@@ -27,7 +27,7 @@ impl<'a> Regressor<'a> {
     
     
     pub fn learn(&mut self, feature_buffer: &Vec<u32>, update: bool) -> f32 {
-        let y = feature_buffer[0] as f32; // 0.0 or 1.1
+        let y = feature_buffer[0] as f32; // 0.0 or 1.0
         let len = feature_buffer.len() - 1;
         /* first we need a dot product, which in our case is a simple sum */
         let mut wsum:f32 = 0.0;
@@ -42,9 +42,11 @@ impl<'a> Regressor<'a> {
             let learning_rate = self.model_instance.learning_rate;
             let nfeatures = feature_buffer.len();
             let general_gradient = -(prediction - y);
+       //     println!("-----------");
             for index in (1..nfeatures).step_by(2) {
 //            for hash in &feature_buffer[] {
                 let feature_location = (feature_buffer[index] & self.hash_mask) as usize;
+  //              println!("{}",feature_buffer[index] & self.hash_mask);
                 let mut feature_weight = f32::from_bits(feature_buffer[index+1]);
 //                feature_weight = 36.0;
 //                println!("FW: {}", feature_weight);
@@ -55,7 +57,8 @@ impl<'a> Regressor<'a> {
                 // this is somewhat bizzare: it seems using feature weights
                 // causes update_factor to have feature_weight^2 update in it
                 // I would believe this is a bug in vw
-                let update_factor = feature_weight * global_update_factor_lr * (self.gradient_sqr[feature_location]).powf(minus_power_t);
+               let update_factor = feature_weight * global_update_factor_lr * (self.gradient_sqr[feature_location]).powf(minus_power_t);
+//                let update_factor =  global_update_factor_lr * (self.gradient_sqr[feature_location]).powf(minus_power_t);
                 self.weights[feature_location] += update_factor;
 //                println!("Global update: {} Feature update {}", global_update_factor, update_factor);
             }
@@ -151,9 +154,9 @@ mod tests {
         p = rr.learn(&vec![0, 1, two], true);
         assert_eq!(p, 0.5);
         p = rr.learn(&vec![0, 1, two], true);
-        assert_eq!(p, 0.4750208);
+        assert_eq!(p, 0.45016602);
         p = rr.learn(&vec![0, 1, two], true);
-        assert_eq!(p, 0.45140287);
+        assert_eq!(p, 0.40611085);
     }
 
 
