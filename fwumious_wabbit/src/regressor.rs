@@ -27,12 +27,15 @@ impl<'a> Regressor<'a> {
     
     
     pub fn learn(&mut self, feature_buffer: &Vec<u32>, update: bool) -> f32 {
+        let nfeatures = feature_buffer.len();
         let y = feature_buffer[0] as f32; // 0.0 or 1.0
-        let len = feature_buffer.len() - 1;
+//        let len = feature_buffer.len() - 1;
         /* first we need a dot product, which in our case is a simple sum */
         let mut wsum:f32 = 0.0;
-        for hash in &feature_buffer[1..feature_buffer.len()] {
-//            println!("H: {}", hash & self.hash_mask);
+  //      for hash in &feature_buffer[1..feature_buffer.len()] {
+        for index in (1..nfeatures).step_by(2) {     // speed of this is 4.53
+            let hash = feature_buffer[index];
+  //          println!("H: {}", hash & self.hash_mask);
             wsum += self.weights[(hash & self.hash_mask) as usize];
         }
         let prediction:f32 = (1.0+(-wsum).exp()).recip();
@@ -40,7 +43,6 @@ impl<'a> Regressor<'a> {
         if update {
             let minus_power_t = -self.model_instance.power_t;
             let learning_rate = self.model_instance.learning_rate;
-            let nfeatures = feature_buffer.len();
             let general_gradient = -(prediction - y);
        //     println!("-----------");
             for index in (1..nfeatures).step_by(2) {
