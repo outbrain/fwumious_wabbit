@@ -9,9 +9,8 @@ pub struct Regressor<'a> {
     model_instance: &'a model_instance::ModelInstance,
     hash_mask: u32,
     weights: Vec<f32>,
-//    gradient_sqr: Vec<f32>,
-    local_data: [f32; 1024],//Vec<f32>,
-     minus_power_t:f32,
+    gradient_sqr: Vec<f32>,
+
 }
 
 impl<'a> Regressor<'a> {
@@ -21,10 +20,8 @@ impl<'a> Regressor<'a> {
         let mut rg = Regressor{
                             model_instance: model_instance,
                             hash_mask: hash_mask,
-                            weights: vec![0.0; (2*(hash_mask+1)) as usize],
- //                           gradient_sqr: vec![0.0; (hash_mask+1) as usize],
-                            local_data: [0.0;1024], //vec![0.0; 1000],
-                            minus_power_t : - model_instance.power_t,
+                            weights: vec![0.0; (hash_mask+1) as usize],
+                            gradient_sqr: vec![0.0; (hash_mask+1) as usize],
                         };
         rg
     }
@@ -34,35 +31,41 @@ impl<'a> Regressor<'a> {
         let y = feature_buffer[0] as f32; // 0.0 or 1.0
         let fbuf = &feature_buffer[1..feature_buffer.len()];
         let fbuf_len = fbuf.len()/2;
+//        let len = feature_buffer.len() - 1;
         /* first we need a dot product, which in our case is a simple sum */
         let mut wsum:f32 = 0.0;
+  //      for hash in &feature_buffer[1..feature_buffer.len()] {
+        let mut local_data: Vec<f32> = Vec::with_capacity(fbuf_len*2);
         for i in 0..fbuf_len {     // speed of this is 4.53
             let hash = (fbuf[i*2] & self.hash_mask) as usize;
-            wsum += self.weights[hash*2];
-            self.local_data[i*4] = self.weights[hash*2];
-            self.local_data[i*4+1] = self.weights[hash*2+1];
-            self.local_data[i*4+2] = f32::from_bits(fbuf[i*2+1]);
+            wsum += self.weights[hash];
+            local_data.push(self.weights[hash]);
+            local_data.push(self.gradient_sqr[hash]);
+            let feature_weight = f32::from_bits(fbuf[i*2+1]);
+            local_data.push(feature_weight);
+            local_data.push(0.0);
+            
         }
-      let prediction:f32 = (1.0+(-wsum).exp()).recip();
+        let prediction:f32 = (1.0+(-wsum).exp()).recip();
 //        let prediction:f32 = sigmoid(wsum);
         if update {
             let minus_power_t = -self.model_instance.power_t;
             let learning_rate = self.model_instance.learning_rate;
             let general_gradient = -(prediction - y);
        //     println!("-----------");
-            for i in 0..fbuf_len {
-                let feature_weight = self.local_data[i*4+2];
+            for i in (0..fbuf_len) {
+                let feature_weight = local_data[i*4+2];
                 let gradient = general_gradient * feature_weight;
-                self.local_data[i*4+1] += gradient*gradient;
+                local_data[i*4+1] += gradient*gradient;
                 let global_update_factor_lr = gradient * learning_rate ;
-                let update_factor = feature_weight * global_update_factor_lr * (self.local_data[i*4+1]).powf(minus_power_t);
-                self.local_data[i*4] += update_factor;
+                let update_factor = feature_weight * global_update_factor_lr * (local_data[i*4+1]).powf(minus_power_t);
+                local_data[i*4] += update_factor;
             }
             // Next step is: gradients = weights_vector *  
             for i in 0..fbuf_len {     // speed of this is 4.53
                 let hash = (fbuf[i*2] & self.hash_mask) as usize;
-                self.weights[hash*2] = self.local_data[i*4];
-                self.weights[hash*2+1] = self.local_data[i*4+1];
+                self.weights[hash] = local_data[i*4];
+                self.gradient_sqr[hash] = local_data[i*4+1] ;
             }
 
         }
@@ -89,13 +92,13 @@ mod tests {
         let mut p: f32;
         
         // Empty model: no matter how many features, prediction is 0.5
-/*        p = rr.learn(&vec![0], false);
+        p = rr.learn(&vec![0], false);
         assert_eq!(p, 0.5);
         p = rr.learn(&vec![0, 1, ONE], false);
         assert_eq!(p, 0.5);
         p = rr.learn(&vec![0, 1, ONE, 2, ONE], false);
         assert_eq!(p, 0.5);
-*/
+
         p = rr.learn(&vec![0, 1, ONE], true);
         assert_eq!(p, 0.5);
         p = rr.learn(&vec![0, 1, ONE], true);

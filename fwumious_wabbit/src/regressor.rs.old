@@ -9,9 +9,7 @@ pub struct Regressor<'a> {
     model_instance: &'a model_instance::ModelInstance,
     hash_mask: u32,
     weights: Vec<f32>,
-//    gradient_sqr: Vec<f32>,
-    local_data: [f32; 1024],//Vec<f32>,
-     minus_power_t:f32,
+    gradient_sqr: Vec<f32>,
 }
 
 impl<'a> Regressor<'a> {
@@ -21,50 +19,52 @@ impl<'a> Regressor<'a> {
         let mut rg = Regressor{
                             model_instance: model_instance,
                             hash_mask: hash_mask,
-                            weights: vec![0.0; (2*(hash_mask+1)) as usize],
- //                           gradient_sqr: vec![0.0; (hash_mask+1) as usize],
-                            local_data: [0.0;1024], //vec![0.0; 1000],
-                            minus_power_t : - model_instance.power_t,
+                            weights: vec![0.0; (hash_mask+1) as usize],
+                            gradient_sqr: vec![0.0; (hash_mask+1) as usize],
                         };
         rg
     }
     
     
     pub fn learn(&mut self, feature_buffer: &Vec<u32>, update: bool) -> f32 {
+        let nfeatures = feature_buffer.len();
         let y = feature_buffer[0] as f32; // 0.0 or 1.0
-        let fbuf = &feature_buffer[1..feature_buffer.len()];
-        let fbuf_len = fbuf.len()/2;
+//        let len = feature_buffer.len() - 1;
         /* first we need a dot product, which in our case is a simple sum */
         let mut wsum:f32 = 0.0;
-        for i in 0..fbuf_len {     // speed of this is 4.53
-            let hash = (fbuf[i*2] & self.hash_mask) as usize;
-            wsum += self.weights[hash*2];
-            self.local_data[i*4] = self.weights[hash*2];
-            self.local_data[i*4+1] = self.weights[hash*2+1];
-            self.local_data[i*4+2] = f32::from_bits(fbuf[i*2+1]);
+  //      for hash in &feature_buffer[1..feature_buffer.len()] {
+        for index in (1..nfeatures).step_by(2) {     // speed of this is 4.53
+            let hash = feature_buffer[index];
+  //          println!("H: {}", hash & self.hash_mask);
+            wsum += self.weights[(hash & self.hash_mask) as usize];
         }
-      let prediction:f32 = (1.0+(-wsum).exp()).recip();
+        let prediction:f32 = (1.0+(-wsum).exp()).recip();
 //        let prediction:f32 = sigmoid(wsum);
         if update {
             let minus_power_t = -self.model_instance.power_t;
             let learning_rate = self.model_instance.learning_rate;
             let general_gradient = -(prediction - y);
        //     println!("-----------");
-            for i in 0..fbuf_len {
-                let feature_weight = self.local_data[i*4+2];
+            for index in (1..nfeatures).step_by(2) {
+//            for hash in &feature_buffer[] {
+                let feature_location = (feature_buffer[index] & self.hash_mask) as usize;
+  //              println!("{}",feature_buffer[index] & self.hash_mask);
+                let mut feature_weight = f32::from_bits(feature_buffer[index+1]);
+//                feature_weight = 36.0;
+//                println!("FW: {}", feature_weight);
+                //let feature_weight = 1.0;
                 let gradient = general_gradient * feature_weight;
-                self.local_data[i*4+1] += gradient*gradient;
+                self.gradient_sqr[feature_location] += gradient*gradient;
                 let global_update_factor_lr = gradient * learning_rate ;
-                let update_factor = feature_weight * global_update_factor_lr * (self.local_data[i*4+1]).powf(minus_power_t);
-                self.local_data[i*4] += update_factor;
+                // this is somewhat bizzare: it seems using feature weights
+                // causes update_factor to have feature_weight^2 update in it
+                // I would believe this is a bug in vw
+               let update_factor = feature_weight * global_update_factor_lr * (self.gradient_sqr[feature_location]).powf(minus_power_t);
+//                let update_factor =  global_update_factor_lr * (self.gradient_sqr[feature_location]).powf(minus_power_t);
+                self.weights[feature_location] += update_factor;
+//                println!("Global update: {} Feature update {}", global_update_factor, update_factor);
             }
             // Next step is: gradients = weights_vector *  
-            for i in 0..fbuf_len {     // speed of this is 4.53
-                let hash = (fbuf[i*2] & self.hash_mask) as usize;
-                self.weights[hash*2] = self.local_data[i*4];
-                self.weights[hash*2+1] = self.local_data[i*4+1];
-            }
-
         }
     //    println!("S {}, {}", y, prediction);
         prediction
@@ -89,13 +89,13 @@ mod tests {
         let mut p: f32;
         
         // Empty model: no matter how many features, prediction is 0.5
-/*        p = rr.learn(&vec![0], false);
+        p = rr.learn(&vec![0], false);
         assert_eq!(p, 0.5);
         p = rr.learn(&vec![0, 1, ONE], false);
         assert_eq!(p, 0.5);
         p = rr.learn(&vec![0, 1, ONE, 2, ONE], false);
         assert_eq!(p, 0.5);
-*/
+
         p = rr.learn(&vec![0, 1, ONE], true);
         assert_eq!(p, 0.5);
         p = rr.learn(&vec![0, 1, ONE], true);
