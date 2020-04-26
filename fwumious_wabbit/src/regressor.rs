@@ -38,31 +38,37 @@ impl<'a> Regressor<'a> {
         let mut wsum:f32 = 0.0;
         for i in 0..fbuf_len {     // speed of this is 4.53
             let hash = (fbuf[i*2] & self.hash_mask) as usize;
-            wsum += self.weights[hash*2];
+            let feature_value:f32 = f32::from_bits(fbuf[i*2+1]);
+            wsum += self.weights[hash*2] * feature_value;    
             self.local_data[i*4] = self.weights[hash*2];
             self.local_data[i*4+1] = self.weights[hash*2+1];
-            self.local_data[i*4+2] = f32::from_bits(fbuf[i*2+1]);
+            self.local_data[i*4+2] = feature_value;
+//            println!("H: {}", hash);
+
         }
-      let prediction:f32 = (1.0+(-wsum).exp()).recip();
+//        println!("NEW PREDICTION");
+        let prediction:f32 = (1.0+(-wsum).exp()).recip();
 //        let prediction:f32 = sigmoid(wsum);
         if update {
-            let minus_power_t = -self.model_instance.power_t;
+//            let minus_power_t = -self.model_instance.power_t;
             let learning_rate = self.model_instance.learning_rate;
             let general_gradient = -(prediction - y);
        //     println!("-----------");
             for i in 0..fbuf_len {
-                let feature_weight = self.local_data[i*4+2];
-                let gradient = general_gradient * feature_weight;
-                self.local_data[i*4+1] += gradient*gradient;
-                let global_update_factor_lr = gradient * learning_rate ;
-                let update_factor = feature_weight * global_update_factor_lr * (self.local_data[i*4+1]).powf(minus_power_t);
-                self.local_data[i*4] += update_factor;
+                let feature_value = self.local_data[i*4+2];
+                let gradient = general_gradient * feature_value;
+//                println!("Gradient: {}", self.local_data[i*4+1]);
+                self.local_data[i*4+3] = gradient*gradient;	// it would be easier, to just use i*4+1 at the end... but this is how vowpal does it
+                self.local_data[i*4+1] += self.local_data[i*4+3];
+                let update_factor = gradient * learning_rate  * (self.local_data[i*4+1]).powf(self.minus_power_t);
+                self.local_data[i*4] = update_factor;    // this is how vowpal does it, first calculate, then addk
+            
             }
             // Next step is: gradients = weights_vector *  
             for i in 0..fbuf_len {     // speed of this is 4.53
                 let hash = (fbuf[i*2] & self.hash_mask) as usize;
-                self.weights[hash*2] = self.local_data[i*4];
-                self.weights[hash*2+1] = self.local_data[i*4+1];
+                self.weights[hash*2] += self.local_data[i*4];
+                self.weights[hash*2+1] += self.local_data[i*4+3];
             }
 
         }
@@ -76,7 +82,23 @@ mod tests {
     use super::*;
 
 
-
+    #[test]
+    fn test_learning_turned_off() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.learning_rate = 0.1;
+        mi.power_t = 0.0;
+        mi.hash_bits = 18;
+        
+        let mut rr = Regressor::new(&mi);
+        let mut p: f32;
+        // Empty model: no matter how many features, prediction is 0.5
+        p = rr.learn(&vec![0], false);
+        assert_eq!(p, 0.5);
+        p = rr.learn(&vec![0, 1, ONE], false);
+        assert_eq!(p, 0.5);
+        p = rr.learn(&vec![0, 1, ONE, 2, ONE], false);
+        assert_eq!(p, 0.5);
+    }
 
     #[test]
     fn test_power_t_zero() {
@@ -88,20 +110,34 @@ mod tests {
         let mut rr = Regressor::new(&mi);
         let mut p: f32;
         
-        // Empty model: no matter how many features, prediction is 0.5
-/*        p = rr.learn(&vec![0], false);
-        assert_eq!(p, 0.5);
-        p = rr.learn(&vec![0, 1, ONE], false);
-        assert_eq!(p, 0.5);
-        p = rr.learn(&vec![0, 1, ONE, 2, ONE], false);
-        assert_eq!(p, 0.5);
-*/
         p = rr.learn(&vec![0, 1, ONE], true);
         assert_eq!(p, 0.5);
         p = rr.learn(&vec![0, 1, ONE], true);
         assert_eq!(p, 0.48750263);
         p = rr.learn(&vec![0, 1, ONE], true);
         assert_eq!(p, 0.47533244);
+    }
+
+    #[test]
+    fn test_double_same_feature() {
+        // this is a tricky test - what happens on collision
+        // depending on the order of math, results are different
+        // so this is here, to make sure the math is always the same
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.learning_rate = 0.1;
+        mi.power_t = 0.0;
+        mi.hash_bits = 18;
+        
+        let mut rr = Regressor::new(&mi);
+        let mut p: f32;
+        let two = 2.0_f32.to_bits();
+        
+        p = rr.learn(&vec![0, 1, ONE, 1, two,], true);
+        assert_eq!(p, 0.5);
+        p = rr.learn(&vec![0, 1, ONE, 1, two,], true);
+        assert_eq!(p, 0.38936076);
+        p = rr.learn(&vec![0, 1, ONE, 1, two,], true);
+        assert_eq!(p, 0.30993468);
     }
 
 

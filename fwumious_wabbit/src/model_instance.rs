@@ -22,7 +22,7 @@ pub struct ModelInstance {
     pub learning_rate: f32,    
     pub power_t: f32,
     pub hash_bits: u8,
-//    pub feature_combos: Vec<Vec<usize>>
+    pub add_constant_feature: bool,
     pub feature_combo_descs: Vec<FeatureComboDesc>,
 
 }
@@ -34,7 +34,7 @@ impl ModelInstance {
             learning_rate: 0.5, // vw default 
             hash_bits: 18,      // vw default
             power_t: 0.5,
-//            feature_combos: Vec::new(),
+            add_constant_feature: true,
             feature_combo_descs: Vec::new(),
         };
         Ok(mi)
@@ -84,7 +84,7 @@ impl ModelInstance {
             for namespaces_str in in_v {                
 //                println!("An input keep parameter: {}", namespaces_str);
                 if namespaces_str.len() <= 1 {
-                    return Err(Box::new(IOError::new(ErrorKind::Other, format!("--interactions needs two or more namespaces: {}", namespaces_str))))
+                    return Err(Box::new(IOError::new(ErrorKind::Other, format!("--interactions needs two or more namespaces: \"{}\"", namespaces_str))))
                 }
                 add_namespaces_combo(namespaces_str.to_string())?;
             }
@@ -116,19 +116,36 @@ impl ModelInstance {
             }
         }
         
-        if !cl.is_present("adaptive") {
-               return Err(Box::new(IOError::new(ErrorKind::Other, format!("You must use --adaptive"))))
-         }
-        if !cl.is_present("noconstant") {
-               return Err(Box::new(IOError::new(ErrorKind::Other, format!("You must use --noconstant"))))
-         }
+        
+        if cl.is_present("noconstant") {
+            mi.add_constant_feature = false;
+//               return Err(Box::new(IOError::new(ErrorKind::Other, format!("You must use --noconstant"))))
+        }
 
+        // We currently only support SGD + adaptive, which means both options have to be specified
         if !cl.is_present("sgd") {
                return Err(Box::new(IOError::new(ErrorKind::Other, format!("You must use --sgd"))))
-         }
+        }
+        if !cl.is_present("adaptive") {
+               return Err(Box::new(IOError::new(ErrorKind::Other, format!("You must use --adaptive"))))
+        }
+
+        
+        // Vowpal supports a mode with "prehashed" features, where numeric strings are treated as
+        // numeric precomputed hashes. This is even default option.
+        // It is generally a bad idea except if you strings really are precomputed hashes... 
+        if !cl.is_present("hash") {
+               return Err(Box::new(IOError::new(ErrorKind::Other, format!("You have to use --hash all "))))
+        } else
+        if let Some(val) = cl.value_of("hash") {
+            if val != "all" {
+                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Only --hash all supported"))))
+            }            
+        }
+
+
         if cl.is_present("cache") {
             println!("WARNING: -c (cache) not yet supported");
-//               return Err(Box::new(IOError::new(ErrorKind::Other, format!("You must use --adaptive"))))
          }
         
         Ok(mi)

@@ -88,14 +88,14 @@ fn m2() -> Result<(), Box<dyn Error>>  {
     let now = Instant::now();
     let mut i = 0;
     loop {
-        let rx = rr.next();
+        let rx = rr.next_vowpal();
         match rx {
             record_reader::NextRecordResult::End => {break;},
             record_reader::NextRecordResult::Error => println!("Error from parsing records, row: {}", i),
             record_reader::NextRecordResult::Ok => ()
         }
 //        println!("{:?}", rr.output_buffer);
-        fb.translate(&rr.output_buffer);
+        fb.translate_vowpal(&rr.output_buffer);
 //        println!("{:?}", &fb.output_buffer);
         let p = re.learn(&fb.output_buffer, true);
         match predictions_file.as_mut() {
