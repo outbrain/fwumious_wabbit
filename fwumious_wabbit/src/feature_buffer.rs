@@ -1,5 +1,5 @@
 use crate::model_instance;
-use crate::record_reader;
+use crate::parser;
 
 const ONE:u32 = 1065353216;      // this is 1.0 float -> u32
 const VOWPAL_FNV_PRIME:u32 = 16777619;	// vowpal magic number
@@ -25,7 +25,7 @@ impl<'a> FeatureBuffer<'a> {
         println!("item out {:?}", self.output_buffer);
     }
     
-    pub fn translate_vowpal(&mut self, record_buffer: &Vec<u32>) -> () {
+    pub fn translate_vowpal(&mut self, record_buffer: &[u32]) -> () {
         self.output_buffer.truncate(0);
         self.output_buffer.push(record_buffer[1]);
         let mut hashes_vec_in:Vec<u32> = Vec::with_capacity(100);
@@ -37,7 +37,7 @@ impl<'a> FeatureBuffer<'a> {
             hashes_vec_out.truncate(0);
             hashes_vec_in.push(0); // we always start with an empty value before doing recombos
             for feature_index in &feature_combo_desc.feature_indices {
-                let feature_index_offset = *feature_index *2 + record_reader::HEADER_LEN;
+                let feature_index_offset = *feature_index *2 + parser::HEADER_LEN;
                 let start = record_buffer[feature_index_offset] as usize;
                 let end = record_buffer[feature_index_offset+1] as usize;
                 /*if start == 0 {
@@ -95,7 +95,7 @@ impl<'a> FeatureBuffer<'a> {
             hashes_vec_out.truncate(0);
             hashes_vec_in.push(0); // we always start with an empty value before doing recombos
             for feature_index in &feature_combo_desc.feature_indices {
-                let feature_index_offset = *feature_index *2 + record_reader::HEADER_LEN;
+                let feature_index_offset = *feature_index *2 + parser::HEADER_LEN;
                 let start = record_buffer[feature_index_offset] as usize;
                 let end = record_buffer[feature_index_offset+1] as usize;
                 /*if start == 0 {

@@ -3,10 +3,10 @@ use clap::{App, Arg, ArgMatches};
 pub fn parse<'a>() -> clap::ArgMatches<'a> {
     
     
-  let matches = App::new("superll")
+  let matches = App::new("fwumious wabbit")
                     .version("1.0")
                     .author("Andraz Tori <atori@outbrain.com>")
-                    .about("Superfast Logistic Legression")
+                    .about("Superfast Logistic Regression")
                     .arg(Arg::with_name("data")
                      .long("data")
                      .short("d")

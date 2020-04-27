@@ -25,11 +25,12 @@ use flate2::read::MultiGzDecoder;
 
 
 mod vwmap;
-mod record_reader;
+mod parser;
 mod model_instance;
 mod feature_buffer;
 mod regressor;
 mod cmdline;
+mod cache;
 
 const RECBUF_LEN:usize = 4096 * 2;
 
@@ -49,20 +50,22 @@ fn read_into_records_buffer(lines: std::io::BufReader<File>, rb: &RecordsBuffer)
 */
 // This is the main function
 fn main() {
-    match m2() {
-        Err(e) => println!("{:?}", e),
+    match main2() {
+        Err(e) => {println!("{:?}", e); std::process::exit(1)},
         Ok(()) => {}
     }    
 }
 
-fn m2() -> Result<(), Box<dyn Error>>  {
-    // Statements here are executed when the compiled binary is called
+fn main2() -> Result<(), Box<dyn Error>>  {
+    // We'll parse once the command line into cl and then different objects will examine it
     let cl = cmdline::parse();
     let input_filename = cl.value_of("data").unwrap();
-    // This is a bit of implicit logic
+    
+    // We do load vw_namespace_map.csv just so we know all the namespaces ahead of time
     let vw_namespace_map_filepath = Path::new(input_filename).parent().unwrap().join("vw_namespace_map.csv");
     let vw = vwmap::get_global_map_from_json(vw_namespace_map_filepath)?;
 
+    // Where will we be putting perdictions (if at all)
     let predictions_filename = cl.value_of("predictions");
     let mut predictions_file = match cl.value_of("predictions") {
         Some(filename) => {
@@ -71,6 +74,8 @@ fn m2() -> Result<(), Box<dyn Error>>  {
             },
         None => None      
     };
+    
+    // Setup Parser, is rust forcing this disguisting way to do it, or I just don't know the pattern?
     let input = File::open(input_filename)?;
     let mut aa;
     let mut bb;
@@ -78,9 +83,14 @@ fn m2() -> Result<(), Box<dyn Error>>  {
         true =>  { aa = io::BufReader::new(MultiGzDecoder::new(input).unwrap()); &mut aa },
         false => { bb = io::BufReader::new(input); &mut bb}
     };
-    let mut rr = record_reader::RecordReader::new(bufferred_input, &vw);
+    let mut rr = parser::VowpalParser::new(bufferred_input, &vw);
+
+    // Setup cache
+       
+    let mut cache: cache::RecordCache = cache::RecordCache::new(input_filename, cl.is_present("cache"));
+
 //    let mut mi = model_instance::ModelInstance::new_from_file("andraz-x2.json", &vw)?;
-    let mut mi = model_instance::ModelInstance::new_from_cmdline(cl, &vw)?;
+    let mut mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
     let mut fb = feature_buffer::FeatureBuffer::new(&mi);
     let mut re = regressor::Regressor::new(&mi);
     
@@ -88,14 +98,29 @@ fn m2() -> Result<(), Box<dyn Error>>  {
     let now = Instant::now();
     let mut i = 0;
     loop {
-        let rx = rr.next_vowpal();
-        match rx {
-            record_reader::NextRecordResult::End => {break;},
-            record_reader::NextRecordResult::Error => println!("Error from parsing records, row: {}", i),
-            record_reader::NextRecordResult::Ok => ()
+        if !cache.reading {
+            match rr.next_vowpal() {
+                parser::NextRecordResult::End => {break;},
+                parser::NextRecordResult::Error => {println!("Error from parsing records, row: {}", i); break},
+                parser::NextRecordResult::Ok => ()
+            }
+            cache.record_ready(&rr)?;
+            fb.translate_vowpal(&rr.output_buffer[..]);
+        } else {
+            // now we read from cache
+            let cache_buffer = match cache.next_record() {
+                Ok(cache_buffer) => cache_buffer,
+                Err(e) => return Err(e),
+            };
+            if cache_buffer.len() == 0 {
+                // End of file
+                break;
+            }
+            fb.translate_vowpal(&cache_buffer[..]);
+
         }
+//        }
 //        println!("{:?}", rr.output_buffer);
-        fb.translate_vowpal(&rr.output_buffer);
 //        println!("{:?}", &fb.output_buffer);
         let p = re.learn(&fb.output_buffer, true);
         match predictions_file.as_mut() {
@@ -106,7 +131,7 @@ fn m2() -> Result<(), Box<dyn Error>>  {
   //      println!("{}", p);
 //        rr.print();
     }
-
+    cache.write_finish()?;
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?} rows: {}", elapsed, i);
 

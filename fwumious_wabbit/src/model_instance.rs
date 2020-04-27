@@ -40,7 +40,7 @@ impl ModelInstance {
         Ok(mi)
     }
     
-    pub fn new_from_cmdline<'a>(cl: clap::ArgMatches<'a>, vw: &vwmap::VwNamespaceMap) -> Result<ModelInstance, Box<dyn Error>> {
+    pub fn new_from_cmdline<'a>(cl: &clap::ArgMatches<'a>, vw: &vwmap::VwNamespaceMap) -> Result<ModelInstance, Box<dyn Error>> {
         let mut mi = ModelInstance::new_empty()?;
         let mut add_namespaces_combo = |namespaces_str: String| -> Result<(), Box<dyn Error>> {
             //let mut feature_vec: Vec<usize> = Vec::new();

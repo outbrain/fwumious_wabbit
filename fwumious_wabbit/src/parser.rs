@@ -3,6 +3,7 @@ use fasthash::murmur3;
 use fasthash::xx;
 use std::io;
 use std::io::BufRead;
+use std::error::Error;
 //mod vwmap;
 
 use crate::vwmap;
@@ -11,12 +12,12 @@ const RECBUF_LEN:usize = 2048;
 pub const HEADER_LEN:usize = 2;
 pub const LABEL_OFFSET:usize = 1;
 
-pub struct RecordReader<'a> {
-    input_bufreader: &'a mut dyn BufRead,
+pub struct VowpalParser<'a> {
+    input_bufread: &'a mut dyn BufRead,
     vw_map: &'a vwmap::VwNamespaceMap,
     tmp_read_buf: Vec<u8>,
+    namespace_hash_seeds: [u32; 256],     // Each namespace has its hash seed
     pub output_buffer: Vec<u32>,
-    namespace_hash_seeds: [u32; 256],
 }
 
 #[derive(Debug)]
@@ -35,11 +36,11 @@ organization of records buffer
 (u32)[dynamic_number_of_hashes] 
 */
 
-impl<'a> RecordReader<'a> {
-//    pub fn new(buffered_input: io::BufReader<File>, vw: &'a vwmap::VwNamespaceMap) -> RecordReader {
-    pub fn new(buffered_input: &'a mut dyn BufRead, vw: &'a vwmap::VwNamespaceMap) -> RecordReader<'a> {
-        let mut rr = RecordReader {  
-                            input_bufreader: buffered_input, 
+impl<'a> VowpalParser<'a> {
+//    pub fn new(buffered_input: io::BufReader<File>, vw: &'a vwmap::VwNamespaceMap) -> VowpalParser {
+    pub fn new(buffered_input: &'a mut dyn BufRead, vw: &'a vwmap::VwNamespaceMap) -> VowpalParser<'a> {
+        let mut rr = VowpalParser {  
+                            input_bufread: buffered_input, 
                             vw_map: vw,
                             tmp_read_buf: Vec::with_capacity(RECBUF_LEN),
                             output_buffer: Vec::with_capacity(RECBUF_LEN*2),
@@ -48,9 +49,9 @@ impl<'a> RecordReader<'a> {
         rr.output_buffer.resize(vw.num_namespaces as usize * 2 + HEADER_LEN, 0);
         for i in 0..=255 {
             rr.namespace_hash_seeds[i as usize] = murmur3::hash32([i;1]);
-            if (i as char == 'A') || (i as char == 'B'){
+//            if (i as char == 'A') || (i as char == 'B'){
 //                println!("Seed for A: {}", rr.namespace_hash_seeds[i as usize]);
-            }
+//            }
         }
         rr
     }
@@ -64,7 +65,7 @@ impl<'a> RecordReader<'a> {
             // Output item
             self.tmp_read_buf.truncate(0);
             //println!("{:?}", self.tmp_read_buf);
-            let rowlen1 = match self.input_bufreader.read_until(0x0a, &mut self.tmp_read_buf) {
+            let rowlen1 = match self.input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
                 Err(e) => return NextRecordResult::Error,
                 Ok(0) => {
                         self.output_buffer.truncate(0);
@@ -141,7 +142,7 @@ impl<'a> RecordReader<'a> {
             // Output item
             self.tmp_read_buf.truncate(0);
             //println!("{:?}", self.tmp_read_buf);
-            let rowlen1 = match self.input_bufreader.read_until(0x0a, &mut self.tmp_read_buf) {
+            let rowlen1 = match self.input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
                 Err(e) => return NextRecordResult::Error,
                 Ok(0) => {
                         self.output_buffer.truncate(0);
@@ -241,7 +242,7 @@ r#"1 |A a
 -1 |B b
 1 |C b c
 "#);
-        let mut rr = RecordReader::new(&mut buf, &vw);
+        let mut rr = VowpalParser::new(&mut buf, &vw);
         // we test a single record
         assert_eq!(rr.next_fwomnious(), NextRecordResult::Ok);
         assert_eq!(rr.output_buffer, vec![9, 1, 8, 9, 0, 0, 0, 0, 1426945110]);
@@ -278,7 +279,7 @@ r#"1 |A a
 1 |A a b
 -1 |A a |B b
 "#);
-        let mut rr = RecordReader::new(&mut buf, &vw);
+        let mut rr = VowpalParser::new(&mut buf, &vw);
         // we test a single record
         assert_eq!(rr.next_vowpal(), NextRecordResult::Ok);
         assert_eq!(rr.output_buffer, vec![9, 1, 8, 9, 0, 0, 0, 0, 2988156968]);
@@ -293,8 +294,4 @@ r#"1 |A a
         assert_eq!(rr.next_vowpal(), NextRecordResult::End);
         assert_eq!(rr.output_buffer.len(), 0);
     }
-
-
-
 }
-
