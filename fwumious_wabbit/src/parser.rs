@@ -10,6 +10,7 @@ use crate::vwmap;
 
 const RECBUF_LEN:usize = 2048;
 pub const HEADER_LEN:usize = 2;
+pub const NAMESPACE_DESC_LEN:usize = 1;
 pub const LABEL_OFFSET:usize = 1;
 
 pub struct VowpalParser<'a> {
@@ -46,7 +47,7 @@ impl<'a> VowpalParser<'a> {
                             output_buffer: Vec::with_capacity(RECBUF_LEN*2),
                             namespace_hash_seeds: [0; 256],
                         };
-        rr.output_buffer.resize(vw.num_namespaces as usize * 2 + HEADER_LEN, 0);
+        rr.output_buffer.resize(vw.num_namespaces as usize * NAMESPACE_DESC_LEN + HEADER_LEN, 0);
         for i in 0..=255 {
             rr.namespace_hash_seeds[i as usize] = murmur3::hash32([i;1]);
 //            if (i as char == 'A') || (i as char == 'B'){
@@ -77,8 +78,8 @@ impl<'a> VowpalParser<'a> {
             // Fields are: 
             // u32 length of the output record
             // u32 label
-            // [u32, u32] * number of namespaces - beginnings and ends of the indexes 
-            let mut bufpos: usize = (self.vw_map.num_namespaces as usize) * 2 + HEADER_LEN;
+            // (u32) * number of namespaces - (where u32 is really two u16 indexes - begining and end of the features belonging to a namespace) 
+            let mut bufpos: usize = (self.vw_map.num_namespaces as usize) + HEADER_LEN;
             self.output_buffer.truncate(bufpos);
             for i in &mut self.output_buffer[0..bufpos] { *i = 0 }     
 
@@ -101,6 +102,7 @@ impl<'a> VowpalParser<'a> {
                 let rowlen = rowlen1 - 1; // ignore last newline byte
                 
                 let mut current_char:usize = 0;
+                let mut bufpos_namespace_start = 0;
                 while i_end < rowlen {
                     while i_end < rowlen && *p.add(i_end) != 0x20 {
                         i_end += 1;
@@ -110,11 +112,14 @@ impl<'a> VowpalParser<'a> {
                     if *p.add(i_start) == 0x7c { // "|"
                         // As we get new namespace index, we store end of the last one
                         //println!("Closing index {} {}", current_char_index, bufpos);
-                        *buf.add(current_char_index + 1) = bufpos as u32;
+                        
+                        //*buf.add(current_char_index + 1) = bufpos as u32;
+                        *buf.add(current_char_index) = ((bufpos_namespace_start<<16) + bufpos) as u32;
                         current_char = *p.add(i_start+1) as usize;
-                        current_char_index = self.vw_map.lookup_char_to_index[current_char] * 2 + HEADER_LEN;
+                        current_char_index = self.vw_map.lookup_char_to_index[current_char] * NAMESPACE_DESC_LEN + HEADER_LEN;
+                        bufpos_namespace_start = bufpos;
                         //println!("Opening index {} {}", current_char_index, bufpos);
-                        *buf.add(current_char_index) = bufpos as u32;
+                        //*buf.add(current_char_index) = bufpos as u32;
                     } else { 
                         // We have a feature! Let's hash it and write it to the buffer
                         // println!("item out {:?}", std::str::from_utf8(&rr.tmp_read_buf[i_start..i_end]));
@@ -129,81 +134,9 @@ impl<'a> VowpalParser<'a> {
                     i_start = i_end ;
                     
                 }
-                *buf.add(current_char_index+1) = bufpos as u32;
-                *buf = bufpos as u32;
-            }
-            
-            //println!("item out {:?}", rr.output_buffer);
-            NextRecordResult::Ok
-        }
+               *buf.add(current_char_index) = ((bufpos_namespace_start<<16) + bufpos) as u32;
 
-
-    pub fn next_fwomnious(&mut self) -> NextRecordResult {
-            // Output item
-            self.tmp_read_buf.truncate(0);
-            //println!("{:?}", self.tmp_read_buf);
-            let rowlen1 = match self.input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
-                Err(e) => return NextRecordResult::Error,
-                Ok(0) => {
-                        self.output_buffer.truncate(0);
-                        return NextRecordResult::End
-                        },
-                Ok(len) => len,
-            };
-            //println!("{:?}", self.tmp_read_buf);
-            // Fields are: 
-            // u32 length of the output record
-            // u32 label
-            // [u32, u32] * number of namespaces - beginnings and ends of the indexes 
-            let mut bufpos: usize = (self.vw_map.num_namespaces as usize) * 2 + HEADER_LEN;
-            self.output_buffer.truncate(bufpos);
-            for i in &mut self.output_buffer[0..bufpos] { *i = 0 }     
-
-            unsafe {
-                let p = self.tmp_read_buf.as_ptr();
-                let mut buf = self.output_buffer.as_mut_ptr();
-                
-                // first token, either 1 or -1
-                match *p.add(0) {
-                    0x31 => self.output_buffer[LABEL_OFFSET] = 1,    // 1
-                    0x2d => self.output_buffer[LABEL_OFFSET] = 0,    // -1
-                    _ => return NextRecordResult::Error
-                };
-                let mut current_char_index:usize = 0 * 2 + HEADER_LEN;
-                let mut i_start:usize;
-                let mut i_end:usize = 0;
-
-                while *p.add(i_end) != 0x7c { i_end += 1;};
-                i_start = i_end;
-                let rowlen = rowlen1 - 1; // ignore last newline byte
-                
-                while i_end < rowlen {
-                    while i_end < rowlen && *p.add(i_end) != 0x20 {
-                        i_end += 1;
-                    }
-                    //println!("item out {:?}", std::str::from_utf8(&rr.tmp_read_buf[i_start..i_end]));
-                                    
-                    if *p.add(i_start) == 0x7c { // "|"
-                        // As we get new namespace index, we store end of the last one
-                        //println!("Closing index {} {}", current_char_index, bufpos);
-                        *buf.add(current_char_index + 1) = bufpos as u32;
-                        current_char_index = self.vw_map.lookup_char_to_index[*p.add(i_start+1) as usize] * 2 + HEADER_LEN;
-                        //println!("Opening index {} {}", current_char_index, bufpos);
-                        *buf.add(current_char_index) = bufpos as u32;
-                    } else { 
-                        // We have a feature! Let's hash it and write it to the buffer
-                        // println!("item out {:?}", std::str::from_utf8(&rr.tmp_read_buf[i_start..i_end]));
-                        let h = xx::hash32(&self.tmp_read_buf[i_start..i_end]);  
-                        // TODO: this might invalidate "buf" ... we need to work on that
-                        self.output_buffer.push(h);
-                        bufpos += 1;
-                    }
-                    
-                    i_end += 1;
-                    i_start = i_end ;
-                    
-                }
-                *buf.add(current_char_index+1) = bufpos as u32;
+//                *buf.add(current_char_index+1) = bufpos as u32;
                 *buf = bufpos as u32;
             }
             
@@ -213,6 +146,8 @@ impl<'a> VowpalParser<'a> {
 
 }
 
+
+
 #[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
@@ -221,41 +156,6 @@ mod tests {
     use std::io::Cursor;
     use std::io::{Write,Seek};
         
-    /* xxhash test */
-    #[test]
-    fn test_fwomnious() {
-        let vw_map_string = r#"
-A,featureA
-B,featureB
-C,featureC
-"#;
-        let vw = vwmap::get_global_map_from_string(vw_map_string).unwrap();
-        fn str_to_cursor(c: &mut Cursor<Vec<u8>>, s: &str) -> () {
-          c.seek(std::io::SeekFrom::Start(0)).unwrap();
-          c.write(s.as_bytes()).unwrap();
-          c.seek(std::io::SeekFrom::Start(0)).unwrap();
-        }
-
-        let mut buf = Cursor::new(Vec::new());
-        str_to_cursor(&mut buf, 
-r#"1 |A a
--1 |B b
-1 |C b c
-"#);
-        let mut rr = VowpalParser::new(&mut buf, &vw);
-        // we test a single record
-        assert_eq!(rr.next_fwomnious(), NextRecordResult::Ok);
-        assert_eq!(rr.output_buffer, vec![9, 1, 8, 9, 0, 0, 0, 0, 1426945110]);
-        assert_eq!(rr.next_fwomnious(), NextRecordResult::Ok);
-        assert_eq!(rr.output_buffer, vec![9, 0, 0, 8, 8, 9, 0, 0, 2718739903]);
-        assert_eq!(rr.next_fwomnious(), NextRecordResult::Ok);
-        assert_eq!(rr.output_buffer, vec![10, 1, 0, 8, 0, 0, 8, 10, 2718739903, 4004515611]);
-        //println!("{:?}", rr.output_buffer);
-        // now we test if end-of-stream works correctly
-        assert_eq!(rr.next_fwomnious(), NextRecordResult::End);
-        assert_eq!(rr.output_buffer.len(), 0);
-    }
-
 
     #[test]
     fn test_vowpal() {
@@ -282,13 +182,13 @@ r#"1 |A a
         let mut rr = VowpalParser::new(&mut buf, &vw);
         // we test a single record
         assert_eq!(rr.next_vowpal(), NextRecordResult::Ok);
-        assert_eq!(rr.output_buffer, vec![9, 1, 8, 9, 0, 0, 0, 0, 2988156968]);
+        assert_eq!(rr.output_buffer, vec![6, 1, 5 << 16 + 6,           0, 0, 2988156968]);
         assert_eq!(rr.next_vowpal(), NextRecordResult::Ok);
-        assert_eq!(rr.output_buffer, vec![9, 0, 0, 8, 8, 9, 0, 0, 2422381320]);
+        assert_eq!(rr.output_buffer, vec![6, 0, 0 << 16 + 6, 5 << 16 + 6, 0, 2422381320]);
         assert_eq!(rr.next_vowpal(), NextRecordResult::Ok);
-        assert_eq!(rr.output_buffer, vec![10, 1, 8, 10, 0, 0, 0, 0, 2988156968, 3529656005]);
+        assert_eq!(rr.output_buffer, vec![7, 1, 5 << 16 + 7,           0, 0, 2988156968, 3529656005]);
         assert_eq!(rr.next_vowpal(), NextRecordResult::Ok);
-        assert_eq!(rr.output_buffer, vec![10, 0, 8, 9, 9, 10, 0, 0, 2988156968, 2422381320]);
+        assert_eq!(rr.output_buffer, vec![7, 0, 5 << 16 + 6, 6 << 16 + 7, 0, 2988156968, 2422381320]);
         //println!("{:?}", rr.output_buffer);
         // now we test if end-of-stream works correctly
         assert_eq!(rr.next_vowpal(), NextRecordResult::End);

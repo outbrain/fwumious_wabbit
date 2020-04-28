@@ -37,9 +37,11 @@ impl<'a> FeatureBuffer<'a> {
             hashes_vec_out.truncate(0);
             hashes_vec_in.push(0); // we always start with an empty value before doing recombos
             for feature_index in &feature_combo_desc.feature_indices {
-                let feature_index_offset = *feature_index *2 + parser::HEADER_LEN;
-                let start = record_buffer[feature_index_offset] as usize;
-                let end = record_buffer[feature_index_offset+1] as usize;
+                let feature_index_offset = *feature_index * parser::NAMESPACE_DESC_LEN + parser::HEADER_LEN;
+                let namespace_desc = record_buffer[feature_index_offset];
+                let start = (namespace_desc >> 16) as usize;
+                let end =  (namespace_desc & 0xffff) as usize;
+               // println!("AAA {}, {}, {}, {}", feature_index_offset, start, end, namespace_desc);
                 /*if start == 0 {
                     // When there is no value, we take it as special value 666+index feature
                     // This is so combo a,b,c wih b empty is different than a,c
@@ -51,13 +53,13 @@ impl<'a> FeatureBuffer<'a> {
                     
                 } else {*/
                 {
-                    //println!("F1: {} {}", start, end);
                     for hash_offset in start..end {
                         let h = record_buffer[hash_offset];
                         for old_hash in &hashes_vec_in {
                             // This is just a copy of what vowpal does
                             // Verified to produce the same result
                             // ... we could use this in general case too, it's not too expansive (the additional mul)
+                            // NOCOMPAT SPEEDUP: Don't do multiplication here, just xor
                             let half_hash = (*old_hash).overflowing_mul(VOWPAL_FNV_PRIME).0;
                             hashes_vec_out.push(h ^ half_hash);
 //                            println!("Output hash: {}", h ^ half_hash);
@@ -82,60 +84,8 @@ impl<'a> FeatureBuffer<'a> {
         }
         //println!("X {:?}", self.output_buffer);
     }
-
-    pub fn translate_fwumnious(&mut self, record_buffer: &Vec<u32>) -> () {
-        self.output_buffer.truncate(0);
-        self.output_buffer.push(record_buffer[1]);
-        let mut hashes_vec_in:Vec<u32> = Vec::with_capacity(100);
-        let mut hashes_vec_out: Vec<u32> = Vec::with_capacity(100);
-        
-        for feature_combo_desc in &self.model_instance.feature_combo_descs {
-            let feature_combo_weight_u32 = (feature_combo_desc.weight).to_bits();
-            hashes_vec_in.truncate(0);
-            hashes_vec_out.truncate(0);
-            hashes_vec_in.push(0); // we always start with an empty value before doing recombos
-            for feature_index in &feature_combo_desc.feature_indices {
-                let feature_index_offset = *feature_index *2 + parser::HEADER_LEN;
-                let start = record_buffer[feature_index_offset] as usize;
-                let end = record_buffer[feature_index_offset+1] as usize;
-                /*if start == 0 {
-                    // When there is no value, we take it as special value 666+index feature
-                    // This is so combo a,b,c wih b empty is different than a,c
-                    // and it means missing a is different from missing b
-                    let h = (feature_index_offset + 666) as u32;
-                    for old_hash in &hashes_vec_in {
-                        hashes_vec_out.push((*old_hash).wrapping_add(h));
-                    }
-                    
-                } else {*/
-                {
-                    //println!("F1: {} {}", start, end);
-                    for hash_offset in start..end {
-                        let h = record_buffer[hash_offset];
-                        for old_hash in &hashes_vec_in {
-                            hashes_vec_out.push((*old_hash).wrapping_add(h));
-                        }
-                    }
-                }
-                hashes_vec_in.truncate(0);
-                let mut tmp = hashes_vec_in;
-                hashes_vec_in = hashes_vec_out;
-                hashes_vec_out = tmp;
-            }
-            for hash in &hashes_vec_in {
-                self.output_buffer.push(*hash);
-                self.output_buffer.push(feature_combo_weight_u32)
-            //self.output_buffer.extend(&hashes_vec_in);
-            }
-        }
-        // add the constant
-        if self.model_instance.add_constant_feature {
-            self.output_buffer.push(CONSTANT_HASH);
-            self.output_buffer.push(ONE)
-        }
-        //println!("X {:?}", self.output_buffer);
-    }
 }
+
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
@@ -145,6 +95,11 @@ mod tests {
         rr.extend(v2);
         rr
     }
+    
+    fn nd(start: u32, end: u32) -> u32 {
+        return (start << 16) + end;
+    }
+
 
     #[test]
     fn test_constant() {
@@ -160,6 +115,7 @@ mod tests {
         assert_eq!(fb.output_buffer, vec![1, 11650396, ONE]); // vw compatibility - no feature is no feature
     }
     
+    
     #[test]
     fn test_single_once() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
@@ -173,11 +129,11 @@ mod tests {
         fb.translate_vowpal(&rb);
         assert_eq!(fb.output_buffer, vec![1]); // vw compatibility - no feature is no feature
 
-        let rb = add_header(vec![4, 5, 0xfea]);
+        let rb = add_header(vec![nd(3,4), 0xfea]);
         fb.translate_vowpal(&rb);
         assert_eq!(fb.output_buffer, vec![1, 0xfea, ONE]);
 
-        let rb = add_header(vec![4, 6, 0xfea, 0xfeb]);
+        let rb = add_header(vec![nd(3,5), 0xfea, 0xfeb]);
         fb.translate_vowpal(&rb);
         assert_eq!(fb.output_buffer, vec![1, 0xfea, ONE, 0xfeb, ONE]);
     }
@@ -195,15 +151,15 @@ mod tests {
 
         let mut fb = FeatureBuffer::new(&mi);
 
-        let rb = add_header(vec![0, 0, 0, 0]);
+        let rb = add_header(vec![nd(0, 0),  nd(0,0)]);
         fb.translate_vowpal(&rb);
         assert_eq!(fb.output_buffer, vec![1]);
 
-        let rb = add_header(vec![6, 7, 0, 0, 0xfea]);
+        let rb = add_header(vec![nd(4, 5), nd(0,0), 0xfea]);
         fb.translate_vowpal(&rb);
         assert_eq!(fb.output_buffer, vec![1, 0xfea, ONE]);
 
-        let rb = add_header(vec![6, 7, 7, 8, 0xfea, 0xfeb]);
+        let rb = add_header(vec![nd(4, 5), nd(5, 6), 0xfea, 0xfeb]);
         fb.translate_vowpal(&rb);
         assert_eq!(fb.output_buffer, vec![1, 0xfea, ONE, 0xfeb, ONE]);
 
@@ -220,15 +176,15 @@ mod tests {
                                                         weight: 1.0});
         
         let mut fb = FeatureBuffer::new(&mi);
-        let rb = add_header(vec![0, 0, 0, 0]);
+        let rb = add_header(vec![0, 0]);
         fb.translate_vowpal(&rb);
         assert_eq!(fb.output_buffer, vec![1]);
 
-        let rb = add_header(vec![6, 7, 0, 0, (0xfea as u32).overflowing_mul(VOWPAL_FNV_PRIME).0]);
+        let rb = add_header(vec![nd(3, 4), nd(0,0), 123456789]);
         fb.translate_vowpal(&rb);
         assert_eq!(fb.output_buffer, vec![1]);	// since the other feature is missing - VW compatibility says no feature is here
 
-        let rb = add_header(vec![6, 7, 7, 8, 2988156968, 2422381320]);
+        let rb = add_header(vec![nd(4,5), nd(5,6), 2988156968, 2422381320]);
         fb.translate_vowpal(&rb);
 //        println!("out {}, out mod 2^24 {}", fb.output_buffer[1], fb.output_buffer[1] & ((1<<24)-1));
         assert_eq!(fb.output_buffer, vec![1, 434843120, ONE]);
@@ -236,30 +192,7 @@ mod tests {
     }
     
     #[test]
-    fn test_double_fwumnious() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
-        mi.add_constant_feature = false;
-        mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
-                                                        feature_indices: vec![0, 1], 
-                                                        weight: 1.0});
-        
-        let mut fb = FeatureBuffer::new(&mi);
-        let rb = add_header(vec![0, 0, 0, 0]);
-        fb.translate_fwumnious(&rb);
-        assert_eq!(fb.output_buffer, vec![1]);
-
-        let rb = add_header(vec![6, 7, 0, 0, 0xfea]);
-        fb.translate_fwumnious(&rb);
-        assert_eq!(fb.output_buffer, vec![1]);	// since the other feature is missing - VW compatibility says no feature is here
-
-        
-        let rb = add_header(vec![6, 8, 8, 10, 0xfea, 0xfeb, 0xfec, 0xfed]);
-        fb.translate_fwumnious(&rb);
-        assert_eq!(fb.output_buffer, vec![1, 0xfea+0xfec, ONE, 0xfeb+0xfec, ONE, 0xfea+0xfed, ONE, 0xfeb+0xfed, ONE]);
-    }
-
-    #[test]
-    fn test_single_with_weight() {
+    fn test_single_with_weight_vowpal() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.add_constant_feature = false;
         mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
@@ -267,7 +200,7 @@ mod tests {
                                                         weight: 2.0});
         
         let mut fb = FeatureBuffer::new(&mi);
-        let rb = add_header(vec![4, 5, 0xfea]);
+        let rb = add_header(vec![nd(3,4), 0xfea]);
         fb.translate_vowpal(&rb);
         let two = 2.0_f32.to_bits();
 

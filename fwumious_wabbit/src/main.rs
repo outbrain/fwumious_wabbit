@@ -58,6 +58,7 @@ fn main() {
 
 fn main2() -> Result<(), Box<dyn Error>>  {
     // We'll parse once the command line into cl and then different objects will examine it
+//    println!("AA {:?}", env::args());
     let cl = cmdline::parse();
     let input_filename = cl.value_of("data").unwrap();
     
