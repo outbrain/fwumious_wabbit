@@ -7,17 +7,25 @@ const CONSTANT_NAMESPACE:usize = 128;
 const CONSTANT_HASH:u32 = 11650396;
 
 
+const OUTPUT_BUFFER_LEN:usize = 1024;
+
 pub struct FeatureBuffer<'a> {
     model_instance: &'a model_instance::ModelInstance,
-    pub output_buffer: Vec<u32>
+    pub output_buffer: Vec<u32>,
+    hashes_vec_in: Vec<u32>,
+    hashes_vec_out: Vec<u32>,
 }
 
 impl<'a> FeatureBuffer<'a> {
     pub fn new(model_instance: &'a model_instance::ModelInstance) -> FeatureBuffer {
         let mut fb = FeatureBuffer{
                             model_instance: model_instance,
-                            output_buffer: Vec::with_capacity(1024)
+                            output_buffer: Vec::new(),
+                            hashes_vec_in : Vec::with_capacity(100),
+                            hashes_vec_out : Vec::with_capacity(100),
+
                         };
+        fb.output_buffer.resize(OUTPUT_BUFFER_LEN, 0);
         fb
     }
     
@@ -25,7 +33,82 @@ impl<'a> FeatureBuffer<'a> {
         println!("item out {:?}", self.output_buffer);
     }
     
+    
+    /* this is unsafe and fast implementation , for saner implementation, look below */
     pub fn translate_vowpal(&mut self, record_buffer: &[u32]) -> () {
+        unsafe {
+        
+        let mut unsafe_output_buffer = self.output_buffer.as_mut_ptr(); 
+        *unsafe_output_buffer.add(0) = record_buffer[1];  // copy label
+        let mut output_len:usize = 1;
+        let mut hashes_vec_in : &mut Vec<u32> = &mut self.hashes_vec_in;
+        let mut hashes_vec_out : &mut Vec<u32> = &mut self.hashes_vec_out;
+        for feature_combo_desc in &self.model_instance.feature_combo_descs {
+            let feature_combo_weight_u32 = (feature_combo_desc.weight).to_bits();
+            hashes_vec_in.truncate(0);
+            hashes_vec_out.truncate(0);
+            // we unroll first iteration of the loop and optimize
+            let num_namespaces:usize = feature_combo_desc.feature_indices.len() ;
+            {
+                let feature_index_offset = *feature_combo_desc.feature_indices.get_unchecked(0) + 2;
+                let namespace_desc = *record_buffer.get_unchecked(feature_index_offset);
+                let start = (namespace_desc >> 16) as usize;
+                let end =  (namespace_desc & 0xffff) as usize;
+                // We special case a single feature (common occurance)
+                if num_namespaces == 1 {
+                    for hash_offset in start..end {
+                        *unsafe_output_buffer.add(output_len) = *record_buffer.get_unchecked(hash_offset);
+                        *unsafe_output_buffer.add(output_len + 1) = feature_combo_weight_u32;
+                        output_len += 2
+                    }
+                    continue
+                }
+                for hash_offset in start..end {
+                    hashes_vec_in.push(*record_buffer.get_unchecked(hash_offset));
+                }
+            }
+            for feature_index in feature_combo_desc.feature_indices.get_unchecked(1 as usize .. num_namespaces) {
+                let feature_index_offset = *feature_index + 2;
+                let namespace_desc = *record_buffer.get_unchecked(feature_index_offset);
+                let start = (namespace_desc >> 16) as usize;
+                let end =  (namespace_desc & 0xffff) as usize;
+                {
+                    for hash_offset in start..end {
+//                        let h = *record_buffer.get_unchecked(hash_offset);
+                        for old_hash in &(*hashes_vec_in) {
+                            // This is just a copy of what vowpal does
+                            // Verified to produce the same result
+                            // ... we could use this in general case too, it's not too expansive (the additional mul)
+                            // NOCOMPAT SPEEDUP: Don't do multiplication here, just xor
+                            let half_hash = old_hash.overflowing_mul(VOWPAL_FNV_PRIME).0;
+                            hashes_vec_out.push(*record_buffer.get_unchecked(hash_offset) ^ half_hash);
+//                            println!("Output hash: {}", h ^ half_hash);
+                        }
+                    }
+                }
+                hashes_vec_in.truncate(0);
+                std::mem::swap(&mut hashes_vec_in, &mut hashes_vec_out);
+            }
+            for hash in &(*hashes_vec_in) {
+                *unsafe_output_buffer.add(output_len) = *hash;
+                *unsafe_output_buffer.add(output_len+1) = feature_combo_weight_u32;
+                output_len += 2
+
+            }
+        }
+        // add the constant
+        if self.model_instance.add_constant_feature {
+                *unsafe_output_buffer.add(output_len) = CONSTANT_HASH;
+                *unsafe_output_buffer.add(output_len+1) = ONE;
+                output_len += 2
+        }
+        //println!("X {:?}", self.output_buffer);
+        self.output_buffer.set_len(output_len);
+        }
+    }
+    
+    
+    pub fn translate_vowpal_original(&mut self, record_buffer: &[u32]) -> () {
         self.output_buffer.truncate(0);
         self.output_buffer.push(record_buffer[1]);
         let mut hashes_vec_in:Vec<u32> = Vec::with_capacity(100);
@@ -41,29 +124,15 @@ impl<'a> FeatureBuffer<'a> {
                 let namespace_desc = record_buffer[feature_index_offset];
                 let start = (namespace_desc >> 16) as usize;
                 let end =  (namespace_desc & 0xffff) as usize;
-               // println!("AAA {}, {}, {}, {}", feature_index_offset, start, end, namespace_desc);
-                /*if start == 0 {
-                    // When there is no value, we take it as special value 666+index feature
-                    // This is so combo a,b,c wih b empty is different than a,c
-                    // and it means missing a is different from missing b
-                    let h = (feature_index_offset + 666) as u32;
+                for hash_offset in start..end {
+                    let h = record_buffer[hash_offset];
                     for old_hash in &hashes_vec_in {
-                        hashes_vec_out.push((*old_hash).wrapping_add(h));
-                    }
-                    
-                } else {*/
-                {
-                    for hash_offset in start..end {
-                        let h = record_buffer[hash_offset];
-                        for old_hash in &hashes_vec_in {
-                            // This is just a copy of what vowpal does
-                            // Verified to produce the same result
-                            // ... we could use this in general case too, it's not too expansive (the additional mul)
-                            // NOCOMPAT SPEEDUP: Don't do multiplication here, just xor
-                            let half_hash = (*old_hash).overflowing_mul(VOWPAL_FNV_PRIME).0;
-                            hashes_vec_out.push(h ^ half_hash);
-//                            println!("Output hash: {}", h ^ half_hash);
-                        }
+                        // This is just a copy of what vowpal does
+                        // Verified to produce the same result
+                        // ... we could use this in general case too, it's not too expansive (the additional mul)
+                        // NOCOMPAT SPEEDUP: Don't do multiplication here, just xor
+                        let half_hash = (*old_hash).overflowing_mul(VOWPAL_FNV_PRIME).0;
+                        hashes_vec_out.push(h ^ half_hash);
                     }
                 }
                 hashes_vec_in.truncate(0);
@@ -74,7 +143,6 @@ impl<'a> FeatureBuffer<'a> {
             for hash in &hashes_vec_in {
                 self.output_buffer.push(*hash);
                 self.output_buffer.push(feature_combo_weight_u32)
-            //self.output_buffer.extend(&hashes_vec_in);
             }
         }
         // add the constant
@@ -82,7 +150,6 @@ impl<'a> FeatureBuffer<'a> {
             self.output_buffer.push(CONSTANT_HASH);
             self.output_buffer.push(ONE)
         }
-        //println!("X {:?}", self.output_buffer);
     }
 }
 

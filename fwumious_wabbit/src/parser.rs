@@ -156,6 +156,10 @@ mod tests {
     use std::io::Cursor;
     use std::io::{Write,Seek};
         
+    fn nd(start: u32, end: u32) -> u32 {
+        return (start << 16) + end;
+    }
+
 
     #[test]
     fn test_vowpal() {
@@ -182,13 +186,13 @@ r#"1 |A a
         let mut rr = VowpalParser::new(&mut buf, &vw);
         // we test a single record
         assert_eq!(rr.next_vowpal(), NextRecordResult::Ok);
-        assert_eq!(rr.output_buffer, vec![6, 1, 5 << 16 + 6,           0, 0, 2988156968]);
+        assert_eq!(rr.output_buffer, vec![6, 1, nd(5,6),           0, 0, 2988156968]);
         assert_eq!(rr.next_vowpal(), NextRecordResult::Ok);
-        assert_eq!(rr.output_buffer, vec![6, 0, 0 << 16 + 6, 5 << 16 + 6, 0, 2422381320]);
+        assert_eq!(rr.output_buffer, vec![6, 0, nd(0,5), nd(5,6), 0, 2422381320]);
         assert_eq!(rr.next_vowpal(), NextRecordResult::Ok);
-        assert_eq!(rr.output_buffer, vec![7, 1, 5 << 16 + 7,           0, 0, 2988156968, 3529656005]);
+        assert_eq!(rr.output_buffer, vec![7, 1, nd(5,7),           0, 0, 2988156968, 3529656005]);
         assert_eq!(rr.next_vowpal(), NextRecordResult::Ok);
-        assert_eq!(rr.output_buffer, vec![7, 0, 5 << 16 + 6, 6 << 16 + 7, 0, 2988156968, 2422381320]);
+        assert_eq!(rr.output_buffer, vec![7, 0, nd(5,6), nd(6, 7), 0, 2988156968, 2422381320]);
         //println!("{:?}", rr.output_buffer);
         // now we test if end-of-stream works correctly
         assert_eq!(rr.next_vowpal(), NextRecordResult::End);
