@@ -142,12 +142,6 @@ impl ModelInstance {
                 return Err(Box::new(IOError::new(ErrorKind::Other, format!("Only --hash all supported"))))
             }            
         }
-
-
-        if cl.is_present("cache") {
-            println!("WARNING: -c (cache) not yet supported");
-         }
-        
         Ok(mi)
     }
 

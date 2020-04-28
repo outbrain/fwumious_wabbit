@@ -4,6 +4,9 @@ use std::io;
 use std::fs;
 use std::error::Error;
 use std::path;
+use flate2::write::GzEncoder;
+use flate2::Compression;
+use flate2::read::GzDecoder;
 
 use crate::parser;
 
@@ -27,8 +30,18 @@ pub struct RecordCache {
 
 impl RecordCache {
     pub fn new(input_filename: &str, enabled: bool) -> RecordCache {
-        let temporary_filename = format!("{}.fwcache.writing", input_filename);
-        let final_filename = format!("{}.fwcache", input_filename);
+        let temporary_filename: String;
+        let final_filename: String;
+        let gz: bool;
+        temporary_filename = format!("{}.fwcache.writing", input_filename);
+        final_filename = format!("{}.fwcache", input_filename);
+        if !input_filename.ends_with("gz") {
+            gz = false;
+        } else
+        {
+            gz = true;
+        }
+        
         let mut rc = RecordCache {
             output_bufwriter: Box::new(io::BufWriter::new(io::sink())),
             input_bufreader: Box::new(io::empty()),
@@ -45,13 +58,24 @@ impl RecordCache {
         if enabled {
             if path::Path::new(&final_filename).exists() {
                 rc.reading = true;
-                rc.input_bufreader = Box::new(io::BufReader::with_capacity(1024*1024, fs::File::open(rc.final_filename.to_string()).unwrap()));
+// 		We do not use BufReader as we do our own buffering
 //                rc.input_bufreader = Box::new(io::BufReader::with_capacity(1024*1024, fs::File::open(rc.final_filename.to_string()).unwrap()));
-                  rc.input_bufreader = Box::new(fs::File::open(rc.final_filename.to_string()).unwrap());
-                  rc.byte_buffer.resize(READBUF_LEN, 0);
+                if !gz {
+                    rc.input_bufreader = Box::new(fs::File::open(final_filename).unwrap());
+                } else {
+                    rc.input_bufreader = Box::new(GzDecoder::new(fs::File::open(final_filename).unwrap()));
+                }
+                rc.byte_buffer.resize(READBUF_LEN, 0);
             } else {
                 rc.writing = true;
-                rc.output_bufwriter = Box::new(io::BufWriter::new(fs::File::create(rc.temporary_filename.to_string()).unwrap()));
+                if !gz {
+                    rc.output_bufwriter = Box::new(io::BufWriter::new(fs::File::create(temporary_filename).unwrap()));
+                    println!("creating cache file = {}", final_filename);
+                } else {
+                    rc.output_bufwriter = Box::new(io::BufWriter::new(GzEncoder::new(fs::File::create(temporary_filename).unwrap(),
+                                                                    Compression::fast())));
+                }
+                
             }
         }        
         rc

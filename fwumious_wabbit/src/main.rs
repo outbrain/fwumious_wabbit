@@ -81,7 +81,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
     let mut aa;
     let mut bb;
     let mut bufferred_input: &mut dyn BufRead = match input_filename.ends_with(".gz") {
-        true =>  { aa = io::BufReader::new(MultiGzDecoder::new(input).unwrap()); &mut aa },
+        true =>  { aa = io::BufReader::new(MultiGzDecoder::new(input)); &mut aa },
         false => { bb = io::BufReader::new(input); &mut bb}
     };
     let mut rr = parser::VowpalParser::new(bufferred_input, &vw);

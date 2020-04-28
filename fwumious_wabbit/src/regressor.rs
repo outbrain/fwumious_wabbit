@@ -89,9 +89,8 @@ impl<'a> Regressor<'a> {
             let feature_value:f32 = f32::from_bits(*fbuf.get_unchecked(i*2+1));
             wsum += self.weights[hash*2] * feature_value;    
             //*local_data.get_unchecked_mut(i*4) = *self.weights.get_unchecked(hash*2);
-            self.local_data[i*4] = *self.weights.get_unchecked(hash*2);
-            
-            self.local_data[i*4+1] = *self.weights.get_unchecked(hash*2+1);
+            self.local_data[i*4] = *self.weights.get_unchecked(hash*2);     // load weight
+            self.local_data[i*4+1] = *self.weights.get_unchecked(hash*2+1); // load sum of previous errors
             self.local_data[i*4+2] = feature_value;
 
         }
