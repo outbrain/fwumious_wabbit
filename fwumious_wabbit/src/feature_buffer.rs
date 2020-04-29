@@ -232,7 +232,7 @@ mod tests {
 
     }
 
-    // for singles, vowpal and fwumnious are the same
+    // for singles, vowpal and fwumious are the same
     // however for doubles theya are not
     #[test]
     fn test_double_vowpal() {

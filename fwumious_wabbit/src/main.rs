@@ -15,12 +15,13 @@ use std::fmt;
 use std::str;
 use std::io::Write;
 use std::io::BufRead;
-
+use std::f32;
+use std::cmp::min;
 //use std::io::ErrorKind;
 //use std::iter::Peekable;
+use ryu;
 use fasthash::xx;
 use std::time::Instant;
-
 use flate2::read::MultiGzDecoder;
 
 
@@ -98,6 +99,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
 
     let now = Instant::now();
     let mut i = 0;
+    let mut float_to_string_buffer = ryu::Buffer::new();
     loop {
         if !cache.reading {
             match rr.next_vowpal() {
@@ -120,17 +122,19 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             fb.translate_vowpal(&cache_buffer[..]);
 
         }
-//        }
-//        println!("{:?}", rr.output_buffer);
-//        println!("{:?}", &fb.output_buffer);
         let p = re.learn(&fb.output_buffer, true);
+        let finalized_p = finalize_prediction(p);
         match predictions_file.as_mut() {
-            Some(file) => {write!(file, "{:.6}\n", p)?;},
+        //    Some(file) => {write!(file, "{:.6}\n", finalized_p)?;},
+              Some(file) => {
+                  write!(file, "{:.6}\n", finalized_p)?;
+//                    let printed = float_to_string_buffer.format(finalized_p);
+//                    file.write(&printed[0..min(printed.len(), 8)].as_bytes());
+//                    write!(file, "\n");
+              },
             None => {}
         };
         i += 1;
-  //      println!("{}", p);
-//        rr.print();
     }
     cache.write_finish()?;
     let elapsed = now.elapsed();
@@ -146,5 +150,20 @@ fn main2() -> Result<(), Box<dyn Error>>  {
 //    let example: i32 = 1;
     
     Ok(())
-
 }
+
+fn finalize_prediction(p:f32) -> f32 {
+    if p == f32::NAN {
+        return 1.0;
+    }
+    if p > 1.0 {
+        return 1.0;
+    }
+    if p < 0.0 {
+        return 0.0;
+    }
+    p
+}
+
+
+
