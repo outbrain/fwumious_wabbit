@@ -19,7 +19,6 @@ use std::f32;
 use std::cmp::min;
 //use std::io::ErrorKind;
 //use std::iter::Peekable;
-use ryu;
 use fasthash::xx;
 use std::time::Instant;
 use flate2::read::MultiGzDecoder;
@@ -99,7 +98,6 @@ fn main2() -> Result<(), Box<dyn Error>>  {
 
     let now = Instant::now();
     let mut i = 0;
-    let mut float_to_string_buffer = ryu::Buffer::new();
     loop {
         if !cache.reading {
             match rr.next_vowpal() {
@@ -153,9 +151,10 @@ fn main2() -> Result<(), Box<dyn Error>>  {
 }
 
 fn finalize_prediction(p:f32) -> f32 {
-    if p == f32::NAN {
+
+/*    if p.is_nan() {
         return 1.0;
-    }
+    }*/
     if p > 1.0 {
         return 1.0;
     }

@@ -57,7 +57,7 @@ impl<'a> FeatureBuffer<'a> {
                 // We special case a single feature (common occurance)
                 if num_namespaces == 1 {
                     for hash_offset in start..end {
-                        *unsafe_output_buffer.add(output_len) = *record_buffer.get_unchecked(hash_offset);
+                        *unsafe_output_buffer.add(output_len) = *record_buffer.get_unchecked(hash_offset)  & self.model_instance.hash_mask;
                         *unsafe_output_buffer.add(output_len + 1) = feature_combo_weight_u32;
                         output_len += 2
                     }
@@ -90,7 +90,7 @@ impl<'a> FeatureBuffer<'a> {
                 std::mem::swap(&mut hashes_vec_in, &mut hashes_vec_out);
             }
             for hash in &(*hashes_vec_in) {
-                *unsafe_output_buffer.add(output_len) = *hash;
+                *unsafe_output_buffer.add(output_len) = *hash  & self.model_instance.hash_mask;
                 *unsafe_output_buffer.add(output_len+1) = feature_combo_weight_u32;
                 output_len += 2
 
@@ -98,7 +98,7 @@ impl<'a> FeatureBuffer<'a> {
         }
         // add the constant
         if self.model_instance.add_constant_feature {
-                *unsafe_output_buffer.add(output_len) = CONSTANT_HASH;
+                *unsafe_output_buffer.add(output_len) = CONSTANT_HASH & self.model_instance.hash_mask;
                 *unsafe_output_buffer.add(output_len+1) = ONE;
                 output_len += 2
         }

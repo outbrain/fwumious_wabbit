@@ -22,6 +22,7 @@ pub struct ModelInstance {
     pub learning_rate: f32,    
     pub power_t: f32,
     pub hash_bits: u8,
+    pub hash_mask: u32,
     pub add_constant_feature: bool,
     pub feature_combo_descs: Vec<FeatureComboDesc>,
 
@@ -33,6 +34,7 @@ impl ModelInstance {
         let mut mi = ModelInstance {
             learning_rate: 0.5, // vw default 
             hash_bits: 18,      // vw default
+            hash_mask: (1 << 18) -1,
             power_t: 0.5,
             add_constant_feature: true,
             feature_combo_descs: Vec::new(),
@@ -92,6 +94,7 @@ impl ModelInstance {
 
         if let Some(val) = cl.value_of("hash_bits") {
             mi.hash_bits = val.parse()?;
+            mi.hash_mask = (1 << mi.hash_bits) -1;
         }
         if let Some(val) = cl.value_of("learning_rate") {
             mi.learning_rate = val.parse()?;

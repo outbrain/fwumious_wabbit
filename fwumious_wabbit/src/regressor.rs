@@ -1,5 +1,5 @@
 use fastapprox::fast::sigmoid;
-
+use std::cmp;
 const ONE:u32 = 1065353216;      // this is 1.0 float -> u32
 
 
@@ -39,40 +39,58 @@ impl<'a> Regressor<'a> {
         /* first we need a dot product, which in our case is a simple sum */
         let mut wsum:f32 = 0.0;
         for i in 0..fbuf_len {     // speed of this is 4.53
-            let hash = (*fbuf.get_unchecked(i*2) & self.hash_mask) as usize;
+            let hash = *fbuf.get_unchecked(i*2) as usize;
             //*local_data.get_unchecked_mut(i*4) = *self.weights.get_unchecked(hash*2);
             let feature_value:f32 = f32::from_bits(*fbuf.get_unchecked(i*2+1));
             let w = *self.weights.get_unchecked(hash*2);
+            // we do substractions here, so we don't need to -wsum later on
             wsum += w * feature_value;    
             *self.local_data.get_unchecked_mut(i*4) = w;
             *self.local_data.get_unchecked_mut(i*4+1) = *self.weights.get_unchecked(hash*2+1);
             *self.local_data.get_unchecked_mut(i*4+2) = feature_value;
             
         }
-        let prediction:f32 = (1.0+(-wsum).exp()).recip();
+        let learning_rate = self.model_instance.learning_rate;
+        // Very clever trick, if we simply multiply by learning rate here, we don't have to in the inner loop
+        // the results are litarary equivalent! 
+        // This works only because all updates are directly linearly proportional to learning rate
+        let prediction = -wsum * learning_rate;
+        // vowpal compatibility
+        let mut prediction_finalized = prediction;
+        if prediction_finalized < -50.0 {
+            prediction_finalized = -50.0
+        } else if prediction_finalized > 50.0 {
+            prediction_finalized = 50.0;
+        }
+        
+        let prediction_probability:f32 = (1.0+(prediction_finalized).exp()).recip();
 //        let prediction:f32 = sigmoid(wsum);      // ain't faster
+        // Part1 >0 
+        // vowpal does not update for negative loss
+        // since logloss = log(1 + wsum_exp), we can just check if part 1 is positive, if it isn't it means that logloss is negativ
+//        println!("Wsum exp: {}", wsum.exp());
+        
         if update {
-            let learning_rate = self.model_instance.learning_rate;
-            let general_gradient = -(prediction - y);
+//        if update {
+            let general_gradient = -(prediction_probability - y);
+            //println!("general gradient: {}, prediction {}, prediction orig: {}", general_gradient, prediction, -wsum*learning_rate); 
             for i in 0..fbuf_len {
                 let feature_value = *self.local_data.get_unchecked(i*4+2);
                 let gradient = general_gradient * feature_value;
-//                println!("Gradient: {}", self.local_data[i*4+1]);
                 *self.local_data.get_unchecked_mut(i*4+3) = gradient*gradient;	// it would be easier, to just use i*4+1 at the end... but this is how vowpal does it
                 *self.local_data.get_unchecked_mut(i*4+1) += *self.local_data.get_unchecked(i*4+3);
-                let update_factor = gradient * learning_rate  * (self.local_data.get_unchecked(i*4+1)).powf(self.minus_power_t);
+                let update_factor = gradient * (self.local_data.get_unchecked(i*4+1)).powf(self.minus_power_t);
                 *self.local_data.get_unchecked_mut(i*4) = update_factor;    // this is how vowpal does it, first calculate, then addk
             }
             // Next step is: gradients = weights_vector *  
             for i in 0..fbuf_len {     // speed of this is 4.53
-                let hash = (*fbuf.get_unchecked(i*2) & self.hash_mask) as usize;
+                let hash = *fbuf.get_unchecked(i*2) as usize;
                 *self.weights.get_unchecked_mut(hash*2) += *self.local_data.get_unchecked(i*4);
                 *self.weights.get_unchecked_mut(hash*2+1) += *self.local_data.get_unchecked(i*4+3);
             }
-
         }
     //    println!("S {}, {}", y, prediction);
-        prediction
+        prediction_probability
         }
     }
 
