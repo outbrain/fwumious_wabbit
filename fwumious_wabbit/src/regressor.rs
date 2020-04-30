@@ -40,11 +40,10 @@ impl<'a> Regressor<'a> {
         let mut wsum:f32 = 0.0;
         for i in 0..fbuf_len {     // speed of this is 4.53
             let hash = *fbuf.get_unchecked(i*2) as usize;
-            //*local_data.get_unchecked_mut(i*4) = *self.weights.get_unchecked(hash*2);
             let feature_value:f32 = f32::from_bits(*fbuf.get_unchecked(i*2+1));
             let w = *self.weights.get_unchecked(hash*2);
             // we do substractions here, so we don't need to -wsum later on
-            wsum += w * feature_value;    
+            wsum -= w * feature_value;    
             *self.local_data.get_unchecked_mut(i*4) = w;
             *self.local_data.get_unchecked_mut(i*4+1) = *self.weights.get_unchecked(hash*2+1);
             *self.local_data.get_unchecked_mut(i*4+2) = feature_value;
@@ -54,7 +53,7 @@ impl<'a> Regressor<'a> {
         // Very clever trick, if we simply multiply by learning rate here, we don't have to in the inner loop
         // the results are litarary equivalent! 
         // This works only because all updates are directly linearly proportional to learning rate
-        let prediction = -wsum * learning_rate;
+        let prediction = wsum * learning_rate;
         // vowpal compatibility
         let mut prediction_finalized = prediction;
         if prediction_finalized < -50.0 {
@@ -63,14 +62,18 @@ impl<'a> Regressor<'a> {
             prediction_finalized = 50.0;
         }
         
-        let prediction_probability:f32 = (1.0+(prediction_finalized).exp()).recip();
+        let part1 = 1.0+(prediction_finalized).exp() ;
+        let prediction_probability:f32 = (part1).recip();
 //        let prediction:f32 = sigmoid(wsum);      // ain't faster
         // Part1 >0 
         // vowpal does not update for negative loss
         // since logloss = log(1 + wsum_exp), we can just check if part 1 is positive, if it isn't it means that logloss is negativ
 //        println!("Wsum exp: {}", wsum.exp());
         
-        if update {
+        if part1 <= 1.0 {
+        //    println!("GOT IT");
+        } else
+        if update{
 //        if update {
             let general_gradient = -(prediction_probability - y);
             //println!("general gradient: {}, prediction {}, prediction orig: {}", general_gradient, prediction, -wsum*learning_rate); 

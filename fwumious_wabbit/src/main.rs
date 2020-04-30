@@ -105,11 +105,11 @@ fn main2() -> Result<(), Box<dyn Error>>  {
                 parser::NextRecordResult::Error => {println!("Error from parsing records, row: {}", i); break},
                 parser::NextRecordResult::Ok => ()
             }
-            cache.record_ready(&rr)?;
+            cache.push_record(&rr)?;
             fb.translate_vowpal(&rr.output_buffer[..]);
         } else {
             // now we read from cache
-            let cache_buffer = match cache.next_record() {
+            let cache_buffer = match cache.get_next_record() {
                 Ok(cache_buffer) => cache_buffer,
                 Err(e) => return Err(e),
             };
@@ -117,7 +117,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
                 // End of file
                 break;
             }
-            fb.translate_vowpal(&cache_buffer[..]);
+            fb.translate_vowpal(cache_buffer);
 
         }
         let p = re.learn(&fb.output_buffer, true);

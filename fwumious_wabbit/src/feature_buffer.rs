@@ -7,7 +7,7 @@ const CONSTANT_NAMESPACE:usize = 128;
 const CONSTANT_HASH:u32 = 11650396;
 
 
-const OUTPUT_BUFFER_LEN:usize = 1024;
+const OUTPUT_BUFFER_LEN:usize = 1024;    // this is highly unsafe...
 
 pub struct FeatureBuffer<'a> {
     model_instance: &'a model_instance::ModelInstance,
@@ -38,8 +38,7 @@ impl<'a> FeatureBuffer<'a> {
     pub fn translate_vowpal(&mut self, record_buffer: &[u32]) -> () {
         unsafe {
         
-        let mut unsafe_output_buffer = self.output_buffer.as_mut_ptr(); 
-        *unsafe_output_buffer.add(0) = record_buffer[1];  // copy label
+        *self.output_buffer.get_unchecked_mut(0) = record_buffer[1];  // copy label
         let mut output_len:usize = 1;
         let mut hashes_vec_in : &mut Vec<u32> = &mut self.hashes_vec_in;
         let mut hashes_vec_out : &mut Vec<u32> = &mut self.hashes_vec_out;
@@ -57,8 +56,8 @@ impl<'a> FeatureBuffer<'a> {
                 // We special case a single feature (common occurance)
                 if num_namespaces == 1 {
                     for hash_offset in start..end {
-                        *unsafe_output_buffer.add(output_len) = *record_buffer.get_unchecked(hash_offset)  & self.model_instance.hash_mask;
-                        *unsafe_output_buffer.add(output_len + 1) = feature_combo_weight_u32;
+                        *self.output_buffer.get_unchecked_mut(output_len) = *record_buffer.get_unchecked(hash_offset)  & self.model_instance.hash_mask;
+                        *self.output_buffer.get_unchecked_mut(output_len + 1) = feature_combo_weight_u32;
                         output_len += 2
                     }
                     continue
@@ -74,15 +73,10 @@ impl<'a> FeatureBuffer<'a> {
                 let end =  (namespace_desc & 0xffff) as usize;
                 {
                     for hash_offset in start..end {
-//                        let h = *record_buffer.get_unchecked(hash_offset);
                         for old_hash in &(*hashes_vec_in) {
                             // This is just a copy of what vowpal does
-                            // Verified to produce the same result
-                            // ... we could use this in general case too, it's not too expansive (the additional mul)
-                            // NOCOMPAT SPEEDUP: Don't do multiplication here, just xor
                             let half_hash = old_hash.overflowing_mul(VOWPAL_FNV_PRIME).0;
                             hashes_vec_out.push(*record_buffer.get_unchecked(hash_offset) ^ half_hash);
-//                            println!("Output hash: {}", h ^ half_hash);
                         }
                     }
                 }
@@ -90,19 +84,18 @@ impl<'a> FeatureBuffer<'a> {
                 std::mem::swap(&mut hashes_vec_in, &mut hashes_vec_out);
             }
             for hash in &(*hashes_vec_in) {
-                *unsafe_output_buffer.add(output_len) = *hash  & self.model_instance.hash_mask;
-                *unsafe_output_buffer.add(output_len+1) = feature_combo_weight_u32;
+                *self.output_buffer.get_unchecked_mut(output_len) = *hash  & self.model_instance.hash_mask;
+                *self.output_buffer.get_unchecked_mut(output_len+1) = feature_combo_weight_u32;
                 output_len += 2
 
             }
         }
         // add the constant
         if self.model_instance.add_constant_feature {
-                *unsafe_output_buffer.add(output_len) = CONSTANT_HASH & self.model_instance.hash_mask;
-                *unsafe_output_buffer.add(output_len+1) = ONE;
+                *self.output_buffer.get_unchecked_mut(output_len) = CONSTANT_HASH & self.model_instance.hash_mask;
+                *self.output_buffer.get_unchecked_mut(output_len+1) = ONE;
                 output_len += 2
         }
-        //println!("X {:?}", self.output_buffer);
         self.output_buffer.set_len(output_len);
         }
     }
@@ -179,7 +172,7 @@ mod tests {
         let mut fb = FeatureBuffer::new(&mi);
         let rb = add_header(vec![0, 0]); // no feature
         fb.translate_vowpal(&rb);
-        assert_eq!(fb.output_buffer, vec![1, 11650396, ONE]); // vw compatibility - no feature is no feature
+        assert_eq!(fb.output_buffer, vec![1, 116060, ONE]); // vw compatibility - no feature is no feature
     }
     
     
@@ -254,7 +247,7 @@ mod tests {
         let rb = add_header(vec![nd(4,5), nd(5,6), 2988156968, 2422381320]);
         fb.translate_vowpal(&rb);
 //        println!("out {}, out mod 2^24 {}", fb.output_buffer[1], fb.output_buffer[1] & ((1<<24)-1));
-        assert_eq!(fb.output_buffer, vec![1, 434843120, ONE]);
+        assert_eq!(fb.output_buffer, vec![1, 208368, ONE]);
         
     }
     

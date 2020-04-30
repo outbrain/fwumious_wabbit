@@ -10,7 +10,7 @@ use flate2::read::GzDecoder;
 
 use crate::parser;
 
-const HEADER_MAGIC_STRING: [u8; 4] = [0x46, 0x57, 0x46, 0x57];   // FWFW
+const HEADER_MAGIC_STRING: &[u8; 4] = b"FWCA";    // Fwumious Wabbit CAche
 const HEADER_VERSION:u32 = 2;
 
 const READBUF_LEN:usize = 1024*100;
@@ -76,7 +76,6 @@ impl RecordCache {
                         rc.reading = false;
                     }
                 }
-
             }
             if !rc.reading {
                 rc.writing = true;
@@ -88,13 +87,12 @@ impl RecordCache {
                                                                     Compression::fast())));
                 }
                 rc.write_header().unwrap();
-                
             }
         }        
         rc
     }
     
-    pub fn record_ready(&mut self, vp: &parser::VowpalParser) -> Result<(), Box<dyn Error>> {
+    pub fn push_record(&mut self, vp: &parser::VowpalParser) -> Result<(), Box<dyn Error>> {
         if self.writing {
             let element_size = mem::size_of::<u32>();
             let mut vv:&[u8];
@@ -118,8 +116,7 @@ impl RecordCache {
     pub fn write_header(&mut self) -> Result<(), Box<dyn Error>> {
         // we will write magic string FWFW
         // And then 32 bit unsigned version of the cache
-        let magic_string: [u8; 4] = [0x46, 0x57, 0x46, 0x57];   // fwfw
-        self.output_bufwriter.write(&HEADER_MAGIC_STRING)?;
+        self.output_bufwriter.write(HEADER_MAGIC_STRING)?;
         self.output_bufwriter.write(&HEADER_VERSION.to_le_bytes())?;
         Ok(())
     }
@@ -127,7 +124,7 @@ impl RecordCache {
     pub fn verify_header(&mut self) -> Result<(), Box<dyn Error>> {
         let mut magic_string: [u8; 4] = [0;4];
         self.input_bufreader.read(&mut magic_string)?;
-        if magic_string != HEADER_MAGIC_STRING {
+        if &magic_string != HEADER_MAGIC_STRING {
             return Err("Cache header does not begin with magic bytes FWFW")?;
         }
         
@@ -141,7 +138,7 @@ impl RecordCache {
     }
     
 
-    pub fn next_record(&mut self) -> Result<&[u32], Box<dyn Error>> {
+    pub fn get_next_record(&mut self) -> Result<&[u32], Box<dyn Error>> {
         if !self.reading {
             return Err("next_recrod() called on reading cache, when not opened in reading mode")?;
         }
@@ -158,28 +155,23 @@ impl RecordCache {
                     let record_len = buf_view[self.start_pointer /4 ] as usize;
                     if self.start_pointer + record_len * 4 <= self.end_pointer {
                         let ret_buf = &buf_view[self.start_pointer/4..self.start_pointer/4 + record_len];
-                        //println!("returning, len: {}: {}, {}", record_len*4, self.start_pointer, self.start_pointer + record_len);
                         self.start_pointer += record_len * 4;
                         return Ok(ret_buf);
                     }
                 } 
-      //          println!("Move");
                 self.byte_buffer.copy_within(self.start_pointer..self.end_pointer, 0);
                 self.end_pointer -= self.start_pointer;
                 self.start_pointer = 0;
-    //            println!("result: buffer start:{} end: {}", self.start_pointer, self.end_pointer);
 
                 let read_len = match self.input_bufreader.read(&mut self.byte_buffer[self.end_pointer..READBUF_LEN])  {
                     Ok(n) => n,
                     Err(e) => Err(e)?          
                 };
-//                println!("Read {} bytes", read_len);
                 if read_len == 0 {
                     return Ok(&[])
                 }
                 self.end_pointer += read_len;
                 self.total_read += read_len;
-  //              println!("Total {}", self.total_read);
             }            
         }
     }
