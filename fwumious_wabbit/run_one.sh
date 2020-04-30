@@ -8,6 +8,7 @@ rest="--data $infile -l 0.1 -b 24 --adaptive --sgd --link=logistic --loss_functi
 rm v f
 #rm $1.cache $1.fwcache
 vw=/home/minmax/minmax_old/zgit/vowpal_wabbit/vowpalwabbit/vw
+#vw=/home/minmax/obgit/vw/vowpal_wabbit/vowpalwabbit/vw
 clear;
 echo "build --release && target/release/fw $namespaces $rest -p f"
 

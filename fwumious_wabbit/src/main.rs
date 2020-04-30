@@ -121,11 +121,10 @@ fn main2() -> Result<(), Box<dyn Error>>  {
 
         }
         let p = re.learn(&fb.output_buffer, true);
-        let finalized_p = finalize_prediction(p);
         match predictions_file.as_mut() {
         //    Some(file) => {write!(file, "{:.6}\n", finalized_p)?;},
               Some(file) => {
-                  write!(file, "{:.6}\n", finalized_p)?;
+                  write!(file, "{:.6}\n", p)?;
 //                    let printed = float_to_string_buffer.format(finalized_p);
 //                    file.write(&printed[0..min(printed.len(), 8)].as_bytes());
 //                    write!(file, "\n");
@@ -150,19 +149,6 @@ fn main2() -> Result<(), Box<dyn Error>>  {
     Ok(())
 }
 
-fn finalize_prediction(p:f32) -> f32 {
-
-/*    if p.is_nan() {
-        return 1.0;
-    }*/
-    if p > 1.0 {
-        return 1.0;
-    }
-    if p < 0.0 {
-        return 0.0;
-    }
-    p
-}
 
 
 
