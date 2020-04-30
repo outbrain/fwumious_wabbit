@@ -10,6 +10,9 @@ use flate2::read::GzDecoder;
 
 use crate::parser;
 
+const HEADER_MAGIC_STRING: [u8; 4] = [0x46, 0x57, 0x46, 0x57];   // FWFW
+const HEADER_VERSION:u32 = 2;
+
 const READBUF_LEN:usize = 1024*100;
 
 
@@ -58,23 +61,33 @@ impl RecordCache {
         if enabled {
             if path::Path::new(&final_filename).exists() {
                 rc.reading = true;
-// 		We do not use BufReader as we do our own buffering
-//                rc.input_bufreader = Box::new(io::BufReader::with_capacity(1024*1024, fs::File::open(rc.final_filename.to_string()).unwrap()));
                 if !gz {
-                    rc.input_bufreader = Box::new(fs::File::open(final_filename).unwrap());
+                    rc.input_bufreader = Box::new(fs::File::open(&final_filename).unwrap());
                 } else {
-                    rc.input_bufreader = Box::new(GzDecoder::new(fs::File::open(final_filename).unwrap()));
+                    rc.input_bufreader = Box::new(GzDecoder::new(fs::File::open(&final_filename).unwrap()));
                 }
+                println!("using cache_file = {}", final_filename );
+                println!("ignoring text input in favor of cache input");
                 rc.byte_buffer.resize(READBUF_LEN, 0);
-            } else {
+                match rc.verify_header() {
+                    Ok(()) => {},
+                    Err(e) => {
+                        println!("Couldn't use the existing cache file");
+                        rc.reading = false;
+                    }
+                }
+
+            }
+            if !rc.reading {
                 rc.writing = true;
+                println!("creating cache file = {}", final_filename );
                 if !gz {
                     rc.output_bufwriter = Box::new(io::BufWriter::new(fs::File::create(temporary_filename).unwrap()));
-                    println!("creating cache file = {}", final_filename);
                 } else {
                     rc.output_bufwriter = Box::new(io::BufWriter::new(GzEncoder::new(fs::File::create(temporary_filename).unwrap(),
                                                                     Compression::fast())));
                 }
+                rc.write_header().unwrap();
                 
             }
         }        
@@ -102,6 +115,31 @@ impl RecordCache {
         Ok(())
     }
 
+    pub fn write_header(&mut self) -> Result<(), Box<dyn Error>> {
+        // we will write magic string FWFW
+        // And then 32 bit unsigned version of the cache
+        let magic_string: [u8; 4] = [0x46, 0x57, 0x46, 0x57];   // fwfw
+        self.output_bufwriter.write(&HEADER_MAGIC_STRING)?;
+        self.output_bufwriter.write(&HEADER_VERSION.to_le_bytes())?;
+        Ok(())
+    }
+
+    pub fn verify_header(&mut self) -> Result<(), Box<dyn Error>> {
+        let mut magic_string: [u8; 4] = [0;4];
+        self.input_bufreader.read(&mut magic_string)?;
+        if magic_string != HEADER_MAGIC_STRING {
+            return Err("Cache header does not begin with magic bytes FWFW")?;
+        }
+        
+        let mut version_bytes: [u8; 4] = [0;4];
+        self.input_bufreader.read(&mut version_bytes)?;
+        if HEADER_VERSION != u32::from_le_bytes(version_bytes) {
+            println!("Cache file is of different version than supported by this fw");
+            return Err("Different cache version")?;
+        }
+        Ok(())
+    }
+    
 
     pub fn next_record(&mut self) -> Result<&[u32], Box<dyn Error>> {
         if !self.reading {
