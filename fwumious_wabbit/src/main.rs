@@ -88,7 +88,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
 
     // Setup cache
        
-    let mut cache: cache::RecordCache = cache::RecordCache::new(input_filename, cl.is_present("cache"));
+    let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"));
 
 //    let mut mi = model_instance::ModelInstance::new_from_file("andraz-x2.json", &vw)?;
     let mut mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
@@ -99,30 +99,30 @@ fn main2() -> Result<(), Box<dyn Error>>  {
     let now = Instant::now();
     let mut i = 0;
     loop {
+        let reading_result;
+        let mut buffer:&[u32];
         if !cache.reading {
-            match rr.next_vowpal() {
-                parser::NextRecordResult::End => {break;},
-                parser::NextRecordResult::Error => {println!("Error from parsing records, row: {}", i); break},
-                parser::NextRecordResult::Ok => ()
-            }
-            cache.push_record(&rr)?;
-            fb.translate_vowpal(&rr.output_buffer[..]);
-        } else {
-            // now we read from cache
-            let cache_buffer = match cache.get_next_record() {
-                Ok(cache_buffer) => cache_buffer,
-                Err(e) => return Err(e),
+            reading_result = rr.next_vowpal();
+            buffer = match reading_result {
+                    Ok([]) => break, // EOF
+                    Ok(buffer2) => buffer2,
+                    Err(e) => return Err("Error")?
             };
-            if cache_buffer.len() == 0 {
-                // End of file
-                break;
+            if cache.writing {
+                    cache.push_record(buffer)?;
             }
-            fb.translate_vowpal(cache_buffer);
-
+        } else {
+            reading_result = cache.get_next_record();
+            buffer = match reading_result {
+                    Ok([]) => break, // EOF
+                    Ok(buffer) => buffer,
+                    Err(e) => return Err("Error")?
+            };
         }
+
+        fb.translate_vowpal(buffer);
         let p = re.learn(&fb.output_buffer, true);
         match predictions_file.as_mut() {
-        //    Some(file) => {write!(file, "{:.6}\n", finalized_p)?;},
               Some(file) => {
                   write!(file, "{:.6}\n", p)?;
 //                    let printed = float_to_string_buffer.format(finalized_p);
@@ -138,14 +138,6 @@ fn main2() -> Result<(), Box<dyn Error>>  {
     println!("Elapsed: {:.2?} rows: {}", elapsed, i);
 
 
-//    println!("{:?}", args);
-  //  println!("{}", input_filename);
-    
-    // Print text to the console
-    //println!("Hello World!");
-
-//    let example: i32 = 1;
-    
     Ok(())
 }
 

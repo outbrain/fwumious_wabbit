@@ -37,7 +37,6 @@ impl<'a> FeatureBuffer<'a> {
     /* this is unsafe and fast implementation , for saner implementation, look below */
     pub fn translate_vowpal(&mut self, record_buffer: &[u32]) -> () {
         unsafe {
-        
         *self.output_buffer.get_unchecked_mut(0) = record_buffer[1];  // copy label
         let mut output_len:usize = 1;
         let mut hashes_vec_in : &mut Vec<u32> = &mut self.hashes_vec_in;

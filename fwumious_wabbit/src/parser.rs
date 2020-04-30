@@ -62,17 +62,14 @@ impl<'a> VowpalParser<'a> {
     }
 
 
-    pub fn next_vowpal(&mut self) -> NextRecordResult {
+    pub fn next_vowpal(&mut self) -> Result<&[u32], Box<dyn Error>>  {
             // Output item
             self.tmp_read_buf.truncate(0);
             //println!("{:?}", self.tmp_read_buf);
             let rowlen1 = match self.input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
-                Err(e) => return NextRecordResult::Error,
-                Ok(0) => {
-                        self.output_buffer.truncate(0);
-                        return NextRecordResult::End
-                        },
-                Ok(len) => len,
+                Ok(0) => return Ok(&[]),
+                Ok(n) => n,
+                Err(e) => Err(e)?          
             };
             //println!("{:?}", self.tmp_read_buf);
             // Fields are: 
@@ -91,7 +88,7 @@ impl<'a> VowpalParser<'a> {
                 match *p.add(0) {
                     0x31 => self.output_buffer[LABEL_OFFSET] = 1,    // 1
                     0x2d => self.output_buffer[LABEL_OFFSET] = 0,    // -1
-                    _ => return NextRecordResult::Error
+                    _ => return Err("Label neither 1 or -1")?
                 };
                 let mut current_char_index:usize = 0 * 2 + HEADER_LEN;
                 let mut i_start:usize;
@@ -138,10 +135,11 @@ impl<'a> VowpalParser<'a> {
 
 //                *buf.add(current_char_index+1) = bufpos as u32;
                 *buf = bufpos as u32;
+            self.output_buffer.set_len(bufpos);  // Why do we also keep length as first datapoint - so we can directly write these records to cache
             }
             
-            //println!("item out {:?}", rr.output_buffer);
-            NextRecordResult::Ok
+//            println!("item out {:?} {}", self.output_buffer, bufpos);
+            Ok(&self.output_buffer)
         }
 
 }
@@ -185,17 +183,12 @@ r#"1 |A a
 "#);
         let mut rr = VowpalParser::new(&mut buf, &vw);
         // we test a single record
-        assert_eq!(rr.next_vowpal(), NextRecordResult::Ok);
-        assert_eq!(rr.output_buffer, vec![6, 1, nd(5,6),           0, 0, 2988156968]);
-        assert_eq!(rr.next_vowpal(), NextRecordResult::Ok);
-        assert_eq!(rr.output_buffer, vec![6, 0, nd(0,5), nd(5,6), 0, 2422381320]);
-        assert_eq!(rr.next_vowpal(), NextRecordResult::Ok);
-        assert_eq!(rr.output_buffer, vec![7, 1, nd(5,7),           0, 0, 2988156968, 3529656005]);
-        assert_eq!(rr.next_vowpal(), NextRecordResult::Ok);
-        assert_eq!(rr.output_buffer, vec![7, 0, nd(5,6), nd(6, 7), 0, 2988156968, 2422381320]);
+        assert_eq!(rr.next_vowpal().unwrap(), [6, 1, nd(5,6),           0, 0, 2988156968]);
+        assert_eq!(rr.next_vowpal().unwrap(), [6, 0, nd(0,5), nd(5,6), 0, 2422381320]);
+        assert_eq!(rr.next_vowpal().unwrap(), [7, 1, nd(5,7),           0, 0, 2988156968, 3529656005]);
+        assert_eq!(rr.next_vowpal().unwrap(), [7, 0, nd(5,6), nd(6, 7), 0, 2988156968, 2422381320]);
         //println!("{:?}", rr.output_buffer);
         // now we test if end-of-stream works correctly
-        assert_eq!(rr.next_vowpal(), NextRecordResult::End);
-        assert_eq!(rr.output_buffer.len(), 0);
+        assert_eq!(rr.next_vowpal().unwrap().len(), 0);
     }
 }

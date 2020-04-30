@@ -92,13 +92,13 @@ impl RecordCache {
         rc
     }
     
-    pub fn push_record(&mut self, vp: &parser::VowpalParser) -> Result<(), Box<dyn Error>> {
+    pub fn push_record(&mut self, record_buf: &[u32]) -> Result<(), Box<dyn Error>> {
         if self.writing {
             let element_size = mem::size_of::<u32>();
             let mut vv:&[u8];
             unsafe { 
-                vv = slice::from_raw_parts(vp.output_buffer.as_ptr() as *const u8, 
-                                            vp.output_buffer.len() * element_size) ;
+                vv = slice::from_raw_parts(record_buf.as_ptr() as *const u8, 
+                                            record_buf.len() * element_size) ;
                 self.output_bufwriter.write(&vv)?;
             }
         }
@@ -164,12 +164,11 @@ impl RecordCache {
                 self.start_pointer = 0;
 
                 let read_len = match self.input_bufreader.read(&mut self.byte_buffer[self.end_pointer..READBUF_LEN])  {
+                    Ok(0) => return Ok(&[]),
                     Ok(n) => n,
                     Err(e) => Err(e)?          
                 };
-                if read_len == 0 {
-                    return Ok(&[])
-                }
+
                 self.end_pointer += read_len;
                 self.total_read += read_len;
             }            
