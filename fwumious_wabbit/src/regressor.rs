@@ -30,7 +30,7 @@ impl<'a> Regressor<'a> {
     }
     
     
-    pub fn learn(&mut self, feature_buffer: &Vec<u32>, update: bool) -> f32 {
+    pub fn learn(&mut self, feature_buffer: &Vec<u32>, mut update: bool, example_num: u32) -> f32 {
         unsafe {
         let y = feature_buffer[0] as f32; // 0.0 or 1.0
         let fbuf = &feature_buffer.get_unchecked(1..feature_buffer.len());
@@ -47,7 +47,6 @@ impl<'a> Regressor<'a> {
             *self.local_data.get_unchecked_mut(i*4) = w;
             *self.local_data.get_unchecked_mut(i*4+1) = *self.weights.get_unchecked(hash*2+1);
             *self.local_data.get_unchecked_mut(i*4+2) = feature_value;
-            
         }
         let learning_rate = self.model_instance.learning_rate;
         // Very clever trick, if we simply multiply by learning rate here, we don't have to in the inner loop
@@ -56,11 +55,18 @@ impl<'a> Regressor<'a> {
         let prediction = wsum * learning_rate;
         // vowpal compatibility
         let mut prediction_finalized = prediction;
-        if prediction_finalized < -50.0 {
-            prediction_finalized = -50.0
+        if prediction_finalized.is_nan() {
+            eprintln!("NAN prediction in example {}, forcing 0.0", example_num);
+            prediction_finalized = 0.0;
+            update = false;
+        } else if prediction_finalized < -50.0 {
+            prediction_finalized = -50.0;
+            update = false;
         } else if prediction_finalized > 50.0 {
             prediction_finalized = 50.0;
+            update = false;
         }
+//        println!("Prediction finalized: {}", prediction_finalized);
         
         let part1 = 1.0+(prediction_finalized).exp() ;
         let prediction_probability:f32 = (part1).recip();
@@ -69,10 +75,9 @@ impl<'a> Regressor<'a> {
         // vowpal does not update for negative loss
         // since logloss = log(1 + wsum_exp), we can just check if part 1 is positive, if it isn't it means that logloss is negativ
 //        println!("Wsum exp: {}", wsum.exp());
-        
-        if part1 <= 1.0 {
-        //    println!("GOT IT");
-        } else
+//        if prediction_probability == 1.92874989335373846e-22 {
+//        println!("Part1: {}, prediction probability: {}", part1, prediction_probability);
+//        }
         if update{
 //        if update {
             let general_gradient = -(prediction_probability - y);

@@ -84,14 +84,12 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         true =>  { aa = io::BufReader::new(MultiGzDecoder::new(input)); &mut aa },
         false => { bb = io::BufReader::new(input); &mut bb}
     };
-    let mut rr = parser::VowpalParser::new(bufferred_input, &vw);
 
     // Setup cache
        
-    let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"));
-
-//    let mut mi = model_instance::ModelInstance::new_from_file("andraz-x2.json", &vw)?;
     let mut mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
+    let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"));
+    let mut rr = parser::VowpalParser::new(bufferred_input, &vw);
     let mut fb = feature_buffer::FeatureBuffer::new(&mi);
     let mut re = regressor::Regressor::new(&mi);
     
@@ -121,7 +119,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         }
 
         fb.translate_vowpal(buffer);
-        let p = re.learn(&fb.output_buffer, true);
+        let p = re.learn(&fb.output_buffer, true, i);
         match predictions_file.as_mut() {
               Some(file) => {
                   write!(file, "{:.6}\n", p)?;

@@ -1,9 +1,9 @@
 #/bin/sh
 infile=$1
 namespaces="--interactions 4G --interactions 4GHX --interactions 4GUW --interactions 4K --interactions 4c --interactions 4go --interactions 4v --interactions BC --interactions BD --interactions BGO --interactions BX --interactions CO --interactions DG --interactions DO --interactions DW --interactions GU --interactions Gx --interactions KR --interactions MN --interactions UW --interactions Ug --interactions eg --keep B --keep C --keep D --keep F --keep G --keep H --keep L --keep O --keep S --keep U --keep W --keep e --keep f --keep g --keep h --keep i --keep o --keep p --keep q --keep r --keep v --keep x "
-#namespaces="--interactions 4G --interactions 4GHX --interactions 4GUW --interactions 4K --interactions 4c --interactions 4go --interactions 4v --interactions BC --interactions BD --interactions BGO --interactions BX --interactions CO --interactions DG --interactions DW --interactions GU --interactions Gx --interactions KR --interactions MN --interactions UW --interactions Ug --interactions eg --keep B --keep C --keep D --keep F --keep G --keep H --keep L --keep O --keep S --keep U --keep W --keep e --keep f --keep g --keep h --keep i --keep o --keep p --keep q --keep r --keep v --keep x "
-#namespaces="--keep A --keep B"
-rest="--data $infile -l 0.1 -b 24 --adaptive --sgd --link=logistic --loss_function logistic --power_t 0.15 --l2 0.0 --hash all"
+#namespaces="--keep A"
+rest="--data $infile -l 0.025 -b 24 --adaptive --sgd --link=logistic --loss_function logistic --power_t 0.15 --l2 0.0 --hash all --noconstant"
+
 #rest="-b 24 --data $infile -l 0.1 --power_t 0.39 --adaptive --link logistic --sgd --loss_function logistic --noconstant --l2 0.0"
 rm v f
 #rm $1.cache $1.fwcache
