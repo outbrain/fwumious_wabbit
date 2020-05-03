@@ -98,6 +98,18 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .value_name("all")
                      .help("We do not support trating strings as already hashed numbers, so you have to use --hash all")
                      .takes_value(true))
+                    .arg(Arg::with_name("final_regressor")
+                     .short("f")
+                     .long("final_regressor")
+                     .value_name("arg")
+                     .help("Final regressor to save (arg is filename)")
+                     .takes_value(true))
+                    .arg(Arg::with_name("initial_regressor")
+                     .short("i")
+                     .long("initial_regressor")
+                     .value_name("arg")
+                     .help("Initial regressor(s) to load into memory (arg is filename)")
+                     .takes_value(true))
                     .get_matches();
 
 matches

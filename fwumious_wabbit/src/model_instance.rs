@@ -4,20 +4,22 @@ use std::io::ErrorKind;
 
 use std::io::Read;
 use std::fs::File;
-
-
-
-use clap::{App, Arg};
+use serde::{Serialize,Deserialize};//, Deserialize};
+use clap::Arg;
 use serde_json::{Value,from_str};
 
 use crate::vwmap;
 
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct FeatureComboDesc {
     pub feature_indices: Vec<usize>,
     pub weight:f32,
 }
 
 
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ModelInstance {
     pub learning_rate: f32,    
     pub power_t: f32,
@@ -25,7 +27,6 @@ pub struct ModelInstance {
     pub hash_mask: u32,
     pub add_constant_feature: bool,
     pub feature_combo_descs: Vec<FeatureComboDesc>,
-
 }
 
 
@@ -149,7 +150,7 @@ impl ModelInstance {
     }
 
 
-    pub fn new_from_file(input_filename: &str, vw: &vwmap::VwNamespaceMap) -> Result<ModelInstance, Box<dyn Error>> {
+    pub fn new_from_jsonfile(input_filename: &str, vw: &vwmap::VwNamespaceMap) -> Result<ModelInstance, Box<dyn Error>> {
         let mut mi = ModelInstance::new_empty()?;
         let mut input = File::open(input_filename)?;
         let mut contents = String::new();
@@ -182,5 +183,8 @@ impl ModelInstance {
 
         Ok(mi)
     }
+    
+    
+    
     
 }

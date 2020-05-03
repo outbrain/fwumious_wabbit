@@ -12,6 +12,6 @@ vw=/home/minmax/minmax_old/zgit/vowpal_wabbit/vowpalwabbit/vw
 clear;
 echo "build --release && target/release/fw $namespaces $rest -p f"
 
-cargo build --release && target/release/fw $namespaces $rest -c -p f && time $vw $namespaces $rest -c -p v
+cargo build --release && target/release/fw $namespaces $rest -c -p f -f regressor.fw -i regressor.fw && time $vw $namespaces $rest -c -p v -f regressor.vw
 #clear; cargo build && target/debug/fw $namespaces $rest -p f && time vw $namespaces $rest -p v
 

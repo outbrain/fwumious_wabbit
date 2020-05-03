@@ -31,6 +31,7 @@ mod feature_buffer;
 mod regressor;
 mod cmdline;
 mod cache;
+mod persistence;
 
 const RECBUF_LEN:usize = 4096 * 2;
 
@@ -51,7 +52,7 @@ fn read_into_records_buffer(lines: std::io::BufReader<File>, rb: &RecordsBuffer)
 // This is the main function
 fn main() {
     match main2() {
-        Err(e) => {println!("{:?}", e); std::process::exit(1)},
+        Err(e) => {println!("Hmm: {:?}", e); std::process::exit(1)},
         Ok(()) => {}
     }    
 }
@@ -62,18 +63,17 @@ fn main2() -> Result<(), Box<dyn Error>>  {
     let cl = cmdline::parse();
     let input_filename = cl.value_of("data").unwrap();
     
-    // We do load vw_namespace_map.csv just so we know all the namespaces ahead of time
-    let vw_namespace_map_filepath = Path::new(input_filename).parent().unwrap().join("vw_namespace_map.csv");
-    let vw = vwmap::get_global_map_from_json(vw_namespace_map_filepath)?;
 
     // Where will we be putting perdictions (if at all)
-    let predictions_filename = cl.value_of("predictions");
     let mut predictions_file = match cl.value_of("predictions") {
-        Some(filename) => {
-            let mut file = File::create(filename)?;
-            Some(BufWriter::new(file))
-            },
+        Some(filename) => Some(BufWriter::new(File::create(filename)?)),
         None => None      
+    };
+
+    let final_regressor_filename = cl.value_of("final_regressor");
+    match final_regressor_filename {
+        Some(filename) => println!("final_regressor = {}", filename),
+        None => {}
     };
     
     // Setup Parser, is rust forcing this disguisting way to do it, or I just don't know the pattern?
@@ -84,15 +84,28 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         true =>  { aa = io::BufReader::new(MultiGzDecoder::new(input)); &mut aa },
         false => { bb = io::BufReader::new(input); &mut bb}
     };
-
-    // Setup cache
-       
-    let mut mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
-    let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"));
-    let mut rr = parser::VowpalParser::new(bufferred_input, &vw);
-    let mut fb = feature_buffer::FeatureBuffer::new(&mi);
-    let mut re = regressor::Regressor::new(&mi);
     
+    /* setting up the pipeline, either from command line or from existing regressor */
+    let mut vw: vwmap::VwNamespaceMap;
+    let mut re: regressor::Regressor;
+    let mut mi: model_instance::ModelInstance;
+    
+    if let Some(filename) = cl.value_of("initial_regressor") {
+            println!("initial_regressor = {}", filename);
+            println!("WARNING: Command line model parameters will be ignored");
+            let (mi2, vw2, re2) = regressor::Regressor::new_from_filename(filename)?;
+            mi = mi2; vw = vw2; re = re2;
+    } else {
+            // We do load vw_namespace_map.csv just so we know all the namespaces ahead of time
+            let vw_namespace_map_filepath = Path::new(input_filename).parent().unwrap().join("vw_namespace_map.csv");
+            vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
+            mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
+            re = regressor::Regressor::new(&mi);
+    };
+    let mut pa = parser::VowpalParser::new(bufferred_input, &vw);
+    let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"), &vw);
+    let mut fb = feature_buffer::FeatureBuffer::new(&mi);
+
 
     let now = Instant::now();
     let mut i = 0;
@@ -100,7 +113,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         let reading_result;
         let mut buffer:&[u32];
         if !cache.reading {
-            reading_result = rr.next_vowpal();
+            reading_result = pa.next_vowpal();
             buffer = match reading_result {
                     Ok([]) => break, // EOF
                     Ok(buffer2) => buffer2,
@@ -121,17 +134,16 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         fb.translate_vowpal(buffer);
         let p = re.learn(&fb.output_buffer, true, i);
         match predictions_file.as_mut() {
-              Some(file) => {
-                  write!(file, "{:.6}\n", p)?;
-//                    let printed = float_to_string_buffer.format(finalized_p);
-//                    file.write(&printed[0..min(printed.len(), 8)].as_bytes());
-//                    write!(file, "\n");
-              },
+            Some(file) =>  write!(file, "{:.6}\n", p)?,
             None => {}
         };
         i += 1;
     }
     cache.write_finish()?;
+    match final_regressor_filename {
+        Some(filename) => re.save_to_filename(filename, &mi, &vw)?,
+        None => {}
+    }
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?} rows: {}", elapsed, i);
 

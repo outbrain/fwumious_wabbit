@@ -1,17 +1,27 @@
 
 use std::{mem,slice};
 use std::io;
+use std::io::Read;
 use std::fs;
 use std::error::Error;
 use std::path;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use flate2::read::GzDecoder;
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use crate::parser;
+use crate::vwmap;
+use crate::persistence;
 
-const HEADER_MAGIC_STRING: &[u8; 4] = b"FWCA";    // Fwumious Wabbit CAche
-const HEADER_VERSION:u32 = 2;
+const CACHE_HEADER_MAGIC_STRING: &[u8; 4] = b"FWCA";    // Fwumious Wabbit CAche
+const CACHE_HEADER_VERSION:u32 = 3;
+// Cache layout:
+// 4 bytes: Magic bytes
+// u32: Version of the cache format
+// u_size + length - json encoding of vw_source
+// ...cached examples
+
 
 const READBUF_LEN:usize = 1024*100;
 
@@ -32,7 +42,7 @@ pub struct RecordCache {
 
 
 impl RecordCache {
-    pub fn new(input_filename: &str, enabled: bool) -> RecordCache {
+    pub fn new(input_filename: &str, enabled: bool, vw_map: &vwmap::VwNamespaceMap) -> RecordCache {
         let temporary_filename: String;
         let final_filename: String;
         let gz: bool;
@@ -62,6 +72,7 @@ impl RecordCache {
             if path::Path::new(&final_filename).exists() {
                 rc.reading = true;
                 if !gz {
+                    // we buffer ourselves, otherwise i would be wise to use bufreader
                     rc.input_bufreader = Box::new(fs::File::open(&final_filename).unwrap());
                 } else {
                     rc.input_bufreader = Box::new(GzDecoder::new(fs::File::open(&final_filename).unwrap()));
@@ -69,10 +80,11 @@ impl RecordCache {
                 println!("using cache_file = {}", final_filename );
                 println!("ignoring text input in favor of cache input");
                 rc.byte_buffer.resize(READBUF_LEN, 0);
-                match rc.verify_header() {
+                match rc.verify_header(vw_map) {
                     Ok(()) => {},
                     Err(e) => {
-                        println!("Couldn't use the existing cache file");
+                        
+                        println!("Couldn't use the existing cache file: {:?}", e);
                         rc.reading = false;
                     }
                 }
@@ -86,7 +98,7 @@ impl RecordCache {
                     rc.output_bufwriter = Box::new(io::BufWriter::new(GzEncoder::new(fs::File::create(temporary_filename).unwrap(),
                                                                     Compression::fast())));
                 }
-                rc.write_header().unwrap();
+                rc.write_header(vw_map).unwrap();
             }
         }        
         rc
@@ -113,27 +125,31 @@ impl RecordCache {
         Ok(())
     }
 
-    pub fn write_header(&mut self) -> Result<(), Box<dyn Error>> {
-        // we will write magic string FWFW
-        // And then 32 bit unsigned version of the cache
-        self.output_bufwriter.write(HEADER_MAGIC_STRING)?;
-        self.output_bufwriter.write(&HEADER_VERSION.to_le_bytes())?;
+    pub fn write_header(&mut self, vw_map: &vwmap::VwNamespaceMap) -> Result<(), Box<dyn Error>> {
+        self.output_bufwriter.write(CACHE_HEADER_MAGIC_STRING)?;
+        self.output_bufwriter.write_u32::<LittleEndian>(CACHE_HEADER_VERSION)?;
+        vw_map.save_to_buf(&mut self.output_bufwriter)?;
         Ok(())
     }
 
-    pub fn verify_header(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn verify_header(&mut self, vwmap: &vwmap::VwNamespaceMap) -> Result<(), Box<dyn Error>> {
         let mut magic_string: [u8; 4] = [0;4];
         self.input_bufreader.read(&mut magic_string)?;
-        if &magic_string != HEADER_MAGIC_STRING {
+        if &magic_string != CACHE_HEADER_MAGIC_STRING {
             return Err("Cache header does not begin with magic bytes FWFW")?;
         }
         
-        let mut version_bytes: [u8; 4] = [0;4];
-        self.input_bufreader.read(&mut version_bytes)?;
-        if HEADER_VERSION != u32::from_le_bytes(version_bytes) {
-            println!("Cache file is of different version than supported by this fw");
-            return Err("Different cache version")?;
+        let version = self.input_bufreader.read_u32::<LittleEndian>()?;
+        if CACHE_HEADER_VERSION != version {
+            return Err(format!("Cache file version of this binary: {}, version of the cache file: {}", CACHE_HEADER_VERSION, version))?;
         }
+        
+        // Compare vwmap in cache and the one we've been given. If they differ, rebuild cache
+        let vwmap_from_cache = vwmap::VwNamespaceMap::new_from_buf(&mut self.input_bufreader)?;
+        if vwmap_from_cache.vw_source != vwmap.vw_source {
+            return Err("vw_namespace_map.csv and the one from cache file differ")?;
+        }
+        
         Ok(())
     }
     
@@ -144,9 +160,7 @@ impl RecordCache {
         }
         unsafe { 
             // We're going to cast another view over the data, so we can read it as u32
-            let buf_view:&[u32];
-            buf_view = slice::from_raw_parts(self.byte_buffer.as_ptr() as *const u32, READBUF_LEN) ;
-            
+            let buf_view:&[u32] = slice::from_raw_parts(self.byte_buffer.as_ptr() as *const u32, READBUF_LEN/4);
             loop {
                 // Classical buffer strategy:
                 // Return if you have full record in buffer,
@@ -174,8 +188,4 @@ impl RecordCache {
             }            
         }
     }
-    
-    
-    
-    
 }

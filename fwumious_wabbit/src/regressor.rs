@@ -1,30 +1,31 @@
 use fastapprox::fast::sigmoid;
-use std::cmp;
-const ONE:u32 = 1065353216;      // this is 1.0 float -> u32
-
+use std::process;
 
 use crate::model_instance;
 
-pub struct Regressor<'a> {
-    model_instance: &'a model_instance::ModelInstance,
+const ONE:u32 = 1065353216;      // this is 1.0 float -> u32
+const BUF_LEN:usize = 256; // it will cause abort if there is more than this number of features in one single vecotr
+
+
+pub struct Regressor {
+//    model_instance: &'a model_instance::ModelInstance,
     hash_mask: u32,
-    weights: Vec<f32>,
-//    gradient_sqr: Vec<f32>,
-    local_data: [f32; 1024],//Vec<f32>,
-     minus_power_t:f32,
+    learning_rate: f32,
+    minus_power_t:f32,
+    pub weights: Vec<f32>,       // Both weights and gradients
+    local_data: [f32; BUF_LEN * 4], //instead of Vec<f32>  -- we found that this speeds up the program considerably
 }
 
-impl<'a> Regressor<'a> {
-    pub fn new(model_instance: &'a model_instance::ModelInstance) -> Regressor {
+impl Regressor {
+    pub fn new(model_instance: &model_instance::ModelInstance) -> Regressor {
         let hash_mask = (1 << model_instance.hash_bits) -1;
-                            
         let mut rg = Regressor{
-                            model_instance: model_instance,
+//                            model_instance: model_instance,
                             hash_mask: hash_mask,
+                            learning_rate: model_instance.learning_rate,
                             weights: vec![0.0; (2*(hash_mask+1)) as usize],
- //                           gradient_sqr: vec![0.0; (hash_mask+1) as usize],
-                            local_data: [0.0;1024], //vec![0.0; 1000],
                             minus_power_t : - model_instance.power_t,
+                            local_data: [0.0; BUF_LEN * 4],//vec![0.0; 1000],
                         };
         rg
     }
@@ -35,6 +36,10 @@ impl<'a> Regressor<'a> {
         let y = feature_buffer[0] as f32; // 0.0 or 1.0
         let fbuf = &feature_buffer.get_unchecked(1..feature_buffer.len());
         let fbuf_len = fbuf.len()/2;
+        if fbuf_len > BUF_LEN {
+            println!("Number of features per example ({}) is higher than supported in this fw binary ({}, exiting", fbuf_len, BUF_LEN);
+            process::exit(1);
+        }
         //let mut local_data = self.local_data;
         /* first we need a dot product, which in our case is a simple sum */
         let mut wsum:f32 = 0.0;
@@ -48,11 +53,8 @@ impl<'a> Regressor<'a> {
             *self.local_data.get_unchecked_mut(i*4+1) = *self.weights.get_unchecked(hash*2+1);
             *self.local_data.get_unchecked_mut(i*4+2) = feature_value;
         }
-        let learning_rate = self.model_instance.learning_rate;
-        // Very clever trick, if we simply multiply by learning rate here, we don't have to in the inner loop
-        // the results are litarary equivalent! 
-        // This works only because all updates are directly linearly proportional to learning rate
-        let prediction = wsum * learning_rate;
+        // Trick: instead of multiply in the updates with learning rate, multiply the result
+        let prediction = wsum * self.learning_rate;
         // vowpal compatibility
         let mut prediction_finalized = prediction;
         if prediction_finalized.is_nan() {
@@ -68,18 +70,9 @@ impl<'a> Regressor<'a> {
         }
 //        println!("Prediction finalized: {}", prediction_finalized);
         
-        let part1 = 1.0+(prediction_finalized).exp() ;
-        let prediction_probability:f32 = (part1).recip();
+        let prediction_probability:f32 = (1.0+(prediction_finalized).exp()).recip();
 //        let prediction:f32 = sigmoid(wsum);      // ain't faster
-        // Part1 >0 
-        // vowpal does not update for negative loss
-        // since logloss = log(1 + wsum_exp), we can just check if part 1 is positive, if it isn't it means that logloss is negativ
-//        println!("Wsum exp: {}", wsum.exp());
-//        if prediction_probability == 1.92874989335373846e-22 {
-//        println!("Part1: {}, prediction probability: {}", part1, prediction_probability);
-//        }
         if update{
-//        if update {
             let general_gradient = -(prediction_probability - y);
             //println!("general gradient: {}, prediction {}, prediction orig: {}", general_gradient, prediction, -wsum*learning_rate); 
             for i in 0..fbuf_len {
@@ -90,8 +83,8 @@ impl<'a> Regressor<'a> {
                 let update_factor = gradient * (self.local_data.get_unchecked(i*4+1)).powf(self.minus_power_t);
                 *self.local_data.get_unchecked_mut(i*4) = update_factor;    // this is how vowpal does it, first calculate, then addk
             }
-            // Next step is: gradients = weights_vector *  
-            for i in 0..fbuf_len {     // speed of this is 4.53
+            // Next step is: gradients = weights_vector * 
+            for i in 0..fbuf_len {
                 let hash = *fbuf.get_unchecked(i*2) as usize;
                 *self.weights.get_unchecked_mut(hash*2) += *self.local_data.get_unchecked(i*4);
                 *self.weights.get_unchecked_mut(hash*2+1) += *self.local_data.get_unchecked(i*4+3);
@@ -102,93 +95,6 @@ impl<'a> Regressor<'a> {
         }
     }
 
-    pub fn learn_oldoptimized(&mut self, feature_buffer: &Vec<u32>, update: bool) -> f32 {
-        unsafe {
-        let y = feature_buffer[0] as f32; // 0.0 or 1.0
-        let fbuf = &feature_buffer[1..feature_buffer.len()];
-        let fbuf_len = fbuf.len()/2;
-        //let mut local_data = self.local_data;
-        /* first we need a dot product, which in our case is a simple sum */
-        let mut wsum:f32 = 0.0;
-        for i in 0..fbuf_len {     // speed of this is 4.53
-            let hash = (*fbuf.get_unchecked(i*2) & self.hash_mask) as usize;
-            let feature_value:f32 = f32::from_bits(*fbuf.get_unchecked(i*2+1));
-            wsum += self.weights[hash*2] * feature_value;    
-            //*local_data.get_unchecked_mut(i*4) = *self.weights.get_unchecked(hash*2);
-            self.local_data[i*4] = *self.weights.get_unchecked(hash*2);     // load weight
-            self.local_data[i*4+1] = *self.weights.get_unchecked(hash*2+1); // load sum of previous errors
-            self.local_data[i*4+2] = feature_value;
-
-        }
-        let prediction:f32 = (1.0+(-wsum).exp()).recip();
-//        let prediction:f32 = sigmoid(wsum);      // ain't faster
-        if update {
-            let learning_rate = self.model_instance.learning_rate;
-            let general_gradient = -(prediction - y);
-            for i in 0..fbuf_len {
-                let feature_value = *self.local_data.get_unchecked(i*4+2);
-                let gradient = general_gradient * feature_value;
-//                println!("Gradient: {}", self.local_data[i*4+1]);
-                self.local_data[i*4+3] = gradient*gradient;	// it would be easier, to just use i*4+1 at the end... but this is how vowpal does it
-                self.local_data[i*4+1] += *self.local_data.get_unchecked(i*4+3);
-                let update_factor = gradient * learning_rate  * (self.local_data.get_unchecked(i*4+1)).powf(self.minus_power_t);
-                self.local_data[i*4] = update_factor;    // this is how vowpal does it, first calculate, then addk
-            
-            }
-            // Next step is: gradients = weights_vector *  
-            for i in 0..fbuf_len {     // speed of this is 4.53
-                let hash = (*fbuf.get_unchecked(i*2) & self.hash_mask) as usize;
-                self.weights[hash*2] += *self.local_data.get_unchecked(i*4);
-                self.weights[hash*2+1] += *self.local_data.get_unchecked(i*4+3);
-            }
-
-        }
-    //    println!("S {}, {}", y, prediction);
-        prediction
-        }
-    }
-
-    pub fn learn_original(&mut self, feature_buffer: &Vec<u32>, update: bool) -> f32 {
-        let y = feature_buffer[0] as f32; // 0.0 or 1.0
-        let fbuf = &feature_buffer[1..feature_buffer.len()];
-        let fbuf_len = fbuf.len()/2;
-        /* first we need a dot product, which in our case is a simple sum */
-        let mut wsum:f32 = 0.0;
-        for i in 0..fbuf_len {     // speed of this is 4.53
-            let hash = (fbuf[i*2] & self.hash_mask) as usize;
-            let feature_value:f32 = f32::from_bits(fbuf[i*2+1]);
-            wsum += self.weights[hash*2] * feature_value;    
-            self.local_data[i*4] = self.weights[hash*2];
-            self.local_data[i*4+1] = self.weights[hash*2+1];
-            self.local_data[i*4+2] = feature_value;
-
-        }
-        let prediction:f32 = (1.0+(-wsum).exp()).recip();
-//        let prediction:f32 = sigmoid(wsum);      // ain't faster
-        if update {
-            let learning_rate = self.model_instance.learning_rate;
-            let general_gradient = -(prediction - y);
-            for i in 0..fbuf_len {
-                let feature_value = self.local_data[i*4+2];
-                let gradient = general_gradient * feature_value;
-//                println!("Gradient: {}", self.local_data[i*4+1]);
-                self.local_data[i*4+3] = gradient*gradient;	// it would be easier, to just use i*4+1 at the end... but this is how vowpal does it
-                self.local_data[i*4+1] += self.local_data[i*4+3];
-                let update_factor = gradient * learning_rate  * (self.local_data[i*4+1]).powf(self.minus_power_t);
-                self.local_data[i*4] = update_factor;    // this is how vowpal does it, first calculate, then addk
-            
-            }
-            // Next step is: gradients = weights_vector *  
-            for i in 0..fbuf_len {     // speed of this is 4.53
-                let hash = (fbuf[i*2] & self.hash_mask) as usize;
-                self.weights[hash*2] += self.local_data[i*4];
-                self.weights[hash*2+1] += self.local_data[i*4+3];
-            }
-
-        }
-    //    println!("S {}, {}", y, prediction);
-        prediction
-    }
     
 }
 

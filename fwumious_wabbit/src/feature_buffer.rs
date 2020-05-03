@@ -17,6 +17,7 @@ pub struct FeatureBuffer<'a> {
 }
 
 impl<'a> FeatureBuffer<'a> {
+
     pub fn new(model_instance: &'a model_instance::ModelInstance) -> FeatureBuffer {
         let mut fb = FeatureBuffer{
                             model_instance: model_instance,
