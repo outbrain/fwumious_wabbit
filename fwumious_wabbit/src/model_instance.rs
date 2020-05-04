@@ -23,7 +23,7 @@ pub struct FeatureComboDesc {
 pub struct ModelInstance {
     pub learning_rate: f32,    
     pub power_t: f32,
-    pub hash_bits: u8,
+    pub bit_precision: u8,
     pub hash_mask: u32,
     pub add_constant_feature: bool,
     pub feature_combo_descs: Vec<FeatureComboDesc>,
@@ -34,7 +34,7 @@ impl ModelInstance {
     pub fn new_empty() -> Result<ModelInstance, Box<dyn Error>> {
         let mut mi = ModelInstance {
             learning_rate: 0.5, // vw default 
-            hash_bits: 18,      // vw default
+            bit_precision: 18,      // vw default
             hash_mask: (1 << 18) -1,
             power_t: 0.5,
             add_constant_feature: true,
@@ -93,9 +93,10 @@ impl ModelInstance {
             }
         }
 
-        if let Some(val) = cl.value_of("hash_bits") {
-            mi.hash_bits = val.parse()?;
-            mi.hash_mask = (1 << mi.hash_bits) -1;
+        if let Some(val) = cl.value_of("bit_precision") {
+            mi.bit_precision = val.parse()?;
+            println!("Num weight bits = {}", mi.bit_precision); // vwcompat
+            mi.hash_mask = (1 << mi.bit_precision) -1;
         }
         if let Some(val) = cl.value_of("learning_rate") {
             mi.learning_rate = val.parse()?;
@@ -158,7 +159,7 @@ impl ModelInstance {
         let j: Value = serde_json::from_str(&contents)?;
         let descj = &j["desc"];
         mi.learning_rate = descj["learning_rate"].as_f64().unwrap() as f32;
-        mi.hash_bits = descj["hash_bits"].as_u64().unwrap() as u8;
+        mi.bit_precision = descj["bit_precision"].as_u64().unwrap() as u8;
         let features = descj["features"].as_array().unwrap();
         for feature in features {
             let mut feature_combo_desc = FeatureComboDesc {

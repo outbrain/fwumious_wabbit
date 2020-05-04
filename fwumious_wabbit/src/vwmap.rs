@@ -52,7 +52,6 @@ impl VwNamespaceMap {
             if *i > vw.num_namespaces {
                 vw.num_namespaces = *i;
             } 
-            
         }
         vw.num_namespaces += 1;
         Ok(vw)
@@ -84,10 +83,8 @@ impl VwNamespaceMap {
                 namespace_name: name_str.to_string(),
                 namespace_index: i,
             });
-            println!("Char: {}, name: {}, index: {}", char, name_str, i);
+//            println!("Char: {}, name: {}, index: {}", char, name_str, i);
         }
-        
-        
         VwNamespaceMap::new_from_source(vw_source)
     }
 

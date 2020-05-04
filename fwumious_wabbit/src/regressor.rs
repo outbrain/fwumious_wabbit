@@ -18,7 +18,7 @@ pub struct Regressor {
 
 impl Regressor {
     pub fn new(model_instance: &model_instance::ModelInstance) -> Regressor {
-        let hash_mask = (1 << model_instance.hash_bits) -1;
+        let hash_mask = (1 << model_instance.bit_precision) -1;
         let mut rg = Regressor{
 //                            model_instance: model_instance,
                             hash_mask: hash_mask,
@@ -51,6 +51,7 @@ impl Regressor {
             wsum -= w * feature_value;    
             *self.local_data.get_unchecked_mut(i*4) = w;
             *self.local_data.get_unchecked_mut(i*4+1) = *self.weights.get_unchecked(hash*2+1);
+//                println!("@{}", *self.weights.get_unchecked(hash*2+1));
             *self.local_data.get_unchecked_mut(i*4+2) = feature_value;
         }
         // Trick: instead of multiply in the updates with learning rate, multiply the result
@@ -74,7 +75,7 @@ impl Regressor {
 //        let prediction:f32 = sigmoid(wsum);      // ain't faster
         if update{
             let general_gradient = -(prediction_probability - y);
-            //println!("general gradient: {}, prediction {}, prediction orig: {}", general_gradient, prediction, -wsum*learning_rate); 
+  //          println!("general gradient: {}, prediction {}, prediction orig: {}", general_gradient, prediction, -wsum*self.learning_rate); 
             for i in 0..fbuf_len {
                 let feature_value = *self.local_data.get_unchecked(i*4+2);
                 let gradient = general_gradient * feature_value;
@@ -108,7 +109,7 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
-        mi.hash_bits = 18;
+        mi.bit_precision = 18;
         
         let mut rr = Regressor::new(&mi);
         let mut p: f32;
@@ -126,7 +127,7 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
-        mi.hash_bits = 18;
+        mi.bit_precision = 18;
         
         let mut rr = Regressor::new(&mi);
         let mut p: f32;
@@ -147,7 +148,7 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
-        mi.hash_bits = 18;
+        mi.bit_precision = 18;
         
         let mut rr = Regressor::new(&mi);
         let mut p: f32;
@@ -167,7 +168,7 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
-        mi.hash_bits = 18;
+        mi.bit_precision = 18;
         
         let mut rr = Regressor::new(&mi);
         let mut p: f32;
@@ -185,7 +186,7 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
-        mi.hash_bits = 18;
+        mi.bit_precision = 18;
         
         let mut rr = Regressor::new(&mi);
         let mut p: f32;
@@ -204,7 +205,7 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
-        mi.hash_bits = 18;
+        mi.bit_precision = 18;
         
         let mut rr = Regressor::new(&mi);
         let mut p: f32;

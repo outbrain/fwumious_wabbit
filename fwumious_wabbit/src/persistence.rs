@@ -71,9 +71,9 @@ impl regressor::Regressor {
                                      vwmap::VwNamespaceMap,
                                      regressor::Regressor), Box<dyn Error>> {
         let mut input_bufreader = &mut io::BufReader::new(fs::File::open(filename).unwrap());
-        regressor::Regressor::verify_header(input_bufreader)?;    
-        let vw = vwmap::VwNamespaceMap::new_from_buf(input_bufreader)?;
-        let mi = model_instance::ModelInstance::new_from_buf(input_bufreader)?;
+        regressor::Regressor::verify_header(input_bufreader).expect("Regressor header error");    
+        let vw = vwmap::VwNamespaceMap::new_from_buf(input_bufreader).expect("Loading vwmap from regressor failed");
+        let mi = model_instance::ModelInstance::new_from_buf(input_bufreader).expect("Loading model instance from regressor failed");
         let mut re = regressor::Regressor::new(&mi);
         re.overwrite_weights_from_buf(&mut input_bufreader)?;
         Ok((mi, vw, re))
@@ -98,7 +98,7 @@ impl regressor::Regressor {
         unsafe {
             let mut buf_view:&mut [u8] = slice::from_raw_parts_mut(self.weights.as_mut_ptr() as *mut u8, 
                                              self.weights.len() *mem::size_of::<f32>());
-            let n = input_bufreader.read(&mut buf_view)?;
+            input_bufreader.read_exact(&mut buf_view)?;
         }
         Ok(())
     }

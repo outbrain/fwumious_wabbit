@@ -33,26 +33,9 @@ mod cmdline;
 mod cache;
 mod persistence;
 
-const RECBUF_LEN:usize = 4096 * 2;
-
-/* 
-organization of records buffer 
-(offset u16, len u16)[number_of_features]
-(u32)[dynamic_number_of_hashes] 
-*/
-/*
-fn read_into_records_buffer(lines: std::io::BufReader<File>, rb: &RecordsBuffer) -> Result<(), Box<dyn Error>> {
-    
-    
-
-    Ok(())
-}
-
-*/
-// This is the main function
 fn main() {
     match main2() {
-        Err(e) => {println!("Hmm: {:?}", e); std::process::exit(1)},
+        Err(e) => {println!("Global error: {:?}", e); std::process::exit(1)},
         Ok(()) => {}
     }    
 }
@@ -72,7 +55,12 @@ fn main2() -> Result<(), Box<dyn Error>>  {
 
     let final_regressor_filename = cl.value_of("final_regressor");
     match final_regressor_filename {
-        Some(filename) => println!("final_regressor = {}", filename),
+        Some(filename) => {
+            if !cl.is_present("save_resume") {
+                return Err("You need to use --save_resume if you are using --final_regressor, so there is compatility with vowpal")?;
+            }
+            println!("final_regressor = {}", filename);
+        },
         None => {}
     };
     
@@ -96,7 +84,8 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             let (mi2, vw2, re2) = regressor::Regressor::new_from_filename(filename)?;
             mi = mi2; vw = vw2; re = re2;
     } else {
-            // We do load vw_namespace_map.csv just so we know all the namespaces ahead of time
+            // We load vw_namespace_map.csv just so we know all the namespaces ahead of time
+            // This is one of the major differences from vowpal
             let vw_namespace_map_filepath = Path::new(input_filename).parent().unwrap().join("vw_namespace_map.csv");
             vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
             mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
