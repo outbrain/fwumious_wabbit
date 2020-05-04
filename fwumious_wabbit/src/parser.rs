@@ -167,7 +167,7 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::get_global_map_from_string(vw_map_string).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         fn str_to_cursor(c: &mut Cursor<Vec<u8>>, s: &str) -> () {
           c.seek(std::io::SeekFrom::Start(0)).unwrap();
           c.write(s.as_bytes()).unwrap();

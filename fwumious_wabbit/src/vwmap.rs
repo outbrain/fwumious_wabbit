@@ -54,6 +54,7 @@ impl VwNamespaceMap {
             } 
             
         }
+        vw.num_namespaces += 1;
         Ok(vw)
     }
 
@@ -63,7 +64,6 @@ impl VwNamespaceMap {
         input_bufreader.read_to_string(&mut s)?;
         VwNamespaceMap::new(&s)   
     }
-
 
     pub fn new(data: &str) -> Result<VwNamespaceMap, Box<dyn Error>> {
         let mut rdr = csv::ReaderBuilder::new()
@@ -84,6 +84,7 @@ impl VwNamespaceMap {
                 namespace_name: name_str.to_string(),
                 namespace_index: i,
             });
+            println!("Char: {}, name: {}, index: {}", char, name_str, i);
         }
         
         

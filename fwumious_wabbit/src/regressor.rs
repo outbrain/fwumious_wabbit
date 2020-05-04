@@ -113,11 +113,11 @@ mod tests {
         let mut rr = Regressor::new(&mi);
         let mut p: f32;
         // Empty model: no matter how many features, prediction is 0.5
-        p = rr.learn(&vec![0], false);
+        p = rr.learn(&vec![0], false, 0);
         assert_eq!(p, 0.5);
-        p = rr.learn(&vec![0, 1, ONE], false);
+        p = rr.learn(&vec![0, 1, ONE], false, 0);
         assert_eq!(p, 0.5);
-        p = rr.learn(&vec![0, 1, ONE, 2, ONE], false);
+        p = rr.learn(&vec![0, 1, ONE, 2, ONE], false, 0);
         assert_eq!(p, 0.5);
     }
 
@@ -131,11 +131,11 @@ mod tests {
         let mut rr = Regressor::new(&mi);
         let mut p: f32;
         
-        p = rr.learn(&vec![0, 1, ONE], true);
+        p = rr.learn(&vec![0, 1, ONE], true, 0);
         assert_eq!(p, 0.5);
-        p = rr.learn(&vec![0, 1, ONE], true);
+        p = rr.learn(&vec![0, 1, ONE], true, 0);
         assert_eq!(p, 0.48750263);
-        p = rr.learn(&vec![0, 1, ONE], true);
+        p = rr.learn(&vec![0, 1, ONE], true, 0);
         assert_eq!(p, 0.47533244);
     }
 
@@ -153,11 +153,11 @@ mod tests {
         let mut p: f32;
         let two = 2.0_f32.to_bits();
         
-        p = rr.learn(&vec![0, 1, ONE, 1, two,], true);
+        p = rr.learn(&vec![0, 1, ONE, 1, two,], true, 0);
         assert_eq!(p, 0.5);
-        p = rr.learn(&vec![0, 1, ONE, 1, two,], true);
+        p = rr.learn(&vec![0, 1, ONE, 1, two,], true, 0);
         assert_eq!(p, 0.38936076);
-        p = rr.learn(&vec![0, 1, ONE, 1, two,], true);
+        p = rr.learn(&vec![0, 1, ONE, 1, two,], true, 0);
         assert_eq!(p, 0.30993468);
     }
 
@@ -172,11 +172,11 @@ mod tests {
         let mut rr = Regressor::new(&mi);
         let mut p: f32;
         
-        p = rr.learn(&vec![0, 1, ONE], true);
+        p = rr.learn(&vec![0, 1, ONE], true, 0);
         assert_eq!(p, 0.5);
-        p = rr.learn(&vec![0, 1, ONE], true);
+        p = rr.learn(&vec![0, 1, ONE], true, 0);
         assert_eq!(p, 0.4750208);
-        p = rr.learn(&vec![0, 1, ONE], true);
+        p = rr.learn(&vec![0, 1, ONE], true, 0);
         assert_eq!(p, 0.45788094);
     }
 
@@ -191,11 +191,11 @@ mod tests {
         let mut p: f32;
         
         // Here we take twice two features and then once just one
-        p = rr.learn(&vec![0, 1, ONE, 2, ONE], true);
+        p = rr.learn(&vec![0, 1, ONE, 2, ONE], true, 0);
         assert_eq!(p, 0.5);
-        p = rr.learn(&vec![0, 1, ONE, 2, ONE], true);
+        p = rr.learn(&vec![0, 1, ONE, 2, ONE], true, 0);
         assert_eq!(p, 0.45016602);
-        p = rr.learn(&vec![0, 1, ONE], true);
+        p = rr.learn(&vec![0, 1, ONE], true, 0);
         assert_eq!(p, 0.45836908);
     }
 
@@ -210,11 +210,11 @@ mod tests {
         let mut p: f32;
         let two = 2.0_f32.to_bits();
         
-        p = rr.learn(&vec![0, 1, two], true);
+        p = rr.learn(&vec![0, 1, two], true, 0);
         assert_eq!(p, 0.5);
-        p = rr.learn(&vec![0, 1, two], true);
+        p = rr.learn(&vec![0, 1, two], true, 0);
         assert_eq!(p, 0.45016602);
-        p = rr.learn(&vec![0, 1, two], true);
+        p = rr.learn(&vec![0, 1, two], true, 0);
         assert_eq!(p, 0.40611085);
     }
 
