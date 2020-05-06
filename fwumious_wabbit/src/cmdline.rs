@@ -12,13 +12,6 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .short("d")
                      .value_name("filename")
                      .help("File with input examples")
-                     .takes_value(true)
-                     .required(true))
-                    .arg(Arg::with_name("final_regressor")
-                     .long("final_regressor")
-                     .short("f")
-                     .value_name("filename")
-                     .help("Weights file")
                      .takes_value(true))
                     .arg(Arg::with_name("predictions")
                      .short("p")
@@ -110,6 +103,35 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .value_name("arg")
                      .help("Initial regressor(s) to load into memory (arg is filename)")
                      .takes_value(true))
+
+                     // Daemon parameterts
+                    .arg(Arg::with_name("daemon")
+                     .long("daemon")
+                     .help("read data from port 26542")
+                     .takes_value(false))
+                    .arg(Arg::with_name("foreground")
+                     .long("foreground")
+                     .help("in daemon mode, do not fork and run vw process in the foreground")
+                     .takes_value(false))
+                    .arg(Arg::with_name("port")
+                     .long("port")
+                     .value_name("arg")
+                     .help("port to listen on")
+                     .takes_value(true))
+                    .arg(Arg::with_name("num_children")
+                     .long("num_children")
+                     .value_name("arg (=10")
+                     .help("number of children for persistent daemon mode")
+                     .takes_value(true))
+                    .arg(Arg::with_name("pid_file")
+                     .long("pid_file")
+                     .value_name("arg")
+                     .help("Write pid file in persistent daemon mode")
+                     .takes_value(true))
+
+
+
+
                     .get_matches();
 
 matches

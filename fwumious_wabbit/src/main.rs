@@ -32,6 +32,7 @@ mod regressor;
 mod cmdline;
 mod cache;
 mod persistence;
+mod serving;
 
 fn main() {
     match main2() {
@@ -42,10 +43,7 @@ fn main() {
 
 fn main2() -> Result<(), Box<dyn Error>>  {
     // We'll parse once the command line into cl and then different objects will examine it
-//    println!("AA {:?}", env::args());
     let cl = cmdline::parse();
-    let input_filename = cl.value_of("data").unwrap();
-    
 
     // Where will we be putting perdictions (if at all)
     let mut predictions_file = match cl.value_of("predictions") {
@@ -64,14 +62,6 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         None => {}
     };
     
-    // Setup Parser, is rust forcing this disguisting way to do it, or I just don't know the pattern?
-    let input = File::open(input_filename)?;
-    let mut aa;
-    let mut bb;
-    let mut bufferred_input: &mut dyn BufRead = match input_filename.ends_with(".gz") {
-        true =>  { aa = io::BufReader::new(MultiGzDecoder::new(input)); &mut aa },
-        false => { bb = io::BufReader::new(input); &mut bb}
-    };
     
     /* setting up the pipeline, either from command line or from existing regressor */
     let mut vw: vwmap::VwNamespaceMap;
@@ -86,14 +76,31 @@ fn main2() -> Result<(), Box<dyn Error>>  {
     } else {
             // We load vw_namespace_map.csv just so we know all the namespaces ahead of time
             // This is one of the major differences from vowpal
-            let vw_namespace_map_filepath = Path::new(input_filename).parent().unwrap().join("vw_namespace_map.csv");
+            let input_filename = cl.value_of("data").expect("--data expected");
+            let vw_namespace_map_filepath = Path::new(input_filename).parent().expect("--data expected").join("vw_namespace_map.csv");
             vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
             mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
             re = regressor::Regressor::new(&mi);
     };
-    let mut pa = parser::VowpalParser::new(bufferred_input, &vw);
+    if cl.is_present("daemon") {
+        let mut se = serving::Serving::new()?;
+        let s = se.serve(&vw, &re);
+    }
+
+    let input_filename = cl.value_of("data").expect("--data expected");
     let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"), &vw);
     let mut fb = feature_buffer::FeatureBuffer::new(&mi);
+
+    // Setup Parser, is rust forcing this disguisting way to do it, or I just don't know the pattern?
+    let input = File::open(input_filename)?;
+    let mut aa;
+    let mut bb;
+    let mut bufferred_input: &mut dyn BufRead = match input_filename.ends_with(".gz") {
+        true =>  { aa = io::BufReader::new(MultiGzDecoder::new(input)); &mut aa },
+        false => { bb = io::BufReader::new(input); &mut bb}
+    };
+
+    let mut pa = parser::VowpalParser::new(bufferred_input, &vw);
 
 
     let now = Instant::now();
