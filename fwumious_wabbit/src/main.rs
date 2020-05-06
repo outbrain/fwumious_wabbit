@@ -82,9 +82,10 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
             re = regressor::Regressor::new(&mi);
     };
+
     if cl.is_present("daemon") {
-        let mut se = serving::Serving::new()?;
-        let s = se.serve(&vw, &re);
+        let mut se = serving::Serving::new(&cl)?;
+        let s = se.serve(&vw, &re, &mi);
     }
 
     let input_filename = cl.value_of("data").expect("--data expected");

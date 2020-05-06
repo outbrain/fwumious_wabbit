@@ -28,6 +28,40 @@ impl Regressor {
         rg
     }
     
+
+    pub fn predict(&self, feature_buffer: &Vec<u32>, example_num: u32) -> f32 {
+        unsafe {
+        let fbuf = &feature_buffer.get_unchecked(1..feature_buffer.len());
+        let fbuf_len = fbuf.len()/2;
+        if fbuf_len > BUF_LEN {
+            println!("Number of features per example ({}) is higher than supported in this fw binary ({}), exiting", fbuf_len, BUF_LEN);
+            process::exit(1);
+        }
+        /* first we need a dot product, which in our case is a simple sum */
+        let mut wsum:f32 = 0.0;
+        for i in 0..fbuf_len {     // speed of this is 4.53
+            let hash = *fbuf.get_unchecked(i*2) as usize;
+            let feature_value:f32 = f32::from_bits(*fbuf.get_unchecked(i*2+1));
+            let w = *self.weights.get_unchecked(hash*2);
+            // we do substractions here, so we don't need to -wsum later on
+            wsum -= w * feature_value;    
+        }
+        // Trick: instead of multiply in the updates with learning rate, multiply the result
+        let prediction = wsum * self.learning_rate;
+        // vowpal compatibility
+        let mut prediction_finalized = prediction;
+        if prediction_finalized.is_nan() {
+            eprintln!("NAN prediction in example {}, forcing 0.0", example_num);
+            prediction_finalized = 0.0;
+        } else if prediction_finalized < -50.0 {
+            prediction_finalized = -50.0;
+        } else if prediction_finalized > 50.0 {
+            prediction_finalized = 50.0;
+        }
+        let prediction_probability:f32 = (1.0+(prediction_finalized).exp()).recip();
+        prediction_probability
+        }
+    }
     
     pub fn learn(&mut self, feature_buffer: &Vec<u32>, mut update: bool, example_num: u32) -> f32 {
         unsafe {

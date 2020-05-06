@@ -21,15 +21,6 @@ pub struct VowpalParser<'a> {
     pub output_buffer: Vec<u32>,
 }
 
-#[derive(Debug)]
-#[derive(PartialEq)]
-pub enum NextRecordResult {
-    Ok,
-    End,
-    Error,
-}
-
-
 
 /* 
 organization of records buffer 
@@ -50,9 +41,6 @@ impl<'a> VowpalParser<'a> {
         rr.output_buffer.resize(vw.num_namespaces as usize * NAMESPACE_DESC_LEN + HEADER_LEN, 0);
         for i in 0..=255 {
             rr.namespace_hash_seeds[i as usize] = murmur3::hash32([i;1]);
-//            if (i as char == 'A') || (i as char == 'B'){
-//                println!("Seed for A: {}", rr.namespace_hash_seeds[i as usize]);
-//            }
         }
         rr
     }
@@ -109,20 +97,14 @@ impl<'a> VowpalParser<'a> {
                     if *p.add(i_start) == 0x7c { // "|"
                         // As we get new namespace index, we store end of the last one
                         //println!("Closing index {} {}", current_char_index, bufpos);
-                        
-                        //*buf.add(current_char_index + 1) = bufpos as u32;
                         *buf.add(current_char_index) = ((bufpos_namespace_start<<16) + bufpos) as u32;
                         current_char = *p.add(i_start+1) as usize;
                         current_char_index = self.vw_map.lookup_char_to_index[current_char] * NAMESPACE_DESC_LEN + HEADER_LEN;
                         bufpos_namespace_start = bufpos;
-                        //println!("Opening index {} {}", current_char_index, bufpos);
-                        //*buf.add(current_char_index) = bufpos as u32;
                     } else { 
                         // We have a feature! Let's hash it and write it to the buffer
                         // println!("item out {:?}", std::str::from_utf8(&rr.tmp_read_buf[i_start..i_end]));
-                        let h = murmur3::hash32_with_seed(&self.tmp_read_buf[i_start..i_end], self.namespace_hash_seeds[current_char]);  
-                        // TODO: this might invalidate "buf" ... we need to work on that
-//                        println!("SSSSS full {} short hash {} {} {}", h , h & ((1<<24)-1), current_char_index, (current_char as u8) as char);
+                        let h = murmur3::hash32_with_seed(&self.tmp_read_buf[i_start..i_end], *self.namespace_hash_seeds.get_unchecked(current_char));  
                         self.output_buffer.push(h);
                         bufpos += 1;
                     }
@@ -131,11 +113,10 @@ impl<'a> VowpalParser<'a> {
                     i_start = i_end ;
                     
                 }
-               *buf.add(current_char_index) = ((bufpos_namespace_start<<16) + bufpos) as u32;
+                *buf.add(current_char_index) = ((bufpos_namespace_start<<16) + bufpos) as u32;
 
-//                *buf.add(current_char_index+1) = bufpos as u32;
                 *buf = bufpos as u32;
-            self.output_buffer.set_len(bufpos);  // Why do we also keep length as first datapoint - so we can directly write these records to cache
+                self.output_buffer.set_len(bufpos);  // Why do we also keep length as first datapoint - so we can directly write these records to cache
             }
             
 //            println!("item out {:?} {}", self.output_buffer, bufpos);
