@@ -1,31 +1,29 @@
+use std::mem::{self, MaybeUninit};
 use fastapprox::fast::sigmoid;
 use std::process;
 
 use crate::model_instance;
 
 const ONE:u32 = 1065353216;      // this is 1.0 float -> u32
-const BUF_LEN:usize = 256; // it will cause abort if there is more than this number of features in one single vecotr
+const BUF_LEN:usize = 220; // We will ABORT if number of derived features for individual example is more than this.
+// Why not bigger number? If we grow stack of the function too much, we end up with stack overflow protecting mechanisms
 
 
 pub struct Regressor {
-//    model_instance: &'a model_instance::ModelInstance,
     hash_mask: u32,
     learning_rate: f32,
     minus_power_t:f32,
     pub weights: Vec<f32>,       // Both weights and gradients
-    local_data: [f32; BUF_LEN * 4], //instead of Vec<f32>  -- we found that this speeds up the program considerably
 }
 
 impl Regressor {
     pub fn new(model_instance: &model_instance::ModelInstance) -> Regressor {
         let hash_mask = (1 << model_instance.bit_precision) -1;
         let mut rg = Regressor{
-//                            model_instance: model_instance,
                             hash_mask: hash_mask,
                             learning_rate: model_instance.learning_rate,
                             weights: vec![0.0; (2*(hash_mask+1)) as usize],
                             minus_power_t : - model_instance.power_t,
-                            local_data: [0.0; BUF_LEN * 4],//vec![0.0; 1000],
                         };
         rg
     }
@@ -33,14 +31,14 @@ impl Regressor {
     
     pub fn learn(&mut self, feature_buffer: &Vec<u32>, mut update: bool, example_num: u32) -> f32 {
         unsafe {
-        let y = feature_buffer[0] as f32; // 0.0 or 1.0
+        let y = *feature_buffer.get_unchecked(0) as f32; // 0.0 or 1.0
         let fbuf = &feature_buffer.get_unchecked(1..feature_buffer.len());
         let fbuf_len = fbuf.len()/2;
         if fbuf_len > BUF_LEN {
-            println!("Number of features per example ({}) is higher than supported in this fw binary ({}, exiting", fbuf_len, BUF_LEN);
+            println!("Number of features per example ({}) is higher than supported in this fw binary ({}), exiting", fbuf_len, BUF_LEN);
             process::exit(1);
         }
-        //let mut local_data = self.local_data;
+        let mut local_data: [f32; (BUF_LEN*4) as usize] = MaybeUninit::uninit().assume_init() ;
         /* first we need a dot product, which in our case is a simple sum */
         let mut wsum:f32 = 0.0;
         for i in 0..fbuf_len {     // speed of this is 4.53
@@ -49,10 +47,10 @@ impl Regressor {
             let w = *self.weights.get_unchecked(hash*2);
             // we do substractions here, so we don't need to -wsum later on
             wsum -= w * feature_value;    
-            *self.local_data.get_unchecked_mut(i*4) = w;
-            *self.local_data.get_unchecked_mut(i*4+1) = *self.weights.get_unchecked(hash*2+1);
+            *local_data.get_unchecked_mut(i*4) = w;
+            *local_data.get_unchecked_mut(i*4+1) = *self.weights.get_unchecked(hash*2+1);
 //                println!("@{}", *self.weights.get_unchecked(hash*2+1));
-            *self.local_data.get_unchecked_mut(i*4+2) = feature_value;
+            *local_data.get_unchecked_mut(i*4+2) = feature_value;
         }
         // Trick: instead of multiply in the updates with learning rate, multiply the result
         let prediction = wsum * self.learning_rate;
@@ -77,18 +75,18 @@ impl Regressor {
             let general_gradient = -(prediction_probability - y);
   //          println!("general gradient: {}, prediction {}, prediction orig: {}", general_gradient, prediction, -wsum*self.learning_rate); 
             for i in 0..fbuf_len {
-                let feature_value = *self.local_data.get_unchecked(i*4+2);
+                let feature_value = *local_data.get_unchecked(i*4+2);
                 let gradient = general_gradient * feature_value;
-                *self.local_data.get_unchecked_mut(i*4+3) = gradient*gradient;	// it would be easier, to just use i*4+1 at the end... but this is how vowpal does it
-                *self.local_data.get_unchecked_mut(i*4+1) += *self.local_data.get_unchecked(i*4+3);
-                let update_factor = gradient * (self.local_data.get_unchecked(i*4+1)).powf(self.minus_power_t);
-                *self.local_data.get_unchecked_mut(i*4) = update_factor;    // this is how vowpal does it, first calculate, then addk
+                *local_data.get_unchecked_mut(i*4+3) = gradient*gradient;	// it would be easier, to just use i*4+1 at the end... but this is how vowpal does it
+                *local_data.get_unchecked_mut(i*4+1) += *local_data.get_unchecked(i*4+3);
+                let update_factor = gradient * (local_data.get_unchecked(i*4+1)).powf(self.minus_power_t);
+                *local_data.get_unchecked_mut(i*4) = update_factor;    // this is how vowpal does it, first calculate, then addk
             }
             // Next step is: gradients = weights_vector * 
             for i in 0..fbuf_len {
                 let hash = *fbuf.get_unchecked(i*2) as usize;
-                *self.weights.get_unchecked_mut(hash*2) += *self.local_data.get_unchecked(i*4);
-                *self.weights.get_unchecked_mut(hash*2+1) += *self.local_data.get_unchecked(i*4+3);
+                *self.weights.get_unchecked_mut(hash*2) += *local_data.get_unchecked(i*4);
+                *self.weights.get_unchecked_mut(hash*2+1) += *local_data.get_unchecked(i*4+3);
             }
         }
     //    println!("S {}, {}", y, prediction);
