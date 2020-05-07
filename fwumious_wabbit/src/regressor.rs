@@ -1,6 +1,8 @@
 use std::mem::{self, MaybeUninit};
 use fastapprox::fast::sigmoid;
 use std::process;
+use triomphe::{UniqueArc, Arc};
+
 
 use crate::model_instance;
 
@@ -9,6 +11,7 @@ const BUF_LEN:usize = 220; // We will ABORT if number of derived features for in
 // Why not bigger number? If we grow stack of the function too much, we end up with stack overflow protecting mechanisms
 
 
+//#[derive(Clone)]
 pub struct Regressor {
     hash_mask: u32,
     learning_rate: f32,
@@ -16,18 +19,21 @@ pub struct Regressor {
     pub weights: Vec<f32>,       // Both weights and gradients
 }
 
-impl Regressor {
-    pub fn new(model_instance: &model_instance::ModelInstance) -> Regressor {
-        let hash_mask = (1 << model_instance.bit_precision) -1;
-        let mut rg = Regressor{
-                            hash_mask: hash_mask,
-                            learning_rate: model_instance.learning_rate,
-                            weights: vec![0.0; (2*(hash_mask+1)) as usize],
-                            minus_power_t : - model_instance.power_t,
-                        };
-        rg
+#[derive(Clone)]
+pub struct FixedRegressor {
+    hash_mask: u32,
+    learning_rate: f32,
+    minus_power_t:f32,
+    pub weights: Arc<Vec<f32>>,       // Both weights and gradients
+}
+impl FixedRegressor {
+    pub fn new(rr: Regressor) -> FixedRegressor {
+        FixedRegressor {hash_mask: rr.hash_mask,
+                        learning_rate: rr.learning_rate,
+                        minus_power_t: rr.minus_power_t,
+                        weights: Arc::new(rr.weights),
+                        }
     }
-    
 
     pub fn predict(&self, feature_buffer: &Vec<u32>, example_num: u32) -> f32 {
         unsafe {
@@ -62,6 +68,21 @@ impl Regressor {
         prediction_probability
         }
     }
+} 
+
+impl Regressor {
+    pub fn new(model_instance: &model_instance::ModelInstance) -> Regressor {
+        let hash_mask = (1 << model_instance.bit_precision) -1;
+        let mut rg = Regressor{
+                            hash_mask: hash_mask,
+                            learning_rate: model_instance.learning_rate,
+                            weights: vec![0.0; (2*(hash_mask+1)) as usize],
+                            minus_power_t : - model_instance.power_t,
+                        };
+        rg
+    }
+    
+
     
     pub fn learn(&mut self, feature_buffer: &Vec<u32>, mut update: bool, example_num: u32) -> f32 {
         unsafe {

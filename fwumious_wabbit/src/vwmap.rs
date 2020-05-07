@@ -6,7 +6,7 @@ use std::fs;
 use serde::{Serialize,Deserialize};//, Deserialize};
 
 
-
+#[derive(Clone)]
 pub struct VwNamespaceMap {
     pub num_namespaces: usize,
     pub map_name_to_index: HashMap <std::string::String, usize>,
@@ -17,14 +17,14 @@ pub struct VwNamespaceMap {
 }
 
 // this is serializible source from which VwNamespaceMap can be constructed
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct VwNamespaceMapEntry {
     namespace_char: char,
     namespace_name: std::string::String,
     namespace_index: usize,
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct VwNamespaceMapSource {
     entries: Vec<VwNamespaceMapEntry>,
 }

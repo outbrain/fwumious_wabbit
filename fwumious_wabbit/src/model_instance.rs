@@ -11,7 +11,7 @@ use serde_json::{Value,from_str};
 use crate::vwmap;
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FeatureComboDesc {
     pub feature_indices: Vec<usize>,
     pub weight:f32,
@@ -19,7 +19,7 @@ pub struct FeatureComboDesc {
 
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ModelInstance {
     pub learning_rate: f32,    
     pub power_t: f32,

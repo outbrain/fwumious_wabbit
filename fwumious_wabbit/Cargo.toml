@@ -16,6 +16,8 @@ fastapprox = "0.3.0"
 clap = "2.33.0"
 byteorder = "1.3.4"
 backtrace = "0.3.46"
+triomphe = "0.1.1"
+
 
 
 
