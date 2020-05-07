@@ -6,12 +6,11 @@ use triomphe::{UniqueArc, Arc};
 
 use crate::model_instance;
 
-const ONE:u32 = 1065353216;      // this is 1.0 float -> u32
+const ONE:u32 = 1065353216;// this is 1.0 float -> u32
 const BUF_LEN:usize = 220; // We will ABORT if number of derived features for individual example is more than this.
 // Why not bigger number? If we grow stack of the function too much, we end up with stack overflow protecting mechanisms
 
 
-//#[derive(Clone)]
 pub struct Regressor {
     hash_mask: u32,
     learning_rate: f32,
@@ -28,11 +27,12 @@ pub struct FixedRegressor {
 }
 impl FixedRegressor {
     pub fn new(rr: Regressor) -> FixedRegressor {
-        FixedRegressor {hash_mask: rr.hash_mask,
+        FixedRegressor {
+                        hash_mask: rr.hash_mask,
                         learning_rate: rr.learning_rate,
                         minus_power_t: rr.minus_power_t,
                         weights: Arc::new(rr.weights),
-                        }
+        }
     }
 
     pub fn predict(&self, feature_buffer: &Vec<u32>, example_num: u32) -> f32 {
@@ -49,12 +49,9 @@ impl FixedRegressor {
             let hash = *fbuf.get_unchecked(i*2) as usize;
             let feature_value:f32 = f32::from_bits(*fbuf.get_unchecked(i*2+1));
             let w = *self.weights.get_unchecked(hash*2);
-            // we do substractions here, so we don't need to -wsum later on
             wsum -= w * feature_value;    
         }
-        // Trick: instead of multiply in the updates with learning rate, multiply the result
         let prediction = wsum * self.learning_rate;
-        // vowpal compatibility
         let mut prediction_finalized = prediction;
         if prediction_finalized.is_nan() {
             eprintln!("NAN prediction in example {}, forcing 0.0", example_num);
@@ -82,8 +79,6 @@ impl Regressor {
         rg
     }
     
-
-    
     pub fn learn(&mut self, feature_buffer: &Vec<u32>, mut update: bool, example_num: u32) -> f32 {
         unsafe {
         let y = *feature_buffer.get_unchecked(0) as f32; // 0.0 or 1.0
@@ -94,9 +89,8 @@ impl Regressor {
             process::exit(1);
         }
         let mut local_data: [f32; (BUF_LEN*4) as usize] = MaybeUninit::uninit().assume_init() ;
-        /* first we need a dot product, which in our case is a simple sum */
         let mut wsum:f32 = 0.0;
-        for i in 0..fbuf_len {     // speed of this is 4.53
+        for i in 0..fbuf_len {
             let hash = *fbuf.get_unchecked(i*2) as usize;
             let feature_value:f32 = f32::from_bits(*fbuf.get_unchecked(i*2+1));
             let w = *self.weights.get_unchecked(hash*2);
@@ -104,7 +98,6 @@ impl Regressor {
             wsum -= w * feature_value;    
             *local_data.get_unchecked_mut(i*4) = w;
             *local_data.get_unchecked_mut(i*4+1) = *self.weights.get_unchecked(hash*2+1);
-//                println!("@{}", *self.weights.get_unchecked(hash*2+1));
             *local_data.get_unchecked_mut(i*4+2) = feature_value;
         }
         // Trick: instead of multiply in the updates with learning rate, multiply the result
@@ -122,8 +115,6 @@ impl Regressor {
             prediction_finalized = 50.0;
             update = false;
         }
-//        println!("Prediction finalized: {}", prediction_finalized);
-        
         let prediction_probability:f32 = (1.0+(prediction_finalized).exp()).recip();
 //        let prediction:f32 = sigmoid(wsum);      // ain't faster
         if update{
@@ -137,14 +128,12 @@ impl Regressor {
                 let update_factor = gradient * (local_data.get_unchecked(i*4+1)).powf(self.minus_power_t);
                 *local_data.get_unchecked_mut(i*4) = update_factor;    // this is how vowpal does it, first calculate, then addk
             }
-            // Next step is: gradients = weights_vector * 
             for i in 0..fbuf_len {
                 let hash = *fbuf.get_unchecked(i*2) as usize;
                 *self.weights.get_unchecked_mut(hash*2) += *local_data.get_unchecked(i*4);
                 *self.weights.get_unchecked_mut(hash*2+1) += *local_data.get_unchecked(i*4+3);
             }
         }
-    //    println!("S {}, {}", y, prediction);
         prediction_probability
         }
     }

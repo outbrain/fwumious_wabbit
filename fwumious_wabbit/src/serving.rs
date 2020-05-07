@@ -6,7 +6,7 @@ use std::thread;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::Mutex;
-
+use std::time;
 
 use crate::parser;
 use crate::vwmap;
@@ -102,6 +102,9 @@ impl Serving {
         let (sender, receiver) = mpsc::channel();
         let receiver = Arc::new(Mutex::new(receiver));
         
+        
+        thread::sleep(time::Duration::from_millis(10000));
+        
         let re_fixed = Arc::new(regressor::FixedRegressor::new(re));
         
         let listening_interface = format!("127.0.0.1:{}", port);
@@ -112,6 +115,14 @@ impl Serving {
             sender: sender,
             
         };
+ 
+        
+        let num_children = match cl.value_of("num_children") {
+            Some(num_children) => num_children.parse().expect("num_children should be integer"),
+            None => 10
+        };
+        
+        println!("Number of threads {}", num_children);
         for i in 1..10 {
             let newt =WorkerThread::new(1, 
                                 Arc::clone(&receiver),
@@ -124,11 +135,11 @@ impl Serving {
         Ok(s)
     }
     
-
+    
     pub fn serve(&mut self)  -> Result<(), Box<dyn Error>> {
         let listener = net::TcpListener::bind(&self.listening_interface)?;
+        println!("Bind done, calling accept");
         for stream in listener.incoming() {
-        //    self.handle_client(stream?, vw, re, mi)?;
             self.sender.send(stream?)?;
         }
         Ok(())

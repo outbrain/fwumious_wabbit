@@ -1,4 +1,4 @@
-use clap::{App, Arg, ArgMatches};
+use clap::{App, Arg, ArgMatches, ArgGroup, AppSettings};
 
 pub fn parse<'a>() -> clap::ArgMatches<'a> {
     
@@ -7,6 +7,7 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                     .version("1.0")
                     .author("Andraz Tori <atori@outbrain.com>")
                     .about("Superfast Logistic Regression")
+                    .setting(AppSettings::DeriveDisplayOrder)
                     .arg(Arg::with_name("data")
                      .long("data")
                      .short("d")
@@ -103,34 +104,21 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .value_name("arg")
                      .help("Initial regressor(s) to load into memory (arg is filename)")
                      .takes_value(true))
-
                      // Daemon parameterts
-                    .arg(Arg::with_name("daemon")
-                     .long("daemon")
-                     .help("read data from port 26542")
-                     .takes_value(false))
-                    .arg(Arg::with_name("foreground")
-                     .long("foreground")
-                     .help("in daemon mode, do not fork and run vw process in the foreground")
-                     .takes_value(false))
-                    .arg(Arg::with_name("port")
-                     .long("port")
-                     .value_name("arg")
-                     .help("port to listen on")
-                     .takes_value(true))
-                    .arg(Arg::with_name("num_children")
-                     .long("num_children")
-                     .value_name("arg (=10")
-                     .help("number of children for persistent daemon mode")
-                     .takes_value(true))
-                    .arg(Arg::with_name("pid_file")
-                     .long("pid_file")
-                     .value_name("arg")
-                     .help("Write pid file in persistent daemon mode")
-                     .takes_value(true))
-
-
-
+                      .arg(Arg::with_name("daemon")
+                       .long("daemon")
+                       .help("read data from port 26542")
+                       .takes_value(false))
+                      .arg(Arg::with_name("port")
+                       .long("port")
+                       .value_name("arg")
+                       .help("port to listen on")
+                       .takes_value(true))
+                      .arg(Arg::with_name("num_children")
+                       .long("num_children")
+                       .value_name("arg (=10")
+                       .help("number of children for persistent daemon mode")
+                       .takes_value(true))
 
                     .get_matches();
 
