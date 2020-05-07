@@ -103,7 +103,7 @@ impl Serving {
         let receiver = Arc::new(Mutex::new(receiver));
         
         
-        thread::sleep(time::Duration::from_millis(10000));
+//        thread::sleep(time::Duration::from_millis(10000));
         
         let re_fixed = Arc::new(regressor::FixedRegressor::new(re));
         
@@ -137,7 +137,7 @@ impl Serving {
     
     
     pub fn serve(&mut self)  -> Result<(), Box<dyn Error>> {
-        let listener = net::TcpListener::bind(&self.listening_interface)?;
+        let listener = net::TcpListener::bind(&self.listening_interface).expect("Cannot bind to the interface");
         println!("Bind done, calling accept");
         for stream in listener.incoming() {
             self.sender.send(stream?)?;
