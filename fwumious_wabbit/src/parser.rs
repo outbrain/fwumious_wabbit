@@ -29,10 +29,9 @@ organization of records buffer
 */
 
 impl<'a> VowpalParser<'a> {
-//    pub fn new(buffered_input: io::BufReader<File>, vw: &'a vwmap::VwNamespaceMap) -> VowpalParser {
     pub fn new(buffered_input: &'a mut dyn BufRead, vw: &'a vwmap::VwNamespaceMap) -> VowpalParser<'a> {
         let mut rr = VowpalParser {  
-                            input_bufread: buffered_input, 
+                            input_bufread: buffered_input,
                             vw_map: vw,
                             tmp_read_buf: Vec::with_capacity(RECBUF_LEN),
                             output_buffer: Vec::with_capacity(RECBUF_LEN*2),
@@ -44,6 +43,10 @@ impl<'a> VowpalParser<'a> {
         }
         rr
     }
+    pub fn set_input_bufread(&mut self, buffered_input: &'a mut dyn BufRead) {
+        self.input_bufread = buffered_input; 
+    }
+    
     
     pub fn print(&self) -> () {
         println!("item out {:?}", self.output_buffer);
@@ -53,20 +56,18 @@ impl<'a> VowpalParser<'a> {
     pub fn next_vowpal(&mut self) -> Result<&[u32], Box<dyn Error>>  {
             // Output item
             self.tmp_read_buf.truncate(0);
-            //println!("{:?}", self.tmp_read_buf);
             let rowlen1 = match self.input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
                 Ok(0) => return Ok(&[]),
                 Ok(n) => n,
                 Err(e) => Err(e)?          
             };
-            //println!("{:?}", self.tmp_read_buf);
             // Fields are: 
             // u32 length of the output record
             // u32 label
             // (u32) * number of namespaces - (where u32 is really two u16 indexes - begining and end of the features belonging to a namespace) 
             let mut bufpos: usize = (self.vw_map.num_namespaces as usize) + HEADER_LEN;
             self.output_buffer.truncate(bufpos);
-            for i in &mut self.output_buffer[0..bufpos] { *i = 0 }     
+            for i in &mut self.output_buffer[0..bufpos] { *i = 0 }
 
             unsafe {
                 let p = self.tmp_read_buf.as_ptr();
@@ -108,10 +109,8 @@ impl<'a> VowpalParser<'a> {
                         self.output_buffer.push(h);
                         bufpos += 1;
                     }
-                    
                     i_end += 1;
                     i_start = i_end ;
-                    
                 }
                 *buf.add(current_char_index) = ((bufpos_namespace_start<<16) + bufpos) as u32;
 

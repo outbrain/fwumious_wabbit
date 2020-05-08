@@ -102,8 +102,9 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             false => { bb = io::BufReader::new(input); &mut bb}
         };
 
-        let mut pa = parser::VowpalParser::new(bufferred_input, &vw);
-
+        let mut empty = io::empty();
+        let mut pa = parser::VowpalParser::new(&mut empty, &vw);
+        pa.set_input_bufread(bufferred_input);
 
         let now = Instant::now();
         let mut i = 0;

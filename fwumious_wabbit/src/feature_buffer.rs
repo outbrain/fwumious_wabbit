@@ -9,18 +9,18 @@ const CONSTANT_HASH:u32 = 11650396;
 
 const OUTPUT_BUFFER_LEN:usize = 1024;    // this is highly unsafe...
 
-pub struct FeatureBuffer<'a> {
-    model_instance: &'a model_instance::ModelInstance,
+pub struct FeatureBuffer {
+    model_instance: model_instance::ModelInstance,
     pub output_buffer: Vec<u32>,
     hashes_vec_in: Vec<u32>,
     hashes_vec_out: Vec<u32>,
 }
 
-impl<'a> FeatureBuffer<'a> {
+impl FeatureBuffer {
 
-    pub fn new(model_instance: &'a model_instance::ModelInstance) -> FeatureBuffer {
+    pub fn new(model_instance: &model_instance::ModelInstance) -> FeatureBuffer {
         let mut fb = FeatureBuffer{
-                            model_instance: model_instance,
+                            model_instance: model_instance.clone(),
                             output_buffer: Vec::new(),
                             hashes_vec_in : Vec::with_capacity(100),
                             hashes_vec_out : Vec::with_capacity(100),

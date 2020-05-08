@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::net;
 use std::io::{BufReader,BufWriter};
+use std::io;
 use std::io::Write;
 use std::thread;
 use std::sync::mpsc;
@@ -26,9 +27,9 @@ pub struct Serving {
 pub struct WorkerThread {
     id: u32,
     receiver: Arc<Mutex<mpsc::Receiver<net::TcpStream>>>,
-    vw: vwmap::VwNamespaceMap, 
     re: Arc<regressor::FixedRegressor>, 
-    mi: model_instance::ModelInstance,
+    fb: feature_buffer::FeatureBuffer,
+    vw: vwmap::VwNamespaceMap, 
 }
 
 impl WorkerThread {
@@ -43,45 +44,44 @@ impl WorkerThread {
         let mut mi = WorkerThread {	
             id: id,
             receiver: receiver,
-            vw: (*vw).clone(),   // these are small structures and we are ok with cloning
             re: re,   // THIS IS NOT A SMALL STRUCTURE
-            mi: (*mi).clone(),
+            fb: feature_buffer::FeatureBuffer::new(mi),
+            vw: (*vw).clone(),
+
         };
         let thread = thread::spawn(move || {mi.start(); 1u32});
         Ok(thread)
     }
     
-    pub fn start(&self) -> () {
+    pub fn start(&mut self) -> () {
+        let mut empty = io::empty();
+        let mut pa = parser::VowpalParser::new(&mut empty, &self.vw);
+
         loop {
             let tcp_stream = self.receiver.lock().unwrap().recv().unwrap();
-            self.handle_connection(tcp_stream);
-        // wait for work and do it 
+            let mut writer = BufWriter::new(&tcp_stream);
+            let mut reader = BufReader::new(&tcp_stream);
+            pa.set_input_bufread(&mut reader);
+
+    //        println!("New connection");
+            let mut i = 0u32;
+            loop {
+                let reading_result = pa.next_vowpal();
+                let mut buffer: &[u32] = match reading_result {
+                        Ok([]) => return (), // EOF
+                        Ok(buffer2) => buffer2,
+                        Err(e) => return (),
+                };
+                self.fb.translate_vowpal(buffer);
+                let p = self.re.predict(&(self.fb.output_buffer), i);
+                writer.write_all(format!("{:.6}\n", p).as_bytes()).unwrap();
+                writer.flush().unwrap(); // This is definitely not the most efficient way of doing this, but let's make it perdictable first, fast second
+                i += 1;
+            }
         }
     }
     
-    pub fn handle_connection(&self, tcp_stream: net::TcpStream) {
-        let mut reader = BufReader::new(&tcp_stream);
-        let mut writer = BufWriter::new(&tcp_stream);
-        let mut pa = parser::VowpalParser::new(&mut reader, &self.vw);
-        let mut fb = feature_buffer::FeatureBuffer::new(&self.mi);
-
-        println!("New connection");
-        let mut i = 0u32;
-        loop {
-            let reading_result = pa.next_vowpal();
-            let mut buffer: &[u32] = match reading_result {
-                    Ok([]) => return (), // EOF
-                    Ok(buffer2) => buffer2,
-                    Err(e) => return (),
-            };
-            fb.translate_vowpal(buffer);
-            let p = self.re.predict(&(fb.output_buffer), i);
-            writer.write_all(format!("{:.6}\n", p).as_bytes()).unwrap();
-            writer.flush().unwrap(); // This is definitely not the most efficient way of doing this, but let's make it perdictable first, fast second
-            i += 1;
-        }
-
-    }
+//    pub fn handle_connection(&mut self, tcp_stream: net::TcpStream, mut pa: &mut parser::VowpalParser) {
     
 }
  
@@ -103,9 +103,9 @@ impl Serving {
         let receiver = Arc::new(Mutex::new(receiver));
         
         
-//        thread::sleep(time::Duration::from_millis(10000));
         
         let re_fixed = Arc::new(regressor::FixedRegressor::new(re));
+//        println!("Stage2");
         
         let listening_interface = format!("127.0.0.1:{}", port);
         println!("Starting to listen on {}", listening_interface); 
