@@ -51,6 +51,9 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         None => None      
     };
 
+    let testonly = cl.is_present("testonly");
+
+
     let final_regressor_filename = cl.value_of("final_regressor");
     match final_regressor_filename {
         Some(filename) => {
@@ -131,7 +134,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             }
 
             fb.translate_vowpal(buffer);
-            let p = re.learn(&fb.output_buffer, true, i);
+            let p = re.learn(&fb.output_buffer, !testonly, i);
             match predictions_file.as_mut() {
                 Some(file) =>  write!(file, "{:.6}\n", p)?,
                 None => {}
