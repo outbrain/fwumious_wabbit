@@ -18,7 +18,7 @@ use crate::regressor;
 use crate::vwmap;
 
 const REGRESSOR_HEADER_MAGIC_STRING: &[u8; 4] = b"FWRE";    // Fwumious Wabbit REgressor
-const REGRESSOR_HEADER_VERSION:u32 = 2;
+const REGRESSOR_HEADER_VERSION:u32 = 3;
 
 impl model_instance::ModelInstance {
     pub fn save_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
@@ -81,13 +81,22 @@ impl regressor::Regressor {
 
 
     pub fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
-       // It's OK! I am a limo driver!
-       output_bufwriter.write_u64::<LittleEndian>(self.weights.len() as u64)?;
+        // It's OK! I am a limo driver!
+        output_bufwriter.write_u64::<LittleEndian>(self.weights.len() as u64)?;
         unsafe {
-            let buf_view:&[u8] = slice::from_raw_parts(self.weights.as_ptr() as *const u8, 
-                                             self.weights.len() *mem::size_of::<f32>());
-            output_bufwriter.write(buf_view)?;
+             let buf_view:&[u8] = slice::from_raw_parts(self.weights.as_ptr() as *const u8, 
+                                              self.weights.len() *mem::size_of::<f32>());
+             output_bufwriter.write(buf_view)?;
         }
+        
+        output_bufwriter.write_u64::<LittleEndian>(self.ffm_weights.len() as u64)?;
+        unsafe {
+             let buf_view:&[u8] = slice::from_raw_parts(self.ffm_weights.as_ptr() as *const u8, 
+                                              self.ffm_weights.len() *mem::size_of::<f32>());
+             output_bufwriter.write(buf_view)?;
+        }
+        
+        
         Ok(())
     }
     pub fn overwrite_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
@@ -100,6 +109,18 @@ impl regressor::Regressor {
                                              self.weights.len() *mem::size_of::<f32>());
             input_bufreader.read_exact(&mut buf_view)?;
         }
+
+        let len = input_bufreader.read_u64::<LittleEndian>()?;
+        if len != self.ffm_weights.len() as u64 {
+            return Err(format!("Lenghts of ffm_weights array in regressor file differ: got {}, expected {}", len, self.ffm_weights.len()))?;
+        }
+        unsafe {
+            let mut buf_view:&mut [u8] = slice::from_raw_parts_mut(self.ffm_weights.as_mut_ptr() as *mut u8, 
+                                             self.ffm_weights.len() *mem::size_of::<f32>());
+            input_bufreader.read_exact(&mut buf_view)?;
+        }
+
+
         Ok(())
     }
 

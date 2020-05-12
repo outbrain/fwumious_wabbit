@@ -94,7 +94,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
 
         let input_filename = cl.value_of("data").expect("--data expected");
         let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"), &vw);
-        let mut fb = feature_buffer::FeatureBuffer::new(&mi);
+        let mut fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
 
         // Setup Parser, is rust forcing this disguisting way to do it, or I just don't know the pattern?
         let input = File::open(input_filename)?;
@@ -133,8 +133,8 @@ fn main2() -> Result<(), Box<dyn Error>>  {
                 };
             }
 
-            fb.translate_vowpal(buffer);
-            let p = re.learn(&fb.output_buffer, !testonly, i);
+            fbt.translate_vowpal(buffer);
+            let p = re.learn(&fbt.feature_buffer, !testonly, i);
             match predictions_file.as_mut() {
                 Some(file) =>  write!(file, "{:.6}\n", p)?,
                 None => {}

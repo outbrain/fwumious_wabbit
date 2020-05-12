@@ -12,11 +12,13 @@ csv = "1.1"
 fasthash = "0.4"
 serde = {version = "1.0.106" , features = ["derive"]}
 serde_json = "1.0.51"
-fastapprox = "0.3.0"
+#fastapprox = "0.3.0"
 clap = "2.33.0"
 byteorder = "1.3.4"
 backtrace = "0.3.46"
 triomphe = "0.1.1"
+rand = "0.7.3"
+
 
 
 

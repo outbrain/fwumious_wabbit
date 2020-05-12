@@ -28,7 +28,7 @@ pub struct WorkerThread {
     id: u32,
     receiver: Arc<Mutex<mpsc::Receiver<net::TcpStream>>>,
     re: Arc<regressor::FixedRegressor>, 
-    fb: feature_buffer::FeatureBuffer,
+    fbt: feature_buffer::FeatureBufferTranslator,
     vw: vwmap::VwNamespaceMap, 
 }
 
@@ -45,7 +45,7 @@ impl WorkerThread {
             id: id,
             receiver: receiver,
             re: re,   // THIS IS NOT A SMALL STRUCTURE
-            fb: feature_buffer::FeatureBuffer::new(mi),
+            fbt: feature_buffer::FeatureBufferTranslator::new(mi),
             vw: (*vw).clone(),
 
         };
@@ -72,8 +72,8 @@ impl WorkerThread {
                         Ok(buffer2) => buffer2,
                         Err(e) => return (),
                 };
-                self.fb.translate_vowpal(buffer);
-                let p = self.re.predict(&(self.fb.output_buffer), i);
+                self.fbt.translate_vowpal(buffer);
+                let p = self.re.predict(&(self.fbt.feature_buffer), i);
                 writer.write_all(format!("{:.6}\n", p).as_bytes()).unwrap();
                 writer.flush().unwrap(); // This is definitely not the most efficient way of doing this, but let's make it perdictable first, fast second
                 i += 1;

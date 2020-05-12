@@ -18,7 +18,6 @@ pub struct FeatureComboDesc {
 }
 
 
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ModelInstance {
     pub learning_rate: f32,    
@@ -27,6 +26,8 @@ pub struct ModelInstance {
     pub hash_mask: u32,
     pub add_constant_feature: bool,
     pub feature_combo_descs: Vec<FeatureComboDesc>,
+    pub ffm_fields: Vec<usize>, // we'll make first version fully compatible with VW's --lrmfa
+    pub ffm_k: u32,
 }
 
 
@@ -39,6 +40,8 @@ impl ModelInstance {
             power_t: 0.5,
             add_constant_feature: true,
             feature_combo_descs: Vec::new(),
+            ffm_fields: Vec::new(),
+            ffm_k: 0,
         };
         Ok(mi)
     }
@@ -91,6 +94,27 @@ impl ModelInstance {
                 }
                 add_namespaces_combo(namespaces_str.to_string())?;
             }
+        }
+
+        if let Some(in_v) = cl.value_of("lrqfa") {
+            let vsplit: Vec<&str> = in_v.split("-").collect(); // We use - as a delimiter instead of first numbers as vowpal does it
+            if vsplit.len() != 2 {
+                return Err(Box::new(IOError::new(ErrorKind::Other, format!("--lrqfa takes namespaces-k, like ABC-12, your string was: \"{}\"", in_v))))
+            }
+            let namespaces_str = vsplit[0];
+            let k_str = vsplit[1];
+            for char in namespaces_str.chars() {
+                // create an list of indexes dfrom list of namespace chars
+                println!("Char {}", char);
+                let index = match vw.map_char_to_index.get(&char) {
+                    Some(index) => *index,
+                    None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown namespace char in command line: {}", char))))
+                };
+                mi.ffm_fields.push(index);
+            }
+            mi.ffm_k = k_str.parse().expect("Number expected");
+            println!("FFM_K: {}", mi.ffm_k);
+            
         }
 
         if let Some(val) = cl.value_of("bit_precision") {
