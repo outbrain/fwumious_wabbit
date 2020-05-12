@@ -106,6 +106,8 @@ impl FeatureBufferTranslator {
         }
         lr_buffer.set_len(output_len);
 
+
+        // FFM loops have not been optimized yet
         if self.model_instance.ffm_k > 0 { 
             // currently we only support primitive features as namespaces, (from --lrqfa command)
             // this is for compatibility with vowpal

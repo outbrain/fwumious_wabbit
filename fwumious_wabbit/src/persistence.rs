@@ -89,14 +89,6 @@ impl regressor::Regressor {
              output_bufwriter.write(buf_view)?;
         }
         
-        output_bufwriter.write_u64::<LittleEndian>(self.ffm_weights.len() as u64)?;
-        unsafe {
-             let buf_view:&[u8] = slice::from_raw_parts(self.ffm_weights.as_ptr() as *const u8, 
-                                              self.ffm_weights.len() *mem::size_of::<f32>());
-             output_bufwriter.write(buf_view)?;
-        }
-        
-        
         Ok(())
     }
     pub fn overwrite_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
@@ -109,17 +101,6 @@ impl regressor::Regressor {
                                              self.weights.len() *mem::size_of::<f32>());
             input_bufreader.read_exact(&mut buf_view)?;
         }
-
-        let len = input_bufreader.read_u64::<LittleEndian>()?;
-        if len != self.ffm_weights.len() as u64 {
-            return Err(format!("Lenghts of ffm_weights array in regressor file differ: got {}, expected {}", len, self.ffm_weights.len()))?;
-        }
-        unsafe {
-            let mut buf_view:&mut [u8] = slice::from_raw_parts_mut(self.ffm_weights.as_mut_ptr() as *mut u8, 
-                                             self.ffm_weights.len() *mem::size_of::<f32>());
-            input_bufreader.read_exact(&mut buf_view)?;
-        }
-
 
         Ok(())
     }
