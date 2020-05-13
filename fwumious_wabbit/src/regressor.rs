@@ -74,11 +74,10 @@ impl Regressor {
 
         // Initialization, from ffm.pdf, however should random distribution be cetered on zero?
         if model_instance.ffm_k > 0 {            
-
             rg.ffm_one_over_k_root = 1.0 / (rg.ffm_k as f32).sqrt();
             for i in 0..(hash_mask+1) {
-               // rg.weights[(rg.ffm_weights_offset + i*2+1) as usize] = 1.0;
-//                rg.weights[(rg.ffm_weights_offset + i*2) as usize] = rng.gen_range(-0.5* k_root , 0.5 * k_root );
+                // rg.weights[(rg.ffm_weights_offset + i*2+1) as usize] = 1.0;
+                // rg.weights[(rg.ffm_weights_offset + i*2) as usize] = rng.gen_range(-0.5* k_root , 0.5 * k_root );
             }
         }
         rg
