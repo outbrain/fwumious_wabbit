@@ -166,18 +166,14 @@ impl Regressor {
             let general_gradient = y - prediction_probability;
   //          println!("general gradient: {}, prediction {}, prediction orig: {}", general_gradient, prediction, -wsum*self.learning_rate); 
             for i in 0..local_buf_len {
+                let hash = local_data.get_unchecked(i*4).to_bits() as usize;
                 let feature_value = *local_data.get_unchecked(i*4+2);
                 let gradient = general_gradient * feature_value;
-                *local_data.get_unchecked_mut(i*4+3) = gradient*gradient;	// it would be easier, to just use i*4+1 at the end... but this is how vowpal does it
-                *local_data.get_unchecked_mut(i*4+1) += *local_data.get_unchecked(i*4+3);
-                let update_factor = gradient * (local_data.get_unchecked(i*4+1)).powf(self.minus_power_t);
-                *local_data.get_unchecked_mut(i*4+2) = self.learning_rate * update_factor;    // this is how vowpal does it, first calculate, then addk
-            }
-            for i in 0..local_buf_len {
-                let hash = local_data.get_unchecked(i*4).to_bits() as usize;
+                let gradient_squared = gradient*gradient;	// it would be easier, to just use i*4+1 at the end... but this is how vowpal does it
+                *self.weights.get_unchecked_mut(hash+1) += gradient_squared;
+                let update_factor = gradient * (local_data.get_unchecked(i*4+1) + gradient_squared).powf(self.minus_power_t);
 //                println!("H: {}, gradient update: {}, weight update: {}", hash, *local_data.get_unchecked(i*4+2), *local_data.get_unchecked(i*4+3));
-                *self.weights.get_unchecked_mut(hash) += *local_data.get_unchecked(i*4+2);
-                *self.weights.get_unchecked_mut(hash+1) += *local_data.get_unchecked(i*4+3);
+                *self.weights.get_unchecked_mut(hash) += self.learning_rate * update_factor;
             }            
         }
         prediction_probability

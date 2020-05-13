@@ -1,4 +1,3 @@
-use backtrace::Backtrace;
 use std::{mem,slice};
 
 use std::str;

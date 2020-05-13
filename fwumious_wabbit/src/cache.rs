@@ -5,9 +5,9 @@ use std::io::Read;
 use std::fs;
 use std::error::Error;
 use std::path;
-use flate2::write::GzEncoder;
+use flate2::write::DeflateEncoder;
 use flate2::Compression;
-use flate2::read::GzDecoder;
+use flate2::read::DeflateDecoder;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use crate::parser;
@@ -15,7 +15,7 @@ use crate::vwmap;
 use crate::persistence;
 
 const CACHE_HEADER_MAGIC_STRING: &[u8; 4] = b"FWCA";    // Fwumious Wabbit CAche
-const CACHE_HEADER_VERSION:u32 = 3;
+const CACHE_HEADER_VERSION:u32 = 4;
 // Cache layout:
 // 4 bytes: Magic bytes
 // u32: Version of the cache format
@@ -75,7 +75,7 @@ impl RecordCache {
                     // we buffer ourselves, otherwise i would be wise to use bufreader
                     rc.input_bufreader = Box::new(fs::File::open(&final_filename).unwrap());
                 } else {
-                    rc.input_bufreader = Box::new(GzDecoder::new(fs::File::open(&final_filename).unwrap()));
+                    rc.input_bufreader = Box::new(DeflateDecoder::new(fs::File::open(&final_filename).unwrap()));
                 }
                 println!("using cache_file = {}", final_filename );
                 println!("ignoring text input in favor of cache input");
@@ -95,7 +95,7 @@ impl RecordCache {
                 if !gz {
                     rc.output_bufwriter = Box::new(io::BufWriter::new(fs::File::create(temporary_filename).unwrap()));
                 } else {
-                    rc.output_bufwriter = Box::new(io::BufWriter::new(GzEncoder::new(fs::File::create(temporary_filename).unwrap(),
+                    rc.output_bufwriter = Box::new(io::BufWriter::new(DeflateEncoder::new(fs::File::create(temporary_filename).unwrap(),
                                                                     Compression::fast())));
                 }
                 rc.write_header(vw_map).unwrap();
