@@ -159,7 +159,7 @@ mod tests {
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![0, 0]); // no feature
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.output_buffer, vec![1, 116060, ONE]); // vw compatibility - no feature is no feature
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![1, 116060, ONE]); // vw compatibility - no feature is no feature
     }
     
     
@@ -174,15 +174,15 @@ mod tests {
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![0, 0]); // no feature
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.output_buffer, vec![1]); // vw compatibility - no feature is no feature
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![1]); // vw compatibility - no feature is no feature
 
         let rb = add_header(vec![nd(3,4), 0xfea]);
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.output_buffer, vec![1, 0xfea, ONE]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![1, 0xfea, ONE]);
 
         let rb = add_header(vec![nd(3,5), 0xfea, 0xfeb]);
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.output_buffer, vec![1, 0xfea, ONE, 0xfeb, ONE]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![1, 0xfea, ONE, 0xfeb, ONE]);
     }
 
     #[test]
@@ -200,15 +200,15 @@ mod tests {
 
         let rb = add_header(vec![nd(0, 0),  nd(0,0)]);
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.output_buffer, vec![1]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![1]);
 
         let rb = add_header(vec![nd(4, 5), nd(0,0), 0xfea]);
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.output_buffer, vec![1, 0xfea, ONE]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![1, 0xfea, ONE]);
 
         let rb = add_header(vec![nd(4, 5), nd(5, 6), 0xfea, 0xfeb]);
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.output_buffer, vec![1, 0xfea, ONE, 0xfeb, ONE]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![1, 0xfea, ONE, 0xfeb, ONE]);
 
     }
 
@@ -225,16 +225,16 @@ mod tests {
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![0, 0]);
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.output_buffer, vec![1]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![1]);
 
         let rb = add_header(vec![nd(3, 4), nd(0,0), 123456789]);
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.output_buffer, vec![1]);	// since the other feature is missing - VW compatibility says no feature is here
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![1]);	// since the other feature is missing - VW compatibility says no feature is here
 
         let rb = add_header(vec![nd(4,5), nd(5,6), 2988156968, 2422381320]);
         fbt.translate_vowpal(&rb);
-//        println!("out {}, out mod 2^24 {}", fbt.output_buffer[1], fbt.output_buffer[1] & ((1<<24)-1));
-        assert_eq!(fbt.output_buffer, vec![1, 208368, ONE]);
+//        println!("out {}, out mod 2^24 {}", fbt.feature_buffer.lr_buffer[1], fbt.feature_buffer.lr_buffer[1] & ((1<<24)-1));
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![1, 208368, ONE]);
         
     }
     
@@ -251,7 +251,7 @@ mod tests {
         fbt.translate_vowpal(&rb);
         let two = 2.0_f32.to_bits();
 
-        assert_eq!(fbt.output_buffer, vec![1, 0xfea, two]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![1, 0xfea, two]);
     }
 
 
