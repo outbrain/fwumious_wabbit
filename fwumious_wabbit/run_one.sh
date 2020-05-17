@@ -1,10 +1,10 @@
 #/bin/sh
 infile=$1
-#namespaces="--interactions BC --interactions BD --interactions BGO --interactions BTf --interactions BX --interactions CO --interactions DG --interactions DW --interactions GHXx --interactions GU --interactions GUx --interactions Gw --interactions KR --interactions KTd --interactions Kx --interactions MN --interactions QS --interactions Sx --interactions UW --interactions Ug --interactions cx --interactions eg --interactions gx --interactions rvx --keep B --keep D --keep F --keep G --keep H --keep L --keep O --keep S --keep U --keep W --keep e --keep f --keep g --keep h --keep i --keep o --keep p --keep q --keep r --keep v --keep w"
-namespaces="--keep A"
+namespaces="--interactions BC --interactions BD --interactions BGO --interactions BTf --interactions BX --interactions CO --interactions DG --interactions DW --interactions GHXx --interactions GU --interactions GUx --interactions Gw --interactions KR --interactions KTd --interactions Kx --interactions MN --interactions QS --interactions Sx --interactions UW --interactions Ug --interactions cx --interactions eg --interactions gx --interactions rvx --keep B --keep D --keep F --keep G --keep H --keep L --keep O --keep S --keep U --keep W --keep e --keep f --keep g --keep h --keep i --keep o --keep p --keep q --keep r --keep v --keep w"
+#namespaces="--keep A"
 rest="--data $infile -l 0.025 -b 25 --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0000000001 --l2 0.00 --hash all --noconstant"
-vwonly="--lrqfa AA1"
-fwonly="--lrqfa AB-1"
+#vwonly="--lrqfa AA1"
+#fwonly="--lrqfa AB-1"
 
 #rest="-b 24 --data $infile -l 0.1 --power_t 0.39 --adaptive --link logistic --sgd --loss_function logistic --noconstant --l2 0.0"
 rm v f
@@ -18,7 +18,6 @@ clear;
 echo "target/release/fw $namespaces $rest -c -p f $fwonly "
 
 cargo build --release && \
-target/release/fw $namespaces $rest -c -p f $fwonly
-# && time $vw $namespaces $rest -c -p v $vwonly
+target/release/fw $namespaces $rest -c -p f $fwonly && time $vw $namespaces $rest -c -p v $vwonly
 #clear; cargo build && target/debug/fw $namespaces $rest -p f && time vw $namespaces $rest -p v
 
