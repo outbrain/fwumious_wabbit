@@ -9,7 +9,9 @@ use flate2::write::DeflateEncoder;
 use flate2::Compression;
 use flate2::read::DeflateDecoder;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use zstd::stream::{Encoder, Decoder};
+//use zstd::stream::{Encoder, Decoder};
+
+use lz4::{Decoder, EncoderBuilder};
 
 use crate::parser;
 use crate::vwmap;
@@ -76,7 +78,8 @@ impl RecordCache {
                     // we buffer ourselves, otherwise i would be wise to use bufreader
                     rc.input_bufreader = Box::new(fs::File::open(&final_filename).unwrap());
                 } else {
-                    rc.input_bufreader = Box::new(zstd::stream::Decoder::new(fs::File::open(&final_filename).unwrap()).unwrap());
+//                    rc.input_bufreader = Box::new(zstd::stream::Decoder::new(fs::File::open(&final_filename).unwrap()).unwrap());
+                    rc.input_bufreader = Box::new(lz4::Decoder::new(fs::File::open(&final_filename).unwrap()).unwrap());
                 }
                 println!("using cache_file = {}", final_filename );
                 println!("ignoring text input in favor of cache input");
@@ -99,8 +102,11 @@ impl RecordCache {
 //                    rc.output_bufwriter = Box::new(io::BufWriter::new(DeflateEncoder::new(fs::File::create(temporary_filename).unwrap(),
 //                                                                    Compression::fast())));
 
-                      rc.output_bufwriter = Box::new(io::BufWriter::new(zstd::stream::Encoder::new(fs::File::create(temporary_filename).unwrap(),
-                                                                    -5).unwrap().auto_finish()));
+//                      rc.output_bufwriter = Box::new(io::BufWriter::new(zstd::stream::Encoder::new(fs::File::create(temporary_filename).unwrap(),
+//                                                                    -5).unwrap().auto_finish()));
+                      rc.output_bufwriter = Box::new(io::BufWriter::new(lz4::EncoderBuilder::new()
+                                                                      .level(3).build(fs::File::create(temporary_filename).unwrap()
+                                                                    ).unwrap()));
                 }
                 rc.write_header(vw_map).unwrap();
             }
