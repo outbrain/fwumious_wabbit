@@ -115,23 +115,34 @@ impl Regressor {
                         for right_hash in right_fbuf {
                             let right_weight_p = (self.ffm_weights_offset + (right_hash & self.ffm_hashmask) * 2) as usize;
                             for k in 0..(self.ffm_k as usize) {
-                                let left_weight_a = &mut self.weights[left_weight_p + k * 2];
-                                if *left_weight_a == 0.0 {
-                                    *left_weight_a = merand48((left_weight_p + k *2) as u64) * self.ffm_one_over_k_root;
+                                let mut left_weight;
+                                {
+                                    let left_weight_a = &mut self.weights[left_weight_p + k * 2];
+                                    if *left_weight_a == 0.0 {
+                                        *left_weight_a = merand48((left_weight_p + k *2) as u64) * self.ffm_one_over_k_root;
+                                        }
+                                    left_weight = *left_weight_a;
                                 }
-                                let left_weight = *left_weight_a;
-                                let right_weight = self.weights[right_weight_p + k * 2];
+                                let mut right_weight;
+                                {
+                                    let right_weight_a = &mut self.weights[right_weight_p + k * 2];
+                                    if *right_weight_a == 0.0 {
+                                        *right_weight_a = merand48((right_weight_p + k *2) as u64) * self.ffm_one_over_k_root;
+                                    }
+                                    right_weight = *right_weight_a;
+                                }
+//                                let right_weight = self.weights[right_weight_p + k * 2];
                                 wsum += left_weight * right_weight * 
                                         left_feature_value * right_feature_value;
                                 // left side
                                 *local_data.get_unchecked_mut(local_buf_len*4) = f32::from_bits((left_weight_p + k * 2) as u32);// store index
                                 *local_data.get_unchecked_mut(local_buf_len*4+1) = self.weights[left_weight_p + k * 2 +1]; // accumulated errors
-                                *local_data.get_unchecked_mut(local_buf_len*4+2) = left_feature_value * right_feature_value * right_weight; // gradient
+                                *local_data.get_unchecked_mut(local_buf_len*4+2) = left_feature_value * right_feature_value * right_weight; // first derivate
                                 local_buf_len += 1;
                                 // right side
                                 *local_data.get_unchecked_mut(local_buf_len*4) = f32::from_bits((right_weight_p + k * 2) as u32); // store index
                                 *local_data.get_unchecked_mut(local_buf_len*4+1) = self.weights[right_weight_p + k * 2 +1]; // accumulated errors
-                                *local_data.get_unchecked_mut(local_buf_len*4+2) = left_feature_value * right_feature_value * left_weight; // gradient
+                                *local_data.get_unchecked_mut(local_buf_len*4+2) = left_feature_value * right_feature_value * left_weight; // first derivate
                                 local_buf_len += 1;
                             }
                             /*
@@ -171,8 +182,10 @@ impl Regressor {
                 let gradient = general_gradient * feature_value;
                 let gradient_squared = gradient*gradient;	// it would be easier, to just use i*4+1 at the end... but this is how vowpal does it
                 *self.weights.get_unchecked_mut(hash+1) += gradient_squared;
-                let update_factor = gradient * (local_data.get_unchecked(i*4+1) + gradient_squared).powf(self.minus_power_t);
-//                println!("H: {}, gradient update: {}, weight update: {}", hash, *local_data.get_unchecked(i*4+2), *local_data.get_unchecked(i*4+3));
+                let accumulated_squared_gradient = local_data.get_unchecked(i*4+1);
+                let update_factor = gradient * (accumulated_squared_gradient + gradient_squared).powf(self.minus_power_t);
+//                println!("Gradient: {}, accumulated squared gradient: accumulated_squared_gradient: {}", gradient, accumulated_squared_gradient);
+//                println!("H: {}, feature_value: {}, weight update: {}, zq {}", hash, feature_value, update_factor * self.learning_rate, (0.0f32).powf(-0.5) *0.0);
                 *self.weights.get_unchecked_mut(hash) += self.learning_rate * update_factor;
             }            
         }
