@@ -10,8 +10,10 @@ use crate::feature_buffer;
 
 
 const ONE:u32 = 1065353216;// this is 1.0 float -> u32
-const BUF_LEN:usize = 220; // We will ABORT if number of derived features for individual example is more than this.
+const BUF_LEN:usize = 512; // We will ABORT if number of derived features for individual example is more than this.
 // Why not bigger number? If we grow stack of the function too much, we end up with stack overflow protecting mechanisms
+
+const TEMP_BUF_ALIGN:usize = 4;
 
 
 pub struct Regressor {
@@ -72,11 +74,12 @@ impl Regressor {
         // Now allocate weights
         rg.weights = vec![0.0; (lr_weights_len + ffm_weights_len) as usize];
 
-        // Initialization, from ffm.pdf, however should random distribution be cetered on zero?
+        // Initialization, from ffm.pdf, however should random distribution be centred on zero?
         if model_instance.ffm_k > 0 {            
-            rg.ffm_one_over_k_root = 1.0 / (rg.ffm_k as f32).sqrt();
+            rg.ffm_one_over_k_root = 2.0 / (rg.ffm_k as f32).sqrt();
             for i in 0..(hash_mask+1) {
-                // rg.weights[(rg.ffm_weights_offset + i*2+1) as usize] = 1.0;
+                // we set FFM gradients to 1.0, so we avoid NaN updates due to adagrad (accumulated_squared_gradients+grad^2).powf(negative_number) * 0.0 
+                rg.weights[(rg.ffm_weights_offset + i*2+1) as usize] = 1.0;
                 // rg.weights[(rg.ffm_weights_offset + i*2) as usize] = rng.gen_range(-0.5* k_root , 0.5 * k_root );
             }
         }
@@ -96,10 +99,9 @@ impl Regressor {
         let mut wsum:f32 = 0.0;
         for i in 0..local_buf_len {
             let hash = (*fbuf.get_unchecked(i*2) * 2) as usize;
-            //            println!("H: {}", hash);
             let feature_value:f32 = f32::from_bits(*fbuf.get_unchecked(i*2+1));
             let w = *self.weights.get_unchecked(hash);
-            wsum += w * feature_value;    
+            wsum += w * feature_value;
             *local_data.get_unchecked_mut(i*4) = f32::from_bits(hash as u32);
             *local_data.get_unchecked_mut(i*4+1) = *self.weights.get_unchecked(hash+1);
             *local_data.get_unchecked_mut(i*4+2) = feature_value;
@@ -184,8 +186,11 @@ impl Regressor {
                 *self.weights.get_unchecked_mut(hash+1) += gradient_squared;
                 let accumulated_squared_gradient = local_data.get_unchecked(i*4+1);
                 let update_factor = gradient * (accumulated_squared_gradient + gradient_squared).powf(self.minus_power_t);
-//                println!("Gradient: {}, accumulated squared gradient: accumulated_squared_gradient: {}", gradient, accumulated_squared_gradient);
-//                println!("H: {}, feature_value: {}, weight update: {}, zq {}", hash, feature_value, update_factor * self.learning_rate, (0.0f32).powf(-0.5) *0.0);
+/*                if update_factor.is_nan() {
+                    println!("Gradient: {}, accumulated_squared_gradient: {}", gradient, accumulated_squared_gradient);
+                    println!("H: {}, feature_value: {}, weight update: {}, zq {}", hash, feature_value, update_factor * self.learning_rate, (0.0f32).powf(-0.5) *0.0);
+                    println!("NaN update at: value: {}, example num:{}", i, example_num);
+                }*/
                 *self.weights.get_unchecked_mut(hash) += self.learning_rate * update_factor;
             }            
         }
