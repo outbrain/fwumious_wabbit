@@ -119,7 +119,7 @@ impl Regressor {
                                 {
                                     let left_weight_a = &mut self.weights[left_weight_p + k * 2];
                                     if *left_weight_a == 0.0 {
-                                        *left_weight_a = merand48((left_weight_p + k *2) as u64) * self.ffm_one_over_k_root;
+                                        *left_weight_a = (merand48((left_weight_p + k *2) as u64) - 0.5) * self.ffm_one_over_k_root;
                                         }
                                     left_weight = *left_weight_a;
                                 }
@@ -127,7 +127,7 @@ impl Regressor {
                                 {
                                     let right_weight_a = &mut self.weights[right_weight_p + k * 2];
                                     if *right_weight_a == 0.0 {
-                                        *right_weight_a = merand48((right_weight_p + k *2) as u64) * self.ffm_one_over_k_root;
+                                        *right_weight_a = (merand48((right_weight_p + k *2) as u64) - 0.5) * self.ffm_one_over_k_root;
                                     }
                                     right_weight = *right_weight_a;
                                 }
