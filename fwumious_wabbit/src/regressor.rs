@@ -201,7 +201,6 @@ impl Regressor {
 
 impl FixedRegressor {
     pub fn new(rr: Regressor) -> FixedRegressor {
-        
         FixedRegressor {
                         hash_mask: rr.hash_mask,
                         learning_rate: rr.learning_rate,
@@ -213,6 +212,17 @@ impl FixedRegressor {
 
         }
     }
+    pub fn new_copy(rr: &Regressor) -> FixedRegressor {
+        FixedRegressor {
+                        hash_mask: rr.hash_mask,
+                        learning_rate: rr.learning_rate,
+                        minus_power_t: rr.minus_power_t,
+                        weights: Arc::new(rr.weights.to_vec()),
+                        ffm_weights_offset: rr.ffm_weights_offset,
+                        ffm_k: rr.ffm_k,
+                        ffm_hashmask: rr.ffm_hashmask,
+        }
+    }
 
     pub fn predict(&self, fb: &feature_buffer::FeatureBuffer, example_num: u32) -> f32 {
         unsafe {
@@ -221,9 +231,10 @@ impl FixedRegressor {
         for i in 0..fbuf.len()/2 {     // speed of this is 4.53
             let hash = (*fbuf.get_unchecked(i*2) *2) as usize;
             let feature_value:f32 = f32::from_bits(*fbuf.get_unchecked(i*2+1));
-            let w = *self.weights.get_unchecked(0);
+            let w = *self.weights.get_unchecked(hash);
             wsum += w * feature_value;    
         }
+        
 
         if self.ffm_k > 0 {
             let left_feature_value = 1.0;  // we currently do not support feature values in ffm
