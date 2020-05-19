@@ -76,7 +76,7 @@ impl Regressor {
 
         // Initialization, from ffm.pdf, however should random distribution be centred on zero?
         if model_instance.ffm_k > 0 {            
-            rg.ffm_one_over_k_root = 2.0 / (rg.ffm_k as f32).sqrt();
+            rg.ffm_one_over_k_root = 2.0 / (rg.ffm_k as f32).sqrt() / 10.0;
             for i in 0..(hash_mask+1) {
                 // we set FFM gradients to 1.0, so we avoid NaN updates due to adagrad (accumulated_squared_gradients+grad^2).powf(negative_number) * 0.0 
                 rg.weights[(rg.ffm_weights_offset + i*2+1) as usize] = 1.0;
