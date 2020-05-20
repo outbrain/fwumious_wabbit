@@ -20,6 +20,7 @@ pub struct Regressor {
     hash_mask: u32,
     learning_rate: f32,
     minus_power_t:f32,
+    minimum_learning_rate:f32,
     pub weights: Vec<f32>,       // weights and gradients, interleved, for all models
     ffm_weights_offset: u32, 
     ffm_k: u32,
@@ -30,8 +31,6 @@ pub struct Regressor {
 #[derive(Clone)]
 pub struct FixedRegressor {
     hash_mask: u32,
-    learning_rate: f32,
-    minus_power_t:f32,
     pub weights: Arc<Vec<f32>>,       // Both weights and gradients
     ffm_weights_offset: u32, 
     ffm_k: u32,
@@ -46,6 +45,7 @@ impl Regressor {
                             hash_mask: hash_mask,
                             learning_rate: model_instance.learning_rate,
                             minus_power_t : - model_instance.power_t,
+                            minimum_learning_rate: model_instance.minimum_learning_rate,
                             weights: Vec::new(), 
                             ffm_weights_offset: 0,
                             ffm_k: 0,
@@ -57,7 +57,6 @@ impl Regressor {
         let mut ffm_weights_len = 0;
         if model_instance.ffm_k > 0 {
             // To keep things simple ffm weights length will be the same as lr
-            // we'll adjust everything else
             ffm_weights_len = lr_weights_len;
             rg.ffm_weights_offset = lr_weights_len;
             rg.ffm_k = model_instance.ffm_k;
@@ -69,14 +68,13 @@ impl Regressor {
             let dimensions_mask = (1 << ffm_bits_for_dimensions) - 1;
             // in ffm we will simply mask the lower bits, so we spare them for k
             rg.ffm_hashmask = ((1 << (model_instance.bit_precision)) -1) ^ dimensions_mask;
-//            println!("ffm_k: {}, ffm_bits_for_dimesnions: {}, ffm_hashmask: {:#032b}", rg.ffm_k, ffm_bits_for_dimensions, rg.ffm_hashmask);
         }
         // Now allocate weights
         rg.weights = vec![0.0; (lr_weights_len + ffm_weights_len) as usize];
 
         // Initialization, from ffm.pdf, however should random distribution be centred on zero?
         if model_instance.ffm_k > 0 {            
-            rg.ffm_one_over_k_root = 2.0 / (rg.ffm_k as f32).sqrt() / 10.0;
+            rg.ffm_one_over_k_root = 1.0 / (rg.ffm_k as f32).sqrt() / 10.0;
             for i in 0..(hash_mask+1) {
                 // we set FFM gradients to 1.0, so we avoid NaN updates due to adagrad (accumulated_squared_gradients+grad^2).powf(negative_number) * 0.0 
                 rg.weights[(rg.ffm_weights_offset + i*2+1) as usize] = 1.0;
@@ -121,7 +119,7 @@ impl Regressor {
                                 {
                                     let left_weight_a = &mut self.weights[left_weight_p + k * 2];
                                     if *left_weight_a == 0.0 {
-                                        *left_weight_a = (merand48((left_weight_p + k *2) as u64) - 0.5) * self.ffm_one_over_k_root;
+                                        *left_weight_a = (merand48((left_weight_p + k *2) as u64)) * self.ffm_one_over_k_root;
                                         }
                                     left_weight = *left_weight_a;
                                 }
@@ -129,11 +127,10 @@ impl Regressor {
                                 {
                                     let right_weight_a = &mut self.weights[right_weight_p + k * 2];
                                     if *right_weight_a == 0.0 {
-                                        *right_weight_a = (merand48((right_weight_p + k *2) as u64) - 0.5) * self.ffm_one_over_k_root;
+                                        *right_weight_a = (merand48((right_weight_p + k *2) as u64)) * self.ffm_one_over_k_root;
                                     }
                                     right_weight = *right_weight_a;
                                 }
-//                                let right_weight = self.weights[right_weight_p + k * 2];
                                 wsum += left_weight * right_weight * 
                                         left_feature_value * right_feature_value;
                                 // left side
@@ -182,16 +179,17 @@ impl Regressor {
                 let hash = local_data.get_unchecked(i*4).to_bits() as usize;
                 let feature_value = *local_data.get_unchecked(i*4+2);
                 let gradient = general_gradient * feature_value;
-                let gradient_squared = gradient*gradient;	// it would be easier, to just use i*4+1 at the end... but this is how vowpal does it
+                let gradient_squared = gradient*gradient;
                 *self.weights.get_unchecked_mut(hash+1) += gradient_squared;
                 let accumulated_squared_gradient = local_data.get_unchecked(i*4+1);
-                let update_factor = gradient * (accumulated_squared_gradient + gradient_squared).powf(self.minus_power_t);
+                let learning_rate = self.learning_rate * (accumulated_squared_gradient + gradient_squared).powf(self.minus_power_t);
 /*                if update_factor.is_nan() {
                     println!("Gradient: {}, accumulated_squared_gradient: {}", gradient, accumulated_squared_gradient);
                     println!("H: {}, feature_value: {}, weight update: {}, zq {}", hash, feature_value, update_factor * self.learning_rate, (0.0f32).powf(-0.5) *0.0);
                     println!("NaN update at: value: {}, example num:{}", i, example_num);
                 }*/
-                *self.weights.get_unchecked_mut(hash) += self.learning_rate * update_factor;
+    //            println!("L {}", learning_rate);
+                *self.weights.get_unchecked_mut(hash) += gradient * f32::max(self.minimum_learning_rate, learning_rate);
             }            
         }
         prediction_probability
@@ -203,24 +201,11 @@ impl FixedRegressor {
     pub fn new(rr: Regressor) -> FixedRegressor {
         FixedRegressor {
                         hash_mask: rr.hash_mask,
-                        learning_rate: rr.learning_rate,
-                        minus_power_t: rr.minus_power_t,
                         weights: Arc::new(rr.weights),
                         ffm_weights_offset: rr.ffm_weights_offset,
                         ffm_k: rr.ffm_k,
                         ffm_hashmask: rr.ffm_hashmask,
 
-        }
-    }
-    pub fn new_copy(rr: &Regressor) -> FixedRegressor {
-        FixedRegressor {
-                        hash_mask: rr.hash_mask,
-                        learning_rate: rr.learning_rate,
-                        minus_power_t: rr.minus_power_t,
-                        weights: Arc::new(rr.weights.to_vec()),
-                        ffm_weights_offset: rr.ffm_weights_offset,
-                        ffm_k: rr.ffm_k,
-                        ffm_hashmask: rr.ffm_hashmask,
         }
     }
 

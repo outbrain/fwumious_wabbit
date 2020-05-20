@@ -130,7 +130,6 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         let now = Instant::now();
         let mut example_num = 0;
         loop {
-            example_num += 1;
 
             let reading_result;
             let mut buffer:&[u32];
@@ -152,6 +151,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
                         Err(e) => return Err("Error")?
                 };
             }
+            example_num += 1;
             fbt.translate_vowpal(buffer);
             let mut prediction: f32 = 0.0;
 
@@ -163,7 +163,6 @@ fn main2() -> Result<(), Box<dyn Error>>  {
                 }
                 delayed_learning_fbs.push_back(fbt.feature_buffer.clone());
                 if (prediction_model_delay as usize) < delayed_learning_fbs.len() {
-                    // pop and learn
                     let delayed_buffer = delayed_learning_fbs.pop_front().unwrap();
                     re.learn(&delayed_buffer, !testonly, example_num);
                 }
