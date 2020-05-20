@@ -21,6 +21,7 @@ pub struct FeatureComboDesc {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ModelInstance {
     pub learning_rate: f32,    
+    pub minimum_learning_rate: f32,
     pub power_t: f32,
     pub bit_precision: u8,
     pub hash_mask: u32,
@@ -34,7 +35,8 @@ pub struct ModelInstance {
 impl ModelInstance {
     pub fn new_empty() -> Result<ModelInstance, Box<dyn Error>> {
         let mut mi = ModelInstance {
-            learning_rate: 0.5, // vw default 
+            learning_rate: 0.5, // vw default
+            minimum_learning_rate: 0.0, 
             bit_precision: 18,      // vw default
             hash_mask: (1 << 18) -1,
             power_t: 0.5,
@@ -125,6 +127,11 @@ impl ModelInstance {
         if let Some(val) = cl.value_of("learning_rate") {
             mi.learning_rate = val.parse()?;
         }
+
+        if let Some(val) = cl.value_of("minimum_learning_rate") {
+            mi.minimum_learning_rate = val.parse()?;
+        }
+
         if let Some(val) = cl.value_of("power_t") {
             mi.power_t = val.parse()?;
         }
