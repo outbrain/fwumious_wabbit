@@ -106,19 +106,13 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             Some(delay) => delay.parse()?,
             None => 0
         };
-        let prediction_model_delay_examples_per_switch:u32 = match cl.value_of("prediction_model_delay_examples_per_switch") {
-            Some(examples) => examples.parse()?,  
-            None => 100000
-        };
-        let prediction_model_delay_start_after = predictions_after - prediction_model_delay_examples_per_switch * prediction_model_delay;
 
-
-        
-        let mut past_models: VecDeque<regressor::FixedRegressor> = VecDeque::new();
-        for i in 0..prediction_model_delay {
-            // Fill the queue with empty models
-            past_models.push_back(regressor::FixedRegressor::new_copy(&re));
+        if prediction_model_delay != 0 && testonly {
+            println!("--prediction_model_delay cannot be used with --testonly");
+            return Err("Error")?
         }
+        
+        let mut delayed_learning_fbs: VecDeque<feature_buffer::FeatureBuffer> = VecDeque::with_capacity(prediction_model_delay as usize);
 
         // Setup Parser, is rust forcing this disguisting way to do it, or I just don't know the pattern?
         let input = File::open(input_filename)?;
@@ -137,12 +131,6 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         let mut example_num = 0;
         loop {
             example_num += 1;
-            if prediction_model_delay != 0 && example_num >= prediction_model_delay_start_after {
-                if example_num % prediction_model_delay_examples_per_switch == 0 {
-                    past_models.pop_front();
-                    past_models.push_back(regressor::FixedRegressor::new_copy(&re));
-                }
-            }
 
             let reading_result;
             let mut buffer:&[u32];
@@ -164,16 +152,26 @@ fn main2() -> Result<(), Box<dyn Error>>  {
                         Err(e) => return Err("Error")?
                 };
             }
-
             fbt.translate_vowpal(buffer);
-            let mut p = re.learn(&fbt.feature_buffer, !testonly, example_num);
-            if example_num > predictions_after {
-                if prediction_model_delay != 0 {
-                    let past_model_re = &past_models[0];
-                    p = past_model_re.predict(&fbt.feature_buffer, example_num);
+            let mut prediction: f32 = 0.0;
+
+            if prediction_model_delay == 0 {
+                prediction = re.learn(&fbt.feature_buffer, !testonly, example_num);
+            } else {
+                if example_num > predictions_after {
+                    prediction = re.learn(&fbt.feature_buffer, false, example_num);
                 }
+                delayed_learning_fbs.push_back(fbt.feature_buffer.clone());
+                if (prediction_model_delay as usize) < delayed_learning_fbs.len() {
+                    // pop and learn
+                    let delayed_buffer = delayed_learning_fbs.pop_front().unwrap();
+                    re.learn(&delayed_buffer, !testonly, example_num);
+                }
+            } 
+            
+            if example_num > predictions_after {
                 match predictions_file.as_mut() {
-                    Some(file) =>  write!(file, "{:.6}\n", p)?,
+                    Some(file) =>  write!(file, "{:.6}\n", prediction)?,
                     None => {}
                 }
             }

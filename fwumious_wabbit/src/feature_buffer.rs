@@ -9,6 +9,7 @@ const CONSTANT_HASH:u32 = 11650396;
 
 const LR_BUFFER_LEN:usize = 1024;    // this is highly unsafe...
 
+#[derive(Clone)]
 pub struct FeatureBuffer {
     pub lr_buffer: Vec<u32>,
     pub ffm_buffers: Vec<Vec<u32>>
