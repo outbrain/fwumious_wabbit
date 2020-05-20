@@ -116,12 +116,27 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .value_name("arg")
                      .help("Initial regressor(s) to load into memory (arg is filename)")
                      .takes_value(true))
+
+                     // FFMs
                     .arg(Arg::with_name("lrqfa")
                      .long("lrqfa")
                      .value_name("namespaces-k")
                      .help("Field aware Factorization Machines. Namespace letters, minus, k")
                      .multiple(false)
                      .takes_value(true))
+                    .arg(Arg::with_name("ffm_field")
+                     .long("ffm_field")
+                     .value_name("namespaces")
+                     .help("Define a FFM field by listing namespace letters")
+                     .multiple(true)
+                     .takes_value(true))
+                    .arg(Arg::with_name("ffm_k")
+                     .long("ffm_k")
+                     .value_name("k")
+                     .help("Lenght of a vector to use for FFM")
+                     .takes_value(true))
+                     
+
                      // Daemon parameterts
                     .arg(Arg::with_name("daemon")
                      .long("daemon")

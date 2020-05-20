@@ -18,7 +18,7 @@ clear;
 echo "target/release/fw $namespaces $rest -c -p f $fwonly "
 
 cargo build --release && \
-target/release/fw $namespaces $rest -c -p f $fwonly --minimum_learning_rate 0.001 
+target/release/fw $namespaces $rest -c -p f $fwonly 
 #&& time $vw $namespaces $rest -c -p v $vwonly
 #clear; cargo build && target/debug/fw $namespaces $rest -p f && time vw $namespaces $rest -p v
 
