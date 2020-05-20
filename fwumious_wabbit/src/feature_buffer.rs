@@ -15,7 +15,6 @@ pub struct FeatureBuffer {
     pub ffm_buffers: Vec<Vec<u32>>
 }
 
-
 pub struct FeatureBufferTranslator {
     model_instance: model_instance::ModelInstance,
     hashes_vec_in: Vec<u32>,
@@ -63,7 +62,7 @@ impl FeatureBufferTranslator {
                 // We special case a single feature (common occurance)
                 if num_namespaces == 1 {
                     if (namespace_desc & parser::IS_NOT_SINGLE_MASK) != 0 {
-                        let start = ((namespace_desc >> 16) as usize) & 0x7fff;
+                        let start = ((namespace_desc >> 16) & 0x7fff) as usize;
                         let end =  (namespace_desc & 0xffff) as usize;
                         for hash_offset in start..end {
                             *lr_buffer.get_unchecked_mut(output_len) = *record_buffer.get_unchecked(hash_offset)  & self.model_instance.hash_mask;
@@ -79,7 +78,7 @@ impl FeatureBufferTranslator {
                     continue
                 }
                 if (namespace_desc & parser::IS_NOT_SINGLE_MASK) != 0 {
-                    let start = ((namespace_desc >> 16) as usize) & 0x7fff;
+                    let start = ((namespace_desc >> 16) & 0x7fff) as usize;
                     let end =  (namespace_desc & 0xffff) as usize;
                     for hash_offset in start..end {
                         hashes_vec_in.push(*record_buffer.get_unchecked(hash_offset));
@@ -94,7 +93,7 @@ impl FeatureBufferTranslator {
                     for old_hash in &(*hashes_vec_in) {
                         let half_hash = old_hash.overflowing_mul(VOWPAL_FNV_PRIME).0;
                         if (namespace_desc & parser::IS_NOT_SINGLE_MASK) != 0 {
-                            let start = ((namespace_desc >> 16) as usize) & 0x7fff;
+                            let start = ((namespace_desc >> 16) & 0x7fff) as usize;
                             let end =  (namespace_desc & 0xffff) as usize;
                             for hash_offset in start..end {
                                 hashes_vec_out.push(*record_buffer.get_unchecked(hash_offset) ^ half_hash);
@@ -131,20 +130,22 @@ impl FeatureBufferTranslator {
             // but in theory we could support also combo features
             let ffm_buffers = &mut self.feature_buffer.ffm_buffers;
             ffm_buffers.truncate(0);
-            for feature_index in &self.model_instance.ffm_fields {
+            for ffm_field in &self.model_instance.ffm_fields {
                 let mut field_hashes_buffer: Vec<u32>= Vec::with_capacity(100);
-                let namespace_desc = *record_buffer.get_unchecked(feature_index+2);
-                
-                if (namespace_desc & parser::IS_NOT_SINGLE_MASK) != 0 {
-                    let start = ((namespace_desc >> 16) as usize) & 0x7fff;
-                    let end =  (namespace_desc & 0xffff) as usize;
-                    for hash_offset in start..end {
-                        field_hashes_buffer.push(*record_buffer.get_unchecked(hash_offset));
+                for feature_index in ffm_field {
+                    let namespace_desc = *record_buffer.get_unchecked(feature_index+2);
+                    
+                    if (namespace_desc & parser::IS_NOT_SINGLE_MASK) != 0 {
+                        let start = ((namespace_desc >> 16) & 0x7fff) as usize;
+                        let end =  (namespace_desc & 0xffff) as usize;
+                        for hash_offset in start..end {
+                            field_hashes_buffer.push(*record_buffer.get_unchecked(hash_offset));
+                        }
+                    } else {
+                        field_hashes_buffer.push(namespace_desc);
                     }
-                } else {
-                    field_hashes_buffer.push(namespace_desc);
+    //                println!("A: {} {:?}", feature_index, field_hashes_buffer);
                 }
-//                println!("A: {} {:?}", feature_index, field_hashes_buffer);
                 ffm_buffers.push(field_hashes_buffer);
             }
         }

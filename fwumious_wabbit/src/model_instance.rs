@@ -27,7 +27,7 @@ pub struct ModelInstance {
     pub hash_mask: u32,
     pub add_constant_feature: bool,
     pub feature_combo_descs: Vec<FeatureComboDesc>,
-    pub ffm_fields: Vec<usize>, // we'll make first version fully compatible with VW's --lrmfa
+    pub ffm_fields: Vec<Vec<usize>>, // we'll make first version fully compatible with VW's --lrmfa
     pub ffm_k: u32,
 }
 
@@ -107,16 +107,32 @@ impl ModelInstance {
             let k_str = vsplit[1];
             for char in namespaces_str.chars() {
                 // create an list of indexes dfrom list of namespace chars
-                println!("Char {}", char);
                 let index = match vw.map_char_to_index.get(&char) {
                     Some(index) => *index,
                     None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown namespace char in command line: {}", char))))
                 };
-                mi.ffm_fields.push(index);
+                mi.ffm_fields.push(vec![index]);
             }
             mi.ffm_k = k_str.parse().expect("Number expected");
-            println!("FFM_K: {}", mi.ffm_k);
-            
+        }
+
+        if let Some(val) = cl.value_of("ffm_k") {
+            mi.ffm_k = val.parse()?;
+        }
+
+        if let Some(in_v) = cl.values_of("ffm_field") {
+            for namespaces_str in in_v {          
+                let mut field: Vec<usize>= Vec::new();
+                for char in namespaces_str.chars() {
+                    println!("K: {}", char);
+                    let index = match vw.map_char_to_index.get(&char) {
+                        Some(index) => *index,
+                        None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown namespace char in command line: {}", char))))
+                    };
+                    field.push(index);
+                }
+                mi.ffm_fields.push(field);
+            }
         }
 
         if let Some(val) = cl.value_of("bit_precision") {
