@@ -9,6 +9,8 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time;
 
+use daemonize::Daemonize;
+
 use crate::parser;
 use crate::vwmap;
 use crate::regressor;
@@ -21,7 +23,7 @@ pub struct Serving {
     listening_interface: String,
     worker_threads: Vec<thread::JoinHandle<u32>>,
     sender: mpsc::Sender<net::TcpStream>,
-
+    foreground: bool,
 }
 
 pub struct WorkerThread {
@@ -102,7 +104,7 @@ impl Serving {
         let (sender, receiver) = mpsc::channel();
         let receiver = Arc::new(Mutex::new(receiver));
         
-        
+
         
         let re_fixed = Arc::new(regressor::FixedRegressor::new(re));
 //        println!("Stage2");
@@ -113,10 +115,9 @@ impl Serving {
             listening_interface:listening_interface.to_string(),
             worker_threads: Vec::new(),
             sender: sender,
-            
+            foreground: cl.is_present("foreground"),
         };
  
-        
         let num_children = match cl.value_of("num_children") {
             Some(num_children) => num_children.parse().expect("num_children should be integer"),
             None => 10
@@ -135,10 +136,16 @@ impl Serving {
         Ok(s)
     }
     
-    
     pub fn serve(&mut self)  -> Result<(), Box<dyn Error>> {
         let listener = net::TcpListener::bind(&self.listening_interface).expect("Cannot bind to the interface");
-        println!("Bind done, calling accept");
+        println!("Bind done, deamonizing and calling accept");
+        if ! self.foreground {
+            let daemonize = Daemonize::new();
+            match daemonize.start() {
+                    Ok(_) => println!("Success, daemonized"),
+                    Err(e) => return Err(e)?,
+                }
+        }
         for stream in listener.incoming() {
             self.sender.send(stream?)?;
         }

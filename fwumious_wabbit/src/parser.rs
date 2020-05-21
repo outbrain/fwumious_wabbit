@@ -4,7 +4,6 @@ use fasthash::xx;
 use std::io;
 use std::io::BufRead;
 use std::error::Error;
-//mod vwmap;
 
 use crate::vwmap;
 
@@ -15,6 +14,7 @@ pub const LABEL_OFFSET:usize = 1;
 pub const IS_NOT_SINGLE_MASK : u32 = 1u32 << 31;
 pub const MASK31: u32 = !IS_NOT_SINGLE_MASK;
 pub const NULL: u32= IS_NOT_SINGLE_MASK; // null is just an exact IS_NOT_SINGLE_MASK
+pub const NO_LABEL: u32 = 0xff;
 
 pub struct VowpalParser<'a> {
     input_bufread: &'a mut dyn BufRead,
@@ -82,7 +82,9 @@ impl<'a> VowpalParser<'a> {
                 match *p.add(0) {
                     0x31 => self.output_buffer[LABEL_OFFSET] = 1,    // 1
                     0x2d => self.output_buffer[LABEL_OFFSET] = 0,    // -1
-                    _ => return Err("Label neither 1 or -1")?
+                    _ => {
+                        self.output_buffer[LABEL_OFFSET] = NO_LABEL;
+                    }
                 };
                 let mut current_char_index:usize = 0 * 2 + HEADER_LEN;
                 let mut i_start:usize;
@@ -179,6 +181,7 @@ r#"1 |A a
 -1 |B b
 1 |A a b
 -1 |A a |B b
+|A a
 "#);
         let mut rr = VowpalParser::new(&mut buf, &vw);
         // we test a single record
@@ -186,6 +189,10 @@ r#"1 |A a
         assert_eq!(rr.next_vowpal().unwrap(), [5, 0, NULL, 2422381320 & MASK31, NULL]);
         assert_eq!(rr.next_vowpal().unwrap(), [7, 1, nd(5,7) | IS_NOT_SINGLE_MASK, NULL, NULL, 2988156968 & MASK31, 3529656005 & MASK31]);
         assert_eq!(rr.next_vowpal().unwrap(), [5, 0, 2988156968 & MASK31, 2422381320 & MASK31, NULL]);
+        // without label
+        assert_eq!(rr.next_vowpal().unwrap(), [5, NO_LABEL, 2988156968 & MASK31, NULL, NULL]);
+        
+        
         //println!("{:?}", rr.output_buffer);
         // now we test if end-of-stream works correctly
         assert_eq!(rr.next_vowpal().unwrap().len(), 0);
