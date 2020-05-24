@@ -10,7 +10,7 @@ use crate::feature_buffer;
 
 
 const ONE:u32 = 1065353216;// this is 1.0 float -> u32
-const BUF_LEN:usize = 512; // We will ABORT if number of derived features for individual example is more than this.
+const BUF_LEN:usize = 8196; // We will ABORT if number of derived features for individual example is more than this.
 // Why not bigger number? If we grow stack of the function too much, we end up with stack overflow protecting mechanisms
 
 const TEMP_BUF_ALIGN:usize = 4;
@@ -57,7 +57,7 @@ impl Regressor {
         let mut ffm_weights_len = 0;
         if model_instance.ffm_k > 0 {
             // To keep things simple ffm weights length will be the same as lr
-            ffm_weights_len = lr_weights_len;
+            ffm_weights_len = (1 << model_instance.ffm_bit_precision)*2;
             rg.ffm_weights_offset = lr_weights_len;
             rg.ffm_k = model_instance.ffm_k;
             // Since we will align our dimensions, we need to know the number of bits for them
@@ -67,15 +67,15 @@ impl Regressor {
             }
             let dimensions_mask = (1 << ffm_bits_for_dimensions) - 1;
             // in ffm we will simply mask the lower bits, so we spare them for k
-            rg.ffm_hashmask = ((1 << (model_instance.bit_precision)) -1) ^ dimensions_mask;
+            rg.ffm_hashmask = ((1 << model_instance.ffm_bit_precision) -1) ^ dimensions_mask;
         }
         // Now allocate weights
         rg.weights = vec![0.0; (lr_weights_len + ffm_weights_len) as usize];
 
         // Initialization, from ffm.pdf, however should random distribution be centred on zero?
-        if model_instance.ffm_k > 0 {            
+        if model_instance.ffm_k > 0 {       
             rg.ffm_one_over_k_root = 1.0 / (rg.ffm_k as f32).sqrt() / 10.0;
-            for i in 0..(hash_mask+1) {
+            for i in 0..(ffm_weights_len/2) {
                 // we set FFM gradients to 1.0, so we avoid NaN updates due to adagrad (accumulated_squared_gradients+grad^2).powf(negative_number) * 0.0 
                 rg.weights[(rg.ffm_weights_offset + i*2+1) as usize] = 1.0;
                 // rg.weights[(rg.ffm_weights_offset + i*2) as usize] = rng.gen_range(-0.5* k_root , 0.5 * k_root );
@@ -189,7 +189,8 @@ impl Regressor {
                     println!("NaN update at: value: {}, example num:{}", i, example_num);
                 }*/
     //            println!("L {}", learning_rate);
-                *self.weights.get_unchecked_mut(hash) += gradient * f32::max(self.minimum_learning_rate, learning_rate);
+        //        *self.weights.get_unchecked_mut(hash) += gradient * f32::max(self.minimum_learning_rate, learning_rate);
+                *self.weights.get_unchecked_mut(hash) += gradient * learning_rate;
             }            
         }
         prediction_probability

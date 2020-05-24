@@ -137,6 +137,11 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .value_name("k")
                      .help("Lenght of a vector to use for FFM")
                      .takes_value(true))
+                    .arg(Arg::with_name("ffm_bit_precision")
+                     .long("ffm_bit_precision")
+                     .value_name("N")
+                     .help("Bits to use for ffm hash space")
+                     .takes_value(true))
                      
 
                      // Daemon parameterts
