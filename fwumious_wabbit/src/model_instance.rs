@@ -29,6 +29,7 @@ pub struct ModelInstance {
     pub feature_combo_descs: Vec<FeatureComboDesc>,
     pub ffm_fields: Vec<Vec<usize>>, // we'll make first version fully compatible with VW's --lrmfa
     pub ffm_k: u32,
+    pub ffm_bit_precision: u32,
 }
 
 
@@ -44,6 +45,7 @@ impl ModelInstance {
             feature_combo_descs: Vec::new(),
             ffm_fields: Vec::new(),
             ffm_k: 0,
+            ffm_bit_precision: 18,
         };
         Ok(mi)
     }
@@ -124,7 +126,7 @@ impl ModelInstance {
             for namespaces_str in in_v {          
                 let mut field: Vec<usize>= Vec::new();
                 for char in namespaces_str.chars() {
-                    println!("K: {}", char);
+                    //println!("K: {}", char);
                     let index = match vw.map_char_to_index.get(&char) {
                         Some(index) => *index,
                         None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown namespace char in command line: {}", char))))
@@ -133,6 +135,10 @@ impl ModelInstance {
                 }
                 mi.ffm_fields.push(field);
             }
+        }
+        if let Some(val) = cl.value_of("ffm_bit_precision") {
+            mi.ffm_bit_precision = val.parse()?;
+            println!("FFM num weight bits = {}", mi.ffm_bit_precision); // vwcompat
         }
 
         if let Some(val) = cl.value_of("bit_precision") {
