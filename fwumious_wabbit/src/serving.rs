@@ -8,6 +8,7 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time;
+use std::fs::File;
 
 use daemonize::Daemonize;
 
@@ -122,9 +123,21 @@ impl Serving {
             Some(num_children) => num_children.parse().expect("num_children should be integer"),
             None => 10
         };
+
+        if ! s.foreground {
+          //  let stdout = File::create("/tmp/daemon.out").unwrap();
+          //  let stderr = File::create("/tmp/daemon.err").unwrap();
+            let daemonize = Daemonize::new();
+            //.stdout(stdout)  // Redirect stdout to `/tmp/daemon.out`.
+            //.stderr(stderr);  // Redirect stderr to `/tmp/daemon.err`.;
+            match daemonize.start() {
+                    Ok(_) => println!("Success, daemonized"),
+                    Err(e) => return Err(e)?,
+            }
+        }
         
         println!("Number of threads {}", num_children);
-        for i in 1..10 {
+        for i in 1..num_children {
             let newt =WorkerThread::new(1, 
                                 Arc::clone(&receiver),
                                 vw,
@@ -139,13 +152,6 @@ impl Serving {
     pub fn serve(&mut self)  -> Result<(), Box<dyn Error>> {
         let listener = net::TcpListener::bind(&self.listening_interface).expect("Cannot bind to the interface");
         println!("Bind done, deamonizing and calling accept");
-        if ! self.foreground {
-            let daemonize = Daemonize::new();
-            match daemonize.start() {
-                    Ok(_) => println!("Success, daemonized"),
-                    Err(e) => return Err(e)?,
-                }
-        }
         for stream in listener.incoming() {
             self.sender.send(stream?)?;
         }

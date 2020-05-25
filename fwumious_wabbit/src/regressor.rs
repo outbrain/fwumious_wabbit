@@ -20,13 +20,14 @@ pub struct Regressor {
     hash_mask: u32,
     learning_rate: f32,
     minus_power_t:f32,
-//    minimum_learning_rate:f32,
     pub weights: Vec<f32>,       // weights and gradients, interleved, for all models
     ffm_weights_offset: u32, 
     ffm_k: u32,
     ffm_hashmask: u32,
     ffm_one_over_k_root: f32,
 }
+
+
 
 #[derive(Clone)]
 pub struct FixedRegressor {

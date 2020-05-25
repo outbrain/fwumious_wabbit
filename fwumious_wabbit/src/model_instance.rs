@@ -21,16 +21,23 @@ pub struct FeatureComboDesc {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ModelInstance {
     pub learning_rate: f32,    
+    #[serde(default = "default_f32_zero")]
     pub minimum_learning_rate: f32,
     pub power_t: f32,
     pub bit_precision: u8,
     pub hash_mask: u32,
     pub add_constant_feature: bool,
     pub feature_combo_descs: Vec<FeatureComboDesc>,
-    pub ffm_fields: Vec<Vec<usize>>, // we'll make first version fully compatible with VW's --lrmfa
+    pub ffm_fields: Vec<Vec<usize>>,
+    #[serde(default = "default_u32_zero")]
     pub ffm_k: u32,
+    #[serde(default = "default_u32_zero")]
     pub ffm_bit_precision: u32,
 }
+
+fn default_u32_zero() -> u32{0}
+fn default_f32_zero() -> f32{0.0}
+
 
 
 impl ModelInstance {
