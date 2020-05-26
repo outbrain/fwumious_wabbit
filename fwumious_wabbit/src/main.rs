@@ -92,11 +92,9 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         let mut se = serving::Serving::new(&cl, &vw, re, &mi)?;
         let s = se.serve();
     } else {
-
         let input_filename = cl.value_of("data").expect("--data expected");
         let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"), &vw);
         let mut fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
-
 
         let predictions_after:u32 = match cl.value_of("predictions_after") {
             Some(examples) => examples.parse()?,

@@ -123,6 +123,7 @@ impl Serving {
             Some(num_children) => num_children.parse().expect("num_children should be integer"),
             None => 10
         };
+        println!("Number of threads {}", num_children);
 
         if ! s.foreground {
           //  let stdout = File::create("/tmp/daemon.out").unwrap();
@@ -136,8 +137,7 @@ impl Serving {
             }
         }
         
-        println!("Number of threads {}", num_children);
-        for i in 1..num_children {
+        for i in 0..num_children {
             let newt =WorkerThread::new(1, 
                                 Arc::clone(&receiver),
                                 vw,
