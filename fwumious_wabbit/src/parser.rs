@@ -17,7 +17,7 @@ pub const NULL: u32= IS_NOT_SINGLE_MASK; // null is just an exact IS_NOT_SINGLE_
 pub const NO_LABEL: u32 = 0xff;
 
 pub struct VowpalParser<'a> {
-    input_bufread: &'a mut dyn BufRead,
+    pub input_bufread: &'a mut dyn BufRead,
     vw_map: &'a vwmap::VwNamespaceMap,
     tmp_read_buf: Vec<u8>,
     namespace_hash_seeds: [u32; 256],     // Each namespace has its hash seed
