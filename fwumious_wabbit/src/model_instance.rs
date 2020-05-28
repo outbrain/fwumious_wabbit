@@ -11,7 +11,7 @@ use serde_json::{Value,from_str};
 use crate::vwmap;
 
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct FeatureComboDesc {
     pub feature_indices: Vec<usize>,
     pub weight:f32,
@@ -42,6 +42,47 @@ fn default_f32_zero() -> f32{0.0}
 fn default_bool_false() -> bool{false}
 
 
+fn create_feature_combo_desc(vw: &vwmap::VwNamespaceMap, s: &str) -> Result<FeatureComboDesc, Box<dyn Error>> {
+    //let mut feature_vec: Vec<usize> = Vec::new();
+
+    let vsplit: Vec<&str> = s.split(":").collect(); // We use : as a delimiter for weight
+    let mut combo_weight: f32 = 1.0;
+    if vsplit.len() > 2 {
+        return Err(Box::new(IOError::new(ErrorKind::Other, format!("only one value parameter allowed (denoted with \":\"): \"{:?}\"", s))))
+    }
+    if vsplit.len() == 2 {
+        let weight_str = vsplit[1];
+        combo_weight = weight_str.parse()?;
+    }
+
+    let namespaces_str = vsplit[0];
+    let mut feature_indices: Vec<usize> = Vec::new();
+    for char in namespaces_str.chars() {
+       // create an list of indexes dfrom list of namespace chars
+       let index = match vw.map_char_to_index.get(&char) {
+           Some(index) => *index,
+           None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown namespace char in command line: {}", char))))
+       };
+       feature_indices.push(index);
+       // now we handle calculating total correct weight for combo feature
+       let feature_name:&String = vw.map_char_to_name.get(&char).unwrap();
+       let ss:Vec<&str> = feature_name.split(":").collect();
+       match ss.len() {
+           1 => continue,
+           2 => {
+               let weight:f32 = ss[1].parse()?;
+               combo_weight *= weight;
+           },
+           _ => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Feature name definition has multiple weights separated by colon: {}", feature_name))))
+       }
+    }
+    Ok(FeatureComboDesc {
+                         feature_indices: feature_indices,
+                          weight: combo_weight
+                        })
+}
+
+
 
 impl ModelInstance {
     pub fn new_empty() -> Result<ModelInstance, Box<dyn Error>> {
@@ -60,54 +101,21 @@ impl ModelInstance {
         };
         Ok(mi)
     }
+
+    
     
     pub fn new_from_cmdline<'a>(cl: &clap::ArgMatches<'a>, vw: &vwmap::VwNamespaceMap) -> Result<ModelInstance, Box<dyn Error>> {
         let mut mi = ModelInstance::new_empty()?;
-        let mut add_namespaces_combo = |namespaces_str: String| -> Result<(), Box<dyn Error>> {
-            //let mut feature_vec: Vec<usize> = Vec::new();
-            let mut feature_combo_desc = FeatureComboDesc {
-                                        feature_indices: Vec::new(),
-                                        weight: 1.0
-                                        };
-            for char in namespaces_str.chars() {
-               // create an list of indexes dfrom list of namespace chars
-               let index = match vw.map_char_to_index.get(&char) {
-                   Some(index) => *index,
-                   None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown namespace char in command line: {}", char))))
-               };
-               feature_combo_desc.feature_indices.push(index);
-               // now we handle calculating total correct weight for combo feature
-               let feature_name:&String = vw.map_char_to_name.get(&char).unwrap();
-               let ss:Vec<&str> = feature_name.split(":").collect();
-               match ss.len() {
-                   1 => continue,
-                   2 => {
-                       let weight:f32 = ss[1].parse()?;
-                       feature_combo_desc.weight *= weight;
-                   },
-                   _ => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Feature name definition has multiple weights separated by colon: {}", feature_name))))
-               }
-            }
-            mi.feature_combo_descs.push(feature_combo_desc);
-            Ok(())
-        };
-
+        
         if let Some(in_v) = cl.values_of("keep") {
-            for namespaces_str in in_v {
-                if namespaces_str.len() != 1 {
-                    return Err(Box::new(IOError::new(ErrorKind::Other, format!("--keep can only have single letter as a namespace parameter: {}", namespaces_str))))
-                }
-                add_namespaces_combo(namespaces_str.to_string())?;
+            for value_str in in_v {
+                mi.feature_combo_descs.push(create_feature_combo_desc(vw, value_str)?);
             }
         }
         
         if let Some(in_v) = cl.values_of("interactions") {
-            for namespaces_str in in_v {                
-//                println!("An input keep parameter: {}", namespaces_str);
-                if namespaces_str.len() <= 1 {
-                    return Err(Box::new(IOError::new(ErrorKind::Other, format!("--interactions needs two or more namespaces: \"{}\"", namespaces_str))))
-                }
-                add_namespaces_combo(namespaces_str.to_string())?;
+            for value_str in in_v {                
+                mi.feature_combo_descs.push(create_feature_combo_desc(vw, value_str)?);
             }
         }
 
@@ -151,7 +159,6 @@ impl ModelInstance {
                 }
                 mi.ffm_fields.push(field);
             }
-            
         }
         
         if let Some(val) = cl.value_of("ffm_bit_precision") {
@@ -255,8 +262,41 @@ impl ModelInstance {
 
         Ok(mi)
     }
-    
-    
-    
-    
 }
+
+
+#[cfg(test)]
+mod tests {
+    // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
+
+    #[test]
+    fn test_interaction_parsing() {
+        // Test for perfect vowpal-compatible hashing
+        let vw_map_string = r#"
+A,featureA
+B,featureB
+C,featureC
+"#;
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+        let aa = create_feature_combo_desc(&vw, "A").unwrap();
+        assert_eq!(aa, FeatureComboDesc {
+                                feature_indices: vec![0],
+                                weight: 1.0
+                                });
+        
+        let aa = create_feature_combo_desc(&vw, "BA:1.5").unwrap();
+        assert_eq!(aa, FeatureComboDesc {
+                                feature_indices: vec![1,0],
+                                weight: 1.5
+                                });
+                                
+    }
+}
+
+
+
+
+
+
+
