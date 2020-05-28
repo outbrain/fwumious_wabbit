@@ -17,7 +17,6 @@ pub const NULL: u32= IS_NOT_SINGLE_MASK; // null is just an exact IS_NOT_SINGLE_
 pub const NO_LABEL: u32 = 0xff;
 
 pub struct VowpalParser<'a> {
-    pub input_bufread: &'a mut dyn BufRead,
     vw_map: &'a vwmap::VwNamespaceMap,
     tmp_read_buf: Vec<u8>,
     namespace_hash_seeds: [u32; 256],     // Each namespace has its hash seed
@@ -35,9 +34,8 @@ organization of records buffer
 */
 
 impl<'a> VowpalParser<'a> {
-    pub fn new(buffered_input: &'a mut dyn BufRead, vw: &'a vwmap::VwNamespaceMap) -> VowpalParser<'a> {
+    pub fn new(vw: &'a vwmap::VwNamespaceMap) -> VowpalParser<'a> {
         let mut rr = VowpalParser {  
-                            input_bufread: buffered_input,
                             vw_map: vw,
                             tmp_read_buf: Vec::with_capacity(RECBUF_LEN),
                             output_buffer: Vec::with_capacity(RECBUF_LEN*2),
@@ -49,20 +47,16 @@ impl<'a> VowpalParser<'a> {
         }
         rr
     }
-    pub fn set_input_bufread(&mut self, buffered_input: &'a mut dyn BufRead) {
-        self.input_bufread = buffered_input; 
-    }
-    
     
     pub fn print(&self) -> () {
         println!("item out {:?}", self.output_buffer);
     }
 
 
-    pub fn next_vowpal(&mut self) -> Result<&[u32], Box<dyn Error>>  {
+    pub fn next_vowpal(&mut self, input_bufread: &mut dyn BufRead) -> Result<&[u32], Box<dyn Error>>  {
             // Output item
             self.tmp_read_buf.truncate(0);
-            let rowlen1 = match self.input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
+            let rowlen1 = match input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
                 Ok(0) => return Ok(&[]),
                 Ok(n) => n,
                 Err(e) => Err(e)?          
@@ -183,18 +177,18 @@ r#"1 |A a
 -1 |A a |B b
 |A a
 "#);
-        let mut rr = VowpalParser::new(&mut buf, &vw);
+        let mut rr = VowpalParser::new(&vw);
         // we test a single record
-        assert_eq!(rr.next_vowpal().unwrap(), [5, 1, 2988156968 & MASK31, NULL, NULL]);
-        assert_eq!(rr.next_vowpal().unwrap(), [5, 0, NULL, 2422381320 & MASK31, NULL]);
-        assert_eq!(rr.next_vowpal().unwrap(), [7, 1, nd(5,7) | IS_NOT_SINGLE_MASK, NULL, NULL, 2988156968 & MASK31, 3529656005 & MASK31]);
-        assert_eq!(rr.next_vowpal().unwrap(), [5, 0, 2988156968 & MASK31, 2422381320 & MASK31, NULL]);
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [5, 1, 2988156968 & MASK31, NULL, NULL]);
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [5, 0, NULL, 2422381320 & MASK31, NULL]);
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [7, 1, nd(5,7) | IS_NOT_SINGLE_MASK, NULL, NULL, 2988156968 & MASK31, 3529656005 & MASK31]);
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [5, 0, 2988156968 & MASK31, 2422381320 & MASK31, NULL]);
         // without label
-        assert_eq!(rr.next_vowpal().unwrap(), [5, NO_LABEL, 2988156968 & MASK31, NULL, NULL]);
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [5, NO_LABEL, 2988156968 & MASK31, NULL, NULL]);
         
         
         //println!("{:?}", rr.output_buffer);
         // now we test if end-of-stream works correctly
-        assert_eq!(rr.next_vowpal().unwrap().len(), 0);
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap().len(), 0);
     }
 }

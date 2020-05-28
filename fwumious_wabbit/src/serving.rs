@@ -57,28 +57,29 @@ impl WorkerThread {
     }
     
     pub fn start(&mut self) -> () {
-        let mut empty = io::empty();
-        let mut pa = parser::VowpalParser::new(&mut empty, &self.vw);
+        let mut pa = parser::VowpalParser::new(&self.vw);
 
         loop {
             let tcp_stream = self.receiver.lock().unwrap().recv().unwrap();
             let mut writer = BufWriter::new(&tcp_stream);
             let mut reader = BufReader::new(&tcp_stream);
-            pa.set_input_bufread(&mut reader);
 
     //        println!("New connection");
             let mut i = 0u32;
             loop {
-                let reading_result = pa.next_vowpal();
+                let reading_result = pa.next_vowpal(&mut reader);
                 let mut buffer: &[u32] = match reading_result {
-                        Ok([]) => return (), // EOF
+                        Ok([]) => break, // EOF
                         Ok(buffer2) => buffer2,
-                        Err(e) => return (),
+                        Err(e) => break,
                 };
                 self.fbt.translate_vowpal(buffer);
                 let p = self.re.predict(&(self.fbt.feature_buffer), i);
                 writer.write_all(format!("{:.6}\n", p).as_bytes()).unwrap();
-                writer.flush().unwrap(); // This is definitely not the most efficient way of doing this, but let's make it perdictable first, fast second
+                // not the smartest
+                if reader.buffer().is_empty() {
+                    writer.flush().unwrap(); 
+                }
                 i += 1;
             }
         }
