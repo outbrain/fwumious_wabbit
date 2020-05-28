@@ -146,6 +146,11 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .value_name("N")
                      .help("Bits to use for ffm hash space")
                      .takes_value(true))
+                    .arg(Arg::with_name("ffm_separate_vectors")
+                     .long("ffm_separate_vectors")
+                     .value_name("false")
+                     .help("Field will have a different vector for each counter-field")
+                     .takes_value(false))
                      
 
                      // Daemon parameterts

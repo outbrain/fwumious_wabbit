@@ -33,10 +33,13 @@ pub struct ModelInstance {
     pub ffm_k: u32,
     #[serde(default = "default_u32_zero")]
     pub ffm_bit_precision: u32,
+    #[serde(default = "default_bool_false")]
+    pub ffm_separate_vectors: bool,
 }
 
 fn default_u32_zero() -> u32{0}
 fn default_f32_zero() -> f32{0.0}
+fn default_bool_false() -> bool{false}
 
 
 
@@ -53,6 +56,7 @@ impl ModelInstance {
             ffm_fields: Vec::new(),
             ffm_k: 0,
             ffm_bit_precision: 18,
+            ffm_separate_vectors: false,
         };
         Ok(mi)
     }
@@ -129,6 +133,11 @@ impl ModelInstance {
             mi.ffm_k = val.parse()?;
         }
 
+        if cl.is_present("ffm_separate_vectors") {
+            mi.ffm_separate_vectors = true;
+        }
+
+
         if let Some(in_v) = cl.values_of("ffm_field") {
             for namespaces_str in in_v {          
                 let mut field: Vec<usize>= Vec::new();
@@ -142,7 +151,9 @@ impl ModelInstance {
                 }
                 mi.ffm_fields.push(field);
             }
+            
         }
+        
         if let Some(val) = cl.value_of("ffm_bit_precision") {
             mi.ffm_bit_precision = val.parse()?;
             println!("FFM num weight bits = {}", mi.ffm_bit_precision); // vwcompat
