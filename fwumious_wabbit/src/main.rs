@@ -122,8 +122,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         };
 
         let mut empty = io::empty();
-        let mut pa = parser::VowpalParser::new(&mut empty, &vw);
-        pa.set_input_bufread(bufferred_input);
+        let mut pa = parser::VowpalParser::new(&vw);
 
         let now = Instant::now();
         let mut example_num = 0;
@@ -132,7 +131,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             let reading_result;
             let mut buffer:&[u32];
             if !cache.reading {
-                reading_result = pa.next_vowpal();
+                reading_result = pa.next_vowpal(&mut bufferred_input);
                 buffer = match reading_result {
                         Ok([]) => break, // EOF
                         Ok(buffer2) => buffer2,
