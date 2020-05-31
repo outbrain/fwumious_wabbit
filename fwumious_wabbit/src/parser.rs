@@ -163,32 +163,33 @@ B,featureB
 C,featureC
 "#;
         let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
-        fn str_to_cursor(c: &mut Cursor<Vec<u8>>, s: &str) -> () {
-          c.seek(std::io::SeekFrom::Start(0)).unwrap();
-          c.write(s.as_bytes()).unwrap();
-          c.seek(std::io::SeekFrom::Start(0)).unwrap();
+
+        fn str_to_cursor(s: &str) -> Cursor<Vec<u8>> {
+          Cursor::new(s.as_bytes().to_vec())
         }
 
-        let mut buf = Cursor::new(Vec::new());
-        str_to_cursor(&mut buf, 
-r#"1 |A a
--1 |B b
-1 |A a b
--1 |A a |B b
-|A a
-"#);
         let mut rr = VowpalParser::new(&vw);
         // we test a single record
+        let mut buf = str_to_cursor("1 |A a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [5, 1, 2988156968 & MASK31, NULL, NULL]);
+        
+        let mut buf = str_to_cursor("-1 |B b\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [5, 0, NULL, 2422381320 & MASK31, NULL]);
+        
+        let mut buf = str_to_cursor("1 |A a b\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [7, 1, nd(5,7) | IS_NOT_SINGLE_MASK, NULL, NULL, 2988156968 & MASK31, 3529656005 & MASK31]);
+        
+        let mut buf = str_to_cursor("-1 |A a |B b\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [5, 0, 2988156968 & MASK31, 2422381320 & MASK31, NULL]);
+        
         // without label
+        let mut buf = str_to_cursor("|A a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [5, NO_LABEL, 2988156968 & MASK31, NULL, NULL]);
         
         
         //println!("{:?}", rr.output_buffer);
         // now we test if end-of-stream works correctly
+        str_to_cursor("");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap().len(), 0);
     }
 }
