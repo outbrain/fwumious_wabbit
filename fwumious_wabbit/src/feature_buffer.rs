@@ -9,26 +9,40 @@ const CONSTANT_HASH:u32 = 11650396;
 
 const LR_BUFFER_LEN:usize = 1024;    // this is highly unsafe...
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct HashAndValue {
+    pub hash: u32,
+    pub value: f32
+}
+
 #[derive(Clone)]
 pub struct FeatureBuffer {
-    pub lr_buffer: Vec<u32>,
-    pub ffm_buffers: Vec<Vec<u32>>
+    pub label: f32,
+    pub lr_buffer: Vec<HashAndValue>,
+    pub ffm_buffers: Vec<Vec<HashAndValue>>
 }
+
 
 pub struct FeatureBufferTranslator {
     model_instance: model_instance::ModelInstance,
-    hashes_vec_in: Vec<u32>,
-    hashes_vec_out: Vec<u32>,
+    // we don't want to keep allocating buffers
+    hashes_vec_in: Vec<HashAndValue>,
+    hashes_vec_out: Vec<HashAndValue>,
     pub feature_buffer: FeatureBuffer,
 }
 
 impl FeatureBufferTranslator {
     pub fn new(model_instance: &model_instance::ModelInstance) -> FeatureBufferTranslator {
         let mut fb = FeatureBuffer {
+            label: 0.0,
             lr_buffer: Vec::new(),
             ffm_buffers: Vec::new(),
         };
-        fb.lr_buffer.resize(LR_BUFFER_LEN, 0);
+        fb.lr_buffer.resize(LR_BUFFER_LEN, HashAndValue {hash:0, value:0.0});
+        // avoid doing any allocations in translate
+        for ffm_field in &model_instance.ffm_fields {
+            fb.ffm_buffers.push(Vec::new());
+        }
         let mut fbt = FeatureBufferTranslator{
                             model_instance: model_instance.clone(),
                             hashes_vec_in : Vec::with_capacity(100),
@@ -46,12 +60,12 @@ impl FeatureBufferTranslator {
     pub fn translate_vowpal(&mut self, record_buffer: &[u32]) -> () {
         unsafe {
         let lr_buffer = &mut self.feature_buffer.lr_buffer;
-        *lr_buffer.get_unchecked_mut(0) = record_buffer[1];  // copy label
-        let mut output_len:usize = 1;
-        let mut hashes_vec_in : &mut Vec<u32> = &mut self.hashes_vec_in;
-        let mut hashes_vec_out : &mut Vec<u32> = &mut self.hashes_vec_out;
+        self.feature_buffer.label = record_buffer[1] as f32;  // copy label
+        let mut output_len:usize = 0;
+        let mut hashes_vec_in : &mut Vec<HashAndValue> = &mut self.hashes_vec_in;
+        let mut hashes_vec_out : &mut Vec<HashAndValue> = &mut self.hashes_vec_out;
         for feature_combo_desc in &self.model_instance.feature_combo_descs {
-            let feature_combo_weight_u32 = (feature_combo_desc.weight).to_bits();
+            let feature_combo_weight = feature_combo_desc.weight;
             hashes_vec_in.truncate(0);
             hashes_vec_out.truncate(0);
             // we unroll first iteration of the loop and optimize
@@ -62,17 +76,17 @@ impl FeatureBufferTranslator {
                 // We special case a single feature (common occurance)
                 if num_namespaces == 1 {
                     if (namespace_desc & parser::IS_NOT_SINGLE_MASK) != 0 {
-                        let start = ((namespace_desc >> 16) & 0x7fff) as usize;
-                        let end =  (namespace_desc & 0xffff) as usize;
-                        for hash_offset in start..end {
-                            *lr_buffer.get_unchecked_mut(output_len) = *record_buffer.get_unchecked(hash_offset)  & self.model_instance.hash_mask;
-                            *lr_buffer.get_unchecked_mut(output_len + 1) = feature_combo_weight_u32;
-                            output_len += 2
+                        let start = ((namespace_desc >> 16) & 0x7fff) as
+                        usize; let end = (namespace_desc & 0xffff) as usize;
+                        for hash_offset in (start..end).step_by(2) {
+                            lr_buffer.get_unchecked_mut(output_len).hash = *record_buffer.get_unchecked(hash_offset) & self.model_instance.hash_mask;
+                            lr_buffer.get_unchecked_mut(output_len).value = f32::from_bits(*record_buffer.get_unchecked(hash_offset+1)) * feature_combo_weight;
+                            output_len += 1
                         }
                     } else {
-                            *lr_buffer.get_unchecked_mut(output_len) = namespace_desc  & self.model_instance.hash_mask;
-                            *lr_buffer.get_unchecked_mut(output_len + 1) = feature_combo_weight_u32;
-                            output_len += 2
+                            lr_buffer.get_unchecked_mut(output_len).hash = namespace_desc & self.model_instance.hash_mask;
+                            lr_buffer.get_unchecked_mut(output_len).value = feature_combo_weight;
+                            output_len += 1
                     }
                     
                     continue
@@ -80,45 +94,47 @@ impl FeatureBufferTranslator {
                 if (namespace_desc & parser::IS_NOT_SINGLE_MASK) != 0 {
                     let start = ((namespace_desc >> 16) & 0x7fff) as usize;
                     let end =  (namespace_desc & 0xffff) as usize;
-                    for hash_offset in start..end {
-                        hashes_vec_in.push(*record_buffer.get_unchecked(hash_offset));
+                    for hash_offset in (start..end).step_by(2) {
+                        hashes_vec_in.push(HashAndValue {hash: *record_buffer.get_unchecked(hash_offset), 
+                                                        value: f32::from_bits(*record_buffer.get_unchecked(hash_offset + 1))});
                     }
                 } else {
-                    hashes_vec_in.push(namespace_desc);
+                    hashes_vec_in.push(HashAndValue {hash: namespace_desc, value: 1.0});
                 }
             }
             for feature_index in feature_combo_desc.feature_indices.get_unchecked(1 as usize .. num_namespaces) {
                 let namespace_desc = *record_buffer.get_unchecked(*feature_index + 2);
                 {
-                    for old_hash in &(*hashes_vec_in) {
-                        let half_hash = old_hash.overflowing_mul(VOWPAL_FNV_PRIME).0;
+                    for handv in &(*hashes_vec_in) {
+                        let half_hash = handv.hash.overflowing_mul(VOWPAL_FNV_PRIME).0;
                         if (namespace_desc & parser::IS_NOT_SINGLE_MASK) != 0 {
                             let start = ((namespace_desc >> 16) & 0x7fff) as usize;
                             let end =  (namespace_desc & 0xffff) as usize;
-                            for hash_offset in start..end {
-                                hashes_vec_out.push(*record_buffer.get_unchecked(hash_offset) ^ half_hash);
+                            for hash_offset in (start..end).step_by(2) {
+                                hashes_vec_out.push(HashAndValue{   hash: *record_buffer.get_unchecked(hash_offset) ^ half_hash,
+                                                                    value: handv.value * f32::from_bits(*record_buffer.get_unchecked(hash_offset + 1))});
                             }
                         } else {
-                                let half_hash = old_hash.overflowing_mul(VOWPAL_FNV_PRIME).0;
-                                hashes_vec_out.push(namespace_desc ^ half_hash);
+                                let half_hash = handv.hash.overflowing_mul(VOWPAL_FNV_PRIME).0;
+                                hashes_vec_out.push(HashAndValue{   hash:namespace_desc ^ half_hash, 
+                                                                    value: handv.value});
                         }
                     }
                 }
                 hashes_vec_in.truncate(0);
                 std::mem::swap(&mut hashes_vec_in, &mut hashes_vec_out);
             }
-            for hash in &(*hashes_vec_in) {
-                *lr_buffer.get_unchecked_mut(output_len) = *hash  & self.model_instance.hash_mask;
-                *lr_buffer.get_unchecked_mut(output_len+1) = feature_combo_weight_u32;
-                output_len += 2
-
+            for handv in &(*hashes_vec_in) {
+                lr_buffer.get_unchecked_mut(output_len).hash = handv.hash & self.model_instance.hash_mask;
+                lr_buffer.get_unchecked_mut(output_len).value = handv.value * feature_combo_weight;
+                output_len += 1;
             }
         }
         // add the constant
         if self.model_instance.add_constant_feature {
-                *lr_buffer.get_unchecked_mut(output_len) = CONSTANT_HASH & self.model_instance.hash_mask;
-                *lr_buffer.get_unchecked_mut(output_len+1) = ONE;
-                output_len += 2
+                lr_buffer.get_unchecked_mut(output_len).hash = CONSTANT_HASH & self.model_instance.hash_mask;
+                lr_buffer.get_unchecked_mut(output_len).value = 1.0;
+                output_len += 1;
         }
         lr_buffer.set_len(output_len);
 
@@ -129,24 +145,24 @@ impl FeatureBufferTranslator {
             // this is for compatibility with vowpal
             // but in theory we could support also combo features
             let ffm_buffers = &mut self.feature_buffer.ffm_buffers;
-            ffm_buffers.truncate(0);
-            for ffm_field in &self.model_instance.ffm_fields {
-                let mut field_hashes_buffer: Vec<u32>= Vec::with_capacity(100);
+            for (field_n, ffm_field) in self.model_instance.ffm_fields.iter().enumerate() {
+                let mut field_hashes_buffer = &mut ffm_buffers[field_n];
+                field_hashes_buffer.truncate(0);
                 for feature_index in ffm_field {
                     let namespace_desc = *record_buffer.get_unchecked(feature_index+2);
                     
                     if (namespace_desc & parser::IS_NOT_SINGLE_MASK) != 0 {
                         let start = ((namespace_desc >> 16) & 0x7fff) as usize;
                         let end =  (namespace_desc & 0xffff) as usize;
-                        for hash_offset in start..end {
-                            field_hashes_buffer.push(*record_buffer.get_unchecked(hash_offset));
+                        for hash_offset in (start..end).step_by(2) {
+                            field_hashes_buffer.push(HashAndValue {hash: *record_buffer.get_unchecked(hash_offset),
+                                                                    value: f32::from_bits(*record_buffer.get_unchecked(hash_offset+1))});
                         }
                     } else {
-                        field_hashes_buffer.push(namespace_desc);
+                        field_hashes_buffer.push(HashAndValue{hash: namespace_desc, value: 1.0});
                     }
     //                println!("A: {} {:?}", feature_index, field_hashes_buffer);
                 }
-                ffm_buffers.push(field_hashes_buffer);
             }
         }
         
@@ -182,7 +198,7 @@ mod tests {
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::NULL]); // no feature
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![1, 116060, ONE]); // vw compatibility - no feature is no feature
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:116060, value:1.0}]); // vw compatibility - no feature is no feature
     }
     
     
@@ -197,15 +213,15 @@ mod tests {
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::NULL]); // no feature
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![1]); // vw compatibility - no feature is no feature
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![]); // vw compatibility - no feature is no feature
 
         let rb = add_header(vec![0xfea]);
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![1, 0xfea, ONE]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}]);
 
-        let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(3,5), 0xfea, 0xfeb]);
+        let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(3,7), 0xfea, 1.0f32.to_bits(), 0xfeb, 1.0f32.to_bits()]);
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![1, 0xfea, ONE, 0xfeb, ONE]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}, HashAndValue {hash:0xfeb, value:1.0}]);
     }
 
     #[test]
@@ -223,15 +239,15 @@ mod tests {
 
         let rb = add_header(vec![parser::NULL, parser::NULL]);
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![1]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![]);
 
         let rb = add_header(vec![0xfea, parser::NULL]);
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![1, 0xfea, ONE]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}]);
 
         let rb = add_header(vec![0xfea, 0xfeb]);
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![1, 0xfea, ONE, 0xfeb, ONE]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}, HashAndValue {hash:0xfeb, value:1.0}]);
 
     }
 
@@ -248,16 +264,16 @@ mod tests {
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::NULL]);
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![1]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![]);
 
         let rb = add_header(vec![123456789, parser::NULL]);
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![1]);	// since the other feature is missing - VW compatibility says no feature is here
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![]);	// since the other feature is missing - VW compatibility says no feature is here
 
         let rb = add_header(vec![2988156968 & parser::MASK31, 2422381320 & parser::MASK31, parser::NULL]);
         fbt.translate_vowpal(&rb);
 //        println!("out {}, out mod 2^24 {}", fbt.feature_buffer.lr_buffer[1], fbt.feature_buffer.lr_buffer[1] & ((1<<24)-1));
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![1, 208368, ONE]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash: 208368, value:1.0}]);
         
     }
     
@@ -272,10 +288,51 @@ mod tests {
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![0xfea]);
         fbt.translate_vowpal(&rb);
-        let two = 2.0_f32.to_bits();
-
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![1, 0xfea, two]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash: 0xfea, value:2.0}]);
     }
+    
+    #[test]
+    fn test_ffm_empty() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.add_constant_feature = false;
+        mi.ffm_fields.push(vec![]);   // single field, empty
+        mi.ffm_k = 1;
+        let mut fbt = FeatureBufferTranslator::new(&mi);
+        let rb = add_header(vec![0xfea]);
+        fbt.translate_vowpal(&rb);
+        assert_eq!(fbt.feature_buffer.ffm_buffers[0], vec![]);
+    }
+
+    #[test]
+    fn test_ffm_one() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.add_constant_feature = false;
+        mi.ffm_fields.push(vec![0]);   // single feature in a single fields 
+        mi.ffm_k = 1;
+        let mut fbt = FeatureBufferTranslator::new(&mi);
+        let rb = add_header(vec![0xfea]);
+        fbt.translate_vowpal(&rb);
+        assert_eq!(fbt.feature_buffer.ffm_buffers[0], vec![HashAndValue{hash: 0xfea, value: 1.0}]);
+    }
+
+    #[test]
+    fn test_ffm_two_fields() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.add_constant_feature = false;
+        mi.ffm_fields.push(vec![0]);   //  single namespace in a field
+        mi.ffm_fields.push(vec![0,1]);   // two namespaces in a field
+        mi.ffm_k = 1;
+        let mut fbt = FeatureBufferTranslator::new(&mi);
+        let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(4,8), 0xfec, 0xfea, 2.0f32.to_bits(), 0xfeb, 3.0f32.to_bits()]);
+        fbt.translate_vowpal(&rb);
+        assert_eq!(fbt.feature_buffer.ffm_buffers[0], vec![ HashAndValue{hash: 0xfea, value: 2.0}, 
+                                                            HashAndValue{hash: 0xfeb, value: 3.0}]);
+        assert_eq!(fbt.feature_buffer.ffm_buffers[1], vec![ HashAndValue{hash: 0xfea, value: 2.0}, 
+                                                            HashAndValue{hash: 0xfeb, value: 3.0}, 
+                                                            HashAndValue{hash: 0xfec, value: 1.0}]);
+    }
+
+
 
 
 }
