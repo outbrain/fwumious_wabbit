@@ -7,6 +7,7 @@ use merand48::*;
 
 use crate::model_instance;
 use crate::feature_buffer;
+use crate::feature_buffer::HashAndValue;
 
 
 const ONE:u32 = 1065353216;// this is 1.0 float -> u32
@@ -91,11 +92,12 @@ impl Regressor {
         rg
     }
     
+    
     pub fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, mut update: bool, example_num: u32) -> f32 {
         unsafe {
-        let y = *fb.lr_buffer.get_unchecked(0) as f32; // 0.0 or 1.0
-        let fbuf = &fb.lr_buffer.get_unchecked(1..fb.lr_buffer.len());
-        let mut local_buf_len = fbuf.len()/2;
+        let y = fb.label; // 0.0 or 1.0
+        let fbuf = &fb.lr_buffer;
+        let mut local_buf_len = fbuf.len();
         if local_buf_len > BUF_LEN {
             println!("Number of features per example ({}) is higher than supported in this fw binary ({}), exiting", local_buf_len, BUF_LEN);
             process::exit(1);
@@ -103,25 +105,25 @@ impl Regressor {
         let mut local_data: [f32; (BUF_LEN*4) as usize] = MaybeUninit::uninit().assume_init() ;
         let mut wsum:f32 = 0.0;
         for i in 0..local_buf_len {
-            let hash = (*fbuf.get_unchecked(i*2) * 2) as usize;
-            let feature_value:f32 = f32::from_bits(*fbuf.get_unchecked(i*2+1));
-            let w = *self.weights.get_unchecked(hash);
+            let hash = fbuf.get_unchecked(i).hash << 1;
+            let feature_value:f32 = fbuf.get_unchecked(i).value;
+            let w = *self.weights.get_unchecked(hash as usize);
             wsum += w * feature_value;
-            *local_data.get_unchecked_mut(i*4) = f32::from_bits(hash as u32);
-            *local_data.get_unchecked_mut(i*4+1) = *self.weights.get_unchecked(hash+1);
+            *local_data.get_unchecked_mut(i*4) = f32::from_bits(hash);
+            *local_data.get_unchecked_mut(i*4+1) = *self.weights.get_unchecked(hash as usize + 1);
             *local_data.get_unchecked_mut(i*4+2) = feature_value;
         }
         
-        
         if self.ffm_k > 0 {
-            let left_feature_value = 1.0;  // we currently do not support feature values in ffm
-            let right_feature_value = 1.0;
             for (i, left_fbuf) in fb.ffm_buffers.iter().enumerate() {
                 for left_hash in left_fbuf {
+                    let left_feature_value = left_hash.value;
                     for (j, right_fbuf) in fb.ffm_buffers[i+1 ..].iter().enumerate() {
-                        let mut left_weight_p = (self.ffm_weights_offset + ((*left_hash + (i+1+j) as u32 *self.ffm_separate_vectors_k) & self.ffm_hashmask) * 2) as usize;
+                        let mut left_weight_p = (self.ffm_weights_offset + ((left_hash.hash + (i+1+j) as u32 *self.ffm_separate_vectors_k) & self.ffm_hashmask) * 2) as usize;
                         for right_hash in right_fbuf {
-                            let mut right_weight_p = (self.ffm_weights_offset + ((*right_hash + i as u32 * self.ffm_separate_vectors_k) & self.ffm_hashmask) * 2) as usize;
+                            let right_feature_value = right_hash.value;
+                            let joint_value = left_feature_value * right_feature_value;
+                            let mut right_weight_p = (self.ffm_weights_offset + ((right_hash.hash + i as u32 * self.ffm_separate_vectors_k) & self.ffm_hashmask) * 2) as usize;
                             for k in 0..(self.ffm_k as usize) {
                                 /*
                                 // why is this code here ? in real productino we would prefer to keep unknown values at zero
@@ -144,16 +146,15 @@ impl Regressor {
                                 let left_weight = *self.weights.get_unchecked(left_weight_p);
                                 let right_weight = *self.weights.get_unchecked(right_weight_p);
 
-                                wsum += left_weight * right_weight ;/*     
-                                        left_feature_value * right_feature_value;*/
+                                wsum += left_weight * right_weight * joint_value;
                                 // left side
                                 *local_data.get_unchecked_mut(local_buf_len*4+0) = f32::from_bits((left_weight_p) as u32);// store index
                                 *local_data.get_unchecked_mut(local_buf_len*4+1) = *self.weights.get_unchecked(left_weight_p +1); // accumulated errors
-                                *local_data.get_unchecked_mut(local_buf_len*4+2) = /*left_feature_value * right_feature_value * */right_weight; // first derivate
+                                *local_data.get_unchecked_mut(local_buf_len*4+2) = joint_value * right_weight; // first derivate
                                 // right side
                                 *local_data.get_unchecked_mut(local_buf_len*4+4) = f32::from_bits((right_weight_p) as u32); // store index
                                 *local_data.get_unchecked_mut(local_buf_len*4+5) = *self.weights.get_unchecked(right_weight_p +1); // accumulated errors
-                                *local_data.get_unchecked_mut(local_buf_len*4+6) = /*left_feature_value * right_feature_value * */left_weight; // first derivate
+                                *local_data.get_unchecked_mut(local_buf_len*4+6) = joint_value *  left_weight; // first derivate
 
                                 local_buf_len += 2;                              
                                 left_weight_p += 2;
@@ -230,9 +231,9 @@ impl FixedRegressor {
         unsafe {
         let fbuf = &fb.lr_buffer.get_unchecked(1..fb.lr_buffer.len());
         let mut wsum:f32 = 0.0;
-        for i in 0..fbuf.len()/2 {     // speed of this is 4.53
-            let hash = (*fbuf.get_unchecked(i*2) *2) as usize;
-            let feature_value:f32 = f32::from_bits(*fbuf.get_unchecked(i*2+1));
+        for i in 0..fbuf.len() {     // speed of this is 4.53
+            let hash = (fbuf.get_unchecked(i).hash) as usize;
+            let feature_value:f32 = fbuf.get_unchecked(i).value;
             let w = *self.weights.get_unchecked(hash);
             wsum += w * feature_value;    
         }
@@ -243,10 +244,10 @@ impl FixedRegressor {
             let right_feature_value = 1.0;
             for (i, left_fbuf) in fb.ffm_buffers.iter().enumerate() {
                 for left_hash in left_fbuf {
-                    let left_weight_p = (self.ffm_weights_offset + (left_hash & self.ffm_hashmask) * 2) as usize;
+                    let left_weight_p = (self.ffm_weights_offset + (left_hash.hash & self.ffm_hashmask) * 2) as usize;
                     for (j, right_fbuf) in fb.ffm_buffers[i+1 ..].iter().enumerate() {
                         for right_hash in right_fbuf {
-                            let right_weight_p = (self.ffm_weights_offset + (right_hash & self.ffm_hashmask) * 2) as usize;
+                            let right_weight_p = (self.ffm_weights_offset + (right_hash.hash & self.ffm_hashmask) * 2) as usize;
                             for k in 0..(self.ffm_k as usize) {
                                 let left_weight = self.weights[left_weight_p + k * 2];
                                 let right_weight = self.weights[right_weight_p + k * 2];
@@ -284,12 +285,16 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
 
-    fn fbvec(v:Vec<u32>) -> feature_buffer::FeatureBuffer {
+    /* LR TESTS */
+
+    fn lr_vec(v:Vec<feature_buffer::HashAndValue>) -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {
+                    label: 0.0,
                     lr_buffer: v,
                     ffm_buffers: Vec::new(),
         }
     }
+
 
     #[test]
     fn test_learning_turned_off() {
@@ -301,13 +306,12 @@ mod tests {
         let mut rr = Regressor::new(&mi);
         let mut p: f32;
         
-
         // Empty model: no matter how many features, prediction is 0.5
-        p = rr.learn(&fbvec(vec![0]), false, 0);
+        p = rr.learn(&lr_vec(vec![]), false, 0);
         assert_eq!(p, 0.5);
-        p = rr.learn(&fbvec(vec![0, 1, ONE]), false, 0);
+        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), false, 0);
         assert_eq!(p, 0.5);
-        p = rr.learn(&fbvec(vec![0, 1, ONE, 2, ONE]), false, 0);
+        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), false, 0);
         assert_eq!(p, 0.5);
     }
 
@@ -321,11 +325,11 @@ mod tests {
         let mut rr = Regressor::new(&mi);
         let mut p: f32;
         
-        p = rr.learn(&fbvec(vec![0, 1, ONE]), true, 0);
+        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), true, 0);
         assert_eq!(p, 0.5);
-        p = rr.learn(&fbvec(vec![0, 1, ONE]), true, 0);
+        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), true, 0);
         assert_eq!(p, 0.48750263);
-        p = rr.learn(&fbvec(vec![0, 1, ONE]), true, 0);
+        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), true, 0);
         assert_eq!(p, 0.47533244);
     }
 
@@ -343,11 +347,11 @@ mod tests {
         let mut p: f32;
         let two = 2.0_f32.to_bits();
         
-        p = rr.learn(&fbvec(vec![0, 1, ONE, 1, two,]), true, 0);
+        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash: 1, value: 2.0}]), true, 0);
         assert_eq!(p, 0.5);
-        p = rr.learn(&fbvec(vec![0, 1, ONE, 1, two,]), true, 0);
+        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash: 1, value: 2.0}]), true, 0);
         assert_eq!(p, 0.38936076);
-        p = rr.learn(&fbvec(vec![0, 1, ONE, 1, two,]), true, 0);
+        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash: 1, value: 2.0}]), true, 0);
         assert_eq!(p, 0.30993468);
     }
 
@@ -362,11 +366,11 @@ mod tests {
         let mut rr = Regressor::new(&mi);
         let mut p: f32;
         
-        p = rr.learn(&fbvec(vec![0, 1, ONE]), true, 0);
+        p = rr.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0);
         assert_eq!(p, 0.5);
-        p = rr.learn(&fbvec(vec![0, 1, ONE]), true, 0);
+        p = rr.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0);
         assert_eq!(p, 0.4750208);
-        p = rr.learn(&fbvec(vec![0, 1, ONE]), true, 0);
+        p = rr.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0);
         assert_eq!(p, 0.45788094);
     }
 
@@ -379,13 +383,12 @@ mod tests {
         
         let mut rr = Regressor::new(&mi);
         let mut p: f32;
-        
         // Here we take twice two features and then once just one
-        p = rr.learn(&fbvec(vec![0, 1, ONE, 2, ONE]), true, 0);
+        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true, 0);
         assert_eq!(p, 0.5);
-        p = rr.learn(&fbvec(vec![0, 1, ONE, 2, ONE]), true, 0);
+        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true, 0);
         assert_eq!(p, 0.45016602);
-        p = rr.learn(&fbvec(vec![0, 1, ONE]), true, 0);
+        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), true, 0);
         assert_eq!(p, 0.45836908);
     }
 
@@ -398,14 +401,78 @@ mod tests {
         
         let mut rr = Regressor::new(&mi);
         let mut p: f32;
-        let two = 2.0_f32.to_bits();
         
-        p = rr.learn(&fbvec(vec![0, 1, two]), true, 0);
+        p = rr.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true, 0);
         assert_eq!(p, 0.5);
-        p = rr.learn(&fbvec(vec![0, 1, two]), true, 0);
+        p = rr.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true, 0);
         assert_eq!(p, 0.45016602);
-        p = rr.learn(&fbvec(vec![0, 1, two]), true, 0);
+        p = rr.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true, 0);
         assert_eq!(p, 0.40611085);
+    }
+
+/* FFM TESTS */
+    fn ffm_vec(v:Vec<Vec<feature_buffer::HashAndValue>>) -> feature_buffer::FeatureBuffer {
+        feature_buffer::FeatureBuffer {
+                    label: 0.0,
+                    lr_buffer: Vec::new(),
+                    ffm_buffers: v,
+        }
+    }
+
+    fn ffm_fixed_init(mut rg: &mut Regressor) -> () {
+        for i in (rg.ffm_weights_offset/2..(rg.weights.len() as u32/2)).step_by(2) {
+            rg.weights[(i*2) as usize] = 1.0;
+            rg.weights[(i*2+1) as usize] = 1.0;
+        }
+    }
+
+
+    #[test]
+    fn test_ffm() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.learning_rate = 0.1;
+        mi.power_t = 0.0;
+        mi.bit_precision = 18;
+        mi.ffm_k = 1;
+        mi.ffm_bit_precision = 18;
+        mi.ffm_fields = vec![vec![]]; // This isn't really used
+        
+        let mut rr = Regressor::new(&mi);
+        let mut p: f32;
+        
+        // Nothing can be learned from a single field
+        let ffm_buf = ffm_vec(vec![vec![HashAndValue{hash:1, value: 1.0}]]);
+        p = rr.learn(&ffm_buf, true, 0);
+        assert_eq!(p, 0.5);
+        p = rr.learn(&ffm_buf, true, 0);
+        assert_eq!(p, 0.5);
+
+        // With two fields, things start to happen
+        // Since fields depend on initial randomization, it's hard to stabilize that.
+        let mut rr = Regressor::new(&mi);
+        ffm_fixed_init(&mut rr);
+        let ffm_buf = ffm_vec(vec![
+                                  vec![HashAndValue{hash:1, value: 1.0}],
+                                  vec![HashAndValue{hash:100, value: 1.0}]
+                                  ]);
+        p = rr.learn(&ffm_buf, true, 0);
+        assert_eq!(p, 0.50134915); 
+        p = rr.learn(&ffm_buf, true, 0);
+        assert_eq!(p, 0.48882028);
+
+        // Two fields, use values
+        let mut rr = Regressor::new(&mi);
+        ffm_fixed_init(&mut rr);
+        let ffm_buf = ffm_vec(vec![
+                                  vec![HashAndValue{hash:1, value: 2.0}],
+                                  vec![HashAndValue{hash:100, value: 2.0}]
+                                  ]);
+        p = rr.learn(&ffm_buf, true, 0);
+        assert_eq!(p, 0.50539637);
+        p = rr.learn(&ffm_buf, true, 0);
+        assert_eq!(p, 0.31298748);
+
+
     }
 
 

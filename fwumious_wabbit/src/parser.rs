@@ -4,7 +4,9 @@ use fasthash::xx;
 use std::io;
 use std::io::BufRead;
 use std::error::Error;
-
+use std::io::Error as IOError;
+use std::io::ErrorKind;
+use std::str;
 use crate::vwmap;
 
 const RECBUF_LEN:usize = 2048;
@@ -15,6 +17,7 @@ pub const IS_NOT_SINGLE_MASK : u32 = 1u32 << 31;
 pub const MASK31: u32 = !IS_NOT_SINGLE_MASK;
 pub const NULL: u32= IS_NOT_SINGLE_MASK; // null is just an exact IS_NOT_SINGLE_MASK
 pub const NO_LABEL: u32 = 0xff;
+pub const FLOAT32_ONE: u32 = 1065353216;  // 1.0f32.to_bits()
 
 pub struct VowpalParser<'a> {
     vw_map: &'a vwmap::VwNamespaceMap,
@@ -28,9 +31,14 @@ pub struct VowpalParser<'a> {
 organization of records buffer 
 (u32) length of the output record
 (union_u u32)[number of features], where:
-    -- if the most significant bit is zero, this is a single value feature and bits 1-31 are a hash
-    -- if the most significant bit is zero, then, 15 next bits are the start offset, and 16 next bits are the end offset of features beyond the buffer 
-(u32)[dynamic_number_of_hashes]
+    -- if the most significant bit is zero
+            - this is a a namespace with a single feature
+            - bits 1-31 are a feature hash
+            - feature value is assumed to be 1.0
+    -- if the most significant bit is one
+            - 15 next bits are the start offset, and lower 16 bits are the end offset of features beyond initial map
+            - the dynamic buffer consists of (hash of the feature name, f32 value of the feature) 
+(u32)[dynamic buffer]
 */
 
 impl<'a> VowpalParser<'a> {
@@ -90,6 +98,7 @@ impl<'a> VowpalParser<'a> {
                 
                 let mut current_char:usize = 0;
                 let mut bufpos_namespace_start = 0;
+                let mut current_namespace_weight:f32 = 1.0;
                 while i_end < rowlen {
                     while i_end < rowlen && *p.add(i_end) != 0x20 {
                         i_end += 1;
@@ -97,33 +106,64 @@ impl<'a> VowpalParser<'a> {
                     //println!("item out {:?}", std::str::from_utf8(&rr.tmp_read_buf[i_start..i_end]));
                                     
                     if *p.add(i_start) == 0x7c { // "|"
-                        // As we get new namespace index, we store end of the last one
-                        //println!("Closing index {} {}", current_char_index, bufpos);
-                        current_char = *p.add(i_start+1) as usize;
+                        // new namespace index
+                        i_start += 1;
+                        current_char = *p.add(i_start) as usize;
                         current_char_index = self.vw_map.lookup_char_to_index[current_char] * NAMESPACE_DESC_LEN + HEADER_LEN;
                         current_char_num_of_features = 0;
+                        current_namespace_weight = 1.0;
+                        bufpos_namespace_start = self.output_buffer.len(); // this is only used if we will have multiple values
+                        if i_end - i_start != 1 {
+                            // COMPLEX NAMESPACE DEFINITION
+                            // namespace more than a single letter? the only allowed format is: letter:float_value, for example  "A:2.4"
+                            let mut splitter = self.tmp_read_buf[i_start..i_end].split(|char| *char == 0x3a); // ":"
+                            let namespace_v = splitter.next().unwrap();
+                            if namespace_v.len() != 1 {
+                                //println!("a {:?}", str::from_utf8(namespace_v);
+                                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Only single letter namespaces are allowed"))));
+                            }
+                            match splitter.next() {
+                                Some(v) => {current_namespace_weight = str::from_utf8_unchecked(v).parse()?},
+                                None => {}
+                            }
+                            match splitter.next() {
+                                Some(v) => {return Err(Box::new(IOError::new(ErrorKind::Other, format!("Double weight for a namespace is not allowed"))))},
+                                None => {}
+                            }
+                        }
                     } else { 
                         // We have a feature! Let's hash it and write it to the buffer
                         // println!("item out {:?}", std::str::from_utf8(&rr.tmp_read_buf[i_start..i_end]));
                         let h = murmur3::hash32_with_seed(&self.tmp_read_buf[i_start..i_end], 
                                                           *self.namespace_hash_seeds.get_unchecked(current_char)) & MASK31;  
                         //self.output_buffer.push(h);
-                        if current_char_num_of_features == 0 {
-                            *buf.add(current_char_index) = h;
-                        } else if current_char_num_of_features == 1 {
-                            // We need to promote feature currently written in-place to out of place
-                            bufpos_namespace_start = self.output_buffer.len();
-                            self.output_buffer.push(*buf.add(current_char_index));
-                            // Then add also out of place character
-                            self.output_buffer.push(h);
-                            // Now we store current pointers to in-place location, with IS_NOT_SINGLE_MASK marker
-                            let bufpos = self.output_buffer.len();
-                            *buf.add(current_char_index) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + bufpos) as u32);
-                        } else {
-                            // Now push a new value and store the new pointer to in_place
-                            self.output_buffer.push(h);
-                            let bufpos = self.output_buffer.len();
-                            *buf.add(current_char_index) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + bufpos) as u32);
+                        if current_namespace_weight == 1.0 {
+                            if current_char_num_of_features == 0 {
+                                *buf.add(current_char_index) = h;
+                            } else if current_char_num_of_features == 1 {
+                                // We need to promote feature currently written in-place to out of place
+                                self.output_buffer.push(*buf.add(current_char_index));
+                                self.output_buffer.push(FLOAT32_ONE);
+                                // Then add also out of place character
+                                self.output_buffer.push(h);
+                                self.output_buffer.push(FLOAT32_ONE);
+                                // Now we store current pointers to in-place location, with IS_NOT_SINGLE_MASK marker
+                                let bufpos = self.output_buffer.len();
+                                *buf.add(current_char_index) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + bufpos) as u32);
+                            } else {
+                                // Now push a new value and store the new pointer to in_place
+                                self.output_buffer.push(h);
+                                self.output_buffer.push(FLOAT32_ONE);
+                                let bufpos = self.output_buffer.len();
+                                *buf.add(current_char_index) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + bufpos) as u32);
+                            }
+                        } else
+                        {
+                                // Now push a new value and store the new pointer to in_place
+                                self.output_buffer.push(h);
+                                self.output_buffer.push(current_namespace_weight.to_bits());
+                                let bufpos = self.output_buffer.len();
+                                *buf.add(current_char_index) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + bufpos) as u32);
                         }
                         current_char_num_of_features += 1;
                     }
@@ -169,19 +209,44 @@ C,featureC
         }
 
         let mut rr = VowpalParser::new(&vw);
-        // we test a single record
+        // we test a single record, single namespace
         let mut buf = str_to_cursor("1 |A a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [5, 1, 2988156968 & MASK31, NULL, NULL]);
-        
         let mut buf = str_to_cursor("-1 |B b\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [5, 0, NULL, 2422381320 & MASK31, NULL]);
-        
+        // single namespace with two features
         let mut buf = str_to_cursor("1 |A a b\n");
-        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [7, 1, nd(5,7) | IS_NOT_SINGLE_MASK, NULL, NULL, 2988156968 & MASK31, 3529656005 & MASK31]);
-        
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [9, 1, 
+                                                        nd(5,9) | IS_NOT_SINGLE_MASK, 	// |A
+                                                        NULL, 				// |B 
+                                                        NULL, 				// |C
+                                                        2988156968 & MASK31, FLOAT32_ONE,   // |A a
+                                                        3529656005 & MASK31, FLOAT32_ONE]); // |A b
+        // two namespaces
         let mut buf = str_to_cursor("-1 |A a |B b\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [5, 0, 2988156968 & MASK31, 2422381320 & MASK31, NULL]);
         
+        // only single letter namespaces are allowed
+        let mut buf = str_to_cursor("1 |MORE_THAN_A_LETTER a\n");
+        assert!(rr.next_vowpal(&mut buf).is_err());
+        // namespace weight test
+        let mut buf = str_to_cursor("1 |A:1.0 a\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [5, 1, 2988156968 & MASK31, NULL, NULL]);
+        // not a parsable number
+        let mut buf = str_to_cursor("1 |A:not_a_parsable_number a\n");
+        assert!(rr.next_vowpal(&mut buf).is_err());
+        // double weight
+        let mut buf = str_to_cursor("1 |A:1:1 a\n");
+        assert!(rr.next_vowpal(&mut buf).is_err());
+        // namespace weight test
+        let mut buf = str_to_cursor("1 |A:2.0 a\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [7, 1, 
+                                                        nd(5, 7) | IS_NOT_SINGLE_MASK, 
+                                                        NULL, 
+                                                        NULL, 
+                                                        2988156968 & MASK31, 2.0f32.to_bits()]);
+                
+        // LABEL TESTS
         // without label
         let mut buf = str_to_cursor("|A a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [5, NO_LABEL, 2988156968 & MASK31, NULL, NULL]);

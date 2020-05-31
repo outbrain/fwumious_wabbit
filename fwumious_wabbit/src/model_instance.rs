@@ -25,6 +25,7 @@ pub struct ModelInstance {
     pub minimum_learning_rate: f32,
     pub power_t: f32,
     pub bit_precision: u8,
+    // This should have been called "lr_hash_mask"
     pub hash_mask: u32,
     pub add_constant_feature: bool,
     pub feature_combo_descs: Vec<FeatureComboDesc>,
@@ -64,25 +65,12 @@ fn create_feature_combo_desc(vw: &vwmap::VwNamespaceMap, s: &str) -> Result<Feat
            None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown namespace char in command line: {}", char))))
        };
        feature_indices.push(index);
-       // now we handle calculating total correct weight for combo feature
-       let feature_name:&String = vw.map_char_to_name.get(&char).unwrap();
-       let ss:Vec<&str> = feature_name.split(":").collect();
-       match ss.len() {
-           1 => continue,
-           2 => {
-               let weight:f32 = ss[1].parse()?;
-               combo_weight *= weight;
-           },
-           _ => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Feature name definition has multiple weights separated by colon: {}", feature_name))))
-       }
     }
     Ok(FeatureComboDesc {
                          feature_indices: feature_indices,
                           weight: combo_weight
                         })
 }
-
-
 
 impl ModelInstance {
     pub fn new_empty() -> Result<ModelInstance, Box<dyn Error>> {
@@ -272,7 +260,6 @@ mod tests {
 
     #[test]
     fn test_interaction_parsing() {
-        // Test for perfect vowpal-compatible hashing
         let vw_map_string = r#"
 A,featureA
 B,featureB
@@ -292,6 +279,26 @@ C,featureC
                                 });
                                 
     }
+
+    #[test]
+    fn test_weight_parsing() {
+        let vw_map_string = r#"
+A,featureA:2
+B,featureB:3
+"#;
+        // The main point is that weight in feature names from vw_map_str is ignored
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+        let aa = create_feature_combo_desc(&vw, "BA:1.5").unwrap();
+        assert_eq!(aa, FeatureComboDesc {
+                                feature_indices: vec![1,0],
+                                weight: 1.5
+                                });
+                                
+    }
+
+
+
+
 }
 
 

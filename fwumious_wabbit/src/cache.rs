@@ -18,11 +18,12 @@ use crate::vwmap;
 use crate::persistence;
 
 const CACHE_HEADER_MAGIC_STRING: &[u8; 4] = b"FWCA";    // Fwumious Wabbit CAche
-const CACHE_HEADER_VERSION:u32 = 6;
+const CACHE_HEADER_VERSION:u32 = 7;
 // Cache layout:
 // 4 bytes: Magic bytes
 // u32: Version of the cache format
-// u_size + length - json encoding of vw_source
+// u_size + blob: json encoding of vw_source
+// u_size + blob: json encoding of model_instance
 // ...cached examples
 
 
