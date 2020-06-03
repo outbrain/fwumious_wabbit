@@ -231,7 +231,7 @@ impl FixedRegressor {
         let fbuf = &fb.lr_buffer;
         let mut wsum:f32 = 0.0;
         for val in fbuf {
-            let hash = (val.hash) as usize;
+            let hash = (val.hash << 1) as usize;
             let feature_value:f32 = val.value;
             let w = self.weights[hash];
             wsum += w * feature_value;    
@@ -280,7 +280,7 @@ impl FixedRegressor {
         let fbuf = &fb.lr_buffer;
         let mut wsum:f32 = 0.0;
         for i in 0..fbuf.len() {
-            let hash = (fbuf.get_unchecked(i).hash) as usize;
+            let hash = (fbuf.get_unchecked(i).hash << 1) as usize;
             let feature_value:f32 = fbuf.get_unchecked(i).value;
             let w = *self.weights.get_unchecked(hash);
             wsum += w * feature_value;    
