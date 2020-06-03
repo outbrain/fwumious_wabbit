@@ -75,10 +75,16 @@ impl WorkerThread {
                 };
                 self.fbt.translate_vowpal(buffer);
                 let p = self.re.predict(&(self.fbt.feature_buffer), i);
-                writer.write_all(format!("{:.6}\n", p).as_bytes()).unwrap();
+                match writer.write_all(format!("{:.6}\n", p).as_bytes()) {
+                    Ok(_) => {},
+                    Err(e) => {/*println!("Write to socket failed, dropping it"); */break}
+                };
                 // not the smartest
                 if reader.buffer().is_empty() {
-                    writer.flush().unwrap(); 
+                    match writer.flush() {
+                        Ok(_) => {},
+                        Err(e) => {/*println!("Flushing socket failed, dropping it");*/ break}
+                    };
                 }
                 i += 1;
             }

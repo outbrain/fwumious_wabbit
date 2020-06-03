@@ -228,10 +228,58 @@ impl FixedRegressor {
     }
 
     pub fn predict(&self, fb: &feature_buffer::FeatureBuffer, example_num: u32) -> f32 {
-        unsafe {
-        let fbuf = &fb.lr_buffer.get_unchecked(1..fb.lr_buffer.len());
+        let fbuf = &fb.lr_buffer;
         let mut wsum:f32 = 0.0;
-        for i in 0..fbuf.len() {     // speed of this is 4.53
+        for val in fbuf {
+            let hash = (val.hash) as usize;
+            let feature_value:f32 = val.value;
+            let w = self.weights[hash];
+            wsum += w * feature_value;    
+        }
+        
+
+        if self.ffm_k > 0 {
+            let left_feature_value = 1.0;  // we currently do not support feature values in ffm
+            let right_feature_value = 1.0;
+            for (i, left_fbuf) in fb.ffm_buffers.iter().enumerate() {
+                for left_hash in left_fbuf {
+                    let left_weight_p = (self.ffm_weights_offset + (left_hash.hash & self.ffm_hashmask) * 2) as usize;
+                    for (j, right_fbuf) in fb.ffm_buffers[i+1 ..].iter().enumerate() {
+                        for right_hash in right_fbuf {
+                            let right_weight_p = (self.ffm_weights_offset + (right_hash.hash & self.ffm_hashmask) * 2) as usize;
+                            for k in 0..(self.ffm_k as usize) {
+                                let left_weight = self.weights[left_weight_p + k * 2];
+                                let right_weight = self.weights[right_weight_p + k * 2];
+                                wsum += left_weight * right_weight * 
+                                        left_feature_value * right_feature_value;
+                            }
+                        }
+                    }
+                }
+            }
+            
+        }
+
+
+        let prediction = -wsum;
+        let mut prediction_finalized = prediction;
+        if prediction_finalized.is_nan() {
+            eprintln!("NAN prediction in example {}, forcing 0.0", example_num);
+            prediction_finalized = 0.0;
+        } else if prediction_finalized < -50.0 {
+            prediction_finalized = -50.0;
+        } else if prediction_finalized > 50.0 {
+            prediction_finalized = 50.0;
+        }
+        let prediction_probability:f32 = (1.0+(prediction_finalized).exp()).recip();
+        prediction_probability
+    }
+
+    pub fn predict_unsafe(&self, fb: &feature_buffer::FeatureBuffer, example_num: u32) -> f32 {
+        unsafe {
+        let fbuf = &fb.lr_buffer;
+        let mut wsum:f32 = 0.0;
+        for i in 0..fbuf.len() {
             let hash = (fbuf.get_unchecked(i).hash) as usize;
             let feature_value:f32 = fbuf.get_unchecked(i).value;
             let w = *self.weights.get_unchecked(hash);
