@@ -31,6 +31,33 @@ pub struct FeatureBufferTranslator {
     pub feature_buffer: FeatureBuffer,
 }
 
+// A macro that takes care of decoding the individual feature - which can have two different encodings
+// this simplifies a lot of the code, as it is used often
+macro_rules! feature_reader {
+    ( $record_buffer:ident, 
+      $feature_index_offset:ident, 
+      $hash_data:ident, 
+      $hash_value:ident, 
+      $bl:block  ) => {
+        let namespace_desc = *$record_buffer.get_unchecked($feature_index_offset + 2);
+        if (namespace_desc & parser::IS_NOT_SINGLE_MASK) != 0 {
+            let start = ((namespace_desc >> 16) & 0x7fff) as usize; 
+            let end = (namespace_desc & 0xffff) as usize;
+            for hash_offset in (start..end).step_by(2) {
+                let $hash_data = *$record_buffer.get_unchecked(hash_offset);
+                let $hash_value = f32::from_bits(*$record_buffer.get_unchecked(hash_offset+1));
+                $bl
+            }
+        } else {
+            let $hash_data = namespace_desc;
+            let $hash_value: f32 = 1.0;
+            $bl
+        }
+    };
+}
+
+
+
 impl FeatureBufferTranslator {
     pub fn new(model_instance: &model_instance::ModelInstance) -> FeatureBufferTranslator {
         let mut fb = FeatureBuffer {
@@ -66,60 +93,30 @@ impl FeatureBufferTranslator {
         let mut hashes_vec_out : &mut Vec<HashAndValue> = &mut self.hashes_vec_out;
         for feature_combo_desc in &self.model_instance.feature_combo_descs {
             let feature_combo_weight = feature_combo_desc.weight;
-            hashes_vec_in.truncate(0);
-            hashes_vec_out.truncate(0);
             // we unroll first iteration of the loop and optimize
             let num_namespaces:usize = feature_combo_desc.feature_indices.len() ;
-            {
-                let feature_index_offset = *feature_combo_desc.feature_indices.get_unchecked(0) + 2;
-                let namespace_desc = *record_buffer.get_unchecked(feature_index_offset);
-                // We special case a single feature (common occurance)
-                if num_namespaces == 1 {
-                    if (namespace_desc & parser::IS_NOT_SINGLE_MASK) != 0 {
-                        let start = ((namespace_desc >> 16) & 0x7fff) as
-                        usize; let end = (namespace_desc & 0xffff) as usize;
-                        for hash_offset in (start..end).step_by(2) {
-                            lr_buffer.get_unchecked_mut(output_len).hash = *record_buffer.get_unchecked(hash_offset) & self.model_instance.hash_mask;
-                            lr_buffer.get_unchecked_mut(output_len).value = f32::from_bits(*record_buffer.get_unchecked(hash_offset+1)) * feature_combo_weight;
-                            output_len += 1
-                        }
-                    } else {
-                            lr_buffer.get_unchecked_mut(output_len).hash = namespace_desc & self.model_instance.hash_mask;
-                            lr_buffer.get_unchecked_mut(output_len).value = feature_combo_weight;
-                            output_len += 1
-                    }
-                    
-                    continue
-                }
-                if (namespace_desc & parser::IS_NOT_SINGLE_MASK) != 0 {
-                    let start = ((namespace_desc >> 16) & 0x7fff) as usize;
-                    let end =  (namespace_desc & 0xffff) as usize;
-                    for hash_offset in (start..end).step_by(2) {
-                        hashes_vec_in.push(HashAndValue {hash: *record_buffer.get_unchecked(hash_offset), 
-                                                        value: f32::from_bits(*record_buffer.get_unchecked(hash_offset + 1))});
-                    }
-                } else {
-                    hashes_vec_in.push(HashAndValue {hash: namespace_desc, value: 1.0});
-                }
+            let feature_index_offset = *feature_combo_desc.feature_indices.get_unchecked(0);
+            // We special case a single feature (common occurance)
+            if num_namespaces == 1 {
+                feature_reader!(record_buffer, feature_index_offset, hash_data, hash_value, {
+                    lr_buffer.get_unchecked_mut(output_len).hash = hash_data & self.model_instance.hash_mask;
+                    lr_buffer.get_unchecked_mut(output_len).value = hash_value * feature_combo_weight;
+                    output_len += 1
+                });
+                continue
             }
+            hashes_vec_in.truncate(0);
+            hashes_vec_out.truncate(0);
+            feature_reader!(record_buffer, feature_index_offset, hash_data, hash_value, {
+                    hashes_vec_in.push(HashAndValue {hash: hash_data, value:hash_value});
+                });
             for feature_index in feature_combo_desc.feature_indices.get_unchecked(1 as usize .. num_namespaces) {
-                let namespace_desc = *record_buffer.get_unchecked(*feature_index + 2);
-                {
-                    for handv in &(*hashes_vec_in) {
-                        let half_hash = handv.hash.overflowing_mul(VOWPAL_FNV_PRIME).0;
-                        if (namespace_desc & parser::IS_NOT_SINGLE_MASK) != 0 {
-                            let start = ((namespace_desc >> 16) & 0x7fff) as usize;
-                            let end =  (namespace_desc & 0xffff) as usize;
-                            for hash_offset in (start..end).step_by(2) {
-                                hashes_vec_out.push(HashAndValue{   hash: *record_buffer.get_unchecked(hash_offset) ^ half_hash,
-                                                                    value: handv.value * f32::from_bits(*record_buffer.get_unchecked(hash_offset + 1))});
-                            }
-                        } else {
-                                let half_hash = handv.hash.overflowing_mul(VOWPAL_FNV_PRIME).0;
-                                hashes_vec_out.push(HashAndValue{   hash:namespace_desc ^ half_hash, 
-                                                                    value: handv.value});
-                        }
-                    }
+                for handv in &(*hashes_vec_in) {
+                    let half_hash = handv.hash.overflowing_mul(VOWPAL_FNV_PRIME).0;
+                    feature_reader!(record_buffer, feature_index, hash_data, hash_value, {
+                        hashes_vec_out.push(HashAndValue{   hash: hash_data ^ half_hash,
+                                                            value: handv.value * hash_value});
+                    });
                 }
                 hashes_vec_in.truncate(0);
                 std::mem::swap(&mut hashes_vec_in, &mut hashes_vec_out);
@@ -138,7 +135,6 @@ impl FeatureBufferTranslator {
         }
         lr_buffer.set_len(output_len);
 
-
         // FFM loops have not been optimized yet
         if self.model_instance.ffm_k > 0 { 
             // currently we only support primitive features as namespaces, (from --lrqfa command)
@@ -149,19 +145,10 @@ impl FeatureBufferTranslator {
                 let mut field_hashes_buffer = &mut ffm_buffers[field_n];
                 field_hashes_buffer.truncate(0);
                 for feature_index in ffm_field {
-                    let namespace_desc = *record_buffer.get_unchecked(feature_index+2);
-                    
-                    if (namespace_desc & parser::IS_NOT_SINGLE_MASK) != 0 {
-                        let start = ((namespace_desc >> 16) & 0x7fff) as usize;
-                        let end =  (namespace_desc & 0xffff) as usize;
-                        for hash_offset in (start..end).step_by(2) {
-                            field_hashes_buffer.push(HashAndValue {hash: *record_buffer.get_unchecked(hash_offset),
-                                                                    value: f32::from_bits(*record_buffer.get_unchecked(hash_offset+1))});
-                        }
-                    } else {
-                        field_hashes_buffer.push(HashAndValue{hash: namespace_desc, value: 1.0});
-                    }
-    //                println!("A: {} {:?}", feature_index, field_hashes_buffer);
+                    feature_reader!(record_buffer, feature_index, hash_data, hash_value, {
+                            field_hashes_buffer.push(HashAndValue {hash: hash_data,
+                                                                    value: hash_value});
+                    });
                 }
             }
         }
