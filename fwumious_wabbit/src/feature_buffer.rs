@@ -1,7 +1,6 @@
 use crate::model_instance;
 use crate::parser;
 
-const ONE:u32 = 1065353216;      // this is 1.0 float -> u32
 const VOWPAL_FNV_PRIME:u32 = 16777619;	// vowpal magic number
 const CONSTANT_NAMESPACE:usize = 128;
 const CONSTANT_HASH:u32 = 11650396;
