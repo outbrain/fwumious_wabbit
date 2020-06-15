@@ -122,6 +122,12 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .long("testonly")
                      .help("Ignore label information and just test")
                      .takes_value(false))
+                    .arg(Arg::with_name("fastmath")
+                     .long("fastmath")
+                     .help("Use approximate, but fast math and lookup tables")
+                     .multiple(false)
+                     .takes_value(false))
+
 
                      // FFMs
                     .arg(Arg::with_name("lrqfa")

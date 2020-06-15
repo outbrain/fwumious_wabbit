@@ -14,8 +14,8 @@ const ONE:u32 = 1065353216;// this is 1.0 float -> u32
 const BUF_LEN:usize = 8196; // We will ABORT if number of derived features for individual example is more than this.
 // Why not bigger number? If we grow stack of the function too much, we end up with stack overflow protecting mechanisms
 
-const TEMP_BUF_ALIGN:usize = 4;
-
+const FASTMATH_LR_LUT_BITS:u8 = 12;
+const FASTMATH_LR_LUT_SIZE:usize = 1 <<  FASTMATH_LR_LUT_BITS;
 
 pub struct Regressor {
     hash_mask: u32,
@@ -27,6 +27,8 @@ pub struct Regressor {
     ffm_hashmask: u32,
     ffm_one_over_k_root: f32,
     ffm_separate_vectors_k: u32,
+    fastmath: bool,
+    fastmath_lr_lut: [f32; FASTMATH_LR_LUT_SIZE],
 }
 
 
@@ -41,7 +43,41 @@ pub struct FixedRegressor {
     ffm_separate_vectors_k: u32,
 }
 
+
+macro_rules! specialize_boolean {
+    ( $input_variable:expr, 
+      $output_const:ident,
+      $code_block:block  ) => {
+         match $input_variable {
+                true => {const $output_const:bool = true; $code_block},
+                false => {const $output_const:bool = false; $code_block},
+            }
+    };
+}
+
+
 impl Regressor {
+    pub fn fastmath_create_lut(&mut self, learning_rate: f32, minus_power_t: f32) {
+        println!("Using look-up tables for AdaGrad learning rate calculation");
+        for x in 0..FASTMATH_LR_LUT_SIZE {
+            // accumulated gradients are always positive floating points, sign is guaranteed to be zero
+            // we will take 7 bits of mantissa + whatever most significant bits remain
+            // we take two consequential such values, so in effect lookup acts as rounding
+            let float_x = f32::from_bits((x as u32)  << (31-FASTMATH_LR_LUT_BITS));
+            let float_x_plus_one = f32::from_bits(((x+1) as u32)  << (31-FASTMATH_LR_LUT_BITS));
+            let val = learning_rate * (float_x.powf(minus_power_t) + float_x_plus_one.powf(minus_power_t))/2.0;
+            self.fastmath_lr_lut[x] = val;
+        }
+    }
+    
+    #[inline(always)]
+    unsafe fn fastmath_calculate_update(&self, update: f32, accumulated_squared_gradient: f32) -> f32 {
+            debug_assert!(accumulated_squared_gradient >= 0.0);
+            let key = accumulated_squared_gradient.to_bits() >> (31-FASTMATH_LR_LUT_BITS);
+            return update * *self.fastmath_lr_lut.get_unchecked(key as usize);
+    }
+
+
     pub fn new(model_instance: &model_instance::ModelInstance) -> Regressor {
         let hash_mask = (1 << model_instance.bit_precision) -1;
         let lr_weights_len = 2*(hash_mask+1);
@@ -56,7 +92,13 @@ impl Regressor {
                             ffm_hashmask: 0,
                             ffm_one_over_k_root: 0.0,
                             ffm_separate_vectors_k: 0,
+                            fastmath: model_instance.fastmath,
+                            fastmath_lr_lut: [0.0; FASTMATH_LR_LUT_SIZE],
                         };
+
+        if rg.fastmath {
+            rg.fastmath_create_lut(rg.learning_rate, rg.minus_power_t);
+        }
 
         let mut ffm_weights_len = 0;
         if model_instance.ffm_k > 0 {
@@ -97,21 +139,22 @@ impl Regressor {
         unsafe {
         let y = fb.label; // 0.0 or 1.0
         let fbuf = &fb.lr_buffer;
-        let mut local_buf_len = fbuf.len();
+        let fbuf_len = fbuf.len();
+        let mut local_buf_len = fbuf_len;
         if local_buf_len > BUF_LEN {
             println!("Number of features per example ({}) is higher than supported in this fw binary ({}), exiting", local_buf_len, BUF_LEN);
             process::exit(1);
         }
-        let mut local_data: [f32; (BUF_LEN*4) as usize] = MaybeUninit::uninit().assume_init() ;
+        let mut local_data: [f32; (BUF_LEN*3) as usize] = MaybeUninit::uninit().assume_init() ;
         let mut wsum:f32 = 0.0;
-        for i in 0..local_buf_len {
-            let hash = fbuf.get_unchecked(i).hash << 1;
+        for i in 0..fbuf_len {
+            let feature_index = fbuf.get_unchecked(i).hash << 1;
             let feature_value:f32 = fbuf.get_unchecked(i).value;
-            let w = *self.weights.get_unchecked(hash as usize);
-            wsum += w * feature_value;
-            *local_data.get_unchecked_mut(i*4) = f32::from_bits(hash);
-            *local_data.get_unchecked_mut(i*4+1) = *self.weights.get_unchecked(hash as usize + 1);
-            *local_data.get_unchecked_mut(i*4+2) = feature_value;
+            let feature_weight = *self.weights.get_unchecked(feature_index as usize);
+            wsum += feature_weight * feature_value;
+            *local_data.get_unchecked_mut(i*3)   = f32::from_bits(feature_index);
+            *local_data.get_unchecked_mut(i*3+1) = *self.weights.get_unchecked((feature_index+1) as usize);
+            *local_data.get_unchecked_mut(i*3+2) = feature_value;
         }
         
         if self.ffm_k > 0 {
@@ -125,36 +168,18 @@ impl Regressor {
                             let joint_value = left_feature_value * right_feature_value;
                             let mut right_weight_p = (self.ffm_weights_offset + ((right_hash.hash + i as u32 * self.ffm_separate_vectors_k) & self.ffm_hashmask) * 2) as usize;
                             for k in 0..(self.ffm_k as usize) {
-                                /*
-                                // why is this code here ? in real productino we would prefer to keep unknown values at zero
-                                let mut left_weight;
-                                {
-                                    let left_weight_a = &mut self.weights[left_weight_p + k * 2];
-                                    if *left_weight_a == 0.0 {
-                                        *left_weight_a = (merand48((left_weight_p + k *2) as u64)) * self.ffm_one_over_k_root;
-                                        }
-                                    left_weight = *left_weight_a;
-                                }
-                                let mut right_weight;
-                                {
-                                    let right_weight_a = &mut self.weights[right_weight_p + k * 2];
-                                    if *right_weight_a == 0.0 {
-                                        *right_weight_a = (merand48((right_weight_p + k *2) as u64)) * self.ffm_one_over_k_root;
-                                    }
-                                    right_weight = *right_weight_a;
-                                }*/
                                 let left_weight = *self.weights.get_unchecked(left_weight_p);
                                 let right_weight = *self.weights.get_unchecked(right_weight_p);
 
                                 wsum += left_weight * right_weight * joint_value;
                                 // left side
-                                *local_data.get_unchecked_mut(local_buf_len*4+0) = f32::from_bits((left_weight_p) as u32);// store index
-                                *local_data.get_unchecked_mut(local_buf_len*4+1) = *self.weights.get_unchecked(left_weight_p +1); // accumulated errors
-                                *local_data.get_unchecked_mut(local_buf_len*4+2) = joint_value * right_weight; // first derivate
+                                *local_data.get_unchecked_mut(local_buf_len*3+0) = f32::from_bits((left_weight_p) as u32);// store index
+                                *local_data.get_unchecked_mut(local_buf_len*3+1) = *self.weights.get_unchecked(left_weight_p +1); // accumulated errors
+                                *local_data.get_unchecked_mut(local_buf_len*3+2) = joint_value * right_weight; // first derivate
                                 // right side
-                                *local_data.get_unchecked_mut(local_buf_len*4+4) = f32::from_bits((right_weight_p) as u32); // store index
-                                *local_data.get_unchecked_mut(local_buf_len*4+5) = *self.weights.get_unchecked(right_weight_p +1); // accumulated errors
-                                *local_data.get_unchecked_mut(local_buf_len*4+6) = joint_value *  left_weight; // first derivate
+                                *local_data.get_unchecked_mut(local_buf_len*3+3) = f32::from_bits((right_weight_p) as u32); // store index
+                                *local_data.get_unchecked_mut(local_buf_len*3+4) = *self.weights.get_unchecked(right_weight_p +1); // accumulated errors
+                                *local_data.get_unchecked_mut(local_buf_len*3+5) = joint_value *  left_weight; // first derivate
 
                                 local_buf_len += 2;                              
                                 left_weight_p += 2;
@@ -187,27 +212,27 @@ impl Regressor {
             update = false;
         }
         let prediction_probability:f32 = (1.0+(prediction_finalized).exp()).recip();
-//        let prediction:f32 = sigmoid(wsum);      // ain't faster
+
         if update{
             let general_gradient = y - prediction_probability;
-  //          println!("general gradient: {}, prediction {}, prediction orig: {}", general_gradient, prediction, -wsum*self.learning_rate); 
-            for i in 0..local_buf_len {
-                let hash = local_data.get_unchecked(i*4).to_bits() as usize;
-                let feature_value = *local_data.get_unchecked(i*4+2);
-                let gradient = general_gradient * feature_value;
-                let gradient_squared = gradient*gradient;
-                *self.weights.get_unchecked_mut(hash+1) += gradient_squared;
-                let accumulated_squared_gradient = local_data.get_unchecked(i*4+1);
-                let learning_rate = self.learning_rate * (accumulated_squared_gradient + gradient_squared).powf(self.minus_power_t);
-/*                if update_factor.is_nan() {
-                    println!("Gradient: {}, accumulated_squared_gradient: {}", gradient, accumulated_squared_gradient);
-                    println!("H: {}, feature_value: {}, weight update: {}, zq {}", hash, feature_value, update_factor * self.learning_rate, (0.0f32).powf(-0.5) *0.0);
-                    println!("NaN update at: value: {}, example num:{}", i, example_num);
-                }*/
-    //            println!("L {}", learning_rate);
-        //        *self.weights.get_unchecked_mut(hash) += gradient * f32::max(self.minimum_learning_rate, learning_rate);
-                *self.weights.get_unchecked_mut(hash) += gradient * learning_rate;
-            }            
+            specialize_boolean!(self.fastmath, FASTMATH, {
+                for i in 0..local_buf_len {
+                    let hash = local_data.get_unchecked(i*3).to_bits() as usize;
+                    let feature_value = *local_data.get_unchecked(i*3+2);
+                    let gradient = general_gradient * feature_value;
+                    let gradient_squared = gradient*gradient;
+                    *self.weights.get_unchecked_mut(hash+1) += gradient_squared;
+                    let accumulated_squared_gradient = local_data.get_unchecked(i*3+1);
+                    if FASTMATH {
+                        let update = self.fastmath_calculate_update(gradient, accumulated_squared_gradient + gradient_squared);
+                        *self.weights.get_unchecked_mut(hash) += update;
+                    } else {
+                        let learning_rate = self.learning_rate * (accumulated_squared_gradient + gradient_squared).powf(self.minus_power_t);
+                        let update = gradient * learning_rate;
+                        *self.weights.get_unchecked_mut(hash) += update;
+                    }
+                }            
+            });
         }
         prediction_probability
         }
@@ -420,6 +445,23 @@ mod tests {
         assert_eq!(p, 0.4750208);
         p = rr.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0);
         assert_eq!(p, 0.45788094);
+    }
+
+    #[test]
+    fn test_power_t_half_fastmath() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.learning_rate = 0.1;
+        mi.power_t = 0.5;
+        mi.fastmath = true;
+        mi.bit_precision = 18;
+        
+        let mut rr = Regressor::new(&mi);
+        let mut p: f32;
+        
+        p = rr.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0);
+        assert_eq!(p, 0.5);
+        p = rr.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0);
+        assert_eq!(p, 0.47539312);
     }
 
     #[test]
