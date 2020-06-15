@@ -36,6 +36,9 @@ pub struct ModelInstance {
     pub ffm_bit_precision: u32,
     #[serde(default = "default_bool_false")]
     pub ffm_separate_vectors: bool,
+    #[serde(default = "default_bool_false")]
+    pub fastmath: bool,
+    
 }
 
 fn default_u32_zero() -> u32{0}
@@ -86,6 +89,7 @@ impl ModelInstance {
             ffm_k: 0,
             ffm_bit_precision: 18,
             ffm_separate_vectors: false,
+            fastmath: false,
         };
         Ok(mi)
     }
@@ -185,6 +189,10 @@ impl ModelInstance {
             if v2.abs() > 0.00000001 {
                 return Err(Box::new(IOError::new(ErrorKind::Other, format!("--l2 can only be 0.0"))))
             }
+        }
+
+        if cl.is_present("fastmath") {
+            mi.fastmath = true;
         }
         
         
