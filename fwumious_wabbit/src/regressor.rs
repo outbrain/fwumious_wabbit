@@ -3,6 +3,7 @@ use std::mem::{self, MaybeUninit};
 use std::process;
 use triomphe::{UniqueArc, Arc};
 //use std::fmt::Binary;
+use core::arch::x86_64::*;
 use merand48::*;
 
 use crate::model_instance;
@@ -18,11 +19,17 @@ const BUF_LEN:usize = 8196; // We will ABORT if number of derived features for i
 const FASTMATH_LR_LUT_BITS:u8 = 11;
 const FASTMATH_LR_LUT_SIZE:usize = 1 <<  FASTMATH_LR_LUT_BITS;
 
+#[derive(Clone)]
+pub struct Weight {
+    weight: f32, 
+    acc_grad: f32,
+}
+
 pub struct Regressor {
     hash_mask: u32,
     learning_rate: f32,
     minus_power_t:f32,
-    pub weights: Vec<f32>,       // weights and gradients, interleved, for all models
+    pub weights: Vec<Weight>,       // weights and gradients, interleved, for all models
     ffm_weights_offset: u32, 
     ffm_k: u32,
     ffm_hashmask: u32,
@@ -30,12 +37,13 @@ pub struct Regressor {
     ffm_separate_vectors_k: u32,
     fastmath: bool,
     fastmath_lr_lut: [f32; FASTMATH_LR_LUT_SIZE],
+    ffm_iw_weights_offset: u32,
 }
 
 #[derive(Clone)]
 pub struct FixedRegressor {
     hash_mask: u32,
-    pub weights: Arc<Vec<f32>>,       // Both weights and gradients
+    pub weights: Arc<Vec<Weight>>,       // Both weights and gradients
     ffm_weights_offset: u32, 
     ffm_k: u32,
     ffm_hashmask: u32,
@@ -62,7 +70,7 @@ impl Regressor {
     
     pub fn new(model_instance: &model_instance::ModelInstance) -> Regressor {
         let hash_mask = (1 << model_instance.bit_precision) -1;
-        let lr_weights_len = 2*(hash_mask+1);
+        let lr_weights_len = hash_mask + 1;
         let mut rg = Regressor{
                             hash_mask: hash_mask,
                             learning_rate: model_instance.learning_rate,
@@ -76,6 +84,7 @@ impl Regressor {
                             ffm_separate_vectors_k: 0,
                             fastmath: model_instance.fastmath,
                             fastmath_lr_lut: [0.0; FASTMATH_LR_LUT_SIZE],
+                            ffm_iw_weights_offset: 0,
                         };
 
         if rg.fastmath {
@@ -85,7 +94,7 @@ impl Regressor {
         let mut ffm_weights_len = 0;
         if model_instance.ffm_k > 0 {
             // To keep things simple ffm weights length will be the same as lr
-            ffm_weights_len = (1 << model_instance.ffm_bit_precision)*2;
+            ffm_weights_len = 1 << model_instance.ffm_bit_precision;
             rg.ffm_weights_offset = lr_weights_len;
             rg.ffm_k = model_instance.ffm_k;
             // Since we will align our dimensions, we need to know the number of bits for them
@@ -98,16 +107,22 @@ impl Regressor {
             rg.ffm_hashmask = ((1 << model_instance.ffm_bit_precision) -1) ^ dimensions_mask;
         }
         // Now allocate weights
-        rg.weights = vec![0.0; (lr_weights_len + ffm_weights_len) as usize];
+        let iw_weights_len =rg.ffm_k * (model_instance.ffm_fields.len() as u32 * model_instance.ffm_fields.len() as u32);
+        rg.ffm_iw_weights_offset = lr_weights_len + ffm_weights_len;
+        rg.weights = vec![Weight{weight:0.0, acc_grad:0.0}; (lr_weights_len + ffm_weights_len + iw_weights_len) as usize];
 
         // Initialization, from ffm.pdf, however should random distribution be centred on zero?
         if model_instance.ffm_k > 0 {       
             rg.ffm_one_over_k_root = 1.0 / (rg.ffm_k as f32).sqrt() / 10.0;
-            for i in 0..(ffm_weights_len/2) {
-                rg.weights[(rg.ffm_weights_offset + i*2) as usize] = (0.2*merand48((rg.ffm_weights_offset+i*2) as u64)-0.1) * rg.ffm_one_over_k_root;
+            for i in 0..ffm_weights_len {
+                rg.weights[(rg.ffm_weights_offset + i) as usize].weight = (0.2*merand48((rg.ffm_weights_offset*2+i*2) as u64)-0.1) * rg.ffm_one_over_k_root;
                 //rng.gen_range(-0.1 * rg.ffm_one_over_k_root , 0.1 * rg.ffm_one_over_k_root );
                 // we set FFM gradients to 1.0, so we avoid NaN updates due to adagrad (accumulated_squared_gradients+grad^2).powf(negative_number) * 0.0 
-                rg.weights[(rg.ffm_weights_offset + i*2+1) as usize] = 1.0;
+                rg.weights[(rg.ffm_weights_offset + i) as usize].acc_grad = 1.0;
+            }
+            for i in 0..(rg.ffm_k * model_instance.ffm_fields.len()  as u32 * model_instance.ffm_fields.len() as u32) {
+                rg.weights[(rg.ffm_iw_weights_offset + i) as usize].weight = 1.0;
+                rg.weights[(rg.ffm_iw_weights_offset + i) as usize].acc_grad = 1.0;
             }
             if model_instance.ffm_separate_vectors {
                 rg.ffm_separate_vectors_k = rg.ffm_k;
@@ -125,7 +140,10 @@ impl Regressor {
             // we take two consequential such values, so in effect lookup acts as rounding
             let float_x = f32::from_bits((x as u32)  << (31-FASTMATH_LR_LUT_BITS));
             let float_x_plus_one = f32::from_bits(((x+1) as u32)  << (31-FASTMATH_LR_LUT_BITS));
-            let val = learning_rate * (float_x.powf(minus_power_t) + float_x_plus_one.powf(minus_power_t))/2.0;
+            let mut val = learning_rate * ((float_x).powf(minus_power_t) + (float_x_plus_one).powf(minus_power_t))/2.0;
+            /*if val > learning_rate || val.is_nan(){
+                val = learning_rate;
+            }*/
             self.fastmath_lr_lut[x] = val;
         }
     }
@@ -156,14 +174,16 @@ impl Regressor {
         let mut local_data: [IndexAccgradientValue; BUF_LEN as usize] = MaybeUninit::uninit().assume_init() ;
         let mut wsum:f32 = 0.0;
         for i in 0..fbuf_len {
-            let feature_index     = fbuf.get_unchecked(i).hash << 1;
+// For now this didn't bear fruit
+//            _mm_prefetch(mem::transmute::<&f32, &i8>(self.weights.get_unchecked((fbuf.get_unchecked(i+8).hash << 1) as usize)), _MM_HINT_T0); 
+            let feature_index     = fbuf.get_unchecked(i).hash;
             let feature_value:f32 = fbuf.get_unchecked(i).value;
-            let feature_weight       = *self.weights.get_unchecked(feature_index as usize);
-            let accumulated_gradient = *self.weights.get_unchecked((feature_index+1) as usize);
+            let feature_weight       = self.weights.get_unchecked(feature_index as usize).weight;
+            let accumulated_gradient = self.weights.get_unchecked(feature_index as usize).acc_grad;
             wsum += feature_weight * feature_value;
-            local_data.get_unchecked_mut(i).index   = feature_index;
+            local_data.get_unchecked_mut(i).index       = feature_index;
             local_data.get_unchecked_mut(i).accgradient = accumulated_gradient;
-            local_data.get_unchecked_mut(i).value = feature_value;
+            local_data.get_unchecked_mut(i).value       = feature_value;
         }
         
         if self.ffm_k > 0 {
@@ -171,28 +191,42 @@ impl Regressor {
                 for left_hash in left_fbuf {
                     let left_feature_value = left_hash.value;
                     for (j, right_fbuf) in fb.ffm_buffers[i+1 ..].iter().enumerate() {
-                        let mut left_weight_p = (self.ffm_weights_offset + ((left_hash.hash + (i+1+j) as u32 *self.ffm_separate_vectors_k) & self.ffm_hashmask) * 2) as usize;
+                        let mut left_weight_p = (self.ffm_weights_offset + ((left_hash.hash + (i+1+j) as u32 *self.ffm_separate_vectors_k) & self.ffm_hashmask)) as usize;
+                        //_mm_prefetch(mem::transmute::<&f32, &i8>(self.weights.get_unchecked(left_weight_p)), _MM_HINT_T0); 
                         for right_hash in right_fbuf {
                             let right_feature_value = right_hash.value;
                             let joint_value = left_feature_value * right_feature_value;
-                            let mut right_weight_p = (self.ffm_weights_offset + ((right_hash.hash + i as u32 * self.ffm_separate_vectors_k) & self.ffm_hashmask) * 2) as usize;
-                            for k in 0..(self.ffm_k as usize) {
-                                let left_weight = *self.weights.get_unchecked(left_weight_p);
-                                let right_weight = *self.weights.get_unchecked(right_weight_p);
-
-                                wsum += left_weight * right_weight * joint_value;
+                            let mut right_weight_p = (self.ffm_weights_offset + ((right_hash.hash + i as u32 * self.ffm_separate_vectors_k) & self.ffm_hashmask)) as usize;
+                            //_mm_prefetch(mem::transmute::<&f32, &i8>(self.weights.get_unchecked(right_weight_p)), _MM_HINT_T0); 
+                            //let mut iw_weight_p = (self.ffm_iw_weights_offset as usize + self.ffm_k as usize * 2*(i * fb.ffm_buffers.len() + (i+1+j))) as usize;
+                                
+                            for _ in (0..(self.ffm_k as usize)).rev() {
+  //                              let iw_weight = self.weights.get_unchecked(iw_weight_p as usize);
+                                let left_weight = self.weights.get_unchecked(left_weight_p).weight;
+                                let right_weight = self.weights.get_unchecked(right_weight_p).weight;
+  
+                                let right_half_part = right_weight * joint_value;
                                 // left side
                                 local_data.get_unchecked_mut(local_buf_len).index = left_weight_p as u32;// store index
-                                local_data.get_unchecked_mut(local_buf_len).accgradient = *self.weights.get_unchecked(left_weight_p +1); // accumulated errors
-                                local_data.get_unchecked_mut(local_buf_len).value = joint_value * right_weight; // first derivate
+                                local_data.get_unchecked_mut(local_buf_len).accgradient = self.weights.get_unchecked(left_weight_p).acc_grad; // accumulated errors
+                                local_data.get_unchecked_mut(local_buf_len).value = right_half_part; // first derivate
                                 // right side
                                 local_data.get_unchecked_mut(local_buf_len+1).index = right_weight_p as u32; // store index
-                                local_data.get_unchecked_mut(local_buf_len+1).accgradient = *self.weights.get_unchecked(right_weight_p +1); // accumulated errors
+                                local_data.get_unchecked_mut(local_buf_len+1).accgradient = self.weights.get_unchecked(right_weight_p).acc_grad; // accumulated errors
                                 local_data.get_unchecked_mut(local_buf_len+1).value = joint_value *  left_weight; // first derivate
 
-                                local_buf_len += 2;                              
-                                left_weight_p += 2;
-                                right_weight_p += 2;
+
+                                wsum += left_weight * right_half_part;
+                                local_buf_len += 2;
+                                left_weight_p += 1;
+                                right_weight_p += 1;
+                                /*local_data.get_unchecked_mut(local_buf_len+2).index = iw_weight_p as u32; // store index
+                                local_data.get_unchecked_mut(local_buf_len+2).accgradient = *self.weights.get_unchecked(iw_weight_p +1); // accumulated errors
+                                local_data.get_unchecked_mut(local_buf_len+2).value = left_weight * right_weight * left_feature_value * right_feature_value; // first derivate
+
+                                local_buf_len += 1;
+
+                                iw_weight_p += 1;*/
                             }
                             /*
                             println!("A {} {} {} {} {} {}", i,j+i+1, left_hash, right_hash, 
@@ -229,26 +263,26 @@ impl Regressor {
                     let feature_index = local_data.get_unchecked(i).index as usize;
                     let feature_value = local_data.get_unchecked(i).value;
                     let gradient = general_gradient * feature_value;
-                    let gradient_squared = 0.1;
-//                    let gradient_squared = gradient*gradient;
-                    *self.weights.get_unchecked_mut(feature_index+1) += gradient_squared;
+                    let gradient_squared = gradient*gradient;
+                    self.weights.get_unchecked_mut(feature_index).acc_grad += gradient_squared;
+//                    _mm_prefetch(mem::transmute::<&f32, &i8>(self.weights.get_unchecked_mut(local_data.get_unchecked(i+1).index as usize)), _MM_HINT_T1); 
                     let accumulated_squared_gradient = local_data.get_unchecked(i).accgradient;
                     if FASTMATH {
                         let update = self.fastmath_calculate_update(gradient, accumulated_squared_gradient + gradient_squared);
-                        *self.weights.get_unchecked_mut(feature_index) += update;
+                        self.weights.get_unchecked_mut(feature_index).weight += update;
                     } else {
                         let learning_rate = self.learning_rate * (accumulated_squared_gradient + gradient_squared).powf(self.minus_power_t);
                         let update = gradient * learning_rate;
-                        *self.weights.get_unchecked_mut(feature_index) += update;
+                        self.weights.get_unchecked_mut(feature_index).weight += update;
                     }
-//                    SUM_GRADIENTS += gradient_squared as f64;
-//                    NUM_GRADIENTS += 1;
+  //                  SUM_GRADIENTS += gradient_squared as f64;
+  //                  NUM_GRADIENTS += 1;
                 }            
             });
         }
-//        if example_num % 100000 == 0{
-//            println!("{}: {}", NUM_GRADIENTS, SUM_GRADIENTS/(NUM_GRADIENTS as f64));
-//        }
+  //      if example_num % 100000 == 0{
+  //          println!("{}: {}", NUM_GRADIENTS, SUM_GRADIENTS/(NUM_GRADIENTS as f64));
+  //      }
         
         prediction_probability
         }
@@ -272,9 +306,9 @@ impl FixedRegressor {
         let fbuf = &fb.lr_buffer;
         let mut wsum:f32 = 0.0;
         for val in fbuf {
-            let hash = (val.hash << 1) as usize;
+            let hash = val.hash as usize;
             let feature_value:f32 = val.value;
-            let w = self.weights[hash];
+            let w = self.weights[hash].weight;
             wsum += w * feature_value;    
         }
         
@@ -284,13 +318,13 @@ impl FixedRegressor {
             let right_feature_value = 1.0;
             for (i, left_fbuf) in fb.ffm_buffers.iter().enumerate() {
                 for left_hash in left_fbuf {
-                    let left_weight_p = (self.ffm_weights_offset + (left_hash.hash & self.ffm_hashmask) * 2) as usize;
+                    let left_weight_p = (self.ffm_weights_offset + (left_hash.hash & self.ffm_hashmask)) as usize;
                     for (j, right_fbuf) in fb.ffm_buffers[i+1 ..].iter().enumerate() {
                         for right_hash in right_fbuf {
-                            let right_weight_p = (self.ffm_weights_offset + (right_hash.hash & self.ffm_hashmask) * 2) as usize;
+                            let right_weight_p = (self.ffm_weights_offset + (right_hash.hash & self.ffm_hashmask)) as usize;
                             for k in 0..(self.ffm_k as usize) {
-                                let left_weight = self.weights[left_weight_p + k * 2];
-                                let right_weight = self.weights[right_weight_p + k * 2];
+                                let left_weight = self.weights[left_weight_p + k].weight;
+                                let right_weight = self.weights[right_weight_p + k].weight;
                                 wsum += left_weight * right_weight * 
                                         left_feature_value * right_feature_value;
                             }
@@ -481,9 +515,9 @@ mod tests {
     }
 
     fn ffm_fixed_init(mut rg: &mut Regressor) -> () {
-        for i in (rg.ffm_weights_offset/2..(rg.weights.len() as u32/2)).step_by(2) {
-            rg.weights[(i*2) as usize] = 1.0;
-            rg.weights[(i*2+1) as usize] = 1.0;
+        for i in rg.ffm_weights_offset as usize..rg.weights.len() {
+            rg.weights[i].weight = 1.0;
+            rg.weights[i].acc_grad = 1.0;
         }
     }
 
