@@ -175,7 +175,7 @@ impl Regressor {
         }
         let mut local_data: [IndexAccgradientValue; BUF_LEN as usize] = MaybeUninit::uninit().assume_init() ;
         let mut wsum:f32 = 0.0;
-/*        for i in 0..fbuf_len {
+        for i in 0..fbuf_len {
 // For now this didn't bear fruit
 //            _mm_prefetch(mem::transmute::<&f32, &i8>(self.weights.get_unchecked((fbuf.get_unchecked(i+8).hash << 1) as usize)), _MM_HINT_T0); 
             let feature_index     = fbuf.get_unchecked(i).hash;
@@ -187,7 +187,7 @@ impl Regressor {
             local_data.get_unchecked_mut(i).accgradient = accumulated_gradient;
             local_data.get_unchecked_mut(i).value       = feature_value;
         }
- */       
+        
         if self.ffm_k > 0 {
             for (i, left_fbuf) in fb.ffm_buffers.iter().enumerate() {
                 for left_hash in left_fbuf {
@@ -200,7 +200,7 @@ impl Regressor {
                             let mut right_weight_p = (self.ffm_weights_offset + ((right_hash.hash + i as u32 * self.ffm_separate_vectors_k) & self.ffm_hashmask)) as usize;
                             //let mut iw_weight_p = (self.ffm_iw_weights_offset as usize + self.ffm_k as usize * 2*(i * fb.ffm_buffers.len() + (i+1+j))) as usize;
                                 
-                            for _ in (0..(self.ffm_k as usize)) {
+                            for _ in (0..(self.ffm_k as usize)).rev() {
   //                              let iw_weight = self.weights.get_unchecked(iw_weight_p as usize);
                                 let left_weight = self.weights.get_unchecked(left_weight_p).weight;
                                 let right_weight = self.weights.get_unchecked(right_weight_p).weight;
@@ -216,7 +216,6 @@ impl Regressor {
                                 local_data.get_unchecked_mut(local_buf_len+1).value = joint_value *  left_weight; // first derivate
                                 
                                 wsum += left_weight * right_half_part;
-                                println!("WSUM: {}", wsum);
                                 local_buf_len += 2;
                                 left_weight_p += 1;
                                 right_weight_p += 1;
@@ -273,7 +272,6 @@ impl Regressor {
                     } else {
                         let learning_rate = self.learning_rate * (accumulated_squared_gradient + gradient_squared).powf(self.minus_power_t);
                         let update = gradient * learning_rate;
-                        println!("A {}", update);
                         self.weights.get_unchecked_mut(feature_index).weight += update;
                     }
   //                  SUM_GRADIENTS += gradient_squared as f64;
@@ -552,9 +550,9 @@ mod tests {
                                   vec![HashAndValue{hash:100, value: 1.0}]
                                   ]);
         p = rr.learn(&ffm_buf, true, 0);
-        assert_eq!(p, 0.50134915); 
+        assert_eq!(p, 0.7310586); 
         p = rr.learn(&ffm_buf, true, 0);
-        assert_eq!(p, 0.48882028);
+        assert_eq!(p, 0.7024794);
 
         // Two fields, use values
         let mut rr = Regressor::new(&mi);
@@ -564,9 +562,9 @@ mod tests {
                                   vec![HashAndValue{hash:100, value: 2.0}]
                                   ]);
         p = rr.learn(&ffm_buf, true, 0);
-        assert_eq!(p, 0.50539637);
+        assert_eq!(p, 0.98201376);
         p = rr.learn(&ffm_buf, true, 0);
-        assert_eq!(p, 0.31298748);
+        assert_eq!(p, 0.81377685);
 
 
     }
