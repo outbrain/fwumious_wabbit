@@ -129,3 +129,26 @@ impl regressor::Regressor {
     
 }
     
+mod tests {
+    // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
+
+    //extern crate tempfile;
+    use tempfile::tempdir;
+    #[test]
+    fn save_empty_model() {
+        let vw_map_string = r#"
+A,featureA
+B,featureB
+"#;
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
+        mi.learning_rate = 0.1;
+        mi.power_t = 0.0;
+        mi.bit_precision = 18;        
+        let mut rr = regressor::Regressor::new(&mi);
+        let dir = tempdir().unwrap();
+        let regressor_filepath = dir.path().join("test_regressor.fw");
+        rr.save_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw).unwrap();
+    }    
+}
