@@ -12,7 +12,7 @@ use crate::feature_buffer::HashAndValue;
 
 
 const ONE:u32 = 1065353216;// this is 1.0 float -> u32
-const BUF_LEN:usize = 8196; // We will ABORT if number of derived features for individual example is more than this.
+const BUF_LEN:usize = 16196; // We will ABORT if number of derived features for individual example is more than this.
 // Why not bigger number? If we grow stack of the function too much, we end up with stack overflow protecting mechanisms
 
 // this really means 7 bits of mantissa and 4 bits of fixed point precision
@@ -115,15 +115,17 @@ impl Regressor {
         if model_instance.ffm_k > 0 {       
             rg.ffm_one_over_k_root = 1.0 / (rg.ffm_k as f32).sqrt() / 10.0;
             for i in 0..ffm_weights_len {
-                rg.weights[(rg.ffm_weights_offset + i) as usize].weight = (0.2*merand48((rg.ffm_weights_offset*2+i*2) as u64)-0.1) * rg.ffm_one_over_k_root;
+//                let mk = (i % rg.ffm_k) + 1;
+//                println!("i: {}, mk: {}, rg_ffm: {}", i, mk, rg.ffm_k);
+                rg.weights[(rg.ffm_weights_offset + i) as usize].weight = 0.0;//(0.2*merand48((rg.ffm_weights_offset+i) as u64)-0.1) * rg.ffm_one_over_k_root;
                 //rng.gen_range(-0.1 * rg.ffm_one_over_k_root , 0.1 * rg.ffm_one_over_k_root );
                 // we set FFM gradients to 1.0, so we avoid NaN updates due to adagrad (accumulated_squared_gradients+grad^2).powf(negative_number) * 0.0 
                 rg.weights[(rg.ffm_weights_offset + i) as usize].acc_grad = 1.0;
             }
-            for i in 0..(rg.ffm_k * model_instance.ffm_fields.len()  as u32 * model_instance.ffm_fields.len() as u32) {
+/*            for i in 0..(rg.ffm_k * model_instance.ffm_fields.len()  as u32 * model_instance.ffm_fields.len() as u32) {
                 rg.weights[(rg.ffm_iw_weights_offset + i) as usize].weight = 1.0;
                 rg.weights[(rg.ffm_iw_weights_offset + i) as usize].acc_grad = 1.0;
-            }
+            }*/
             if model_instance.ffm_separate_vectors {
                 rg.ffm_separate_vectors_k = rg.ffm_k;
             }
@@ -200,7 +202,7 @@ impl Regressor {
                             //_mm_prefetch(mem::transmute::<&f32, &i8>(self.weights.get_unchecked(right_weight_p)), _MM_HINT_T0); 
                             //let mut iw_weight_p = (self.ffm_iw_weights_offset as usize + self.ffm_k as usize * 2*(i * fb.ffm_buffers.len() + (i+1+j))) as usize;
                                 
-                            for _ in (0..(self.ffm_k as usize)).rev() {
+                            for _ in (0..(self.ffm_k as usize)) {
   //                              let iw_weight = self.weights.get_unchecked(iw_weight_p as usize);
                                 let left_weight = self.weights.get_unchecked(left_weight_p).weight;
                                 let right_weight = self.weights.get_unchecked(right_weight_p).weight;
@@ -214,7 +216,6 @@ impl Regressor {
                                 local_data.get_unchecked_mut(local_buf_len+1).index = right_weight_p as u32; // store index
                                 local_data.get_unchecked_mut(local_buf_len+1).accgradient = self.weights.get_unchecked(right_weight_p).acc_grad; // accumulated errors
                                 local_data.get_unchecked_mut(local_buf_len+1).value = joint_value *  left_weight; // first derivate
-
 
                                 wsum += left_weight * right_half_part;
                                 local_buf_len += 2;
@@ -532,10 +533,10 @@ mod tests {
         mi.ffm_bit_precision = 18;
         mi.ffm_fields = vec![vec![]]; // This isn't really used
         
-        let mut rr = Regressor::new(&mi);
         let mut p: f32;
         
         // Nothing can be learned from a single field
+        let mut rr = Regressor::new(&mi);
         let ffm_buf = ffm_vec(vec![vec![HashAndValue{hash:1, value: 1.0}]]);
         p = rr.learn(&ffm_buf, true, 0);
         assert_eq!(p, 0.5);
