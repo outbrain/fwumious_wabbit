@@ -14,7 +14,7 @@ pub struct HashAndValue {
     pub value: f32
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FeatureBuffer {
     pub label: f32,
     pub lr_buffer: Vec<HashAndValue>,
