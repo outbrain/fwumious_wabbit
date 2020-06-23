@@ -21,8 +21,8 @@ const FASTMATH_LR_LUT_SIZE:usize = 1 <<  FASTMATH_LR_LUT_BITS;
 
 #[derive(Clone)]
 pub struct Weight {
-    weight: f32, 
-    acc_grad: f32,
+    pub weight: f32, 
+    pub acc_grad: f32,
 }
 
 pub struct Regressor {
@@ -30,7 +30,7 @@ pub struct Regressor {
     learning_rate: f32,
     minus_power_t:f32,
     pub weights: Vec<Weight>,       // weights and gradients, interleved, for all models
-    ffm_weights_offset: u32, 
+    pub ffm_weights_offset: u32, 
     ffm_k: u32,
     ffm_hashmask: u32,
     ffm_one_over_k_root: f32,
@@ -163,7 +163,6 @@ impl Regressor {
             accgradient: f32,
             value: f32,
         }
-
         unsafe {
         let y = fb.label; // 0.0 or 1.0
         let fbuf = &fb.lr_buffer;
@@ -201,6 +200,7 @@ impl Regressor {
                             //let mut iw_weight_p = (self.ffm_iw_weights_offset as usize + self.ffm_k as usize * 2*(i * fb.ffm_buffers.len() + (i+1+j))) as usize;
                                 
                             for _ in (0..(self.ffm_k as usize)).rev() {
+
   //                              let iw_weight = self.weights.get_unchecked(iw_weight_p as usize);
                                 let left_weight = self.weights.get_unchecked(left_weight_p).weight;
                                 let right_weight = self.weights.get_unchecked(right_weight_p).weight;
@@ -310,22 +310,23 @@ impl FixedRegressor {
             let w = self.weights[hash].weight;
             wsum += w * feature_value;    
         }
-        
 
         if self.ffm_k > 0 {
-            let left_feature_value = 1.0;  // we currently do not support feature values in ffm
-            let right_feature_value = 1.0;
             for (i, left_fbuf) in fb.ffm_buffers.iter().enumerate() {
                 for left_hash in left_fbuf {
-                    let left_weight_p = (self.ffm_weights_offset + (left_hash.hash & self.ffm_hashmask)) as usize;
+                    let left_feature_value = left_hash.value;
                     for (j, right_fbuf) in fb.ffm_buffers[i+1 ..].iter().enumerate() {
+                        let mut left_weight_p = (self.ffm_weights_offset + ((left_hash.hash + (i+1+j) as u32 *self.ffm_separate_vectors_k) & self.ffm_hashmask)) as usize;
                         for right_hash in right_fbuf {
-                            let right_weight_p = (self.ffm_weights_offset + (right_hash.hash & self.ffm_hashmask)) as usize;
-                            for k in 0..(self.ffm_k as usize) {
-                                let left_weight = self.weights[left_weight_p + k].weight;
-                                let right_weight = self.weights[right_weight_p + k].weight;
-                                wsum += left_weight * right_weight * 
-                                        left_feature_value * right_feature_value;
+                            let right_feature_value = right_hash.value;
+                            let joint_value = left_feature_value * right_feature_value;
+                            let mut right_weight_p = (self.ffm_weights_offset + ((right_hash.hash + i as u32 * self.ffm_separate_vectors_k) & self.ffm_hashmask)) as usize;
+                            for _ in (0..(self.ffm_k as usize)).rev() {
+                                let left_weight = self.weights[left_weight_p].weight;
+                                let right_weight = self.weights[right_weight_p].weight;
+                                wsum += left_weight * right_weight * joint_value;
+                                left_weight_p += 1;
+                                right_weight_p += 1;
                             }
                         }
                     }

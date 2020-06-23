@@ -84,7 +84,7 @@ impl regressor::Regressor {
         output_bufwriter.write_u64::<LittleEndian>(self.weights.len() as u64)?;
         unsafe {
              let buf_view:&[u8] = slice::from_raw_parts(self.weights.as_ptr() as *const u8, 
-                                              self.weights.len() *mem::size_of::<f32>());
+                                              self.weights.len() *mem::size_of::<regressor::Weight>());
              output_bufwriter.write(buf_view)?;
         }
         
@@ -97,7 +97,7 @@ impl regressor::Regressor {
         }
         unsafe {
             let mut buf_view:&mut [u8] = slice::from_raw_parts_mut(self.weights.as_mut_ptr() as *mut u8, 
-                                             self.weights.len() *mem::size_of::<f32>());
+                                             self.weights.len() *mem::size_of::<regressor::Weight>());
             input_bufreader.read_exact(&mut buf_view)?;
         }
 
@@ -129,11 +129,16 @@ impl regressor::Regressor {
     
 }
     
+#[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
+    use crate::feature_buffer;
+    use crate::feature_buffer::HashAndValue;
+    use std::sync::Arc;
+    use regressor::Regressor;
 
-    //extern crate tempfile;
+//    extern crate tempfile;
     use tempfile::tempdir;
     #[test]
     fn save_empty_model() {
@@ -147,8 +152,118 @@ B,featureB
         mi.power_t = 0.0;
         mi.bit_precision = 18;        
         let mut rr = regressor::Regressor::new(&mi);
-        let dir = tempdir().unwrap();
+        let dir = tempfile::tempdir().unwrap();
         let regressor_filepath = dir.path().join("test_regressor.fw");
         rr.save_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw).unwrap();
     }    
+
+    fn lr_vec(v:Vec<feature_buffer::HashAndValue>) -> feature_buffer::FeatureBuffer {
+        feature_buffer::FeatureBuffer {
+                    label: 0.0,
+                    lr_buffer: v,
+                    ffm_buffers: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn save_load_and_test_mode_lr() {
+        let vw_map_string = r#"
+A,featureA
+B,featureB
+"#;
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
+        mi.learning_rate = 0.1;
+        mi.power_t = 0.5;
+        mi.bit_precision = 18;        
+        let mut rr = regressor::Regressor::new(&mi);
+        let mut p: f32;
+        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true, 0);
+        assert_eq!(p, 0.5);
+        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true, 0);
+        assert_eq!(p, 0.45016602);
+        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), false, 0);
+        assert_eq!(p, 0.41731137);
+        let dir = tempdir().unwrap();
+        let regressor_filepath = dir.path().join("test_regressor.fw");
+        rr.save_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw).unwrap();
+
+        // Now let's load the saved regressor
+        let (mi2, vw2, mut re2) = regressor::Regressor::new_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
+
+        // predict with the same feature vector
+        p = re2.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), false, 0);
+        assert_eq!(p, 0.41731137);
+
+        let re_fixed = Arc::new(regressor::FixedRegressor::new(re2));
+        p = re_fixed.predict(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), 0);
+        assert_eq!(p, 0.41731137);
+    }    
+
+    fn ffm_fixed_init(mut rg: &mut Regressor) -> () {
+        for i in rg.ffm_weights_offset as usize..rg.weights.len() {
+            rg.weights[i].weight = 1.0;
+            rg.weights[i].acc_grad = 1.0;
+        }
+    }
+
+
+    fn ffm_vec(v:Vec<Vec<feature_buffer::HashAndValue>>) -> feature_buffer::FeatureBuffer {
+        feature_buffer::FeatureBuffer {
+                    label: 0.0,
+                    lr_buffer: Vec::new(),
+                    ffm_buffers: v,
+        }
+    }
+
+
+    #[test]
+    fn save_load_and_test_mode_ffm() {
+        let vw_map_string = r#"
+A,featureA
+B,featureB
+"#;
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
+        mi.learning_rate = 0.1;
+        mi.power_t = 0.0;
+        mi.bit_precision = 18;
+        mi.ffm_k = 1;
+        mi.ffm_bit_precision = 18;
+        mi.ffm_fields = vec![vec![]]; // This isn't really used
+        let mut rr = regressor::Regressor::new(&mi);
+        let mut p: f32;
+
+        ffm_fixed_init(&mut rr);
+        let ffm_buf = ffm_vec(vec![
+                                  vec![HashAndValue{hash:1, value: 1.0}],
+                                  vec![HashAndValue{hash:100, value: 2.0}]
+                                  ]);
+        p = rr.learn(&ffm_buf, true, 0);
+        assert_eq!(p, 0.880797); 
+        p = rr.learn(&ffm_buf, false, 0);
+        assert_eq!(p, 0.79534113);
+
+
+        let dir = tempdir().unwrap();
+        let regressor_filepath = dir.path().join("test_regressor2.fw");
+        rr.save_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw).unwrap();
+
+        // Now let's load the saved regressor
+        let (mi2, vw2, mut re2) = regressor::Regressor::new_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
+
+        // predict with the same feature vector
+        p = re2.learn(&ffm_buf, false, 0);
+        assert_eq!(p, 0.79534113);
+
+        let re_fixed = Arc::new(regressor::FixedRegressor::new(re2));
+        p = re_fixed.predict(&ffm_buf, 0);
+        assert_eq!(p, 0.79534113);
+
+    }    
+
+
+
+
+
 }
