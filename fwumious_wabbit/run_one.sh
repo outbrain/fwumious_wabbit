@@ -22,3 +22,4 @@ target/release/fw $namespaces $rest -c -p f $fwonly && time $vw $namespaces $res
 #clear; cargo build && target/debug/fw $namespaces $rest -p f && time vw $namespaces $rest -p v
 
 
+
