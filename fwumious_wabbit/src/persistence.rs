@@ -138,8 +138,7 @@ mod tests {
     use std::sync::Arc;
     use regressor::Regressor;
 
-//    extern crate tempfile;
-    use tempfile::tempdir;
+    use tempfile::{tempdir, NamedTempFile};
     #[test]
     fn save_empty_model() {
         let vw_map_string = r#"
@@ -259,6 +258,52 @@ B,featureB
         let re_fixed = Arc::new(regressor::FixedRegressor::new(re2));
         p = re_fixed.predict(&ffm_buf, 0);
         assert_eq!(p, 0.79534113);
+
+    }    
+
+    #[test]
+    fn load_and_test_ffm() {
+        // Now let's load the saved regressor
+
+        let mut file = NamedTempFile::new().unwrap();
+        file.write(include_bytes!("tests/fixtures/ffm1.fwre")).unwrap();        
+        
+        let (mi2, vw2, mut re2) = regressor::Regressor::new_from_filename(file.into_temp_path().to_str().unwrap()).unwrap();
+        //println!("{:?}", re2.weights[0]);
+        let mut p: f32;
+        let ffm_buf = ffm_vec(vec![
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  ]);
+
+        // predict with the same feature vector
+        p = re2.learn(&ffm_buf, false, 0);
+        assert_eq!(p, 0.44015038);
+
+        let re_fixed = Arc::new(regressor::FixedRegressor::new(re2));
+        p = re_fixed.predict(&ffm_buf, 0);
+        assert_eq!(p, 0.44015038);
 
     }    
 
