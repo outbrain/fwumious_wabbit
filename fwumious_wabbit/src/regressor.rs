@@ -1,7 +1,8 @@
 use std::mem::{self, MaybeUninit};
 //use fastapprox::fast::sigmoid;
 use std::process;
-use triomphe::{UniqueArc, Arc};
+//use triomphe::{UniqueArc, Arc};
+use std::sync::Arc;
 //use std::fmt::Binary;
 use core::arch::x86_64::*;
 use merand48::*;
