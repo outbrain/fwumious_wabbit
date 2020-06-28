@@ -21,5 +21,9 @@ cargo build --release && \
 target/release/fw $namespaces $rest -c -p f $fwonly && time $vw $namespaces $rest -c -p v $vwonly
 #clear; cargo build && target/debug/fw $namespaces $rest -p f && time vw $namespaces $rest -p v
 
+# an example of command line of some specific model and its debugging
+# for debugging use --foreground opt
+#target/release/fw --foreground -i /tmp/vw/time=15-25/initial_weights.vw -t --daemon --quiet --port 26542 --interactions 0t --interactions 13 --interactions 2G --interactions 3GHX --interactions 3GU --interactions 3K --interactions 3S --interactions 3c --interactions 3g --interactions BD --interactions BGO --interactions BTf --interactions BX --interactions Bo --interactions Bp --interactions Bs --interactions CO --interactions Cx --interactions DG --interactions DW --interactions FG --interactions GU --interactions Gt --interactions KR --interactions KRt --interactions KTd --interactions Lt --interactions MN --interactions QS --interactions UW --interactions Ug --interactions eg --keep 1 --keep 2 --keep F --keep H --keep L --keep O --keep U --keep W --keep e --keep f --keep h --keep i --keep o --keep p --keep r --keep s --keep t --keep x --num_children 4
+
 
 
