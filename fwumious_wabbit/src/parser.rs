@@ -62,6 +62,8 @@ impl<'a> VowpalParser<'a> {
 
 
     pub fn next_vowpal(&mut self, input_bufread: &mut dyn BufRead) -> Result<&[u32], Box<dyn Error>>  {
+
+            // flush is kw to return OK(&[999])
             // Output item
             self.tmp_read_buf.truncate(0);
             let rowlen1 = match input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
@@ -79,12 +81,16 @@ impl<'a> VowpalParser<'a> {
             unsafe {
                 let p = self.tmp_read_buf.as_ptr();
                 let mut buf = self.output_buffer.as_mut_ptr();
-                
+
                 // first token, either 1 or -1
                 match *p.add(0) {
                     0x31 => self.output_buffer[LABEL_OFFSET] = 1,    // 1
                     0x2d => self.output_buffer[LABEL_OFFSET] = 0,    // -1
                     _ => {
+                        // flush asci 66, 6C, 75, 73, 68
+                        if rowlen1 >= 5 && *p.add(0) == 0x66  && *p.add(1) == 0x6C && *p.add(2) == 0x75 && *p.add(3) == 0x73 && *p.add(4) == 0x68 {
+                            return Ok(&[999])
+                        }
                         self.output_buffer[LABEL_OFFSET] = NO_LABEL;
                     }
                 };
