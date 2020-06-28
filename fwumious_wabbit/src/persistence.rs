@@ -229,7 +229,7 @@ B,featureB
         mi.bit_precision = 18;
         mi.ffm_k = 1;
         mi.ffm_bit_precision = 18;
-        mi.ffm_fields = vec![vec![]]; // This isn't really used
+        mi.ffm_fields = vec![vec![],vec![]]; 
         let mut rr = regressor::Regressor::new(&mi);
         let mut p: f32;
 
