@@ -561,7 +561,7 @@ mod tests {
         mi.bit_precision = 18;
         mi.ffm_k = 1;
         mi.ffm_bit_precision = 18;
-        mi.ffm_fields = vec![vec![]]; // This isn't really used
+        mi.ffm_fields = vec![vec![], vec![]]; // This isn't really used
         
         let mut p: f32;
         
