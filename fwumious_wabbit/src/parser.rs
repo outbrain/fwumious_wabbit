@@ -262,5 +262,10 @@ C,featureC
         // now we test if end-of-stream works correctly
         str_to_cursor("");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap().len(), 0);
+
+        // flush should return [999]
+        let mut buf = str_to_cursor("flush");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [999]);
+
     }
 }

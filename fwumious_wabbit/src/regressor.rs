@@ -13,7 +13,7 @@ use crate::feature_buffer::HashAndValue;
 
 
 const ONE:u32 = 1065353216;// this is 1.0 float -> u32
-const BUF_LEN:usize = 16196; // We will ABORT if number of derived features for individual example is more than this.
+const BUF_LEN:usize = 32000; // We will ABORT if number of derived features for individual example is more than this.
 // Why not bigger number? If we grow stack of the function too much, we end up with stack overflow protecting mechanisms
 
 // this really means 7 bits of mantissa and 4 bits of fixed point precision
@@ -39,6 +39,8 @@ pub struct Regressor {
     fastmath: bool,
     fastmath_lr_lut: [f32; FASTMATH_LR_LUT_SIZE],
     ffm_iw_weights_offset: u32,
+    ffm_k_threshold: f32,
+
 }
 
 #[derive(Clone)]
@@ -86,6 +88,7 @@ impl Regressor {
                             fastmath: model_instance.fastmath,
                             fastmath_lr_lut: [0.0; FASTMATH_LR_LUT_SIZE],
                             ffm_iw_weights_offset: 0,
+                            ffm_k_threshold: model_instance.ffm_k_threshold,
                         };
 
         if rg.fastmath {
@@ -116,14 +119,28 @@ impl Regressor {
         // Initialization, from ffm.pdf, however should random distribution be centred on zero?
         if model_instance.ffm_k > 0 {       
             rg.ffm_one_over_k_root = 1.0 / (rg.ffm_k as f32).sqrt() / 10.0;
-            for i in 0..ffm_weights_len {
-//                let mk = (i % rg.ffm_k) + 1;
-//                println!("i: {}, mk: {}, rg_ffm: {}", i, mk, rg.ffm_k);
-                rg.weights[(rg.ffm_weights_offset + i) as usize].weight = (0.2*merand48((rg.ffm_weights_offset+i) as u64)-0.1) * rg.ffm_one_over_k_root;
-                //rng.gen_range(-0.1 * rg.ffm_one_over_k_root , 0.1 * rg.ffm_one_over_k_root );
-                // we set FFM gradients to 1.0, so we avoid NaN updates due to adagrad (accumulated_squared_gradients+grad^2).powf(negative_number) * 0.0 
-                rg.weights[(rg.ffm_weights_offset + i) as usize].acc_grad = 1.0;
+            if model_instance.ffm_init_width == 0.0 {
+
+                for i in 0..ffm_weights_len {
+    //                let mk = (i % rg.ffm_k) + 1;
+    //                println!("i: {}, mk: {}, rg_ffm: {}", i, mk, rg.ffm_k);
+                    rg.weights[(rg.ffm_weights_offset + i) as usize].weight = (0.2*merand48((rg.ffm_weights_offset+i) as u64)-0.1) * rg.ffm_one_over_k_root;
+                    //rng.gen_range(-0.1 * rg.ffm_one_over_k_root , 0.1 * rg.ffm_one_over_k_root );
+                    // we set FFM gradients to 1.0, so we avoid NaN updates due to adagrad (accumulated_squared_gradients+grad^2).powf(negative_number) * 0.0 
+                    rg.weights[(rg.ffm_weights_offset + i) as usize].acc_grad = 1.0;
+                }
+            } else {
+                for i in 0..ffm_weights_len {
+                    rg.weights[(rg.ffm_weights_offset + i) as usize].weight = model_instance.ffm_init_center - model_instance.ffm_init_width/2.0 + 
+                                                                         merand48(i as u64) * model_instance.ffm_init_width;
+                    //rng.gen_range(-0.1 * rg.ffm_one_over_k_root , 0.1 * rg.ffm_one_over_k_root );
+                    // we set FFM gradients to 1.0, so we avoid NaN updates due to adagrad (accumulated_squared_gradients+grad^2).powf(negative_number) * 0.0 
+                    rg.weights[(rg.ffm_weights_offset + i) as usize].acc_grad = 1.0;
+                }
+
             }
+            
+            
 /*            for i in 0..(rg.ffm_k * model_instance.ffm_fields.len()  as u32 * model_instance.ffm_fields.len() as u32) {
                 rg.weights[(rg.ffm_iw_weights_offset + i) as usize].weight = 1.0;
                 rg.weights[(rg.ffm_iw_weights_offset + i) as usize].acc_grad = 1.0;
@@ -165,7 +182,7 @@ impl Regressor {
             accgradient: f32,
             value: f32,
         }
-                                debug_assert!(false);
+//        debug_assert!(false);
         unsafe {
         let y = fb.label; // 0.0 or 1.0
         let fbuf = &fb.lr_buffer;
@@ -206,39 +223,27 @@ impl Regressor {
                                 
                             for _ in 0..self.ffm_k as usize {
   //                              let iw_weight = self.weights.get_unchecked(iw_weight_p as usize);
-                                /*let left_weight = self.weights.get_unchecked(left_weight_p).weight;
+                                let left_weight = self.weights.get_unchecked(left_weight_p).weight;
                                 let right_weight = self.weights.get_unchecked(right_weight_p).weight;
-  */
-                                let left_weight = self.weights[left_weight_p].weight;
-                                let right_weight = self.weights[right_weight_p].weight;
+  
                                 let right_half_part = right_weight * joint_value;
                                 // left side
                                 local_data.get_unchecked_mut(local_buf_len).index = left_weight_p as u32;// store index
                                 local_data.get_unchecked_mut(local_buf_len).accgradient = self.weights.get_unchecked(left_weight_p).acc_grad; // accumulated errors
                                 local_data.get_unchecked_mut(local_buf_len).value = right_half_part; // first derivate
-                                /*if local_data.get_unchecked_mut(local_buf_len).value == 0.0 
-                                {
-                                    println!("AAAA {} {} {}", right_weight, left_feature_value, right_feature_value);
-                                    println!("RIGHT WEIGHT_P: {}", right_weight_p);
-                                    println!("FFM WEIGHTS OFFSET: {}", self.ffm_weights_offset);
-                                    panic!();
-                                }*/
                                 // right side
                                 local_data.get_unchecked_mut(local_buf_len+1).index = right_weight_p as u32; // store index
                                 local_data.get_unchecked_mut(local_buf_len+1).accgradient = self.weights.get_unchecked(right_weight_p).acc_grad; // accumulated errors
                                 local_data.get_unchecked_mut(local_buf_len+1).value = joint_value *  left_weight; // first derivate
-                                /*if local_data.get_unchecked_mut(local_buf_len+1).value == 0.0 
-                                {
-                                println!("BBB {} {} {}", left_weight, left_feature_value, right_feature_value);
-                                    println!("LEFT WEIGHT_P: {}", left_weight_p);
-                                    println!("FFM WEIGHTS OFFSET: {}", self.ffm_weights_offset);
-                                    panic!();
-                                }*/
                                 
                                 wsum += left_weight * right_half_part;
-                                local_buf_len += 2;
                                 left_weight_p += 1;
                                 right_weight_p += 1;
+                                local_buf_len += 2;
+                                //if local_data.get_unchecked_mut(local_buf_len-1).accgradient < self.ffm_k_threshold && 
+                                //   local_data.get_unchecked_mut(local_buf_len-2).accgradient < self.ffm_k_threshold {
+                                //    break;
+                                //}
                                 /*local_data.get_unchecked_mut(local_buf_len+2).index = iw_weight_p as u32; // store index
                                 local_data.get_unchecked_mut(local_buf_len+2).accgradient = *self.weights.get_unchecked(iw_weight_p +1); // accumulated errors
                                 local_data.get_unchecked_mut(local_buf_len+2).value = left_weight * right_weight * left_feature_value * right_feature_value; // first derivate
@@ -289,30 +294,14 @@ impl Regressor {
                     if FASTMATH {
                         let update = self.fastmath_calculate_update(gradient, accumulated_squared_gradient + gradient_squared);
                         self.weights.get_unchecked_mut(feature_index).weight += update;
-/*                        let x = self.weights.get_unchecked_mut(feature_index).weight;
-                        if x == 0.0 {
-                        println!("LALA");
-                        panic!();
-                        }
-                                if x.is_nan() {
-                                    println!("X {} gradient: {}, update: {} prediction probability: {}, y: {}, prediction : {}, acc: {} {}, feature_value: {}", x, gradient, update, prediction_probability, y, prediction, accumulated_squared_gradient,  gradient_squared, feature_value);
-                                    panic!();
-
-                                }*/
-
                     } else {
                         let learning_rate = self.learning_rate * (accumulated_squared_gradient + gradient_squared).powf(self.minus_power_t);
                         let update = gradient * learning_rate;
                         self.weights.get_unchecked_mut(feature_index).weight += update;
                     }
-  //                  SUM_GRADIENTS += gradient_squared as f64;
-  //                  NUM_GRADIENTS += 1;
                 }            
             });
         }
-  //      if example_num % 100000 == 0{
-  //          println!("{}: {}", NUM_GRADIENTS, SUM_GRADIENTS/(NUM_GRADIENTS as f64));
-  //      }
         
         prediction_probability
         }
