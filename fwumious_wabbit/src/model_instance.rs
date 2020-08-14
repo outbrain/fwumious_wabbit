@@ -38,6 +38,14 @@ pub struct ModelInstance {
     pub ffm_separate_vectors: bool,
     #[serde(default = "default_bool_false")]
     pub fastmath: bool,
+
+    #[serde(default = "default_f32_zero")]
+    pub ffm_k_threshold: f32,
+    #[serde(default = "default_f32_zero")]
+    pub ffm_init_center: f32,
+    #[serde(default = "default_f32_zero")]
+    pub ffm_init_width: f32,
+    
     
 }
 
@@ -90,6 +98,10 @@ impl ModelInstance {
             ffm_bit_precision: 18,
             ffm_separate_vectors: false,
             fastmath: false,
+            ffm_k_threshold: 0.0,
+            ffm_init_center: 0.0,
+            ffm_init_width: 0.0,
+            
         };
         Ok(mi)
     }
@@ -131,6 +143,16 @@ impl ModelInstance {
 
         if let Some(val) = cl.value_of("ffm_k") {
             mi.ffm_k = val.parse()?;
+        }
+        
+        if let Some(val) = cl.value_of("ffm_k_threshold") {
+            mi.ffm_k_threshold = val.parse()?;
+        }
+        if let Some(val) = cl.value_of("ffm_init_center") {
+            mi.ffm_init_center = val.parse()?;
+        }
+        if let Some(val) = cl.value_of("ffm_init_width") {
+            mi.ffm_init_width = val.parse()?;
         }
 
         if cl.is_present("ffm_separate_vectors") {

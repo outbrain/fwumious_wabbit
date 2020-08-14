@@ -194,7 +194,7 @@ mod tests {
     fn test_exception() {
         let v = "abc5";
         match v.parse::<i32>() {
-            Ok(pVal) => {},
+            Ok(p_val) => {},
             Err(e) =>
                 {
                     let msg = e.to_string();
