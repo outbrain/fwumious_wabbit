@@ -157,6 +157,22 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .value_name("false")
                      .help("Field will have a different vector for each counter-field")
                      .takes_value(false))
+                    .arg(Arg::with_name("ffm_k_threshold")
+                     .long("ffm_k_threshold")
+                     .help("A minum gradient on left and right side to increase k")
+                     .multiple(false)
+                     .takes_value(true))
+                    .arg(Arg::with_name("ffm_init_center")
+                     .long("ffm_init_center")
+                     .help("Center of the initial weights distribution")
+                     .multiple(false)
+                     .takes_value(true))
+                    .arg(Arg::with_name("ffm_init_width")
+                     .long("ffm_init_width")
+                     .help("Total width of the initial weights distribution")
+                     .multiple(false)
+                     .takes_value(true))
+
                      
 
                      // Daemon parameterts
