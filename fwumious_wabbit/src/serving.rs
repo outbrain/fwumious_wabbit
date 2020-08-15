@@ -31,7 +31,7 @@ pub struct WorkerThread {
     receiver: Arc<Mutex<mpsc::Receiver<net::TcpStream>>>,
     re: Arc<regressor::FixedRegressor>,
     fbt: feature_buffer::FeatureBufferTranslator,
-    vw: vwmap::VwNamespaceMap,
+    pa: parser::VowpalParser,
 }
 
 impl WorkerThread {
@@ -42,42 +42,34 @@ impl WorkerThread {
         re: Arc<regressor::FixedRegressor>,
         mi: &model_instance::ModelInstance,
     ) -> Result<thread::JoinHandle<u32>, Box<dyn Error>> {
-        let mut mi = WorkerThread {
+        let mut wt = WorkerThread {
             id: id,
             receiver: receiver,
             re: re,   // THIS IS NOT A SMALL STRUCTURE
             fbt: feature_buffer::FeatureBufferTranslator::new(mi),
-            vw: (*vw).clone(),
-
+            pa: parser::VowpalParser::new(vw),
         };
         let thread = thread::spawn(move || {
-            mi.start();
+            wt.start();
             1u32
         });
         Ok(thread)
     }
 
-    pub fn start(&mut self) -> () {
-        let mut pa = parser::VowpalParser::new(&self.vw);
+    
 
+    pub fn start(&mut self) -> () {
         loop {
             let tcp_stream = self.receiver.lock().unwrap().recv().unwrap();
             let mut writer = BufWriter::new(&tcp_stream);
             let mut reader = BufReader::new(&tcp_stream);
 
-            //        println!("New connection");
             let mut i = 0u32;
             loop {
-                let reading_result = pa.next_vowpal(&mut reader);
+                let reading_result = self.pa.next_vowpal(&mut reader);
                 let mut p_res:String;
                 match reading_result {
                     Ok([]) => break, // EOF
-                    Ok([999]) => {
-                        match writer.flush() {
-                            Ok(_) => {},
-                            Err(e) => { /*println!("Flushing socket failed, dropping it");*/ break; }
-                        }
-                    },
                     Ok(buffer2) => {
                         self.fbt.translate_vowpal(buffer2);
                         let p = self.re.predict(&(self.fbt.feature_buffer), i);
@@ -89,32 +81,39 @@ impl WorkerThread {
                     },
                     Err(e) =>
                         {
-                            p_res = format!("ERR: {}\n", e.to_string());
-                            match writer.write_all(p_res.as_bytes()) {
-                                Ok(_) => match writer.flush() {
+                            if e.is::<parser::FlushError>() {
+                                // FlushError just causes us to flush, not to break
+                                match writer.flush() {
                                     Ok(_) => {},
-                                    Err(e) => { /*println!("Flushing socket failed, dropping it");*/ break; }
-                                },
-                                Err(e) => { /*println!("Write to socket failed, dropping it"); */break; }
-                            };
-                            break
+                                    Err(e) => { /*println!("Flushing the socket failed, dropping it");*/ break; }
+                                }
+                            } else
+                            {
+                                p_res = format!("ERR: {}\n", e.to_string());
+                                match writer.write_all(p_res.as_bytes()) {
+                                    Ok(_) => match writer.flush() {
+                                        Ok(_) => {},
+                                        Err(e) => { /*println!("Flushing the socket failed, dropping it");*/ break; }
+                                    },
+                                    Err(e) => { /*println!("Write to socket failed, dropping it"); */break; }
+                                };
+                                break
+                            }
                         },
                 };
 
-                // not the smartest
-                // this is lazy flushing
+                // lazy flushing
                 if reader.buffer().is_empty() {
                     match writer.flush() {
                         Ok(_) => {},
-                        Err(e) => { /*println!("Flushing socket failed, dropping it");*/ break; }
+                        Err(e) => { /*println!("Flushing the socket failed, dropping it");*/ break; }
                     };
                 }
                 i += 1;
             }
         }
     }
-
-//    pub fn handle_connection(&mut self, tcp_stream: net::TcpStream, mut pa: &mut parser::VowpalParser) {
+    
 }
 
 
