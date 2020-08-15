@@ -1,3 +1,4 @@
+use std::fmt;
 use std::fs::File;
 use fasthash::murmur3;
 use fasthash::xx;
@@ -19,17 +20,28 @@ pub const NULL: u32= IS_NOT_SINGLE_MASK; // null is just an exact IS_NOT_SINGLE_
 pub const NO_LABEL: u32 = 0xff;
 pub const FLOAT32_ONE: u32 = 1065353216;  // 1.0f32.to_bits()
 
-pub struct VowpalParser<'a> {
-    vw_map: &'a vwmap::VwNamespaceMap,
+pub struct VowpalParser {
+    vw_map: vwmap::VwNamespaceMap,
     tmp_read_buf: Vec<u8>,
     namespace_hash_seeds: [u32; 256],     // Each namespace has its hash seed
     pub output_buffer: Vec<u32>,
 }
 
 
+#[derive(Debug)]
+pub struct FlushError;  // Parser returns FlushError to signal flush message
+impl Error for FlushError {}
+impl fmt::Display for FlushError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Not really an error: a flush command from client")
+    }
+}
+
+
 /* 
 organization of records buffer 
 (u32) length of the output record
+(u32) label
 (union_u u32)[number of features], where:
     -- if the most significant bit is zero
             - this is a a namespace with a single feature
@@ -41,10 +53,10 @@ organization of records buffer
 (u32)[dynamic buffer]
 */
 
-impl<'a> VowpalParser<'a> {
-    pub fn new(vw: &'a vwmap::VwNamespaceMap) -> VowpalParser<'a> {
+impl VowpalParser {
+    pub fn new(vw: &vwmap::VwNamespaceMap) -> VowpalParser {
         let mut rr = VowpalParser {  
-                            vw_map: vw,
+                            vw_map: (*vw).clone(),
                             tmp_read_buf: Vec::with_capacity(RECBUF_LEN),
                             output_buffer: Vec::with_capacity(RECBUF_LEN*2),
                             namespace_hash_seeds: [0; 256],
@@ -62,14 +74,11 @@ impl<'a> VowpalParser<'a> {
 
 
     pub fn next_vowpal(&mut self, input_bufread: &mut dyn BufRead) -> Result<&[u32], Box<dyn Error>>  {
-
-            // flush is kw to return OK(&[999])
-            // Output item
             self.tmp_read_buf.truncate(0);
             let rowlen1 = match input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
                 Ok(0) => return Ok(&[]),
                 Ok(n) => n,
-                Err(e) => Err(e)?          
+                Err(e) => Err(e)?
             };
             {
                 let mut bufpos: usize = (self.vw_map.num_namespaces as usize) + HEADER_LEN;
@@ -86,15 +95,17 @@ impl<'a> VowpalParser<'a> {
                 match *p.add(0) {
                     0x31 => self.output_buffer[LABEL_OFFSET] = 1,    // 1
                     0x2d => self.output_buffer[LABEL_OFFSET] = 0,    // -1
+                    0x7c => self.output_buffer[LABEL_OFFSET] = NO_LABEL, // when first character is |, this means there is no label
                     _ => {
-                        // flush asci 66, 6C, 75, 73, 68
+                        // "flush" ascii 66, 6C, 75, 73, 68
                         if rowlen1 >= 5 && *p.add(0) == 0x66  && *p.add(1) == 0x6C && *p.add(2) == 0x75 && *p.add(3) == 0x73 && *p.add(4) == 0x68 {
-                            return Ok(&[999])
+                            return Err(Box::new(FlushError))
+                        } else {
+                            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown first character of the label: ascii {:?}", p.add(0)))))
                         }
-                        self.output_buffer[LABEL_OFFSET] = NO_LABEL;
                     }
                 };
-                let mut current_char_index:usize = 0 * 2 + HEADER_LEN;
+                let mut current_char_index:usize = HEADER_LEN;
                 let mut i_start:usize;
                 let mut i_end:usize = 0;
 
@@ -256,16 +267,20 @@ C,featureC
         // without label
         let mut buf = str_to_cursor("|A a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [5, NO_LABEL, 2988156968 & MASK31, NULL, NULL]);
-        
-        
+                
         //println!("{:?}", rr.output_buffer);
         // now we test if end-of-stream works correctly
         str_to_cursor("");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap().len(), 0);
-
+        
         // flush should return [999]
         let mut buf = str_to_cursor("flush");
-        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [999]);
+        assert_eq!(rr.next_vowpal(&mut buf).err().unwrap().is::<FlushError>(), true);
 
+        // Unrecognized label -> Error
+        let mut buf = str_to_cursor("$1");
+        assert_eq!(rr.next_vowpal(&mut buf).err().unwrap().is::<IOError>(), true);
+ 
+ 
     }
 }
