@@ -20,6 +20,7 @@ pub const NULL: u32= IS_NOT_SINGLE_MASK; // null is just an exact IS_NOT_SINGLE_
 pub const NO_LABEL: u32 = 0xff;
 pub const FLOAT32_ONE: u32 = 1065353216;  // 1.0f32.to_bits()
 
+#[derive (Clone)]
 pub struct VowpalParser {
     vw_map: vwmap::VwNamespaceMap,
     tmp_read_buf: Vec<u8>,
@@ -80,11 +81,11 @@ impl VowpalParser {
                 Ok(n) => n,
                 Err(e) => Err(e)?
             };
-            {
-                let mut bufpos: usize = (self.vw_map.num_namespaces as usize) + HEADER_LEN;
-                self.output_buffer.truncate(bufpos);
-                for i in &mut self.output_buffer[0..bufpos] { *i = NULL };
-            }
+
+            let mut bufpos: usize = (self.vw_map.num_namespaces as usize) + HEADER_LEN;
+            self.output_buffer.truncate(bufpos);
+            for i in &mut self.output_buffer[0..bufpos] { *i = NULL };
+
             let mut current_char_num_of_features = 0;
 
             unsafe {
@@ -165,22 +166,19 @@ impl VowpalParser {
                                 self.output_buffer.push(h);
                                 self.output_buffer.push(FLOAT32_ONE);
                                 // Now we store current pointers to in-place location, with IS_NOT_SINGLE_MASK marker
-                                let bufpos = self.output_buffer.len();
-                                *buf.add(current_char_index) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + bufpos) as u32);
+                                *buf.add(current_char_index) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
                             } else {
                                 // Now push a new value and store the new pointer to in_place
                                 self.output_buffer.push(h);
                                 self.output_buffer.push(FLOAT32_ONE);
-                                let bufpos = self.output_buffer.len();
-                                *buf.add(current_char_index) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + bufpos) as u32);
+                                *buf.add(current_char_index) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
                             }
                         } else
                         {
                                 // Now push a new value and store the new pointer to in_place
                                 self.output_buffer.push(h);
                                 self.output_buffer.push(current_namespace_weight.to_bits());
-                                let bufpos = self.output_buffer.len();
-                                *buf.add(current_char_index) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + bufpos) as u32);
+                                *buf.add(current_char_index) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
                         }
                         current_char_num_of_features += 1;
                     }

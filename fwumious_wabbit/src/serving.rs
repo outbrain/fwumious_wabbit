@@ -28,8 +28,7 @@ pub struct Serving {
 
 pub struct WorkerThread {
     id: u32,
-    receiver: Arc<Mutex<mpsc::Receiver<net::TcpStream>>>,
-    re: Arc<regressor::FixedRegressor>,
+    re_fixed: Arc<regressor::FixedRegressor>,
     fbt: feature_buffer::FeatureBufferTranslator,
     pa: parser::VowpalParser,
 }
@@ -37,80 +36,85 @@ pub struct WorkerThread {
 impl WorkerThread {
     pub fn new(
         id: u32,
+        re_fixed: Arc<regressor::FixedRegressor>,
+        fbt: feature_buffer::FeatureBufferTranslator,
+        pa: parser::VowpalParser,
         receiver: Arc<Mutex<mpsc::Receiver<net::TcpStream>>>,
-        vw: &vwmap::VwNamespaceMap,
-        re: Arc<regressor::FixedRegressor>,
-        mi: &model_instance::ModelInstance,
     ) -> Result<thread::JoinHandle<u32>, Box<dyn Error>> {
         let mut wt = WorkerThread {
             id: id,
-            receiver: receiver,
-            re: re,   // THIS IS NOT A SMALL STRUCTURE
-            fbt: feature_buffer::FeatureBufferTranslator::new(mi),
-            pa: parser::VowpalParser::new(vw),
+            re_fixed: re_fixed,
+            fbt: fbt,
+            pa: pa
         };
         let thread = thread::spawn(move || {
-            wt.start();
+            wt.start(receiver);
             1u32
         });
         Ok(thread)
     }
 
-    
+    pub fn handle_connection(&mut self, 
+                             mut tcp_stream: net::TcpStream) 
+    {
+        let mut reader = BufReader::new(&tcp_stream);
+        let mut writer = BufWriter::new(&tcp_stream);
 
-    pub fn start(&mut self) -> () {
+        let mut i = 0u32;
         loop {
-            let tcp_stream = self.receiver.lock().unwrap().recv().unwrap();
-            let mut writer = BufWriter::new(&tcp_stream);
-            let mut reader = BufReader::new(&tcp_stream);
+            let reading_result = self.pa.next_vowpal(&mut reader);
 
-            let mut i = 0u32;
-            loop {
-                let reading_result = self.pa.next_vowpal(&mut reader);
-                let mut p_res:String;
-                match reading_result {
-                    Ok([]) => break, // EOF
-                    Ok(buffer2) => {
-                        self.fbt.translate_vowpal(buffer2);
-                        let p = self.re.predict(&(self.fbt.feature_buffer), i);
-                        p_res = format!("{:.6}\n", p);
-                        match writer.write_all(p_res.as_bytes()) {
-                            Ok(_) => {},
-                            Err(e) => { /*println!("Write to socket failed, dropping it"); */break; }
-                        };
-                    },
-                    Err(e) =>
-                        {
-                            if e.is::<parser::FlushError>() {
-                                // FlushError just causes us to flush, not to break
-                                match writer.flush() {
-                                    Ok(_) => {},
-                                    Err(e) => { /*println!("Flushing the socket failed, dropping it");*/ break; }
-                                }
-                            } else
-                            {
-                                p_res = format!("ERR: {}\n", e.to_string());
-                                match writer.write_all(p_res.as_bytes()) {
-                                    Ok(_) => match writer.flush() {
-                                        Ok(_) => {},
-                                        Err(e) => { /*println!("Flushing the socket failed, dropping it");*/ break; }
-                                    },
-                                    Err(e) => { /*println!("Write to socket failed, dropping it"); */break; }
-                                };
-                                break
-                            }
-                        },
-                };
-
-                // lazy flushing
-                if reader.buffer().is_empty() {
-                    match writer.flush() {
+            match reading_result {
+                Ok([]) => break, // EOF
+                Ok(buffer2) => {
+                    self.fbt.translate_vowpal(buffer2);
+                    let p = self.re_fixed.predict(&(self.fbt.feature_buffer), i);
+                    let p_res = format!("{:.6}\n", p);
+                    match writer.write_all(p_res.as_bytes()) {
                         Ok(_) => {},
-                        Err(e) => { /*println!("Flushing the socket failed, dropping it");*/ break; }
+                        Err(e) => { /*println!("Write to socket failed, dropping it"); */ return; }
                     };
-                }
-                i += 1;
+                },
+                Err(e) =>
+                    {
+                        if e.is::<parser::FlushError>() {
+                            // FlushError just causes us to flush, not to break
+                            match writer.flush() {
+                                Ok(_) => {},
+                                Err(e) => { /*println!("Flushing the socket failed, dropping it");*/ return; }
+                            }
+                        } else
+                        {
+                            let p_res = format!("ERR: {}\n", e.to_string());
+                            match writer.write_all(p_res.as_bytes()) {
+                                Ok(_) => match writer.flush() {
+                                    Ok(_) => {},
+                                    Err(e) => { /*println!("Flushing the socket failed, dropping it");*/ return; }
+                                },
+                                Err(e) => { /*println!("Write to socket failed, dropping it"); */return; }
+                            };
+                            return;
+                        }
+                    },
+            };
+
+            // lazy flushing
+            if reader.buffer().is_empty() {
+                match writer.flush() {
+                    Ok(_) => {},
+                    Err(e) => { /*println!("Flushing the socket failed, dropping it");*/ break; }
+                };
             }
+            i += 1;
+        }
+    }
+    
+    pub fn start(&mut self, receiver: Arc<Mutex<mpsc::Receiver<net::TcpStream>>>) -> () {
+        // Simple endless serving loop: receive new connection and serve it
+        // when handle_connection exits, the connection is dropped
+        loop {
+            let tcp_stream = receiver.lock().unwrap().recv().unwrap();
+            self.handle_connection(tcp_stream);
         }
     }
     
@@ -131,8 +135,6 @@ impl Serving {
         let receiver = Arc::new(Mutex::new(receiver));
 
 
-        let re_fixed = Arc::new(regressor::FixedRegressor::new(re));
-//        println!("Stage2");
 
         let listening_interface = format!("127.0.0.1:{}", port);
         println!("Starting to listen on {}", listening_interface);
@@ -161,12 +163,15 @@ impl Serving {
             }
         }
 
+        let re_fixed = Arc::new(regressor::FixedRegressor::new(re));
+        let fbt = feature_buffer::FeatureBufferTranslator::new(mi);
+        let pa = parser::VowpalParser::new(&vw);
         for i in 0..num_children {
             let newt = WorkerThread::new(i,
-                                         Arc::clone(&receiver),
-                                         vw,
                                          re_fixed.clone(),
-                                         mi,
+                                         fbt.clone(),
+                                         pa.clone(),
+                                         Arc::clone(&receiver),
             )?;
             s.worker_threads.push(newt);
         }
@@ -188,21 +193,28 @@ impl Serving {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
+    use crate::regressor;
 
     #[test]
-    fn test_exception() {
-        let v = "abc5";
-        match v.parse::<i32>() {
-            Ok(p_val) => {},
-            Err(e) =>
-                {
-                    let msg = e.to_string();
-                    let msg = format!("ERR:{}", msg);
-                    println!("{}", msg);
-                    assert_eq! ("ERR:invalid digit found in string", msg);
-                }
-            ,
-        };
+    fn test_handle_connection() {
+        let vw_map_string = r#"
+A,featureA
+B,featureB
+C,featureC
+"#;
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        let mut re = regressor::Regressor::new(&mi);
+        let re_fixed = Arc::new(regressor::FixedRegressor::new(re));
+        let fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
+        let pa = parser::VowpalParser::new(&vw);
+
+        let newt = WorkerThread {id: 1,
+                                 fbt: fbt,
+                                 pa: pa,
+                                 re_fixed: re_fixed.clone(),
+                                 };
+                                 
     }
 
 
