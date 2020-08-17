@@ -22,6 +22,7 @@ pub struct FeatureBuffer {
 }
 
 
+#[derive(Clone)]
 pub struct FeatureBufferTranslator {
     model_instance: model_instance::ModelInstance,
     // we don't want to keep allocating buffers
