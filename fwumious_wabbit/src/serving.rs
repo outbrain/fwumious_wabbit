@@ -33,12 +33,28 @@ pub struct WorkerThread {
     pa: parser::VowpalParser,
 }
 
+pub trait IsEmpty {
+    fn is_empty(&mut self) -> bool;
+}
+impl IsEmpty for io::BufReader<&net::TcpStream> {
+    fn is_empty(&mut self) -> bool {
+        return self.buffer().is_empty();
+    }
+}
+
+// These are used only for unit-tests
+#[derive (Debug, PartialEq)]
+pub enum ConnectionEnd {
+    EndOfStream,
+    StreamWriteError,
+    StreamFlushError,
+    ParseError,
+}
+
 impl WorkerThread {
     pub fn new(
-        id: u32,
-        re_fixed: Arc<regressor::FixedRegressor>,
-        fbt: feature_buffer::FeatureBufferTranslator,
-        pa: parser::VowpalParser,
+        id: u32, re_fixed: Arc<regressor::FixedRegressor>, fbt:
+        feature_buffer::FeatureBufferTranslator, pa: parser::VowpalParser,
         receiver: Arc<Mutex<mpsc::Receiver<net::TcpStream>>>,
     ) -> Result<thread::JoinHandle<u32>, Box<dyn Error>> {
         let mut wt = WorkerThread {
@@ -55,24 +71,23 @@ impl WorkerThread {
     }
 
     pub fn handle_connection(&mut self, 
-                             mut tcp_stream: net::TcpStream) 
+                             reader: &mut (impl io::BufRead + IsEmpty),
+                             writer: &mut impl io::Write,
+                             ) -> ConnectionEnd
     {
-        let mut reader = BufReader::new(&tcp_stream);
-        let mut writer = BufWriter::new(&tcp_stream);
-
         let mut i = 0u32;
         loop {
-            let reading_result = self.pa.next_vowpal(&mut reader);
+            let reading_result = self.pa.next_vowpal(reader);
 
             match reading_result {
-                Ok([]) => break, // EOF
+                Ok([]) => return ConnectionEnd::EndOfStream, // EOF
                 Ok(buffer2) => {
                     self.fbt.translate_vowpal(buffer2);
                     let p = self.re_fixed.predict(&(self.fbt.feature_buffer), i);
                     let p_res = format!("{:.6}\n", p);
                     match writer.write_all(p_res.as_bytes()) {
                         Ok(_) => {},
-                        Err(e) => { /*println!("Write to socket failed, dropping it"); */ return; }
+                        Err(e) => { /*println!("Write to socket failed, dropping it"); */ return ConnectionEnd::StreamWriteError; }
                     };
                 },
                 Err(e) =>
@@ -81,7 +96,7 @@ impl WorkerThread {
                             // FlushError just causes us to flush, not to break
                             match writer.flush() {
                                 Ok(_) => {},
-                                Err(e) => { /*println!("Flushing the socket failed, dropping it");*/ return; }
+                                Err(e) => { /*println!("Flushing the socket failed, dropping it");*/ return ConnectionEnd::StreamFlushError; }
                             }
                         } else
                         {
@@ -89,20 +104,20 @@ impl WorkerThread {
                             match writer.write_all(p_res.as_bytes()) {
                                 Ok(_) => match writer.flush() {
                                     Ok(_) => {},
-                                    Err(e) => { /*println!("Flushing the socket failed, dropping it");*/ return; }
+                                    Err(e) => { /*println!("Flushing the socket failed, dropping it");*/ return ConnectionEnd::StreamFlushError; }
                                 },
-                                Err(e) => { /*println!("Write to socket failed, dropping it"); */return; }
+                                Err(e) => { /*println!("Write to socket failed, dropping it"); */return ConnectionEnd::StreamWriteError; }
                             };
-                            return;
+                            return ConnectionEnd::ParseError;
                         }
                     },
             };
 
             // lazy flushing
-            if reader.buffer().is_empty() {
+            if reader.is_empty() {
                 match writer.flush() {
                     Ok(_) => {},
-                    Err(e) => { /*println!("Flushing the socket failed, dropping it");*/ break; }
+                    Err(e) => { /*println!("Flushing the socket failed, dropping it");*/ return ConnectionEnd::StreamFlushError; }
                 };
             }
             i += 1;
@@ -114,7 +129,9 @@ impl WorkerThread {
         // when handle_connection exits, the connection is dropped
         loop {
             let tcp_stream = receiver.lock().unwrap().recv().unwrap();
-            self.handle_connection(tcp_stream);
+            let mut reader = BufReader::new(&tcp_stream);
+            let mut writer = BufWriter::new(&tcp_stream);
+            self.handle_connection(&mut reader, &mut writer);
         }
     }
     
@@ -194,6 +211,15 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use crate::regressor;
+    use mockstream::{SharedMockStream, FailingMockStream};
+
+
+    impl IsEmpty for std::io::BufReader<mockstream::SharedMockStream> {
+        fn is_empty(&mut self) -> bool {
+            return true
+        }
+    }
+
 
     #[test]
     fn test_handle_connection() {
@@ -209,11 +235,53 @@ C,featureC
         let fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
         let pa = parser::VowpalParser::new(&vw);
 
-        let newt = WorkerThread {id: 1,
+        let mut newt = WorkerThread {id: 1,
                                  fbt: fbt,
                                  pa: pa,
                                  re_fixed: re_fixed.clone(),
                                  };
+
+        { // WORKING STREAM TEST
+            let mut mocked_stream = SharedMockStream::new();
+            let mut reader = BufReader::new(mocked_stream.clone());
+            let mut writer = BufWriter::new(mocked_stream.clone());
+            // Just passes through, as the stream is empty
+            newt.handle_connection(&mut reader, &mut writer);
+
+
+            // now let's start playing
+            mocked_stream.push_bytes_to_read(b"|A 0 |A 0");
+            assert_eq!(ConnectionEnd::EndOfStream, newt.handle_connection(&mut reader, &mut writer));
+            let x = mocked_stream.pop_bytes_written();
+            assert_eq!(x, b"0.500000\n");
+
+            mocked_stream.push_bytes_to_read(b"1 |A 0 |A 0");
+            assert_eq!(ConnectionEnd::EndOfStream, newt.handle_connection(&mut reader, &mut writer));
+            let x = mocked_stream.pop_bytes_written();
+            assert_eq!(x, b"0.500000\n");
+
+
+            mocked_stream.push_bytes_to_read(b"! exclamation mark is not a valid label");
+            assert_eq!(ConnectionEnd::ParseError, newt.handle_connection(&mut reader, &mut writer));
+            let x = mocked_stream.pop_bytes_written();
+            assert_eq!(&x[..] == &b"ERR: Unknown first character of the label: ascii 33\n"[..], true);
+        } 
+        
+        // Non Working stream test
+        /*
+        {
+            let mut mocked_stream = FailingMockStream::new();
+            let mut reader = BufReader::new(mocked_stream.clone());
+            let mut writer = BufWriter::new(mocked_stream.clone());
+            // Just passes through, as the stream is empty
+            newt.handle_connection(&mut reader, &mut writer);
+
+
+        }*/
+    //    println!("Return value {:?}", std::str::from_utf8(&x).unwrap());    
+
+
+
                                  
     }
 
