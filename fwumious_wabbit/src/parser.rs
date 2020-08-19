@@ -30,9 +30,9 @@ pub struct VowpalParser {
 
 
 #[derive(Debug)]
-pub struct FlushError;  // Parser returns FlushError to signal flush message
-impl Error for FlushError {}
-impl fmt::Display for FlushError {
+pub struct FlushCommand;  // Parser returns FlushCommand to signal flush message
+impl Error for FlushCommand {}
+impl fmt::Display for FlushCommand {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Not really an error: a flush command from client")
     }
@@ -43,6 +43,7 @@ impl fmt::Display for FlushError {
 organization of records buffer 
 (u32) length of the output record
 (u32) label
+TODO: (f32) Example importance (default: 1.0)
 (union_u u32)[number of features], where:
     -- if the most significant bit is zero
             - this is a a namespace with a single feature
@@ -51,7 +52,7 @@ organization of records buffer
     -- if the most significant bit is one
             - 15 next bits are the start offset, and lower 16 bits are the end offset of features beyond initial map
             - the dynamic buffer consists of (hash of the feature name, f32 value of the feature) 
-(u32)[dynamic buffer]
+[dynamic buffer of (u32 hash, f32 value of the feature]
 */
 
 impl VowpalParser {
@@ -100,7 +101,7 @@ impl VowpalParser {
                     _ => {
                         // "flush" ascii 66, 6C, 75, 73, 68
                         if rowlen1 >= 5 && *p.add(0) == 0x66  && *p.add(1) == 0x6C && *p.add(2) == 0x75 && *p.add(3) == 0x73 && *p.add(4) == 0x68 {
-                            return Err(Box::new(FlushError))
+                            return Err(Box::new(FlushCommand))
                         } else {
                             return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown first character of the label: ascii {:?}", *p.add(0)))))
                         }
@@ -109,7 +110,25 @@ impl VowpalParser {
                 let mut current_char_index:usize = HEADER_LEN;
                 let mut i_start:usize;
                 let mut i_end:usize = 0;
-
+                
+                if self.output_buffer[LABEL_OFFSET] != NO_LABEL {
+                        // if we have a label, let's check if we also have label weight
+                        while *p.add(i_end) != 0x20 { i_end += 1;}; // find space
+                        //if next character is not "|", we assume it's a example importance
+                        i_end +=1;
+                        if *p.add(i_end) != 0x7c { // this token does not start with "|", so it has to be example improtance floating point
+                                i_start = i_end;
+                                while *p.add(i_end) != 0x20 { i_end += 1;}; // find end of token (space)
+                                let importance:f32 = str::from_utf8_unchecked(&self.tmp_read_buf[i_start..i_end]).parse()?;
+                                if importance < 0.0  {
+                                        return Err(Box::new(IOError::new(ErrorKind::Other, format!("Example importance cannot be negative: {:?}! ", importance))))
+                                }
+                                //return Err(Box::new(IOError::new(ErrorKind::Other, format!("We have an example importance number {:?}! ", importance))))
+                                
+                        }
+                                              
+                }
+                
                 // Then we look for first namespace
                 while *p.add(i_end) != 0x7c { i_end += 1;};
                 i_start = i_end;
@@ -274,11 +293,25 @@ C,featureC
         
         // flush should return [999]
         let mut buf = str_to_cursor("flush");
-        assert_eq!(rr.next_vowpal(&mut buf).err().unwrap().is::<FlushError>(), true);
+        assert_eq!(rr.next_vowpal(&mut buf).err().unwrap().is::<FlushCommand>(), true);
 
         // Unrecognized label -> Error
         let mut buf = str_to_cursor("$1");
         assert_eq!(rr.next_vowpal(&mut buf).err().unwrap().is::<IOError>(), true);
+ 
+ 
+        // Example importance is negative -> Error
+        let mut buf = str_to_cursor("1 -0.1 |A a\n");
+        assert!(rr.next_vowpal(&mut buf).is_err());
+
+        // After label, there is neither namespace definition (|) nor example importance float
+        let mut buf = str_to_cursor("1 fdsa |A a\n");
+        assert!(rr.next_vowpal(&mut buf).is_err());
+        
+        // Example importance
+        let mut buf = str_to_cursor("1 0.1 |A a\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [5, 1, 2988156968 & MASK31, NULL, NULL]);
+ 
  
  
     }
