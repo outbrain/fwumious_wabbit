@@ -92,8 +92,8 @@ impl WorkerThread {
                 },
                 Err(e) =>
                     {
-                        if e.is::<parser::FlushError>() {
-                            // FlushError just causes us to flush, not to break
+                        if e.is::<parser::FlushCommand>() {
+                            // FlushCommand just causes us to flush, not to break
                             match writer.flush() {
                                 Ok(_) => {},
                                 Err(e) => { /*println!("Flushing the socket failed, dropping it");*/ return ConnectionEnd::StreamFlushError; }
@@ -211,10 +211,16 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use crate::regressor;
+    use std::io::ErrorKind;
     use mockstream::{SharedMockStream, FailingMockStream};
 
 
     impl IsEmpty for std::io::BufReader<mockstream::SharedMockStream> {
+        fn is_empty(&mut self) -> bool {
+            return true
+        }
+    }
+impl IsEmpty for std::io::BufReader<mockstream::FailingMockStream> {
         fn is_empty(&mut self) -> bool {
             return true
         }
@@ -268,16 +274,22 @@ C,featureC
         } 
         
         // Non Working stream test
-        /*
+        
         {
-            let mut mocked_stream = FailingMockStream::new();
-            let mut reader = BufReader::new(mocked_stream.clone());
-            let mut writer = BufWriter::new(mocked_stream.clone());
-            // Just passes through, as the stream is empty
-            newt.handle_connection(&mut reader, &mut writer);
+            let mut mocked_stream_ok = SharedMockStream::new();
+            let mut mocked_stream_error = FailingMockStream::new(ErrorKind::Other, "Failing", 3);
+            let mut reader = BufReader::new(mocked_stream_ok.clone());
+            let mut writer = BufWriter::new(mocked_stream_error.clone());
+            mocked_stream_ok.push_bytes_to_read(b"|A 0 |A 0");
+            // Now there will be an error
+            assert_eq!(ConnectionEnd::StreamFlushError, newt.handle_connection(&mut reader, &mut writer));
+            let mut reader = BufReader::new(mocked_stream_error.clone());
+            let mut writer = BufWriter::new(mocked_stream_error.clone());
+            // Now there will be an error
+            assert_eq!(ConnectionEnd::StreamFlushError, newt.handle_connection(&mut reader, &mut writer));
 
 
-        }*/
+        }
     //    println!("Return value {:?}", std::str::from_utf8(&x).unwrap());    
 
 
