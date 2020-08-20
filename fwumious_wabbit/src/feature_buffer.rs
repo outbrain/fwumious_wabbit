@@ -17,6 +17,7 @@ pub struct HashAndValue {
 #[derive(Clone, Debug)]
 pub struct FeatureBuffer {
     pub label: f32,
+    pub example_importance: f32,
     pub lr_buffer: Vec<HashAndValue>,
     pub ffm_buffers: Vec<Vec<HashAndValue>>
 }
@@ -39,7 +40,7 @@ macro_rules! feature_reader {
       $hash_data:ident, 
       $hash_value:ident, 
       $bl:block  ) => {
-        let namespace_desc = *$record_buffer.get_unchecked($feature_index_offset + 2);
+        let namespace_desc = *$record_buffer.get_unchecked($feature_index_offset + parser::HEADER_LEN);
         if (namespace_desc & parser::IS_NOT_SINGLE_MASK) != 0 {
             let start = ((namespace_desc >> 16) & 0x7fff) as usize; 
             let end = (namespace_desc & 0xffff) as usize;
@@ -62,6 +63,7 @@ impl FeatureBufferTranslator {
     pub fn new(model_instance: &model_instance::ModelInstance) -> FeatureBufferTranslator {
         let mut fb = FeatureBuffer {
             label: 0.0,
+            example_importance: 1.0,
             lr_buffer: Vec::new(),
             ffm_buffers: Vec::new(),
         };
@@ -87,7 +89,8 @@ impl FeatureBufferTranslator {
     pub fn translate_vowpal(&mut self, record_buffer: &[u32]) -> () {
         unsafe {
         let lr_buffer = &mut self.feature_buffer.lr_buffer;
-        self.feature_buffer.label = record_buffer[1] as f32;  // copy label
+        self.feature_buffer.label = record_buffer[parser::LABEL_OFFSET] as f32;  // copy label
+        self.feature_buffer.example_importance = record_buffer[parser::EXAMPLE_IMPORTANCE_OFFSET] as f32;  // copy label
         let mut output_len:usize = 0;
         let mut hashes_vec_in : &mut Vec<HashAndValue> = &mut self.hashes_vec_in;
         let mut hashes_vec_out : &mut Vec<HashAndValue> = &mut self.hashes_vec_out;
@@ -164,7 +167,7 @@ mod tests {
     use super::*;
 
     fn add_header(v2: Vec<u32>) -> Vec<u32> {
-        let mut rr: Vec<u32> = vec![100, 1];
+        let mut rr: Vec<u32> = vec![100, 1, 1.0f32.to_bits()];
         rr.extend(v2);
         rr
     }
@@ -206,7 +209,7 @@ mod tests {
         fbt.translate_vowpal(&rb);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}]);
 
-        let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(3,7), 0xfea, 1.0f32.to_bits(), 0xfeb, 1.0f32.to_bits()]);
+        let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(4,8), 0xfea, 1.0f32.to_bits(), 0xfeb, 1.0f32.to_bits()]);
         fbt.translate_vowpal(&rb);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}, HashAndValue {hash:0xfeb, value:1.0}]);
     }
@@ -310,7 +313,7 @@ mod tests {
         mi.ffm_fields.push(vec![0,1]);   // two namespaces in a field
         mi.ffm_k = 1;
         let mut fbt = FeatureBufferTranslator::new(&mi);
-        let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(4,8), 0xfec, 0xfea, 2.0f32.to_bits(), 0xfeb, 3.0f32.to_bits()]);
+        let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(5,9), 0xfec, 0xfea, 2.0f32.to_bits(), 0xfeb, 3.0f32.to_bits()]);
         fbt.translate_vowpal(&rb);
         assert_eq!(fbt.feature_buffer.ffm_buffers[0], vec![ HashAndValue{hash: 0xfea, value: 2.0}, 
                                                             HashAndValue{hash: 0xfeb, value: 3.0}]);

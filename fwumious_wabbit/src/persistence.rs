@@ -159,6 +159,7 @@ B,featureB
     fn lr_vec(v:Vec<feature_buffer::HashAndValue>) -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {
                     label: 0.0,
+                    example_importance: 1.0,
                     lr_buffer: v,
                     ffm_buffers: Vec::new(),
         }
@@ -210,6 +211,7 @@ B,featureB
     fn ffm_vec(v:Vec<Vec<feature_buffer::HashAndValue>>) -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {
                     label: 0.0,
+                    example_importance: 1.0,
                     lr_buffer: Vec::new(),
                     ffm_buffers: v,
         }
