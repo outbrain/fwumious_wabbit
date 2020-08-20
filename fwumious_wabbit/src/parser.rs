@@ -11,9 +11,10 @@ use std::str;
 use crate::vwmap;
 
 const RECBUF_LEN:usize = 2048;
-pub const HEADER_LEN:usize = 2;
+pub const HEADER_LEN:usize = 3;
 pub const NAMESPACE_DESC_LEN:usize = 1;
 pub const LABEL_OFFSET:usize = 1;
+pub const EXAMPLE_IMPORTANCE_OFFSET:usize = 2;
 pub const IS_NOT_SINGLE_MASK : u32 = 1u32 << 31;
 pub const MASK31: u32 = !IS_NOT_SINGLE_MASK;
 pub const NULL: u32= IS_NOT_SINGLE_MASK; // null is just an exact IS_NOT_SINGLE_MASK
@@ -43,7 +44,7 @@ impl fmt::Display for FlushCommand {
 organization of records buffer 
 (u32) length of the output record
 (u32) label
-TODO: (f32) Example importance (default: 1.0)
+(f32) Example importance (default: 1.0)
 (union_u u32)[number of features], where:
     -- if the most significant bit is zero
             - this is a a namespace with a single feature
@@ -124,11 +125,13 @@ impl VowpalParser {
                                         return Err(Box::new(IOError::new(ErrorKind::Other, format!("Example importance cannot be negative: {:?}! ", importance))))
                                 }
                                 //return Err(Box::new(IOError::new(ErrorKind::Other, format!("We have an example importance number {:?}! ", importance))))
-                                
-                        }
-                                              
-                }
-                
+                                self.output_buffer[EXAMPLE_IMPORTANCE_OFFSET] = importance.to_bits();
+                        } else {
+                                self.output_buffer[EXAMPLE_IMPORTANCE_OFFSET] = FLOAT32_ONE;
+                        }                                              
+                } else {
+                        self.output_buffer[EXAMPLE_IMPORTANCE_OFFSET] = FLOAT32_ONE;
+                }                
                 // Then we look for first namespace
                 while *p.add(i_end) != 0x7c { i_end += 1;};
                 i_start = i_end;
@@ -246,27 +249,39 @@ C,featureC
         let mut rr = VowpalParser::new(&vw);
         // we test a single record, single namespace
         let mut buf = str_to_cursor("1 |A a\n");
-        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [5, 1, 2988156968 & MASK31, NULL, NULL]);
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6,  1, FLOAT32_ONE,  
+                                                        2988156968 & MASK31, 
+                                                        NULL, 
+                                                        NULL]);
         let mut buf = str_to_cursor("-1 |B b\n");
-        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [5, 0, NULL, 2422381320 & MASK31, NULL]);
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 0, FLOAT32_ONE,
+                                                        NULL, 
+                                                        2422381320 & MASK31, 
+                                                        NULL]);
         // single namespace with two features
         let mut buf = str_to_cursor("1 |A a b\n");
-        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [9, 1, 
-                                                        nd(5,9) | IS_NOT_SINGLE_MASK, 	// |A
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [10, 1, FLOAT32_ONE,  
+                                                        nd(6,10) | IS_NOT_SINGLE_MASK, 	// |A
                                                         NULL, 				// |B 
                                                         NULL, 				// |C
                                                         2988156968 & MASK31, FLOAT32_ONE,   // |A a
                                                         3529656005 & MASK31, FLOAT32_ONE]); // |A b
         // two namespaces
         let mut buf = str_to_cursor("-1 |A a |B b\n");
-        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [5, 0, 2988156968 & MASK31, 2422381320 & MASK31, NULL]);
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 0, FLOAT32_ONE,
+                                                        2988156968 & MASK31, 
+                                                        2422381320 & MASK31, 
+                                                        NULL]);
         
         // only single letter namespaces are allowed
         let mut buf = str_to_cursor("1 |MORE_THAN_A_LETTER a\n");
         assert!(rr.next_vowpal(&mut buf).is_err());
         // namespace weight test
         let mut buf = str_to_cursor("1 |A:1.0 a\n");
-        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [5, 1, 2988156968 & MASK31, NULL, NULL]);
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 1, FLOAT32_ONE,
+                                                        2988156968 & MASK31, 
+                                                        NULL, 
+                                                        NULL]);
         // not a parsable number
         let mut buf = str_to_cursor("1 |A:not_a_parsable_number a\n");
         assert!(rr.next_vowpal(&mut buf).is_err());
@@ -275,8 +290,8 @@ C,featureC
         assert!(rr.next_vowpal(&mut buf).is_err());
         // namespace weight test
         let mut buf = str_to_cursor("1 |A:2.0 a\n");
-        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [7, 1, 
-                                                        nd(5, 7) | IS_NOT_SINGLE_MASK, 
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [8, 1, FLOAT32_ONE, 
+                                                        nd(6, 8) | IS_NOT_SINGLE_MASK, 
                                                         NULL, 
                                                         NULL, 
                                                         2988156968 & MASK31, 2.0f32.to_bits()]);
@@ -284,7 +299,10 @@ C,featureC
         // LABEL TESTS
         // without label
         let mut buf = str_to_cursor("|A a\n");
-        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [5, NO_LABEL, 2988156968 & MASK31, NULL, NULL]);
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, NO_LABEL, FLOAT32_ONE,
+                                                        2988156968 & MASK31, 
+                                                        NULL, 
+                                                        NULL]);
                 
         //println!("{:?}", rr.output_buffer);
         // now we test if end-of-stream works correctly
@@ -310,7 +328,10 @@ C,featureC
         
         // Example importance
         let mut buf = str_to_cursor("1 0.1 |A a\n");
-        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [5, 1, 2988156968 & MASK31, NULL, NULL]);
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 1, 0.1f32.to_bits(),
+                                                        2988156968 & MASK31, 
+                                                        NULL, 
+                                                        NULL]);
  
  
  
