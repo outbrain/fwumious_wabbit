@@ -280,8 +280,8 @@ impl Regressor {
 
         let prediction_probability:f32 = (1.0+(prediction).exp()).recip();
 
-        if update {
-            let general_gradient = y - prediction_probability;
+        if update && fb.example_importance != 0.0 {
+            let general_gradient = (y - prediction_probability) * fb.example_importance;
             specialize_boolean!(self.fastmath, FASTMATH, {
                 for i in 0..local_buf_len {
                     let feature_index = local_data.get_unchecked(i).index as usize;
@@ -384,6 +384,7 @@ mod tests {
     fn lr_vec(v:Vec<feature_buffer::HashAndValue>) -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {
                     label: 0.0,
+                    example_importance: 1.0,
                     lr_buffer: v,
                     ffm_buffers: Vec::new(),
         }
@@ -529,6 +530,7 @@ mod tests {
     fn ffm_vec(v:Vec<Vec<feature_buffer::HashAndValue>>) -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {
                     label: 0.0,
+                    example_importance: 1.0,
                     lr_buffer: Vec::new(),
                     ffm_buffers: v,
         }
@@ -590,6 +592,26 @@ mod tests {
 
     }
 
+
+    #[test]
+    fn test_example_importance() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.learning_rate = 0.1;
+        mi.power_t = 0.0;
+        mi.bit_precision = 18;
+        
+        let mut rr = Regressor::new(&mi);
+        let mut p: f32;
+        
+        let mut fb_instance = lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);
+        fb_instance.example_importance = 0.5;
+        p = rr.learn(&fb_instance, true, 0);
+        assert_eq!(p, 0.5);
+        p = rr.learn(&fb_instance, true, 0);
+        assert_eq!(p, 0.49375027);
+        p = rr.learn(&fb_instance, true, 0);
+        assert_eq!(p, 0.4875807);
+    }
 
 }
 
