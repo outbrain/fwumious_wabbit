@@ -89,7 +89,7 @@ impl FeatureBufferTranslator {
     pub fn translate_vowpal(&mut self, record_buffer: &[u32]) -> () {
         unsafe {
         let lr_buffer = &mut self.feature_buffer.lr_buffer;
-        self.feature_buffer.label = record_buffer[parser::LABEL_OFFSET] as f32;  // copy label
+        self.feature_buffer.example_importance = f32::from_bits(record_buffer[parser::EXAMPLE_IMPORTANCE_OFFSET]);        
         self.feature_buffer.example_importance = record_buffer[parser::EXAMPLE_IMPORTANCE_OFFSET] as f32;  // copy label
         let mut output_len:usize = 0;
         let mut hashes_vec_in : &mut Vec<HashAndValue> = &mut self.hashes_vec_in;
