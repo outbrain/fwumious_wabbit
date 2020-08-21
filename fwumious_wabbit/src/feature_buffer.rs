@@ -90,7 +90,7 @@ impl FeatureBufferTranslator {
         unsafe {
         let lr_buffer = &mut self.feature_buffer.lr_buffer;
         self.feature_buffer.example_importance = f32::from_bits(record_buffer[parser::EXAMPLE_IMPORTANCE_OFFSET]);        
-        self.feature_buffer.example_importance = record_buffer[parser::EXAMPLE_IMPORTANCE_OFFSET] as f32;  // copy label
+        self.feature_buffer.example_importance = f32::from_bits(record_buffer[parser::EXAMPLE_IMPORTANCE_OFFSET]);    
         let mut output_len:usize = 0;
         let mut hashes_vec_in : &mut Vec<HashAndValue> = &mut self.hashes_vec_in;
         let mut hashes_vec_out : &mut Vec<HashAndValue> = &mut self.hashes_vec_out;
@@ -204,6 +204,7 @@ mod tests {
         let rb = add_header(vec![parser::NULL]); // no feature
         fbt.translate_vowpal(&rb);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]); // vw compatibility - no feature is no feature
+        
 
         let rb = add_header(vec![0xfea]);
         fbt.translate_vowpal(&rb);
@@ -322,8 +323,19 @@ mod tests {
                                                             HashAndValue{hash: 0xfec, value: 1.0}]);
     }
 
-
-
+    #[test]
+    fn test_example_importance() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
+        mi.add_constant_feature = false;
+        mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
+                                                        feature_indices: vec![0], 
+                                                        weight: 1.0});
+        
+        let mut fbt = FeatureBufferTranslator::new(&mi);
+        let mut rb = add_header(vec![parser::NULL]); // no feature
+        fbt.translate_vowpal(&rb);
+        assert_eq!(fbt.feature_buffer.example_importance, 1.0); // Did example importance get parsed correctly
+    }
 
 }
 
