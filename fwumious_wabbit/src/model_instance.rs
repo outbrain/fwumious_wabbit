@@ -45,7 +45,13 @@ pub struct ModelInstance {
     pub ffm_init_center: f32,
     #[serde(default = "default_f32_zero")]
     pub ffm_init_width: f32,
-    
+    // these are only used for learning, so it doesnt matter they got set to zero as default        
+    #[serde(default = "default_f32_zero")]
+    pub ffm_learning_rate: f32,    
+    #[serde(default = "default_f32_zero")]
+    pub ffm_power_t: f32,
+
+
     
 }
 
@@ -87,10 +93,12 @@ impl ModelInstance {
     pub fn new_empty() -> Result<ModelInstance, Box<dyn Error>> {
         let mut mi = ModelInstance {
             learning_rate: 0.5, // vw default
+            ffm_learning_rate: 0.5, // vw default
             minimum_learning_rate: 0.0, 
             bit_precision: 18,      // vw default
             hash_mask: (1 << 18) -1,
             power_t: 0.5,
+            ffm_power_t: 0.5,
             add_constant_feature: true,
             feature_combo_descs: Vec::new(),
             ffm_fields: Vec::new(),
@@ -188,6 +196,11 @@ impl ModelInstance {
         if let Some(val) = cl.value_of("learning_rate") {
             mi.learning_rate = val.parse()?;
         }
+        if let Some(val) = cl.value_of("ffm_learning_rate") {
+            mi.ffm_learning_rate = val.parse()?;
+        } else {
+            mi.ffm_learning_rate = mi.learning_rate;
+        }
 
         if let Some(val) = cl.value_of("minimum_learning_rate") {
             mi.minimum_learning_rate = val.parse()?;
@@ -195,6 +208,11 @@ impl ModelInstance {
 
         if let Some(val) = cl.value_of("power_t") {
             mi.power_t = val.parse()?;
+        }
+        if let Some(val) = cl.value_of("ffm_power_t") {
+            mi.ffm_power_t = val.parse()?;
+        } else {
+            mi.ffm_power_t = mi.power_t;
         }
         if let Some(val) = cl.value_of("link") {
             if val != "logistic" {
