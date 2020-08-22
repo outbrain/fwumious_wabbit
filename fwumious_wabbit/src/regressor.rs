@@ -123,9 +123,9 @@ impl Regressor {
         if model_instance.ffm_k > 0 {       
             if model_instance.ffm_init_width == 0.0 {
                 // Initialization, from ffm.pdf with added division by 100 and centered on zero (determined empirically)
-                rg.ffm_one_over_k_root = 1.0 / (rg.ffm_k as f32).sqrt();
+                rg.ffm_one_over_k_root = 1.0 / (rg.ffm_k as f32).sqrt() / 10.0;
                 for i in 0..ffm_weights_len {
-                    rg.weights[(rg.ffm_weights_offset + i) as usize].weight = (0.02*merand48((rg.ffm_weights_offset+i) as u64)-0.01) * rg.ffm_one_over_k_root;
+                    rg.weights[(rg.ffm_weights_offset + i) as usize].weight = (0.2*merand48((rg.ffm_weights_offset+i) as u64)-0.1) * rg.ffm_one_over_k_root;
                     //rng.gen_range(-0.1 * rg.ffm_one_over_k_root , 0.1 * rg.ffm_one_over_k_root );
                     // we set FFM gradients to 1.0, so we avoid NaN updates due to adagrad (accumulated_squared_gradients+grad^2).powf(negative_number) * 0.0 
                     rg.weights[(rg.ffm_weights_offset + i) as usize].acc_grad = 1.0;
@@ -216,7 +216,7 @@ impl Regressor {
                             let mut left_weight_p = left_weight_p_orig;
                             let mut right_weight_p = (self.ffm_weights_offset + ((right_hash.hash + i as u32 * self.ffm_separate_vectors_k) & self.ffm_hashmask)) as usize;
                             //let mut iw_weight_p = (self.ffm_iw_weights_offset as usize + self.ffm_k as usize * 2*(i * fb.ffm_buffers.len() + (i+1+j))) as usize;
-                                
+                            
                             for _ in 0..self.ffm_k as usize {
   //                              let iw_weight = self.weights.get_unchecked(iw_weight_p as usize);
                                 let left_weight = self.weights.get_unchecked(left_weight_p).weight;
