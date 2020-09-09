@@ -33,3 +33,5 @@ mockstream = "0.0.3"
 
 [profile.release]
 debug = false
+#lto = true
+#panic = 'abort'
