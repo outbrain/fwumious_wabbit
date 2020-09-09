@@ -69,9 +69,6 @@ macro_rules! specialize_boolean {
 }
 
 
-static mut SUM_GRADIENTS: f64 = 0.0;
-static mut NUM_GRADIENTS: u64 = 0;
-
 impl Regressor {
     
     pub fn new(model_instance: &model_instance::ModelInstance) -> Regressor {
