@@ -14,12 +14,20 @@ pub struct HashAndValue {
     pub value: f32
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct HashAndValueAndSeq {
+    pub hash: u32,
+    pub value: f32,
+    pub seq: u32,
+}
+
+
 #[derive(Clone, Debug)]
 pub struct FeatureBuffer {
     pub label: f32,
     pub example_importance: f32,
     pub lr_buffer: Vec<HashAndValue>,
-    pub ffm_buffers: Vec<Vec<HashAndValue>>
+    pub ffm_buffers: Vec<Vec<HashAndValueAndSeq>>
 }
 
 
@@ -144,13 +152,16 @@ impl FeatureBufferTranslator {
             // this is for compatibility with vowpal
             // but in theory we could support also combo features
             let ffm_buffers = &mut self.feature_buffer.ffm_buffers;
+            let mut sequence_number:u32 = 0;
             for (field_n, ffm_field) in self.model_instance.ffm_fields.iter().enumerate() {
                 let mut field_hashes_buffer = &mut ffm_buffers[field_n];
                 field_hashes_buffer.truncate(0);
                 for feature_index in ffm_field {
                     feature_reader!(record_buffer, feature_index, hash_data, hash_value, {
-                            field_hashes_buffer.push(HashAndValue {hash: hash_data,
-                                                                    value: hash_value});
+                            field_hashes_buffer.push(HashAndValueAndSeq {hash: hash_data,
+                                                                    value: hash_value,
+                                                                    seq: sequence_number});
+                            sequence_number += 1;
                     });
                 }
             }
@@ -303,7 +314,7 @@ mod tests {
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![0xfea]);
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.feature_buffer.ffm_buffers[0], vec![HashAndValue{hash: 0xfea, value: 1.0}]);
+        assert_eq!(fbt.feature_buffer.ffm_buffers[0], vec![HashAndValueAndSeq{hash: 0xfea, value: 1.0, seq: 0}]);
     }
 
     #[test]
@@ -316,11 +327,11 @@ mod tests {
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(5,9), 0xfec, 0xfea, 2.0f32.to_bits(), 0xfeb, 3.0f32.to_bits()]);
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.feature_buffer.ffm_buffers[0], vec![ HashAndValue{hash: 0xfea, value: 2.0}, 
-                                                            HashAndValue{hash: 0xfeb, value: 3.0}]);
-        assert_eq!(fbt.feature_buffer.ffm_buffers[1], vec![ HashAndValue{hash: 0xfea, value: 2.0}, 
-                                                            HashAndValue{hash: 0xfeb, value: 3.0}, 
-                                                            HashAndValue{hash: 0xfec, value: 1.0}]);
+        assert_eq!(fbt.feature_buffer.ffm_buffers[0], vec![ HashAndValueAndSeq{hash: 0xfea, value: 2.0, seq: 0}, 
+                                                            HashAndValueAndSeq{hash: 0xfeb, value: 3.0, seq: 1}]);
+        assert_eq!(fbt.feature_buffer.ffm_buffers[1], vec![ HashAndValueAndSeq{hash: 0xfea, value: 2.0, seq: 2}, 
+                                                            HashAndValueAndSeq{hash: 0xfeb, value: 3.0, seq: 3}, 
+                                                            HashAndValueAndSeq{hash: 0xfec, value: 1.0, seq: 4}]);
     }
 
     #[test]
