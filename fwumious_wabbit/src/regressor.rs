@@ -8,6 +8,7 @@ use merand48::*;
 use crate::model_instance;
 use crate::feature_buffer;
 use crate::feature_buffer::HashAndValue;
+use crate::feature_buffer::HashAndValueAndSeq;
 
 
 const ONE:u32 = 1065353216;// this is 1.0u32.to_bits(), but to_bits isn't const function yet in rust
@@ -539,7 +540,7 @@ mod tests {
     }
 
 /* FFM TESTS */
-    fn ffm_vec(v:Vec<Vec<feature_buffer::HashAndValue>>) -> feature_buffer::FeatureBuffer {
+    fn ffm_vec(v:Vec<Vec<feature_buffer::HashAndValueAndSeq>>) -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {
                     label: 0.0,
                     example_importance: 1.0,
@@ -570,7 +571,7 @@ mod tests {
         
         // Nothing can be learned from a single field
         let mut rr = Regressor::new(&mi);
-        let ffm_buf = ffm_vec(vec![vec![HashAndValue{hash:1, value: 1.0}]]);
+        let ffm_buf = ffm_vec(vec![vec![HashAndValueAndSeq{hash:1, value: 1.0, seq: 0}]]);
         p = rr.learn(&ffm_buf, true, 0);
         assert_eq!(p, 0.5);
         p = rr.learn(&ffm_buf, true, 0);
@@ -581,8 +582,8 @@ mod tests {
         let mut rr = Regressor::new(&mi);
         ffm_fixed_init(&mut rr);
         let ffm_buf = ffm_vec(vec![
-                                  vec![HashAndValue{hash:1, value: 1.0}],
-                                  vec![HashAndValue{hash:100, value: 1.0}]
+                                  vec![HashAndValueAndSeq{hash:1, value: 1.0, seq: 0}],
+                                  vec![HashAndValueAndSeq{hash:100, value: 1.0, seq: 1}]
                                   ]);
         p = rr.learn(&ffm_buf, true, 0);
         assert_eq!(p, 0.7310586); 
@@ -593,8 +594,8 @@ mod tests {
         let mut rr = Regressor::new(&mi);
         ffm_fixed_init(&mut rr);
         let ffm_buf = ffm_vec(vec![
-                                  vec![HashAndValue{hash:1, value: 2.0}],
-                                  vec![HashAndValue{hash:100, value: 2.0}]
+                                  vec![HashAndValueAndSeq{hash:1, value: 2.0, seq: 0}],
+                                  vec![HashAndValueAndSeq{hash:100, value: 2.0, seq: 1}]
                                   ]);
         p = rr.learn(&ffm_buf, true, 0);
         assert_eq!(p, 0.98201376);

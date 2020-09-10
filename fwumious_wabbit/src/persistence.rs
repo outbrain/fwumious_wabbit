@@ -135,6 +135,7 @@ mod tests {
     use super::*;
     use crate::feature_buffer;
     use crate::feature_buffer::HashAndValue;
+    use crate::feature_buffer::HashAndValueAndSeq;
     use std::sync::Arc;
     use regressor::Regressor;
 
@@ -208,7 +209,7 @@ B,featureB
     }
 
 
-    fn ffm_vec(v:Vec<Vec<feature_buffer::HashAndValue>>) -> feature_buffer::FeatureBuffer {
+    fn ffm_vec(v:Vec<Vec<feature_buffer::HashAndValueAndSeq>>) -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {
                     label: 0.0,
                     example_importance: 1.0,
@@ -237,8 +238,8 @@ B,featureB
 
         ffm_fixed_init(&mut rr);
         let ffm_buf = ffm_vec(vec![
-                                  vec![HashAndValue{hash:1, value: 1.0}],
-                                  vec![HashAndValue{hash:100, value: 2.0}]
+                                  vec![HashAndValueAndSeq{hash:1, value: 1.0, seq: 0}],
+                                  vec![HashAndValueAndSeq{hash:100, value: 2.0, seq: 1}]
                                   ]);
         p = rr.learn(&ffm_buf, true, 0);
         assert_eq!(p, 0.880797); 
@@ -274,29 +275,29 @@ B,featureB
         //println!("{:?}", re2.weights[0]);
         let mut p: f32;
         let ffm_buf = ffm_vec(vec![
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
-                                  vec![HashAndValue{hash:0, value: 2.0}, HashAndValue{hash:0, value: 1.5}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 1}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 2}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 1}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 3}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 1}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 1}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 1}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 1}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 1}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 1}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 1}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 1}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 1}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 1}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 1}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 1}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 1}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 1}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 1}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 1}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 1}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 1}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
+                                  vec![HashAndValueAndSeq{hash:0, value: 2.0, seq: 1}, HashAndValueAndSeq{hash:0, value: 1.5, seq: 1}, ],
                                   ]);
 
         // predict with the same feature vector
