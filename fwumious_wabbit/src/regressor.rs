@@ -43,7 +43,7 @@ pub struct Regressor {
     fastmath_lr_lut: [[f32; FASTMATH_LR_LUT_SIZE]; 2],
     ffm_iw_weights_offset: u32,
     ffm_k_threshold: f32,
-
+    ffm_k_bits: u8
 }
 
 #[derive(Clone)]
@@ -81,6 +81,7 @@ impl Regressor {
                             weights: Vec::new(), 
                             ffm_weights_offset: 0,
                             ffm_k: 0,
+                            ffm_k_bits: 0,
                             ffm_hashmask: 0,
                             ffm_one_over_k_root: 0.0,
                             fastmath: model_instance.fastmath,
@@ -106,6 +107,8 @@ impl Regressor {
                 ffm_bits_for_dimensions += 1;
             }
             let dimensions_mask = (1 << ffm_bits_for_dimensions) - 1;
+            rg.ffm_k_bits =  ffm_bits_for_dimensions;
+            //println!("{}", rg.ffm_k_bits);
             // in ffm we will simply mask the lower bits, so we spare them for k
             rg.ffm_hashmask = ((1 << model_instance.ffm_bit_precision) -1) ^ dimensions_mask;
         }
@@ -169,7 +172,7 @@ impl Regressor {
             index: u32,
             accgradient: f32,
             value: f32,
-            weight: f32
+  //          weight: f32
         }
         unsafe {
         let y = fb.label; // 0.0 or 1.0
@@ -199,18 +202,18 @@ impl Regressor {
         if self.ffm_k > 0 {
             let ffm_buf_start:u32 = local_buf_len as u32;
             let max_seq = fb.ffm_buffers.last().unwrap().last().unwrap().seq as usize;
-            local_buf_len = ffm_buf_start as usize + max_seq + self.ffm_k as usize;
             let ffm_contra_buffers_len = (fb.ffm_buffers.len()) as u32;
+            local_buf_len = ffm_buf_start as usize + max_seq + (self.ffm_k) as usize;
             for (i, left_fbuf) in fb.ffm_buffers.iter().enumerate() {
                 for left_hash in left_fbuf {
                     for j in 0..ffm_contra_buffers_len {
-                        let left_weight_p_orig = (self.ffm_weights_offset as u32 + ((left_hash.hash + j * self.ffm_k) & self.ffm_hashmask)) as u32;
-                        let left_local_index = ffm_buf_start + left_hash.seq + j * self.ffm_k;
+                        let left_weight_p_orig = (self.ffm_weights_offset as u32 + ((left_hash.hash + (j << self.ffm_k_bits)) & self.ffm_hashmask)) as u32;
+                        let left_local_index = ffm_buf_start + left_hash.seq + (j << self.ffm_k_bits);
                         for k in 0..self.ffm_k as u32 {
                             local_data.get_unchecked_mut((left_local_index + k) as usize).index = left_weight_p_orig + k;
                             local_data.get_unchecked_mut((left_local_index + k) as usize).accgradient = self.weights.get_unchecked((left_weight_p_orig + k) as usize).acc_grad; // accumulated errors
                             local_data.get_unchecked_mut((left_local_index + k) as usize).value = 0.0;
-                            local_data.get_unchecked_mut((left_local_index + k) as usize).weight = self.weights.get_unchecked((left_weight_p_orig + k) as usize).weight;
+//                            local_data.get_unchecked_mut((left_local_index + k) as usize).weight = self.weights.get_unchecked((left_weight_p_orig + k) as usize).weight;
                         }
                     }
                 }
@@ -220,19 +223,22 @@ impl Regressor {
                 for left_hash in left_fbuf {
                     for (j, right_fbuf) in fb.ffm_buffers[ii+1 ..].iter().enumerate() {
                         let j:u32 = j as u32;
-                        let left_local_index = ffm_buf_start + left_hash.seq + (i+j+1) * self.ffm_k;
+                        let left_local_index = ffm_buf_start + left_hash.seq + ((i+j+1) << self.ffm_k_bits);
                         for right_hash in right_fbuf {
                             let right_feature_value = right_hash.value;
-                            let right_local_index = ffm_buf_start + right_hash.seq + i * self.ffm_k;
+                            let right_local_index = ffm_buf_start + right_hash.seq + (i << self.ffm_k_bits);
                             let joint_value = left_hash.value * right_hash.value;
-                            for k in 0..self.ffm_k as usize {
-                                let k:u32 = k as u32;
-                                let left_hash_weight  = local_data.get_unchecked_mut((left_local_index + k) as usize).weight;
-                                let right_hash_weight = local_data.get_unchecked_mut((right_local_index + k) as usize).weight;
-                                local_data.get_unchecked_mut((left_local_index + k) as usize).value  += right_hash_weight * joint_value; // first derivate
+                            for k in 0..self.ffm_k {
+//                                let left_hash_weight  = local_data.get_unchecked_mut((left_local_index + k) as usize).weight;
+//                                let right_hash_weight = local_data.get_unchecked_mut((right_local_index + k) as usize).weight;
+                                let left_hash_weight  = self.weights.get_unchecked((local_data.get_unchecked_mut((left_local_index) as usize).index +k)as usize).weight;
+                                let right_hash_weight = self.weights.get_unchecked((local_data.get_unchecked_mut((right_local_index) as usize).index +k) as usize).weight;
+                                
+                                let right_side = right_hash_weight * joint_value;
+                                local_data.get_unchecked_mut((left_local_index + k) as usize).value  += right_side; // first derivate
                                 local_data.get_unchecked_mut((right_local_index + k) as usize).value += left_hash_weight  * joint_value; // first derivate
                                 
-                                wsum += left_hash_weight * right_hash_weight * joint_value;
+                                wsum += left_hash_weight * right_side;
                                 //if local_data.get_unchecked_mut(local_buf_len-1).accgradient < self.ffm_k_threshold && 
                                 //   local_data.get_unchecked_mut(local_buf_len-2).accgradient < self.ffm_k_threshold {
                                 //    break;
