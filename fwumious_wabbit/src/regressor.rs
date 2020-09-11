@@ -172,7 +172,7 @@ impl Regressor {
             index: u32,
             accgradient: f32,
             value: f32,
-  //          weight: f32
+            weight: f32
         }
         unsafe {
         let y = fb.label; // 0.0 or 1.0
@@ -203,17 +203,18 @@ impl Regressor {
             let ffm_buf_start:u32 = local_buf_len as u32;
             let max_seq = fb.ffm_buffers.last().unwrap().last().unwrap().seq as usize;
             let ffm_contra_buffers_len = (fb.ffm_buffers.len()) as u32;
-            local_buf_len = ffm_buf_start as usize + max_seq + (self.ffm_k) as usize;
+            local_buf_len = ffm_buf_start as usize + max_seq + (self.ffm_k * ffm_contra_buffers_len) as usize;
             for (i, left_fbuf) in fb.ffm_buffers.iter().enumerate() {
                 for left_hash in left_fbuf {
                     for j in 0..ffm_contra_buffers_len {
-                        let left_weight_p_orig = (self.ffm_weights_offset as u32 + ((left_hash.hash + (j << self.ffm_k_bits)) & self.ffm_hashmask)) as u32;
-                        let left_local_index = ffm_buf_start + left_hash.seq + (j << self.ffm_k_bits);
+                        let row = j * self.ffm_k;
+                        let left_weight_p_orig = (self.ffm_weights_offset as u32 + ((left_hash.hash + row) & self.ffm_hashmask)) as u32;
+                        let left_local_index = ffm_buf_start + left_hash.seq + row;
                         for k in 0..self.ffm_k as u32 {
                             local_data.get_unchecked_mut((left_local_index + k) as usize).index = left_weight_p_orig + k;
                             local_data.get_unchecked_mut((left_local_index + k) as usize).accgradient = self.weights.get_unchecked((left_weight_p_orig + k) as usize).acc_grad; // accumulated errors
                             local_data.get_unchecked_mut((left_local_index + k) as usize).value = 0.0;
-//                            local_data.get_unchecked_mut((left_local_index + k) as usize).weight = self.weights.get_unchecked((left_weight_p_orig + k) as usize).weight;
+                            local_data.get_unchecked_mut((left_local_index + k) as usize).weight = self.weights.get_unchecked((left_weight_p_orig + k) as usize).weight;
                         }
                     }
                 }
@@ -223,16 +224,16 @@ impl Regressor {
                 for left_hash in left_fbuf {
                     for (j, right_fbuf) in fb.ffm_buffers[ii+1 ..].iter().enumerate() {
                         let j:u32 = j as u32;
-                        let left_local_index = ffm_buf_start + left_hash.seq + ((i+j+1) << self.ffm_k_bits);
+                        let left_local_index = ffm_buf_start + left_hash.seq + ((i+j+1) * self.ffm_k);
                         for right_hash in right_fbuf {
                             let right_feature_value = right_hash.value;
-                            let right_local_index = ffm_buf_start + right_hash.seq + (i << self.ffm_k_bits);
+                            let right_local_index = ffm_buf_start + right_hash.seq + (i * self.ffm_k);
                             let joint_value = left_hash.value * right_hash.value;
                             for k in 0..self.ffm_k {
-//                                let left_hash_weight  = local_data.get_unchecked_mut((left_local_index + k) as usize).weight;
-//                                let right_hash_weight = local_data.get_unchecked_mut((right_local_index + k) as usize).weight;
-                                let left_hash_weight  = self.weights.get_unchecked((local_data.get_unchecked_mut((left_local_index) as usize).index +k)as usize).weight;
-                                let right_hash_weight = self.weights.get_unchecked((local_data.get_unchecked_mut((right_local_index) as usize).index +k) as usize).weight;
+                                let left_hash_weight  = local_data.get_unchecked_mut((left_local_index + k) as usize).weight;
+                                let right_hash_weight = local_data.get_unchecked_mut((right_local_index + k) as usize).weight;
+                        //        let left_hash_weight  = self.weights.get_unchecked((local_data.get_unchecked_mut((left_local_index) as usize).index +k) as usize).weight;
+                        //        let right_hash_weight = self.weights.get_unchecked((local_data.get_unchecked_mut((right_local_index) as usize).index +k) as usize).weight;
                                 
                                 let right_side = right_hash_weight * joint_value;
                                 local_data.get_unchecked_mut((left_local_index + k) as usize).value  += right_side; // first derivate
@@ -284,9 +285,9 @@ impl Regressor {
             specialize_boolean!(self.fastmath, FASTMATH, {
                 for i in 0..lr_fbuf_len {
                     let feature_value = local_data.get_unchecked(i).value;
-                    if feature_value == 0.0{
-                        continue;
-                    }
+//                    if feature_value == 0.0{
+  //                      continue;
+    //                }
                     let feature_index = local_data.get_unchecked(i).index as usize;
                     let gradient = general_gradient * feature_value;
                     let gradient_squared = gradient * gradient;
@@ -304,8 +305,11 @@ impl Regressor {
                 }
                 
                 for i in lr_fbuf_len..local_buf_len {
-                    let feature_index = local_data.get_unchecked(i).index as usize;
                     let feature_value = local_data.get_unchecked(i).value;
+                    if feature_value == 0.0{
+                        continue;
+                    }
+                    let feature_index = local_data.get_unchecked(i).index as usize;
                     let gradient = general_gradient * feature_value;
                     let gradient_squared = gradient * gradient;
                     self.weights.get_unchecked_mut(feature_index).acc_grad += gradient_squared;
