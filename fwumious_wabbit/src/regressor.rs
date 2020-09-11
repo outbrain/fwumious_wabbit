@@ -211,10 +211,12 @@ impl Regressor {
                         let left_weight_p_orig = (self.ffm_weights_offset as u32 + ((left_hash.hash + row) & self.ffm_hashmask)) as u32;
                         let left_local_index = ffm_buf_start + left_hash.seq + row;
                         for k in 0..self.ffm_k as u32 {
-                            local_data.get_unchecked_mut((left_local_index + k) as usize).index = left_weight_p_orig + k;
-                            local_data.get_unchecked_mut((left_local_index + k) as usize).accgradient = self.weights.get_unchecked((left_weight_p_orig + k) as usize).acc_grad; // accumulated errors
-                            local_data.get_unchecked_mut((left_local_index + k) as usize).value = 0.0;
-                            local_data.get_unchecked_mut((left_local_index + k) as usize).weight = self.weights.get_unchecked((left_weight_p_orig + k) as usize).weight;
+                            let llik = (left_local_index + k) as usize;
+                            let lwpok = (left_weight_p_orig + k) as usize;
+                            local_data.get_unchecked_mut(llik).index = left_weight_p_orig + k;
+                            local_data.get_unchecked_mut(llik).accgradient = self.weights.get_unchecked(lwpok).acc_grad; // accumulated errors
+                            local_data.get_unchecked_mut(llik).value = 0.0;
+                            local_data.get_unchecked_mut(llik).weight = self.weights.get_unchecked(lwpok).weight;
                         }
                     }
                 }
@@ -230,14 +232,17 @@ impl Regressor {
                             let right_local_index = ffm_buf_start + right_hash.seq + (i * self.ffm_k);
                             let joint_value = left_hash.value * right_hash.value;
                             for k in 0..self.ffm_k {
-                                let left_hash_weight  = local_data.get_unchecked_mut((left_local_index + k) as usize).weight;
-                                let right_hash_weight = local_data.get_unchecked_mut((right_local_index + k) as usize).weight;
+                                let llik = (left_local_index + k) as usize;
+                                let rlik = (right_local_index + k) as usize;
+                                
+                                let left_hash_weight  = local_data.get_unchecked_mut(llik).weight;
+                                let right_hash_weight = local_data.get_unchecked_mut(rlik).weight;
                         //        let left_hash_weight  = self.weights.get_unchecked((local_data.get_unchecked_mut((left_local_index) as usize).index +k) as usize).weight;
                         //        let right_hash_weight = self.weights.get_unchecked((local_data.get_unchecked_mut((right_local_index) as usize).index +k) as usize).weight;
                                 
                                 let right_side = right_hash_weight * joint_value;
-                                local_data.get_unchecked_mut((left_local_index + k) as usize).value  += right_side; // first derivate
-                                local_data.get_unchecked_mut((right_local_index + k) as usize).value += left_hash_weight  * joint_value; // first derivate
+                                local_data.get_unchecked_mut(llik).value  += right_side; // first derivate
+                                local_data.get_unchecked_mut(rlik).value += left_hash_weight  * joint_value; // first derivate
                                 
                                 wsum += left_hash_weight * right_side;
                                 //if local_data.get_unchecked_mut(local_buf_len-1).accgradient < self.ffm_k_threshold && 
@@ -285,9 +290,6 @@ impl Regressor {
             specialize_boolean!(self.fastmath, FASTMATH, {
                 for i in 0..lr_fbuf_len {
                     let feature_value = local_data.get_unchecked(i).value;
-//                    if feature_value == 0.0{
-  //                      continue;
-    //                }
                     let feature_index = local_data.get_unchecked(i).index as usize;
                     let gradient = general_gradient * feature_value;
                     let gradient_squared = gradient * gradient;
