@@ -152,6 +152,7 @@ impl FeatureBufferTranslator {
             // this is for compatibility with vowpal
             // but in theory we could support also combo features
             let ffm_buffers = &mut self.feature_buffer.ffm_buffers;
+            let ffm_contra_buffers_len = (ffm_buffers.len()) as u32 * self.model_instance.ffm_k;
             let mut sequence_number:u32 = 0;
             for (field_n, ffm_field) in self.model_instance.ffm_fields.iter().enumerate() {
                 let mut field_hashes_buffer = &mut ffm_buffers[field_n];
@@ -161,7 +162,7 @@ impl FeatureBufferTranslator {
                             field_hashes_buffer.push(HashAndValueAndSeq {hash: hash_data,
                                                                     value: hash_value,
                                                                     seq: sequence_number});
-                            sequence_number += 1;
+                            sequence_number += ffm_contra_buffers_len;
                     });
                 }
             }
@@ -332,6 +333,25 @@ mod tests {
         assert_eq!(fbt.feature_buffer.ffm_buffers[1], vec![ HashAndValueAndSeq{hash: 0xfea, value: 2.0, seq: 2}, 
                                                             HashAndValueAndSeq{hash: 0xfeb, value: 3.0, seq: 3}, 
                                                             HashAndValueAndSeq{hash: 0xfec, value: 1.0, seq: 4}]);
+    }
+    
+    #[test]
+    fn test_ffm_three_fields() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.add_constant_feature = false;
+        mi.ffm_fields.push(vec![0]);   //  single namespace in a field
+        mi.ffm_fields.push(vec![0,1]);   // two namespaces in a field
+        mi.ffm_fields.push(vec![1]);   // single namespace in a field
+        mi.ffm_k = 3;
+        let mut fbt = FeatureBufferTranslator::new(&mi);
+        let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(5,9), 0xfec, 0xfea, 2.0f32.to_bits(), 0xfeb, 3.0f32.to_bits()]);
+        fbt.translate_vowpal(&rb);
+        assert_eq!(fbt.feature_buffer.ffm_buffers[0], vec![ HashAndValueAndSeq{hash: 0xfea, value: 2.0, seq: 0}, 
+                                                            HashAndValueAndSeq{hash: 0xfeb, value: 3.0, seq: 6}]);
+        assert_eq!(fbt.feature_buffer.ffm_buffers[1], vec![ HashAndValueAndSeq{hash: 0xfea, value: 2.0, seq: 12}, 
+                                                            HashAndValueAndSeq{hash: 0xfeb, value: 3.0, seq: 18}, 
+                                                            HashAndValueAndSeq{hash: 0xfec, value: 1.0, seq: 24}]);
+        // one more which we dont test
     }
 
     #[test]
