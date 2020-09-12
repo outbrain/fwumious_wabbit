@@ -1,36 +1,80 @@
 # What makes Fwumious Wabbit (FW) so fast?
 
-a) FW is strictly focused on two machine learning methods: logistic 
-regression and field-aware factorization machines. This allows lots of 
-shortcuts.
+# Strict focus
 
-b) FW only supports logistic function. It does not support anything else.
-This would be rather easy expansion without hurting speed, but it has not
-been done yet.
+The biggest advantage that FW gets over VW is much narrower focus on what it
+does. Everything that would cause conditional jumps in inner loops is
+avoided or specialized using macros.
 
-c) All external libraries that were chosen were benchmarked for speed and
-best option for specific workloads was always chosen. For example
-Cloudflare's gzip library and lz4 for internal cache compression.
+As an example FW does not implement regularization nor multipass, as those
+aren't top features needed in our use case at Outbrain. However they could
+be easily added without hurting performance in the fast path.
 
-d) Rust is by nature fast. We use a lot of rust features to support
-specialization, like macros and statically compiled traits.
+Compared to VW we also do not keep books on performance - we do not
+continously compute logloss as we use external library to do so. Also we are
+interested in the predictions only on the evaluation part of the dataset,
+therefore a new parameter --predictions-after allows for skipping outputing
+all predictions. We were surprised to learn that fromatting floating point
+for human readable ouput can take significant time compared to making the
+prediction itself. 
 
-e) Careful attention was paid to internal data structures organization,
-always choosing the fastest approach (via benchmarking).
+# Reduced flexibility in input formats
 
-f) There are some novel (compared to VW) approaches, like look up table for
-Adagrad learning rate and novel approach in how to organize data structures
-and algorithm for field-aware factorization machines.
+FW builds on VW's idea that you will likely run a lot of different models
+over the same input data and it is worthwhile to parse it and save it in a
+"cache". FW packs that cache format even more tightly than VW.
 
-g) There's lots of functionality missing - no L2 regularization, no
-multipass support
+Generally FW supports a subset of VW's input format with special rigidness 
+around namespaces. Namespaces can only be single letters and all of them used 
+in an input file have to be listed ahead of time in a separate file (called
+vw_namespaces_map.csv).
 
-# Why is it faster?
-- tighter encoding format for examples cache
-- using lz4 for examples cache compression instead of gz
-- using Look Up Tables for AdaGrad (--fastmath option)
-- inner loop is single purpose and super-optimized
-- it is written in Rust and it uses specialization tricks (via macros)
-- it cuts corners by preallocating buffers and not doing bound checking
-- a lot of profiling and optimizing the bottlenecks
+# Carefully chosen external libraries
 
+Benchmarking was done to pick the fastest gzip library for our use case
+(Cloudflare's). Examples cache file FW uses an extremely efficient LZ4
+library (https://github.com/lz4/lz4). Deterministic random library is a Rust
+copy of Vowpal's method (merand48). Fasthash's murmur3 algorithm is used for
+hashing to be compatible with Vowpal.
+
+# Using Rust to an extreme
+
+The code uses Rust macro's in order to create specialized code blocks and
+thus avoids branching in inner loops. We are waiting for const generics to
+hopefully use them in the future.
+
+In core parts of parser, translator and regressor "unsafe" mode
+is used, mainly to avoid the need to to avoid bounds checking in
+inner loops and to avoid the need to initialize memory at declaration. 
+
+Some frequent codepaths were unrolled manually.
+
+# Algorithmic optimization
+
+We heavily relied on ideas from VW and built on top of them. VW's buffer
+management is fully replicated for logistic regression code.
+
+However FFM implementation in VW is not well tested and is in our opinion 
+buggy. We created a novel approach to FFM calculation that allows for fields 
+that are filled from multiple features and those can be multi valued. 
+Traditional quadraple loop to handle such cases (which also VW uses) was 
+replaced by double loop with minimal logic to avoid self-combinations.
+
+We sum all changes to each feature weight in all FFM combinations and do the
+final update of each feature weight only once per example. 
+
+A large speed boost comes in Adagrad from using look up table to 
+map accumulated squared gradients to learning rate. A simple bit shift plus
+lookup basically replaces power function and multiplication (or sqrt if 
+power_t is 0.5). This look up table had almost no effect on performance 
+of our large scale machine learning tasks. And it removes an expensive
+function from inner loop.
+
+# Code and data structures optimization
+
+Examples cache file is really tightly packed, inspired by video codecs.
+Similarly other data structures were carefully trimmed to avoid cache
+trashing.
+
+Buffers are allocated statically on stack. There are some bound checks and
+if they fail FW will exit.
