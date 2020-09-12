@@ -217,38 +217,37 @@ impl Regressor {
 
         
         if self.ffm_k > 0 {
-            let max_seq = fb.ffm_buffer.last().unwrap().seq as usize;
-            local_buf_ffm_len = max_seq + (self.ffm_k * fb.ffm_fields_count) as usize;
+            local_buf_ffm_len = fb.ffm_buffer.len() * (self.ffm_k * fb.ffm_fields_count) as usize;
             if local_buf_ffm_len > BUF_FFM_LEN {
                 println!("Number of features in ffm fields ({}) is higher than supported in this fw binary ({}), exiting", local_buf_len, BUF_FFM_LEN);
                 process::exit(1);
             }
 
 
-            let fc = fb.ffm_fields_count * self.ffm_k;
-            for left_hash in fb.ffm_buffer.iter() {
+            let fc = fb.ffm_fields_count  as usize * self.ffm_k as usize;
+            for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
                 let base_weight_index = self.ffm_weights_offset + (left_hash.hash & self.ffm_hashmask);
-                for j in 0..fc {
-                    let v = local_data_ffm.get_unchecked_mut((left_hash.seq + j) as usize);
-                    v.index = base_weight_index + j;
+                for j in 0..fc as usize {
+                    let v = local_data_ffm.get_unchecked_mut((i * fc + j) as usize);
+                    v.index = base_weight_index + j as u32;
                     v.value = 0.0;
                 }
             }
 
             specialize_k!(self.ffm_k, FFMK, {
             for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                for right_hash in fb.ffm_buffer[i+1 ..].iter() {
+                for (j, right_hash) in fb.ffm_buffer[i+1 ..].iter().enumerate() {
                     if left_hash.contra_field_index == right_hash.contra_field_index {
                         continue	// not combining within a field
                     }
-                    let left_local_index = left_hash.seq + right_hash.contra_field_index;
-                    let right_local_index = right_hash.seq + left_hash.contra_field_index;
+                    let left_local_index = i*fc as usize + right_hash.contra_field_index as usize;
+                    let right_local_index = (i+1+j) * fc as usize + left_hash.contra_field_index as usize;
                     let joint_value = left_hash.value * right_hash.value;
-                    let lindex = local_data_ffm.get_unchecked(left_local_index as usize).index;
-                    let rindex = local_data_ffm.get_unchecked(right_local_index as usize).index;
-                    for k in 0..FFMK {
-                        let llik = (left_local_index + k) as usize;
-                        let rlik = (right_local_index + k) as usize;
+                    let lindex = local_data_ffm.get_unchecked(left_local_index).index as usize;
+                    let rindex = local_data_ffm.get_unchecked(right_local_index).index as usize;
+                    for k in 0..FFMK as usize {
+                        let llik = (left_local_index as usize + k) as usize;
+                        let rlik = (right_local_index as usize + k) as usize;
                         let left_hash_weight  = self.weights.get_unchecked((lindex+k) as usize).weight;
                         let right_hash_weight = self.weights.get_unchecked((rindex+k) as usize).weight;
                         
@@ -352,32 +351,12 @@ impl FixedRegressor {
         }
 
         if self.ffm_k > 0 {
-
-/*            for (ii, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                for right_hash in fb.ffm_buffer[ii+1 ..].iter() {
+            let fc = fb.ffm_fields_count  as usize * self.ffm_k as usize;
+            for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
+                for (j, right_hash) in fb.ffm_buffer[i+1 ..].iter().enumerate() {
                     if left_hash.contra_field_index == right_hash.contra_field_index {
                         continue	// not combining within a field
                     }
-                    let joint_value = left_hash.value * right_hash.value;
-                    let left_weight_p_orig = (self.ffm_weights_offset as u32 + ((left_hash.hash & self.ffm_hashmask) + right_hash.contra_field_index)) as u32;
-                    let right_weight_p_orig = (self.ffm_weights_offset as u32 + ((right_hash.hash & self.ffm_hashmask) + left_hash.contra_field_index)) as u32;
-                    for k in 0..self.ffm_k {
-                        let left_hash_weight  = self.weights[(left_weight_p_orig + k) as usize].weight;
-                        let right_hash_weight = self.weights[(right_weight_p_orig + k) as usize].weight;
-                        let right_side = right_hash_weight * joint_value;
-                        wsum += left_hash_weight * right_side;
-                    }
-                }
-            }
-            */
-            
-             for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                for right_hash in fb.ffm_buffer[i+1 ..].iter() {
-                    if left_hash.contra_field_index == right_hash.contra_field_index {
-                        continue	// not combining within a field
-                    }
-                    let left_local_index = left_hash.seq + right_hash.contra_field_index;
-                    let right_local_index = right_hash.seq + left_hash.contra_field_index;
                     let joint_value = left_hash.value * right_hash.value;
                     let lindex = (self.ffm_weights_offset as u32 + ((left_hash.hash & self.ffm_hashmask) + right_hash.contra_field_index)) as u32;
                     let rindex = (self.ffm_weights_offset as u32 + ((right_hash.hash & self.ffm_hashmask) + left_hash.contra_field_index)) as u32;
@@ -597,7 +576,7 @@ mod tests {
         
         // Nothing can be learned from a single field
         let mut rr = Regressor::new(&mi);
-        let ffm_buf = ffm_vec(vec![HashAndValueAndSeq{hash:1, value: 1.0, seq: 0, contra_field_index: 0}], 1);
+        let ffm_buf = ffm_vec(vec![HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0}], 1);
         p = rr.learn(&ffm_buf, true, 0);
         assert_eq!(p, 0.5);
         p = rr.learn(&ffm_buf, true, 0);
@@ -608,25 +587,25 @@ mod tests {
         let mut rr = Regressor::new(&mi);
         ffm_fixed_init(&mut rr);
         let ffm_buf = ffm_vec(vec![
-                                  HashAndValueAndSeq{hash:1, value: 1.0, seq: 0, contra_field_index: 0},
-                                  HashAndValueAndSeq{hash:100, value: 1.0, seq: 1, contra_field_index: 1}
+                                  HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
+                                  HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: 1}
                                   ], 2);
         p = rr.learn(&ffm_buf, true, 0);
         assert_eq!(p, 0.7310586); 
         p = rr.learn(&ffm_buf, true, 0);
-        assert_eq!(p, 0.67457575);
+        assert_eq!(p, 0.7024794);
 
         // Two fields, use values
         let mut rr = Regressor::new(&mi);
         ffm_fixed_init(&mut rr);
         let ffm_buf = ffm_vec(vec![
-                                  HashAndValueAndSeq{hash:1, value: 2.0, seq: 0, contra_field_index: 0},
-                                  HashAndValueAndSeq{hash:100, value: 2.0, seq: 1, contra_field_index: 1}
+                                  HashAndValueAndSeq{hash:1, value: 2.0, contra_field_index: 0},
+                                  HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: 1}
                                   ], 2);
         p = rr.learn(&ffm_buf, true, 0);
         assert_eq!(p, 0.98201376);
         p = rr.learn(&ffm_buf, true, 0);
-        assert_eq!(p, 0.54583365);
+        assert_eq!(p, 0.81377685);
 
 
     }

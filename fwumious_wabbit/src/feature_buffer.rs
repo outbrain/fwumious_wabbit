@@ -18,7 +18,6 @@ pub struct HashAndValue {
 pub struct HashAndValueAndSeq {
     pub hash: u32,
     pub value: f32,
-    pub seq: u32,
     pub contra_field_index: u32,
 }
 
@@ -155,15 +154,12 @@ impl FeatureBufferTranslator {
             ffm_buffer.truncate(0);
             self.feature_buffer.ffm_fields_count = self.model_instance.ffm_fields.len() as u32;    
             let feature_len = self.feature_buffer.ffm_fields_count * self.model_instance.ffm_k;
-            let mut sequence_number:u32 = 0;
             for (contra_field_index, ffm_field) in self.model_instance.ffm_fields.iter().enumerate() {
                 for feature_index in ffm_field {
                     feature_reader!(record_buffer, feature_index, hash_data, hash_value, {
                             ffm_buffer.push(HashAndValueAndSeq {hash: hash_data,
                                                                     value: hash_value,
-                                                                    seq: sequence_number,
                                                                     contra_field_index: contra_field_index as u32 * self.model_instance.ffm_k as u32});
-                            sequence_number += feature_len;
                     });
                 }
             }
@@ -316,7 +312,7 @@ mod tests {
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![0xfea]);
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.feature_buffer.ffm_buffer, vec![HashAndValueAndSeq{hash: 0xfea, value: 1.0, seq: 0, contra_field_index:0}]);
+        assert_eq!(fbt.feature_buffer.ffm_buffer, vec![HashAndValueAndSeq{hash: 0xfea, value: 1.0, contra_field_index:0}]);
     }
 
     #[test]
@@ -329,11 +325,11 @@ mod tests {
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(5,9), 0xfec, 0xfea, 2.0f32.to_bits(), 0xfeb, 3.0f32.to_bits()]);
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.feature_buffer.ffm_buffer, vec![     HashAndValueAndSeq{hash: 0xfea, value: 2.0, seq: 0, contra_field_index:0}, 
-                                                            HashAndValueAndSeq{hash: 0xfeb, value: 3.0, seq: 2, contra_field_index:0},
-                                                            HashAndValueAndSeq{hash: 0xfea, value: 2.0, seq: 4, contra_field_index:1}, 
-                                                            HashAndValueAndSeq{hash: 0xfeb, value: 3.0, seq: 6, contra_field_index:1}, 
-                                                            HashAndValueAndSeq{hash: 0xfec, value: 1.0, seq: 8, contra_field_index:1}]);
+        assert_eq!(fbt.feature_buffer.ffm_buffer, vec![     HashAndValueAndSeq{hash: 0xfea, value: 2.0, contra_field_index:0}, 
+                                                            HashAndValueAndSeq{hash: 0xfeb, value: 3.0, contra_field_index:0},
+                                                            HashAndValueAndSeq{hash: 0xfea, value: 2.0, contra_field_index:1}, 
+                                                            HashAndValueAndSeq{hash: 0xfeb, value: 3.0, contra_field_index:1}, 
+                                                            HashAndValueAndSeq{hash: 0xfec, value: 1.0, contra_field_index:1}]);
     }
     
     #[test]
@@ -347,12 +343,12 @@ mod tests {
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(5,9), 0xfec, 0xfea, 2.0f32.to_bits(), 0xfeb, 3.0f32.to_bits()]);
         fbt.translate_vowpal(&rb);
-        assert_eq!(fbt.feature_buffer.ffm_buffer, vec![ HashAndValueAndSeq{hash: 0xfea, value: 2.0, seq: 0, contra_field_index: 0}, 
-                                                        HashAndValueAndSeq{hash: 0xfeb, value: 3.0, seq: 9, contra_field_index: 0},
-                                                        HashAndValueAndSeq{hash: 0xfea, value: 2.0, seq: 18, contra_field_index: 3}, 
-                                                        HashAndValueAndSeq{hash: 0xfeb, value: 3.0, seq: 27, contra_field_index: 3}, 
-                                                        HashAndValueAndSeq{hash: 0xfec, value: 1.0, seq: 36, contra_field_index: 3},
-                                                        HashAndValueAndSeq{hash: 0xfec, value: 1.0, seq: 45, contra_field_index: 6},
+        assert_eq!(fbt.feature_buffer.ffm_buffer, vec![ HashAndValueAndSeq{hash: 0xfea, value: 2.0, contra_field_index: 0}, 
+                                                        HashAndValueAndSeq{hash: 0xfeb, value: 3.0, contra_field_index: 0},
+                                                        HashAndValueAndSeq{hash: 0xfea, value: 2.0, contra_field_index: 3}, 
+                                                        HashAndValueAndSeq{hash: 0xfeb, value: 3.0, contra_field_index: 3}, 
+                                                        HashAndValueAndSeq{hash: 0xfec, value: 1.0, contra_field_index: 3},
+                                                        HashAndValueAndSeq{hash: 0xfec, value: 1.0, contra_field_index: 6},
                                                      ]);
         // one more which we dont test
     }
