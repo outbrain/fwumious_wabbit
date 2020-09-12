@@ -240,8 +240,8 @@ B,featureB
 
         ffm_fixed_init(&mut rr);
         let ffm_buf = ffm_vec(vec![
-                                  HashAndValueAndSeq{hash:1, value: 1.0, seq: 0, contra_field_index: 0},
-                                  HashAndValueAndSeq{hash:100, value: 2.0, seq: 2, contra_field_index: 1}
+                                  HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
+                                  HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: 1}
                                   ], 2);
         p = rr.learn(&ffm_buf, true, 0);
         assert_eq!(p, 0.880797); 
