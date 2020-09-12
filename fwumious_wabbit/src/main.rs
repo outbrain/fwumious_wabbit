@@ -2,6 +2,7 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(unused_mut)]
+#![allow(non_snake_case)]
 use std::io::Error as IOError;
 use std::io::ErrorKind;
 use std::error::Error;
