@@ -10,13 +10,12 @@ As an example FW does not implement regularization nor multipass, as those
 aren't top features needed in our use case at Outbrain. However they could
 be easily added without hurting performance in the fast path.
 
-Compared to VW we also do not keep books on performance - we do not
-continously compute logloss as we use external library to do so. Also we are
-interested in the predictions only on the evaluation part of the dataset,
-therefore a new parameter --predictions-after allows for skipping outputing
-all predictions. We were surprised to learn that fromatting floating point
-for human readable ouput can take significant time compared to making the
-prediction itself. 
+Compared to VW we also do not track prediction performance during the run - 
+we do not continously compute logloss. Also we are interested in the 
+predictions only o n the evaluation part of the dataset, therefore a new 
+parameter  --predictions-after allows for skipping outputing all predictions. 
+We were surprised to learn that fromatting floating point for human readable 
+output can take significant time compared to making the prediction itself. 
 
 # Reduced flexibility in input formats
 
