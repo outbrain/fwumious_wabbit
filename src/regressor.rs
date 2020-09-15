@@ -31,6 +31,18 @@ pub struct Weight {
     pub acc_grad: f32,
 }
 
+
+pub struct IndexAccgradientValue {
+    index: u32,
+    accgradient: f32,
+    value: f32,
+}
+pub struct IndexAccgradientValueFFM {
+    index: u32,
+    value: f32,
+}
+
+
 pub struct Regressor {
     hash_mask: u32,
     learning_rate: f32,
@@ -44,7 +56,9 @@ pub struct Regressor {
     fastmath_lr_lut: [[f32; FASTMATH_LR_LUT_SIZE]; 2],
     ffm_iw_weights_offset: u32,
     ffm_k_threshold: f32,
-    ffm_k_bits: u8
+    ffm_k_bits: u8,
+    local_data: Vec<IndexAccgradientValue>,
+    local_data_ffm: Vec<IndexAccgradientValueFFM>,
 }
 
 #[derive(Clone)]
@@ -101,6 +115,8 @@ impl Regressor {
                             fastmath_lr_lut: [[0.0; FASTMATH_LR_LUT_SIZE],[0.0; FASTMATH_LR_LUT_SIZE]],
                             ffm_iw_weights_offset: 0,
                             ffm_k_threshold: model_instance.ffm_k_threshold,
+                            local_data: Vec::New(),
+                            local_data_ffm: Vec::New(), 
                         };
 
         if rg.fastmath {
@@ -180,15 +196,6 @@ impl Regressor {
     }
 
     pub fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32 {
-        pub struct IndexAccgradientValue {
-            index: u32,
-            accgradient: f32,
-            value: f32,
-        }
-        pub struct IndexAccgradientValueFFM {
-            index: u32,
-            value: f32,
-        }
         unsafe {
         let y = fb.label; // 0.0 or 1.0
         let lr_fbuf = &fb.lr_buffer;
@@ -199,8 +206,6 @@ impl Regressor {
             println!("Number of features per example ({}) is higher than supported in this fw binary ({}), exiting", local_buf_len, BUF_LEN);
             process::exit(1);
         }
-        let mut local_data: [IndexAccgradientValue; BUF_LEN as usize] = MaybeUninit::uninit().assume_init() ;
-        let mut local_data_ffm: [IndexAccgradientValueFFM; BUF_FFM_LEN as usize] = MaybeUninit::uninit().assume_init() ;
         let mut wsum:f32 = 0.0;
         for i in 0..lr_fbuf_len {
 // For now this didn't bear fruit
