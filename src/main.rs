@@ -35,6 +35,7 @@ mod cmdline;
 mod cache;
 mod persistence;
 mod serving;
+mod learning_rate;
 
 fn main() {
     match main2() {
