@@ -9,9 +9,7 @@ use crate::model_instance;
 use crate::feature_buffer;
 use crate::feature_buffer::HashAndValue;
 use crate::feature_buffer::HashAndValueAndSeq;
-
-
-const ONE:u32 = 1065353216;// this is 1.0u32.to_bits(), but to_bits isn't const function yet in rust
+use crate::learning_rate;
 
 // 11 bits means 7 bits of exponent and 4 bits of fixed point precision from mantissa
 const FASTMATH_LR_LUT_BITS:u8 = 11;
