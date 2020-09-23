@@ -21,48 +21,48 @@ def render_example(a, b):
 #    print(a,b)
     return " ".join([str(score), u"|A", a[0] + u"-" + str(a[1]), u"|B", b[0] + u"-" + str(b[1])]) + "\n"
 
-
-i = 0 
-f = open("train.vw", "w")
-while i < TRAIN_EXAMPLES:
-    animal_type = random.choices(['Herbivore', 'Carnivore'])[0]
-    food_type = random.choices(['Plant', 'Meat'])[0]
-    missone = random.randint(0,1)
-    if missone:
-        person = random.randint(0, NUM_ANIMALS)
-        movie = random.randint(0, BLOCK_BEYOND)
-    else:
-        person = random.randint(0, BLOCK_BEYOND)
-        movie = random.randint(0, NUM_FOODS)
-    f.write(render_example((animal_type, person), (food_type, movie)))
-    i+=1 
-
-i = 0
-# this has the same distribution as for train...
-f = open("easy.vw", "w")
-while i < EVAL_EXAMPLES:
-    animal_type = random.choices(['Herbivore', 'Carnivore'])[0]
-    food_type = random.choices(['Plant', 'Meat'])[0]
-    missone = random.randint(0,1)
-    if missone:
-        person = random.randint(0, NUM_ANIMALS)
-        movie = random.randint(0, BLOCK_BEYOND)
-    else:
-        person = random.randint(0, BLOCK_BEYOND)
-        movie = random.randint(0, NUM_FOODS)
-    f.write(render_example((animal_type, person), (food_type, movie)))
-    i+=1 
-
-# now we will test for completely unseen combos
-f = open("hard.vw", "w")
-i = 0
-while i < EVAL_EXAMPLES:
-    animal_type = random.choices(['Herbivore', 'Carnivore'])[0]
-    food_type = random.choices(['Plant', 'Meat'])[0]
-    person = random.randint(BLOCK_BEYOND+1, NUM_ANIMALS)
-    movie = random.randint(BLOCK_BEYOND+1, NUM_FOODS)
-
-    f.write(render_example((animal_type, person), (food_type, movie)))
-    i+=1 
+def generate():
+  i = 0 
+  f = open("train.vw", "w")
+  while i < TRAIN_EXAMPLES:
+      animal_type = random.choices(['Herbivore', 'Carnivore'])[0]
+      food_type = random.choices(['Plant', 'Meat'])[0]
+      missone = random.randint(0,1)
+      if missone:
+          person = random.randint(0, NUM_ANIMALS)
+          movie = random.randint(0, BLOCK_BEYOND)
+      else:
+          person = random.randint(0, BLOCK_BEYOND)
+          movie = random.randint(0, NUM_FOODS)
+      f.write(render_example((animal_type, person), (food_type, movie)))
+      i+=1 
+  
+  i = 0
+  # this has the same distribution as for train...
+  f = open("easy.vw", "w")
+  while i < EVAL_EXAMPLES:
+      animal_type = random.choices(['Herbivore', 'Carnivore'])[0]
+      food_type = random.choices(['Plant', 'Meat'])[0]
+      missone = random.randint(0,1)
+      if missone:
+          person = random.randint(0, NUM_ANIMALS)
+          movie = random.randint(0, BLOCK_BEYOND)
+      else:
+          person = random.randint(0, BLOCK_BEYOND)
+          movie = random.randint(0, NUM_FOODS)
+      f.write(render_example((animal_type, person), (food_type, movie)))
+      i+=1 
+  
+  # now we will test for completely unseen combos
+  f = open("hard.vw", "w")
+  i = 0
+  while i < EVAL_EXAMPLES:
+      animal_type = random.choices(['Herbivore', 'Carnivore'])[0]
+      food_type = random.choices(['Plant', 'Meat'])[0]
+      person = random.randint(BLOCK_BEYOND+1, NUM_ANIMALS)
+      movie = random.randint(BLOCK_BEYOND+1, NUM_FOODS)
+  
+      f.write(render_example((animal_type, person), (food_type, movie)))
+      i+=1 
 
 
