@@ -12,8 +12,6 @@ use crate::feature_buffer::HashAndValueAndSeq;
 
 
 const ONE:u32 = 1065353216;// this is 1.0u32.to_bits(), but to_bits isn't const function yet in rust
-const BUF_LEN:usize = 1024;
-const BUF_FFM_LEN:usize = 32000; // We will ABORT if number of derived features for individual example is more than this.
 
 // 11 bits means 7 bits of exponent and 4 bits of fixed point precision from mantissa
 const FASTMATH_LR_LUT_BITS:u8 = 11;
@@ -31,6 +29,21 @@ pub struct Weight {
     pub acc_grad: f32,
 }
 
+
+pub struct IndexAccgradientValue {
+    index: u32,
+    accgradient: f32,
+    value: f32,
+}
+pub struct IndexAccgradientValueFFM {
+    index: u32,
+    value: f32,
+}
+
+pub struct AdaGradLUT {
+   fastmath_lr_lut: [[f32; FASTMATH_LR_LUT_SIZE]; 2], 
+}
+
 pub struct Regressor {
     hash_mask: u32,
     learning_rate: f32,
@@ -41,10 +54,11 @@ pub struct Regressor {
     ffm_hashmask: u32,
     ffm_one_over_k_root: f32,
     fastmath: bool,
-    fastmath_lr_lut: [[f32; FASTMATH_LR_LUT_SIZE]; 2],
     ffm_iw_weights_offset: u32,
     ffm_k_threshold: f32,
-    ffm_k_bits: u8
+    adagrad: AdaGradLUT,
+    local_data_lr: Vec<IndexAccgradientValue>,
+    local_data_ffm: Vec<IndexAccgradientValueFFM>,
 }
 
 #[derive(Clone)]
@@ -80,6 +94,33 @@ macro_rules! specialize_k {
     };
 }
 
+impl AdaGradLUT {
+    pub fn fastmath_create_lut(&mut self, learning_rate: f32, minus_power_t: f32, lut_number: usize) {
+        println!("Using look-up tables for AdaGrad learning rate calculation");
+        for x in 0..FASTMATH_LR_LUT_SIZE {
+            // accumulated gradients are always positive floating points, sign is guaranteed to be zero
+            // floating point: 1 bit of sign, 7 bits of signed expontent then floating point bits (mantissa)
+            // we will take 7 bits of exponent + whatever most significant bits of mantissa remain
+            // we take two consequtive such values, so we act as if had rounding
+            let float_x = f32::from_bits((x as u32)  << (31-FASTMATH_LR_LUT_BITS));
+            let float_x_plus_one = f32::from_bits(((x+1) as u32)  << (31-FASTMATH_LR_LUT_BITS));
+            let mut val = learning_rate * ((float_x).powf(minus_power_t) + (float_x_plus_one).powf(minus_power_t)) * 0.5;
+            /*if val > learning_rate || val.is_nan(){
+                val = learning_rate;
+            }*/
+            
+            self.fastmath_lr_lut[lut_number][x] = val;
+        }
+    }
+    
+    #[inline(always)]
+    unsafe fn fastmath_calculate_update(&self, update: f32, accumulated_squared_gradient: f32, lut_number: usize) -> f32 {
+            debug_assert!(accumulated_squared_gradient >= 0.0);
+            let key = accumulated_squared_gradient.to_bits() >> (31-FASTMATH_LR_LUT_BITS);
+            return update * *self.fastmath_lr_lut.get_unchecked(lut_number).get_unchecked(key as usize);
+    }
+
+}
 
 impl Regressor {
     
@@ -94,18 +135,19 @@ impl Regressor {
                             weights: Vec::new(), 
                             ffm_weights_offset: 0,
                             ffm_k: 0,
-                            ffm_k_bits: 0,
                             ffm_hashmask: 0,
                             ffm_one_over_k_root: 0.0,
                             fastmath: model_instance.fastmath,
-                            fastmath_lr_lut: [[0.0; FASTMATH_LR_LUT_SIZE],[0.0; FASTMATH_LR_LUT_SIZE]],
+                            adagrad: AdaGradLUT {fastmath_lr_lut: [[0.0; FASTMATH_LR_LUT_SIZE],[0.0; FASTMATH_LR_LUT_SIZE]]},
                             ffm_iw_weights_offset: 0,
                             ffm_k_threshold: model_instance.ffm_k_threshold,
+                            local_data_lr: Vec::with_capacity(1024),
+                            local_data_ffm: Vec::with_capacity(1024), 
                         };
 
         if rg.fastmath {
-            rg.fastmath_create_lut(rg.learning_rate, rg.minus_power_t, LearningRateGroup::LogisticRegression as usize);
-            rg.fastmath_create_lut(model_instance.ffm_learning_rate, -model_instance.ffm_power_t, LearningRateGroup::FFM as usize);
+            rg.adagrad.fastmath_create_lut(rg.learning_rate, rg.minus_power_t, LearningRateGroup::LogisticRegression as usize);
+            rg.adagrad.fastmath_create_lut(model_instance.ffm_learning_rate, -model_instance.ffm_power_t, LearningRateGroup::FFM as usize);
         }
 
         let mut ffm_weights_len = 0;
@@ -119,8 +161,6 @@ impl Regressor {
                 ffm_bits_for_dimensions += 1;
             }
             let dimensions_mask = (1 << ffm_bits_for_dimensions) - 1;
-            rg.ffm_k_bits =  ffm_bits_for_dimensions;
-            //println!("{}", rg.ffm_k_bits);
             // in ffm we will simply mask the lower bits, so we spare them for k
             rg.ffm_hashmask = ((1 << model_instance.ffm_bit_precision) -1) ^ dimensions_mask;
         }
@@ -154,77 +194,43 @@ impl Regressor {
         rg
     }
     
-    pub fn fastmath_create_lut(&mut self, learning_rate: f32, minus_power_t: f32, lut_number: usize) {
-        println!("Using look-up tables for AdaGrad learning rate calculation");
-        for x in 0..FASTMATH_LR_LUT_SIZE {
-            // accumulated gradients are always positive floating points, sign is guaranteed to be zero
-            // floating point: 1 bit of sign, 7 bits of signed expontent then floating point bits (mantissa)
-            // we will take 7 bits of exponent + whatever most significant bits of mantissa remain
-            // we take two consequtive such values, so we act as if had rounding
-            let float_x = f32::from_bits((x as u32)  << (31-FASTMATH_LR_LUT_BITS));
-            let float_x_plus_one = f32::from_bits(((x+1) as u32)  << (31-FASTMATH_LR_LUT_BITS));
-            let mut val = learning_rate * ((float_x).powf(minus_power_t) + (float_x_plus_one).powf(minus_power_t)) * 0.5;
-            /*if val > learning_rate || val.is_nan(){
-                val = learning_rate;
-            }*/
-            
-            self.fastmath_lr_lut[lut_number][x] = val;
-        }
-    }
-    
-    #[inline(always)]
-    unsafe fn fastmath_calculate_update(&self, update: f32, accumulated_squared_gradient: f32, lut_number: usize) -> f32 {
-            debug_assert!(accumulated_squared_gradient >= 0.0);
-            let key = accumulated_squared_gradient.to_bits() >> (31-FASTMATH_LR_LUT_BITS);
-            return update * *self.fastmath_lr_lut.get_unchecked(lut_number).get_unchecked(key as usize);
-    }
 
     pub fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32 {
-        pub struct IndexAccgradientValue {
-            index: u32,
-            accgradient: f32,
-            value: f32,
-        }
-        pub struct IndexAccgradientValueFFM {
-            index: u32,
-            value: f32,
-        }
         unsafe {
         let y = fb.label; // 0.0 or 1.0
-        let lr_fbuf = &fb.lr_buffer;
-        let lr_fbuf_len = lr_fbuf.len();
-        let mut local_buf_len = lr_fbuf_len;
-        let mut local_buf_ffm_len:usize = 0;
-        if local_buf_len > BUF_LEN {
-            println!("Number of features per example ({}) is higher than supported in this fw binary ({}), exiting", local_buf_len, BUF_LEN);
-            process::exit(1);
+
+        let local_data_lr_len = fb.lr_buffer.len();
+        if local_data_lr_len > self.local_data_lr.len() {
+            self.local_data_lr.reserve(local_data_lr_len - self.local_data_lr.len() + 1024);
         }
-        let mut local_data: [IndexAccgradientValue; BUF_LEN as usize] = MaybeUninit::uninit().assume_init() ;
-        let mut local_data_ffm: [IndexAccgradientValueFFM; BUF_FFM_LEN as usize] = MaybeUninit::uninit().assume_init() ;
+        
+        let local_data_ffm_len = fb.ffm_buffer.len() * (self.ffm_k * fb.ffm_fields_count) as usize;
+        if local_data_ffm_len > self.local_data_ffm.len() {
+            self.local_data_ffm.reserve(local_data_ffm_len - self.local_data_ffm.len() + 1024);
+        }
+
+        // local_data is writable, but weights are read-only in this section
+        let local_data_lr = &mut self.local_data_lr;
+        let local_data_ffm = &mut self.local_data_ffm;
+        let weights = &self.weights;
+
         let mut wsum:f32 = 0.0;
-        for i in 0..lr_fbuf_len {
-// For now this didn't bear fruit
-//            _mm_prefetch(mem::transmute::<&f32, &i8>(self.weights.get_unchecked((fbuf.get_unchecked(i+8).hash << 1) as usize)), _MM_HINT_T0); 
-            let feature_index     = lr_fbuf.get_unchecked(i).hash;
-            let feature_value:f32 = lr_fbuf.get_unchecked(i).value;
-            let feature_weight       = self.weights.get_unchecked(feature_index as usize).weight;
-            let accumulated_gradient = self.weights.get_unchecked(feature_index as usize).acc_grad;
+        for (i, hashvalue) in fb.lr_buffer.iter().enumerate() {
+//            _mm_prefetch(mem::transmute::<&f32, &i8>(weights.get_unchecked((fbuf.get_unchecked(i+8).hash << 1) as usize)), _MM_HINT_T0);  // No benefit for now
+            let feature_index     = hashvalue.hash;
+            let feature_value:f32 = hashvalue.value;
+            let feature_weight       = weights.get_unchecked(feature_index as usize).weight;
+            let accumulated_gradient = weights.get_unchecked(feature_index as usize).acc_grad;
             wsum += feature_weight * feature_value;
-            local_data.get_unchecked_mut(i).index       = feature_index;
-            local_data.get_unchecked_mut(i).accgradient = accumulated_gradient;
-            local_data.get_unchecked_mut(i).value       = feature_value;
+            local_data_lr.get_unchecked_mut(i).index       = feature_index;
+            local_data_lr.get_unchecked_mut(i).accgradient = accumulated_gradient;
+            local_data_lr.get_unchecked_mut(i).value       = feature_value;
+            
         }
 
         
         if self.ffm_k > 0 {
-            local_buf_ffm_len = fb.ffm_buffer.len() * (self.ffm_k * fb.ffm_fields_count) as usize;
-            if local_buf_ffm_len > BUF_FFM_LEN {
-                println!("Number of features in ffm fields ({}) is higher than supported in this fw binary ({}), exiting", local_buf_len, BUF_FFM_LEN);
-                process::exit(1);
-            }
-
-
-            let fc = fb.ffm_fields_count  as usize * self.ffm_k as usize;
+            let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
             for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
                 let base_weight_index = self.ffm_weights_offset + (left_hash.hash & self.ffm_hashmask);
                 for j in 0..fc as usize {
@@ -248,8 +254,8 @@ impl Regressor {
                     for k in 0..FFMK as usize {
                         let llik = (left_local_index as usize + k) as usize;
                         let rlik = (right_local_index as usize + k) as usize;
-                        let left_hash_weight  = self.weights.get_unchecked((lindex+k) as usize).weight;
-                        let right_hash_weight = self.weights.get_unchecked((rindex+k) as usize).weight;
+                        let left_hash_weight  = weights.get_unchecked((lindex+k) as usize).weight;
+                        let right_hash_weight = weights.get_unchecked((rindex+k) as usize).weight;
                         
                         let right_side = right_hash_weight * joint_value;
                         local_data_ffm.get_unchecked_mut(llik).value += right_side; // first derivate
@@ -279,28 +285,33 @@ impl Regressor {
 
         let prediction_probability:f32 = (1.0+(prediction).exp()).recip();
 
+        // Weights are now writable, but local_data is read only
+        let weights = &mut self.weights;
+        let local_data_lr = &self.local_data_lr;
+        let local_data_ffm = &self.local_data_ffm;
+
+
         if update && fb.example_importance != 0.0 {
             let general_gradient = (y - prediction_probability) * fb.example_importance;
             specialize_boolean!(self.fastmath, FASTMATH, {
-                for i in 0..lr_fbuf_len {
-                    let feature_value = local_data.get_unchecked(i).value;
-                    let feature_index = local_data.get_unchecked(i).index as usize;
+                for i in 0..local_data_lr_len {
+                    let feature_value = local_data_lr.get_unchecked(i).value;
+                    let feature_index = local_data_lr.get_unchecked(i).index as usize;
                     let gradient = general_gradient * feature_value;
                     let gradient_squared = gradient * gradient;
-                    self.weights.get_unchecked_mut(feature_index).acc_grad += gradient_squared;
-//                    _mm_prefetch(mem::transmute::<&f32, &i8>(self.weights.get_unchecked_mut(local_data.get_unchecked(i+1).index as usize)), _MM_HINT_T1); 
-                    let accumulated_squared_gradient = local_data.get_unchecked(i).accgradient;
+                    weights.get_unchecked_mut(feature_index).acc_grad += gradient_squared;
+                    let accumulated_squared_gradient = local_data_lr.get_unchecked(i).accgradient;
                     if FASTMATH {
-                        let update = self.fastmath_calculate_update(gradient, accumulated_squared_gradient + gradient_squared, LearningRateGroup::LogisticRegression as usize);
-                        self.weights.get_unchecked_mut(feature_index).weight += update;
+                        let update = self.adagrad.fastmath_calculate_update(gradient, accumulated_squared_gradient + gradient_squared, LearningRateGroup::LogisticRegression as usize);
+                        weights.get_unchecked_mut(feature_index).weight += update;
                     } else {
                         let learning_rate = self.learning_rate * (accumulated_squared_gradient + gradient_squared).powf(self.minus_power_t);
                         let update = gradient * learning_rate;
-                        self.weights.get_unchecked_mut(feature_index).weight += update;
+                        weights.get_unchecked_mut(feature_index).weight += update;
                     }
                 }
                 
-                for i in 0..local_buf_ffm_len {
+                for i in 0..local_data_ffm_len {
                     let feature_value = local_data_ffm.get_unchecked(i).value;
                     if feature_value == 0.0 {
                         continue; // this is basically diagonal of ffm - self combination
@@ -308,16 +319,16 @@ impl Regressor {
                     let feature_index = local_data_ffm.get_unchecked(i).index as usize;
                     let gradient = general_gradient * feature_value;
                     let gradient_squared = gradient * gradient;
-                    let accumulated_gradient_squared = self.weights.get_unchecked_mut(feature_index).acc_grad;
+                    let accumulated_gradient_squared = weights.get_unchecked_mut(feature_index).acc_grad;
                     let new_accumulated_gradient_squared = accumulated_gradient_squared + gradient_squared;
-                    self.weights.get_unchecked_mut(feature_index).acc_grad = new_accumulated_gradient_squared;
+                    weights.get_unchecked_mut(feature_index).acc_grad = new_accumulated_gradient_squared;
                     if FASTMATH {
-                        let update = self.fastmath_calculate_update(gradient, new_accumulated_gradient_squared, LearningRateGroup::FFM as usize);
-                        self.weights.get_unchecked_mut(feature_index).weight += update;
+                        let update = self.adagrad.fastmath_calculate_update(gradient, new_accumulated_gradient_squared, LearningRateGroup::FFM as usize);
+                        weights.get_unchecked_mut(feature_index).weight += update;
                     } else {
                         let learning_rate = self.learning_rate * (new_accumulated_gradient_squared).powf(self.minus_power_t);
                         let update = gradient * learning_rate;
-                        self.weights.get_unchecked_mut(feature_index).weight += update;
+                        weights.get_unchecked_mut(feature_index).weight += update;
                     }
                 }
                             
