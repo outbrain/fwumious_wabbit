@@ -8,6 +8,7 @@ use std::error::Error;
 use std::io::Error as IOError;
 use std::io::ErrorKind;
 use std::str;
+use std::string::String;
 use crate::vwmap;
 
 const RECBUF_LEN:usize = 2048;
@@ -75,8 +76,17 @@ impl VowpalParser {
         println!("item out {:?}", self.output_buffer);
     }
 
+    #[inline(always)]
+    pub fn parse_float_or_error(&self, i_start: usize, i_end :usize, error_str: &str) -> Result<f32, Box<dyn Error>> {
+        unsafe {
+            match str::from_utf8_unchecked(&self.tmp_read_buf[i_start..i_end]).parse::<f32>() {
+                Ok(f) => return Ok(f),
+                Err(e) => return Err(Box::new(IOError::new(ErrorKind::Other, format!("{}: {}", error_str, String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end])))))
+            };
+        };
+    }
 
-    pub fn next_vowpal(&mut self, input_bufread: &mut impl BufRead) -> Result<&[u32], Box<dyn Error>>  {
+    pub fn next_vowpal(&mut self, input_bufread: &mut impl BufRead) -> Result<&[u32], Box<dyn Error>> {
             self.tmp_read_buf.truncate(0);
             let rowlen1 = match input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
                 Ok(0) => return Ok(&[]),
@@ -120,11 +130,10 @@ impl VowpalParser {
                         if *p.add(i_end) != 0x7c { // this token does not start with "|", so it has to be example improtance floating point
                                 i_start = i_end;
                                 while *p.add(i_end) != 0x20 { i_end += 1;}; // find end of token (space)
-                                let importance:f32 = str::from_utf8_unchecked(&self.tmp_read_buf[i_start..i_end]).parse()?;
+                                let importance = self.parse_float_or_error(i_start, i_end, "Failed parsing example importance")?;
                                 if importance < 0.0  {
-                                        return Err(Box::new(IOError::new(ErrorKind::Other, format!("Example importance cannot be negative: {:?}! ", importance))))
+                                    return Err(Box::new(IOError::new(ErrorKind::Other, format!("Example importance cannot be negative: {:?}! ", importance))));
                                 }
-                                //return Err(Box::new(IOError::new(ErrorKind::Other, format!("We have an example importance number {:?}! ", importance))))
                                 self.output_buffer[EXAMPLE_IMPORTANCE_OFFSET] = importance.to_bits();
                         } else {
                                 self.output_buffer[EXAMPLE_IMPORTANCE_OFFSET] = FLOAT32_ONE;
@@ -141,72 +150,64 @@ impl VowpalParser {
                 let mut bufpos_namespace_start = 0;
                 let mut current_namespace_weight:f32 = 1.0;
                 while i_end < rowlen {
-                    while i_end < rowlen && *p.add(i_end) != 0x20 {
+                    // <letter>[:<weight>]
+                    while i_end < rowlen && *p.add(i_end) != 0x20 && *p.add(i_end) != 0x3a  {
                         i_end += 1;
                     }
+                    let i_end_first_part = i_end;
+                    while i_end < rowlen && *p.add(i_end) != 0x20 {
+                         i_end += 1;
+                    }
+                    
                     //println!("item out {:?}", std::str::from_utf8(&rr.tmp_read_buf[i_start..i_end]));
-                                    
                     if *p.add(i_start) == 0x7c { // "|"
                         // new namespace index
                         i_start += 1;
+                        if i_end - i_start != 1 {
+                            // Namespace that has more than one character is either an error, or it defines the 
+                            if i_end_first_part - i_start != 1 {
+                                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Only single letter namespaces are allowed, however namespace string is: {:?}", String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end_first_part])))));
+                            }
+                            current_namespace_weight = self.parse_float_or_error(i_end_first_part+1, i_end, "Failed parsing namespace weight")?;
+                        } else {
+                            current_namespace_weight = 1.0;
+                        }
                         current_char = *p.add(i_start) as usize;
                         current_char_index = self.vw_map.lookup_char_to_index[current_char] * NAMESPACE_DESC_LEN + HEADER_LEN;
                         current_char_num_of_features = 0;
-                        current_namespace_weight = 1.0;
                         bufpos_namespace_start = self.output_buffer.len(); // this is only used if we will have multiple values
-                        if i_end - i_start != 1 {
-                            // COMPLEX NAMESPACE DEFINITION
-                            // namespace more than a single letter? the only allowed format is: letter:float_value, for example  "A:2.4"
-                            let mut splitter = self.tmp_read_buf[i_start..i_end].split(|char| *char == 0x3a); // ":"
-                            let namespace_v = splitter.next().unwrap();
-                            if namespace_v.len() != 1 {
-                                //println!("a {:?}", str::from_utf8(namespace_v);
-                                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Only single letter namespaces are allowed"))));
-                            }
-                            match splitter.next() {
-                                Some(v) => {current_namespace_weight = str::from_utf8_unchecked(v).parse()?},
-                                None => {}
-                            }
-                            match splitter.next() {
-                                Some(v) => {return Err(Box::new(IOError::new(ErrorKind::Other, format!("Double weight for a namespace is not allowed"))))},
-                                None => {}
-                            }
-                        }
                     } else { 
                         // We have a feature! Let's hash it and write it to the buffer
                         // println!("item out {:?}", std::str::from_utf8(&rr.tmp_read_buf[i_start..i_end]));
-                        let h = murmur3::hash32_with_seed(&self.tmp_read_buf[i_start..i_end], 
+                        let h = murmur3::hash32_with_seed(&self.tmp_read_buf[i_start..i_end_first_part], 
                                                           *self.namespace_hash_seeds.get_unchecked(current_char)) & MASK31;  
-                        //self.output_buffer.push(h);
-                        if current_namespace_weight == 1.0 {
-                            if current_char_num_of_features == 0 {
-                                *buf.add(current_char_index) = h;
-                            } else if current_char_num_of_features == 1 {
+
+                        let feature_weight:f32 = match i_end - i_end_first_part {
+                            0 => 1.0,
+                            _ => self.parse_float_or_error(i_end_first_part + 1, i_end, "Failed parsing feature weight")?
+                        };
+                        
+                        // We have three options: 
+                        // - first feature, no weights -> put it in-place
+                        // - if it's second feature and first one was "simple", then promote it
+                        // -- and then just add feature to the end of the buffer
+                        
+                        if current_namespace_weight == 1.0 && feature_weight == 1.0 && current_char_num_of_features == 0 {
+                            *buf.add(current_char_index) = h;
+                        } else {
+                            if (current_char_num_of_features == 1) && (*buf.add(current_char_index) & IS_NOT_SINGLE_MASK) == 0 {
                                 // We need to promote feature currently written in-place to out of place
                                 self.output_buffer.push(*buf.add(current_char_index));
                                 self.output_buffer.push(FLOAT32_ONE);
-                                // Then add also out of place character
-                                self.output_buffer.push(h);
-                                self.output_buffer.push(FLOAT32_ONE);
-                                // Now we store current pointers to in-place location, with IS_NOT_SINGLE_MASK marker
-                                *buf.add(current_char_index) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
-                            } else {
-                                // Now push a new value and store the new pointer to in_place
-                                self.output_buffer.push(h);
-                                self.output_buffer.push(FLOAT32_ONE);
-                                *buf.add(current_char_index) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
                             }
-                        } else
-                        {
-                                // Now push a new value and store the new pointer to in_place
-                                self.output_buffer.push(h);
-                                self.output_buffer.push(current_namespace_weight.to_bits());
-                                *buf.add(current_char_index) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
+                            self.output_buffer.push(h);
+                            self.output_buffer.push((current_namespace_weight * feature_weight).to_bits());
+                            *buf.add(current_char_index) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
                         }
                         current_char_num_of_features += 1;
                     }
                     i_end += 1;
-                    i_start = i_end ;
+                    i_start = i_end;
                 }
             }
             
@@ -276,6 +277,12 @@ C,featureC
         // only single letter namespaces are allowed
         let mut buf = str_to_cursor("1 |MORE_THAN_A_LETTER a\n");
         assert!(rr.next_vowpal(&mut buf).is_err());
+
+        let mut buf = str_to_cursor("1 |MORE_THAN_A_LETTER a\n");
+        let result = rr.next_vowpal(&mut buf);
+        assert!(result.is_err());
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Only single letter namespaces are allowed, however namespace string is: \\\"MORE_THAN_A_LETTER\\\"\" })");
+ 
         // namespace weight test
         let mut buf = str_to_cursor("1 |A:1.0 a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 1, FLOAT32_ONE,
@@ -284,10 +291,16 @@ C,featureC
                                                         NULL]);
         // not a parsable number
         let mut buf = str_to_cursor("1 |A:not_a_parsable_number a\n");
-        assert!(rr.next_vowpal(&mut buf).is_err());
+        let result = rr.next_vowpal(&mut buf);
+        assert!(result.is_err());
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Failed parsing namespace weight: not_a_parsable_number\" })");
+
         // double weight
         let mut buf = str_to_cursor("1 |A:1:1 a\n");
-        assert!(rr.next_vowpal(&mut buf).is_err());
+        let result = rr.next_vowpal(&mut buf);
+        assert!(result.is_err());
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Failed parsing namespace weight: 1:1\" })");
+
         // namespace weight test
         let mut buf = str_to_cursor("1 |A:2.0 a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [8, 1, FLOAT32_ONE, 
@@ -295,6 +308,52 @@ C,featureC
                                                         NULL, 
                                                         NULL, 
                                                         2988156968 & MASK31, 2.0f32.to_bits()]);
+       // feature weight
+        let mut buf = str_to_cursor("1 |A a:2.0\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [8, 1, FLOAT32_ONE, 
+                                                        nd(6, 8) | IS_NOT_SINGLE_MASK, 
+                                                        NULL, 
+                                                        NULL, 
+                                                        2988156968 & MASK31, 2.0f32.to_bits()]);
+
+       // two feature weights
+        let mut buf = str_to_cursor("1 |A a:2.0 b:3.0\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [10, 1, FLOAT32_ONE, 
+                                                        nd(6, 10) | IS_NOT_SINGLE_MASK, 
+                                                        NULL, 
+                                                        NULL, 
+                                                        2988156968 & MASK31, 2.0f32.to_bits(),
+                                                        3529656005 & MASK31, 3.0f32.to_bits(),
+                                                        ]);
+
+       // feature weight + namespace weight
+        let mut buf = str_to_cursor("1 |A:3 a:2.0\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [8, 1, FLOAT32_ONE, 
+                                                        nd(6, 8) | IS_NOT_SINGLE_MASK, 
+                                                        NULL, 
+                                                        NULL, 
+                                                        2988156968 & MASK31, 6.0f32.to_bits()]);
+
+       // bad feature weight
+        let mut buf = str_to_cursor("1 |A a:2x0\n");
+        let result = rr.next_vowpal(&mut buf);
+        assert!(result.is_err());
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Failed parsing feature weight: 2x0\" })");
+
+
+       // first no weight, then two weighted features
+        let mut buf = str_to_cursor("1 |A a b:2.0 c:3.0\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [12, 1, FLOAT32_ONE, 
+                                                        nd(6, 12) | IS_NOT_SINGLE_MASK, 
+                                                        NULL, 
+                                                        NULL, 
+                                                        2988156968 & MASK31, 1.0f32.to_bits(),
+                                                        3529656005 & MASK31, 2.0f32.to_bits(),
+                                                        906509 & MASK31, 3.0f32.to_bits(),
+                                                        ]);
+
+ 
+ 
                 
         // LABEL TESTS
         // without label
@@ -315,16 +374,21 @@ C,featureC
 
         // Unrecognized label -> Error
         let mut buf = str_to_cursor("$1");
-        assert_eq!(rr.next_vowpal(&mut buf).err().unwrap().is::<IOError>(), true);
- 
- 
+        let result = rr.next_vowpal(&mut buf);
+        assert!(result.is_err());
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Unknown first character of the label: ascii 36\" })");
+
         // Example importance is negative -> Error
         let mut buf = str_to_cursor("1 -0.1 |A a\n");
-        assert!(rr.next_vowpal(&mut buf).is_err());
+        let result = rr.next_vowpal(&mut buf);
+        assert!(result.is_err());
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Example importance cannot be negative: -0.1! \" })");
 
         // After label, there is neither namespace definition (|) nor example importance float
         let mut buf = str_to_cursor("1 fdsa |A a\n");
-        assert!(rr.next_vowpal(&mut buf).is_err());
+        let result = rr.next_vowpal(&mut buf);
+        assert!(result.is_err());
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Failed parsing example importance: fdsa\" })");
         
         // Example importance
         let mut buf = str_to_cursor("1 0.1 |A a\n");
