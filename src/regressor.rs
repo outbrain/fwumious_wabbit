@@ -4,6 +4,10 @@ use std::process;
 use std::sync::Arc;
 use core::arch::x86_64::*;
 use merand48::*;
+use std::io;
+use std::fs;
+use std::error::Error;
+
 
 use crate::model_instance;
 use crate::feature_buffer;
@@ -11,6 +15,7 @@ use crate::feature_buffer::HashAndValue;
 use crate::feature_buffer::HashAndValueAndSeq;
 use crate::learning_rate;
 use learning_rate::LearningRateTrait;
+use crate::vwmap;
 
 #[derive(Clone, Debug)]
 pub struct Weight {
@@ -29,7 +34,7 @@ pub struct IndexAccgradientValueFFM {
     value: f32,
 }
 
-pub struct Regressor {
+pub struct Regressor<L:LearningRateTrait> {
     hash_mask: u32,
     learning_rate: f32,
     minus_power_t:f32,
@@ -41,8 +46,8 @@ pub struct Regressor {
     fastmath: bool,
     ffm_iw_weights_offset: u32,
     ffm_k_threshold: f32,
-    adagrad_lr: learning_rate::LearningRateAdagradLUT,
-    adagrad_ffm: learning_rate::LearningRateAdagradLUT,
+    adagrad_lr: L,
+    adagrad_ffm: L,
     local_data_lr: Vec<IndexAccgradientValue>,
     local_data_ffm: Vec<IndexAccgradientValueFFM>,
 }
@@ -80,28 +85,38 @@ macro_rules! specialize_k {
     };
 }
 
-impl Regressor {
-    
-    pub fn new(model_instance: &model_instance::ModelInstance) -> Regressor {
+pub trait RegressorTrait {
+    fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32;
+    fn get_fixed_regressor(&mut self) -> FixedRegressor;
+    fn save_to_filename(&self, 
+                        filename: &str, 
+                        model_instance: &model_instance::ModelInstance,
+                        vwmap: &vwmap::VwNamespaceMap) -> Result<(), Box<dyn Error>>;
+    fn new_from_filename(
+                        filename: &str, 
+                        ) -> Result<(model_instance::ModelInstance,
+                                     vwmap::VwNamespaceMap,
+                                     Self), Box<dyn Error>> where Self: Sized;
+}
+
+impl <L:LearningRateTrait>Regressor<L> {
+    pub fn new(model_instance: &model_instance::ModelInstance) -> Regressor<L> {
         let hash_mask = (1 << model_instance.bit_precision) -1;
         let lr_weights_len = hash_mask + 1;
-        let mut rg = Regressor{
+        let mut rg = Regressor::<L>{
                             hash_mask: hash_mask,
                             learning_rate: model_instance.learning_rate,
                             minus_power_t : - model_instance.power_t,
                             //minimum_learning_rate: model_instance.minimum_learning_rate,
-                            weights: Vec::new(), 
-                            ffm_weights_offset: 0,
-                            ffm_k: 0,
-                            ffm_hashmask: 0,
-                            ffm_one_over_k_root: 0.0,
-                            fastmath: model_instance.fastmath,
-                            adagrad_lr: learning_rate::LearningRateAdagradLUT {fastmath_lr_lut: [0.0; learning_rate::FASTMATH_LR_LUT_SIZE]},
-                            adagrad_ffm: learning_rate::LearningRateAdagradLUT {fastmath_lr_lut: [0.0; learning_rate::FASTMATH_LR_LUT_SIZE]},
-                            ffm_iw_weights_offset: 0,
-                            ffm_k_threshold: model_instance.ffm_k_threshold,
-                            local_data_lr: Vec::with_capacity(1024),
-                            local_data_ffm: Vec::with_capacity(1024), 
+                            weights: Vec::new(), ffm_weights_offset: 0,
+                            ffm_k: 0, ffm_hashmask: 0, ffm_one_over_k_root:
+                            0.0, fastmath: model_instance.fastmath,
+                            adagrad_lr: L::new(),
+                            adagrad_ffm: L::new(),
+                            ffm_iw_weights_offset: 0, ffm_k_threshold:
+                            model_instance.ffm_k_threshold, local_data_lr:
+                            Vec::with_capacity(1024), local_data_ffm:
+                            Vec::with_capacity(1024),
                         };
 
         if rg.fastmath {
@@ -152,9 +167,13 @@ impl Regressor {
         }
         rg
     }
+}
     
+impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
 
-    pub fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32 {
+
+
+    fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32 {
         unsafe {
         let y = fb.label; // 0.0 or 1.0
 
@@ -298,19 +317,46 @@ impl Regressor {
         prediction_probability
         }
     }
+    
+    fn get_fixed_regressor(&mut self) -> FixedRegressor {
+        FixedRegressor {
+                        hash_mask: self.hash_mask,
+                        weights: Arc::new(std::mem::replace(&mut self.weights, Vec::new())),
+                        ffm_weights_offset: self.ffm_weights_offset,
+                        ffm_k: self.ffm_k,
+                        ffm_hashmask: self.ffm_hashmask,
+        }
+    }
+    fn save_to_filename(&self, 
+                        filename: &str, 
+                        model_instance: &model_instance::ModelInstance,
+                        vwmap: &vwmap::VwNamespaceMap) -> Result<(), Box<dyn Error>> {
+        let mut output_bufwriter = &mut io::BufWriter::new(fs::File::create(filename).unwrap());
+        Self::write_header(output_bufwriter)?;    
+        vwmap.save_to_buf(output_bufwriter)?;
+        model_instance.save_to_buf(output_bufwriter)?;
+        self.write_weights_to_buf(output_bufwriter)?;
+        Ok(())
+    }
+    
+    fn new_from_filename(
+                        filename: &str, 
+                        ) -> Result<(model_instance::ModelInstance,
+                                     vwmap::VwNamespaceMap,
+                                     Self), Box<dyn Error>> {
+        let mut input_bufreader = &mut io::BufReader::new(fs::File::open(filename).unwrap());
+        Self::verify_header(input_bufreader).expect("Regressor header error");    
+        let vw = vwmap::VwNamespaceMap::new_from_buf(input_bufreader).expect("Loading vwmap from regressor failed");
+        let mi = model_instance::ModelInstance::new_from_buf(input_bufreader).expect("Loading model instance from regressor failed");
+        let mut re = Regressor::new(&mi);
+        re.overwrite_weights_from_buf(&mut input_bufreader)?;
+        Ok((mi, vw, re))
+    }
+
+
 }
 
 impl FixedRegressor {
-    pub fn new(rr: Regressor) -> FixedRegressor {
-        FixedRegressor {
-                        hash_mask: rr.hash_mask,
-                        weights: Arc::new(rr.weights),
-                        ffm_weights_offset: rr.ffm_weights_offset,
-                        ffm_k: rr.ffm_k,
-                        ffm_hashmask: rr.ffm_hashmask,
-
-        }
-    }
 
     pub fn predict(&self, fb: &feature_buffer::FeatureBuffer, example_num: u32) -> f32 {
         let fbuf = &fb.lr_buffer;
@@ -386,7 +432,7 @@ mod tests {
         mi.power_t = 0.0;
         mi.bit_precision = 18;
         
-        let mut rr = Regressor::new(&mi);
+        let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
         let mut p: f32;
         
         // Empty model: no matter how many features, prediction is 0.5
@@ -405,7 +451,7 @@ mod tests {
         mi.power_t = 0.0;
         mi.bit_precision = 18;
         
-        let mut rr = Regressor::new(&mi);
+        let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
         let mut p: f32;
         
         p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), true, 0);
@@ -426,7 +472,7 @@ mod tests {
         mi.power_t = 0.0;
         mi.bit_precision = 18;
         
-        let mut rr = Regressor::new(&mi);
+        let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
         let mut p: f32;
         let two = 2.0_f32.to_bits();
         
@@ -446,7 +492,7 @@ mod tests {
         mi.power_t = 0.5;
         mi.bit_precision = 18;
         
-        let mut rr = Regressor::new(&mi);
+        let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
         let mut p: f32;
         
         p = rr.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0);
@@ -465,7 +511,7 @@ mod tests {
         mi.fastmath = true;
         mi.bit_precision = 18;
         
-        let mut rr = Regressor::new(&mi);
+        let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
         let mut p: f32;
         
         p = rr.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0);
@@ -485,7 +531,7 @@ mod tests {
         mi.power_t = 0.5;
         mi.bit_precision = 18;
         
-        let mut rr = Regressor::new(&mi);
+        let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
         let mut p: f32;
         // Here we take twice two features and then once just one
         p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true, 0);
@@ -503,7 +549,7 @@ mod tests {
         mi.power_t = 0.0;
         mi.bit_precision = 18;
         
-        let mut rr = Regressor::new(&mi);
+        let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
         let mut p: f32;
         
         p = rr.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true, 0);
@@ -525,7 +571,7 @@ mod tests {
         }
     }
 
-    fn ffm_fixed_init(mut rg: &mut Regressor) -> () {
+    fn ffm_fixed_init<T:LearningRateTrait>(mut rg: &mut Regressor<T>) -> () {
         for i in rg.ffm_weights_offset as usize..rg.weights.len() {
             rg.weights[i].weight = 1.0;
             rg.weights[i].acc_grad = 1.0;
@@ -546,7 +592,7 @@ mod tests {
         let mut p: f32;
         
         // Nothing can be learned from a single field
-        let mut rr = Regressor::new(&mi);
+        let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
         let ffm_buf = ffm_vec(vec![HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0}], 1);
         p = rr.learn(&ffm_buf, true, 0);
         assert_eq!(p, 0.5);
@@ -555,7 +601,7 @@ mod tests {
 
         // With two fields, things start to happen
         // Since fields depend on initial randomization, these tests are ... peculiar.
-        let mut rr = Regressor::new(&mi);
+        let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
         ffm_fixed_init(&mut rr);
         let ffm_buf = ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
@@ -567,7 +613,7 @@ mod tests {
         assert_eq!(p, 0.7024794);
 
         // Two fields, use values
-        let mut rr = Regressor::new(&mi);
+        let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
         ffm_fixed_init(&mut rr);
         let ffm_buf = ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 2.0, contra_field_index: 0},
@@ -589,7 +635,7 @@ mod tests {
         mi.power_t = 0.0;
         mi.bit_precision = 18;
         
-        let mut rr = Regressor::new(&mi);
+        let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
         let mut p: f32;
         
         let mut fb_instance = lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);
