@@ -1,6 +1,6 @@
 
 
-trait LearningRateTrait {
+pub trait LearningRateTrait {
     fn init(&mut self, learning_rate: f32, minus_power_t: f32);
     unsafe fn calculate_update(&self, update: f32, accumulated_squared_gradient: f32) -> f32;
 }
@@ -44,11 +44,11 @@ impl LearningRateTrait for LearningRateAdaGradFlex {
 
 
 /***************** Adagrad using Look Up Table ******************/
-const FASTMATH_LR_LUT_BITS:u8 = 11;
-const FASTMATH_LR_LUT_SIZE:usize = 1 <<  FASTMATH_LR_LUT_BITS;
+pub const FASTMATH_LR_LUT_BITS:u8 = 11;
+pub const FASTMATH_LR_LUT_SIZE:usize = 1 <<  FASTMATH_LR_LUT_BITS;
 
-struct LearningRateAdagradLUT {
-   fastmath_lr_lut: [f32; FASTMATH_LR_LUT_SIZE], 
+pub struct LearningRateAdagradLUT {
+   pub fastmath_lr_lut: [f32; FASTMATH_LR_LUT_SIZE], 
 }
 
 impl LearningRateTrait for LearningRateAdagradLUT {
