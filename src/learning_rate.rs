@@ -1,6 +1,7 @@
 
 
 pub trait LearningRateTrait {
+    fn new() -> Self;
     fn init(&mut self, learning_rate: f32, minus_power_t: f32);
     unsafe fn calculate_update(&self, update: f32, accumulated_squared_gradient: f32) -> f32;
 }
@@ -11,6 +12,9 @@ struct LearningRateSGD {
 }
 
 impl LearningRateTrait for LearningRateSGD {
+    fn new() -> Self {
+        LearningRateSGD{learning_rate: 0.0}
+    } 
     fn init(&mut self, learning_rate: f32, minus_power_t: f32) {
         self.learning_rate = learning_rate;
     }
@@ -29,6 +33,10 @@ struct LearningRateAdaGradFlex {
 }
 
 impl LearningRateTrait for LearningRateAdaGradFlex {
+    fn new() -> Self {
+        LearningRateAdaGradFlex{learning_rate: 0.0, minus_power_t: 0.0}
+    } 
+
     fn init(&mut self, learning_rate: f32, minus_power_t: f32) {
         self.learning_rate = learning_rate;
         self.minus_power_t = minus_power_t;
@@ -52,6 +60,11 @@ pub struct LearningRateAdagradLUT {
 }
 
 impl LearningRateTrait for LearningRateAdagradLUT {
+    fn new() -> Self {
+        LearningRateAdagradLUT{fastmath_lr_lut: [0.0;FASTMATH_LR_LUT_SIZE]}
+    } 
+
+    
     fn init(&mut self, learning_rate: f32, minus_power_t: f32) {
         println!("Calculating look-up tables for AdaGrad learning rate calculation");
         for x in 0..FASTMATH_LR_LUT_SIZE {
