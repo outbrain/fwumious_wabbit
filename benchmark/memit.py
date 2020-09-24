@@ -21,8 +21,12 @@ def memit(cmd):
 
     lines = output.lower().replace("\t", "").split("\n")
     for line in lines:
-        if line.startswith("maximum resident set size"):
-            res = line.split(" ")[-1]
+        if "maximum resident set size" in line:
+            split_line = [t.strip() for t in line.strip().split(" ")]
+            if s == "Linux":
+                res = int(split_line[-1])
+            elif s == "Darwin":
+                res = int(split_line[0])/1024.0
             break
     return res
    
