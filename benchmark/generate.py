@@ -1,6 +1,6 @@
 import random
-TRAIN_EXAMPLES = 5000000
-EVAL_EXAMPLES = 5000000
+import sys
+
 NUM_ANIMALS = 5
 NUM_FOODS = 5
 BLOCK_BEYOND = 3
@@ -21,10 +21,10 @@ def render_example(a, b):
 #    print(a,b)
     return " ".join([str(score), u"|A", a[0] + u"-" + str(a[1]), u"|B", b[0] + u"-" + str(b[1])]) + "\n"
 
-def generate():
+def generate(train_examples=5000000, test_examples=5000000):
   i = 0 
   f = open("train.vw", "w")
-  while i < TRAIN_EXAMPLES:
+  while i < train_examples:
       animal_type = random.choices(['Herbivore', 'Carnivore'])[0]
       food_type = random.choices(['Plant', 'Meat'])[0]
       missone = random.randint(0,1)
@@ -40,7 +40,7 @@ def generate():
   i = 0
   # this has the same distribution as for train...
   f = open("easy.vw", "w")
-  while i < EVAL_EXAMPLES:
+  while i < test_examples:
       animal_type = random.choices(['Herbivore', 'Carnivore'])[0]
       food_type = random.choices(['Plant', 'Meat'])[0]
       missone = random.randint(0,1)
@@ -56,7 +56,7 @@ def generate():
   # now we will test for completely unseen combos
   f = open("hard.vw", "w")
   i = 0
-  while i < EVAL_EXAMPLES:
+  while i < test_examples:
       animal_type = random.choices(['Herbivore', 'Carnivore'])[0]
       food_type = random.choices(['Plant', 'Meat'])[0]
       person = random.randint(BLOCK_BEYOND+1, NUM_ANIMALS)
@@ -65,4 +65,9 @@ def generate():
       f.write(render_example((animal_type, person), (food_type, movie)))
       i+=1 
 
+if __name__ == "__main__":
+    dataset_size = 5000000
+    if len(sys.argv) == 2:
+        dataset_size = int(sys.argv[1])
 
+    generate(dataset_size)
