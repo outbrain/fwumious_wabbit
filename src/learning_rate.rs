@@ -7,7 +7,7 @@ pub trait LearningRateTrait {
 }
 
 /******************* SGD **************************/
-struct LearningRateSGD {
+pub struct LearningRateSGD {
     learning_rate: f32,    
 }
 
@@ -26,15 +26,15 @@ impl LearningRateTrait for LearningRateSGD {
 }
 
 
-/******************* AdaGrad with flexible power_t  **************************/
-struct LearningRateAdaGradFlex {
+/******************* Adagrad with flexible power_t  **************************/
+pub struct LearningRateAdagradFlex {
     learning_rate: f32,   
     minus_power_t: f32,
 }
 
-impl LearningRateTrait for LearningRateAdaGradFlex {
+impl LearningRateTrait for LearningRateAdagradFlex {
     fn new() -> Self {
-        LearningRateAdaGradFlex{learning_rate: 0.0, minus_power_t: 0.0}
+        LearningRateAdagradFlex{learning_rate: 0.0, minus_power_t: 0.0}
     } 
 
     fn init(&mut self, learning_rate: f32, minus_power_t: f32) {
@@ -45,6 +45,7 @@ impl LearningRateTrait for LearningRateAdaGradFlex {
     #[inline(always)]
     unsafe fn calculate_update(&self, update: f32, accumulated_squared_gradient: f32) -> f32{
         let learning_rate = self.learning_rate * (accumulated_squared_gradient).powf(self.minus_power_t);
+      //  println("Flex: {}", learning_rate);
         return update * learning_rate;
     }
 }
@@ -63,10 +64,9 @@ impl LearningRateTrait for LearningRateAdagradLUT {
     fn new() -> Self {
         LearningRateAdagradLUT{fastmath_lr_lut: [0.0;FASTMATH_LR_LUT_SIZE]}
     } 
-
     
     fn init(&mut self, learning_rate: f32, minus_power_t: f32) {
-        println!("Calculating look-up tables for AdaGrad learning rate calculation");
+        println!("Calculating look-up tables for Adagrad learning rate calculation");
         for x in 0..FASTMATH_LR_LUT_SIZE {
             // accumulated gradients are always positive floating points, sign is guaranteed to be zero
             // floating point: 1 bit of sign, 7 bits of signed expontent then floating point bits (mantissa)
@@ -75,7 +75,8 @@ impl LearningRateTrait for LearningRateAdagradLUT {
             let float_x = f32::from_bits((x as u32)  << (31-FASTMATH_LR_LUT_BITS));
             let float_x_plus_one = f32::from_bits(((x+1) as u32)  << (31-FASTMATH_LR_LUT_BITS));
             let mut val = learning_rate * ((float_x).powf(minus_power_t) + (float_x_plus_one).powf(minus_power_t)) * 0.5;
-            /*if val > learning_rate || val.is_nan(){
+            // Safety measure
+            /*if val > learning_rate || val.is_nan() {
                 val = learning_rate;
             }*/
             

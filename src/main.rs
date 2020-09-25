@@ -75,16 +75,14 @@ fn main2() -> Result<(), Box<dyn Error>>  {
     /* setting up the pipeline, either from command line or from existing regressor */
     // we want heal-allocated objects here
     let mut vw: vwmap::VwNamespaceMap;
-    let mut re: &mut dyn regressor::RegressorTrait;
+    let mut re: Box<dyn regressor::RegressorTrait>;
     let mut mi: model_instance::ModelInstance;
-    let mut re3: regressor::Regressor::<learning_rate::LearningRateAdagradLUT>;
 
     if let Some(filename) = cl.value_of("initial_regressor") {
             println!("initial_regressor = {}", filename);
             println!("WARNING: Command line model parameters will be ignored");
             let (mi2, vw2, re2) = regressor::Regressor::<learning_rate::LearningRateAdagradLUT>::new_from_filename(filename)?;
-            re3 = re2;
-            mi = mi2; vw = vw2; re = &mut re3;
+            mi = mi2; vw = vw2; re = Box::new(re2);
     } else {
             // We load vw_namespace_map.csv just so we know all the namespaces ahead of time
             // This is one of the major differences from vowpal
@@ -92,8 +90,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             let vw_namespace_map_filepath = Path::new(input_filename).parent().expect("--data expected").join("vw_namespace_map.csv");
             vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
             mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
-            re3 = regressor::Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
-            re = &mut re3;
+            re = regressor::get_regressor(&mi);
     };
 
     if cl.is_present("daemon") {
