@@ -143,7 +143,7 @@ impl WorkerThread {
 impl Serving {
     pub fn new<'a>(cl: &clap::ArgMatches<'a>,
                    vw: &vwmap::VwNamespaceMap,
-                   re: &mut dyn regressor::RegressorTrait,
+                   mut re: Box<dyn regressor::RegressorTrait>,
                    mi: &model_instance::ModelInstance,
     ) -> Result<Serving, Box<dyn Error>> {
         let port = match cl.value_of("port") {

@@ -18,10 +18,10 @@ use crate::vwmap;
 use crate::learning_rate;
 use crate::regressor::Regressor;
 use learning_rate::LearningRateTrait;
-
+use regressor::RegressorTrait;
 
 const REGRESSOR_HEADER_MAGIC_STRING: &[u8; 4] = b"FWRE";    // Fwumious Wabbit REgressor
-const REGRESSOR_HEADER_VERSION:u32 = 4;
+const REGRESSOR_HEADER_VERSION:u32 = 5;
 
 impl model_instance::ModelInstance {
     pub fn save_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
@@ -52,6 +52,33 @@ impl vwmap::VwNamespaceMap {
         Ok(vw)
     }
 }
+
+
+
+pub fn save_regressor_to_filename(
+                        filename: &str, 
+                        mi: &model_instance::ModelInstance,
+                        vwmap: &vwmap::VwNamespaceMap,
+                        re: Box<dyn regressor::RegressorTrait>,
+                        ) -> Result<(), Box<dyn Error>> {
+        let mut output_bufwriter = &mut io::BufWriter::new(fs::File::create(filename).unwrap());
+        write_regressor_header(output_bufwriter)?;
+        vwmap.save_to_buf(output_bufwriter)?;
+        mi.save_to_buf(output_bufwriter)?;
+        re.write_weights_to_buf(output_bufwriter)?;
+        Ok(())
+    }
+
+fn write_regressor_header(output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
+    // we will write magic string FWFW
+    // And then 32 bit unsigned version of the regressor
+    output_bufwriter.write(REGRESSOR_HEADER_MAGIC_STRING)?;
+    output_bufwriter.write_u32::<LittleEndian>(REGRESSOR_HEADER_VERSION)?;
+    Ok(())
+}
+
+
+
 
 impl <L:LearningRateTrait>Regressor<L> {
     /*pub fn save_to_filename(&self, 
@@ -128,7 +155,7 @@ impl <L:LearningRateTrait>Regressor<L> {
     }        
 
 }    
-/*    
+    
 #[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
@@ -151,7 +178,7 @@ B,featureB
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
         mi.bit_precision = 18;        
-        let mut rr = regressor::Regressor::new(&mi);
+        let mut rr = regressor::Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
         let dir = tempfile::tempdir().unwrap();
         let regressor_filepath = dir.path().join("test_regressor.fw");
         rr.save_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw).unwrap();
@@ -178,7 +205,7 @@ B,featureB
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
         mi.bit_precision = 18;        
-        let mut rr = regressor::Regressor::new(&mi);
+        let mut rr = regressor::Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
         let mut p: f32;
         p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true, 0);
         assert_eq!(p, 0.5);
@@ -191,13 +218,13 @@ B,featureB
         rr.save_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw).unwrap();
 
         // Now let's load the saved regressor
-        let (mi2, vw2, mut re2) = regressor::Regressor::new_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
+        let (mi2, vw2, mut re2) = regressor::Regressor::<learning_rate::LearningRateAdagradFlex>::new_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
 
         // predict with the same feature vector
         p = re2.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), false, 0);
         assert_eq!(p, 0.41731137);
 
-        let re_fixed = Arc::new(regressor::FixedRegressor::new(re2));
+        let re_fixed = Arc::new(re2.get_fixed_regressor());
         p = re_fixed.predict(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), 0);
         assert_eq!(p, 0.41731137);
     }    
@@ -235,7 +262,7 @@ B,featureB
         mi.ffm_k = 1;
         mi.ffm_bit_precision = 18;
         mi.ffm_fields = vec![vec![],vec![]]; 
-        let mut rr = regressor::Regressor::new(&mi);
+        let mut rr = regressor::Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
         let mut p: f32;
 
         ffm_fixed_init(&mut rr);
@@ -254,17 +281,16 @@ B,featureB
         rr.save_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw).unwrap();
 
         // Now let's load the saved regressor
-        let (mi2, vw2, mut re2) = regressor::Regressor::new_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
+        let (mi2, vw2, mut re2) = regressor::Regressor::<learning_rate::LearningRateAdagradFlex>::new_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
 
         // predict with the same feature vector
         p = re2.learn(&ffm_buf, false, 0);
         assert_eq!(p, 0.79534113);
 
-        let re_fixed = Arc::new(regressor::FixedRegressor::new(re2));
+        let re_fixed = Arc::new(re2.get_fixed_regressor());
         p = re_fixed.predict(&ffm_buf, 0);
         assert_eq!(p, 0.79534113);
 
     }    
 
 }
-*/
