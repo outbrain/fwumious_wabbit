@@ -81,8 +81,8 @@ fn main2() -> Result<(), Box<dyn Error>>  {
     if let Some(filename) = cl.value_of("initial_regressor") {
             println!("initial_regressor = {}", filename);
             println!("WARNING: Command line model parameters will be ignored");
-            let (mi2, vw2, re2) = regressor::Regressor::<learning_rate::LearningRateAdagradLUT>::new_from_filename(filename)?;
-            mi = mi2; vw = vw2; re = Box::new(re2);
+            let (mi2, vw2, re2) = persistence::new_regressor_from_filename(filename)?;
+            mi = mi2; vw = vw2; re = re2;
     } else {
             // We load vw_namespace_map.csv just so we know all the namespaces ahead of time
             // This is one of the major differences from vowpal
@@ -180,7 +180,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         }
         cache.write_finish()?;
         match final_regressor_filename {
-            Some(filename) => re.save_to_filename(filename, &mi, &vw)?,
+            Some(filename) => persistence::save_regressor_to_filename(filename, &mi, &vw, re).unwrap(),
             None => {}
         }
     
