@@ -1,4 +1,6 @@
+#![allow(unused_macros)]
 use std::mem::{self, MaybeUninit};
+use std::slice;
 //use fastapprox::fast::sigmoid; // surprisingly this doesn't work very well
 use std::process;
 use std::sync::Arc;
@@ -7,6 +9,7 @@ use merand48::*;
 use std::io;
 use std::fs;
 use std::error::Error;
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 
 use crate::model_instance;
@@ -43,7 +46,6 @@ pub struct Regressor<L:LearningRateTrait> {
     ffm_k: u32,
     ffm_hashmask: u32,
     ffm_one_over_k_root: f32,
-    fastmath: bool,
     ffm_iw_weights_offset: u32,
     ffm_k_threshold: f32,
     adagrad_lr: L,
@@ -88,6 +90,8 @@ macro_rules! specialize_k {
 pub trait RegressorTrait {
     fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32;
     fn get_fixed_regressor(&mut self) -> FixedRegressor;
+    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>>;
+
     fn save_to_filename(&self, 
                         filename: &str, 
                         model_instance: &model_instance::ModelInstance,
@@ -99,53 +103,67 @@ pub trait RegressorTrait {
                                      Self), Box<dyn Error>> where Self: Sized;
 }
 
+
+pub fn get_regressor(mi: &model_instance::ModelInstance) -> Box<dyn RegressorTrait> {
+    if mi.optimizer == model_instance::Optimizer::Adagrad {
+        if mi.fastmath {
+            Box::new(Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi))
+        } else {
+            Box::new(Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi))
+        }
+    } else {
+        Box::new(Regressor::<learning_rate::LearningRateSGD>::new(&mi))
+    }    
+}
+
+
 impl <L:LearningRateTrait>Regressor<L> {
-    pub fn new(model_instance: &model_instance::ModelInstance) -> Regressor<L> {
-        let hash_mask = (1 << model_instance.bit_precision) -1;
+    pub fn new(mi: &model_instance::ModelInstance) -> Regressor<L> {
+        let hash_mask = (1 << mi.bit_precision) -1;
         let lr_weights_len = hash_mask + 1;
         let mut rg = Regressor::<L>{
                             hash_mask: hash_mask,
-                            learning_rate: model_instance.learning_rate,
-                            minus_power_t : - model_instance.power_t,
-                            //minimum_learning_rate: model_instance.minimum_learning_rate,
-                            weights: Vec::new(), ffm_weights_offset: 0,
-                            ffm_k: 0, ffm_hashmask: 0, ffm_one_over_k_root:
-                            0.0, fastmath: model_instance.fastmath,
+                            learning_rate: mi.learning_rate,
+                            minus_power_t : - mi.power_t,
+                            //minimum_learning_rate: mi.minimum_learning_rate,
+                            weights: Vec::new(), 
+                            ffm_weights_offset: 0,
+                            ffm_k: 0, 
+                            ffm_hashmask: 0, 
+                            ffm_one_over_k_root: 0.0, 
                             adagrad_lr: L::new(),
                             adagrad_ffm: L::new(),
                             ffm_iw_weights_offset: 0, ffm_k_threshold:
-                            model_instance.ffm_k_threshold, local_data_lr:
-                            Vec::with_capacity(1024), local_data_ffm:
-                            Vec::with_capacity(1024),
+                            mi.ffm_k_threshold, 
+                            local_data_lr: Vec::with_capacity(1024), 
+                            local_data_ffm: Vec::with_capacity(1024),
                         };
 
-        if rg.fastmath {
-            rg.adagrad_lr.init(rg.learning_rate, rg.minus_power_t);
-            rg.adagrad_ffm.init(model_instance.ffm_learning_rate, -model_instance.ffm_power_t);
-        }
+        rg.adagrad_lr.init(rg.learning_rate, rg.minus_power_t);
+        rg.adagrad_ffm.init(mi.ffm_learning_rate, -mi.ffm_power_t);
 
         let mut ffm_weights_len = 0;
-        if model_instance.ffm_k > 0 {
+        if mi.ffm_k > 0 {
+            
             rg.ffm_weights_offset = lr_weights_len;            // Since we will align our dimensions, we need to know the number of bits for them
-            rg.ffm_k = model_instance.ffm_k;
+            rg.ffm_k = mi.ffm_k;
             // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
-            ffm_weights_len = (1 << model_instance.ffm_bit_precision) + (model_instance.ffm_fields.len() as u32 * rg.ffm_k);
+            ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * rg.ffm_k);
             let mut ffm_bits_for_dimensions = 0;
             while rg.ffm_k > (1 << (ffm_bits_for_dimensions)) {
                 ffm_bits_for_dimensions += 1;
             }
             let dimensions_mask = (1 << ffm_bits_for_dimensions) - 1;
             // in ffm we will simply mask the lower bits, so we spare them for k
-            rg.ffm_hashmask = ((1 << model_instance.ffm_bit_precision) -1) ^ dimensions_mask;
+            rg.ffm_hashmask = ((1 << mi.ffm_bit_precision) -1) ^ dimensions_mask;
         }
         // Now allocate weights
-//        let iw_weights_len =rg.ffm_k * (model_instance.ffm_fields.len() as u32 * model_instance.ffm_fields.len() as u32);
         let iw_weights_len = 0;
         rg.ffm_iw_weights_offset = lr_weights_len + ffm_weights_len;
         rg.weights = vec![Weight{weight:0.0, acc_grad:0.0}; (lr_weights_len + ffm_weights_len + iw_weights_len) as usize];
 
-        if model_instance.ffm_k > 0 {       
-            if model_instance.ffm_init_width == 0.0 {
+        if mi.ffm_k > 0 {       
+            if mi.ffm_init_width == 0.0 {
                 // Initialization, from ffm.pdf with added division by 100 and centered on zero (determined empirically)
                 rg.ffm_one_over_k_root = 1.0 / (rg.ffm_k as f32).sqrt() / 10.0;
                 for i in 0..ffm_weights_len {
@@ -156,8 +174,8 @@ impl <L:LearningRateTrait>Regressor<L> {
                 }
             } else {
                 for i in 0..ffm_weights_len {
-                    rg.weights[(rg.ffm_weights_offset + i) as usize].weight = model_instance.ffm_init_center - model_instance.ffm_init_width * 0.5 + 
-                                                                         merand48(i as u64) * model_instance.ffm_init_width;
+                    rg.weights[(rg.ffm_weights_offset + i) as usize].weight = mi.ffm_init_center - mi.ffm_init_width * 0.5 + 
+                                                                         merand48(i as u64) * mi.ffm_init_width;
                     //rng.gen_range(-0.1 * rg.ffm_one_over_k_root , 0.1 * rg.ffm_one_over_k_root );
                     // we set FFM gradients to 1.0, so we avoid NaN updates due to adagrad (accumulated_squared_gradients+grad^2).powf(negative_number) * 0.0 
                     rg.weights[(rg.ffm_weights_offset + i) as usize].acc_grad = 1.0;
@@ -170,9 +188,6 @@ impl <L:LearningRateTrait>Regressor<L> {
 }
     
 impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
-
-
-
     fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32 {
         unsafe {
         let y = fb.label; // 0.0 or 1.0
@@ -272,46 +287,31 @@ impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
 
         if update && fb.example_importance != 0.0 {
             let general_gradient = (y - prediction_probability) * fb.example_importance;
-            specialize_boolean!(self.fastmath, FASTMATH, {
-                for i in 0..local_data_lr_len {
-                    let feature_value = local_data_lr.get_unchecked(i).value;
-                    let feature_index = local_data_lr.get_unchecked(i).index as usize;
-                    let gradient = general_gradient * feature_value;
-                    let gradient_squared = gradient * gradient;
-                    weights.get_unchecked_mut(feature_index).acc_grad += gradient_squared;
-                    let accumulated_squared_gradient = local_data_lr.get_unchecked(i).accgradient;
-                    if FASTMATH {
-                        let update = self.adagrad_lr.calculate_update(gradient, accumulated_squared_gradient + gradient_squared);
-                        weights.get_unchecked_mut(feature_index).weight += update;
-                    } else {
-                        let learning_rate = self.learning_rate * (accumulated_squared_gradient + gradient_squared).powf(self.minus_power_t);
-                        let update = gradient * learning_rate;
-                        weights.get_unchecked_mut(feature_index).weight += update;
-                    }
+            for i in 0..local_data_lr_len {
+                let feature_value = local_data_lr.get_unchecked(i).value;
+                let feature_index = local_data_lr.get_unchecked(i).index as usize;
+                let gradient = general_gradient * feature_value;
+                let gradient_squared = gradient * gradient;
+                weights.get_unchecked_mut(feature_index).acc_grad += gradient_squared;
+                let accumulated_squared_gradient = local_data_lr.get_unchecked(i).accgradient;
+                let update = self.adagrad_lr.calculate_update(gradient, accumulated_squared_gradient + gradient_squared);
+                weights.get_unchecked_mut(feature_index).weight += update;
+            }
+            
+            for i in 0..local_data_ffm_len {
+                let feature_value = local_data_ffm.get_unchecked(i).value;
+                if feature_value == 0.0 {
+                    continue; // this is basically diagonal of ffm - self combination
                 }
-                
-                for i in 0..local_data_ffm_len {
-                    let feature_value = local_data_ffm.get_unchecked(i).value;
-                    if feature_value == 0.0 {
-                        continue; // this is basically diagonal of ffm - self combination
-                    }
-                    let feature_index = local_data_ffm.get_unchecked(i).index as usize;
-                    let gradient = general_gradient * feature_value;
-                    let gradient_squared = gradient * gradient;
-                    let accumulated_gradient_squared = weights.get_unchecked_mut(feature_index).acc_grad;
-                    let new_accumulated_gradient_squared = accumulated_gradient_squared + gradient_squared;
-                    weights.get_unchecked_mut(feature_index).acc_grad = new_accumulated_gradient_squared;
-                    if FASTMATH {
-                        let update = self.adagrad_ffm.calculate_update(gradient, new_accumulated_gradient_squared);
-                        weights.get_unchecked_mut(feature_index).weight += update;
-                    } else {
-                        let learning_rate = self.learning_rate * (new_accumulated_gradient_squared).powf(self.minus_power_t);
-                        let update = gradient * learning_rate;
-                        weights.get_unchecked_mut(feature_index).weight += update;
-                    }
-                }
-                            
-            });
+                let feature_index = local_data_ffm.get_unchecked(i).index as usize;
+                let gradient = general_gradient * feature_value;
+                let gradient_squared = gradient * gradient;
+                let accumulated_gradient_squared = weights.get_unchecked_mut(feature_index).acc_grad;
+                let new_accumulated_gradient_squared = accumulated_gradient_squared + gradient_squared;
+                weights.get_unchecked_mut(feature_index).acc_grad = new_accumulated_gradient_squared;
+                let update = self.adagrad_ffm.calculate_update(gradient, new_accumulated_gradient_squared);
+                weights.get_unchecked_mut(feature_index).weight += update;
+            }
         }
         
         prediction_probability
@@ -319,6 +319,7 @@ impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
     }
     
     fn get_fixed_regressor(&mut self) -> FixedRegressor {
+        // This operation effectively destroys initial regressor since it 'steals' its weights array and doesn't make a copy
         FixedRegressor {
                         hash_mask: self.hash_mask,
                         weights: Arc::new(std::mem::replace(&mut self.weights, Vec::new())),
@@ -327,6 +328,7 @@ impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
                         ffm_hashmask: self.ffm_hashmask,
         }
     }
+
     fn save_to_filename(&self, 
                         filename: &str, 
                         model_instance: &model_instance::ModelInstance,
@@ -351,6 +353,18 @@ impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
         let mut re = Regressor::new(&mi);
         re.overwrite_weights_from_buf(&mut input_bufreader)?;
         Ok((mi, vw, re))
+    }
+
+    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
+        // It's OK! I am a limo driver!
+        output_bufwriter.write_u64::<LittleEndian>(self.weights.len() as u64)?;
+        unsafe {
+             let buf_view:&[u8] = slice::from_raw_parts(self.weights.as_ptr() as *const u8, 
+                                              self.weights.len() *mem::size_of::<Weight>());
+             output_bufwriter.write(buf_view)?;
+        }
+        
+        Ok(())
     }
 
 
@@ -436,8 +450,7 @@ mod tests {
         let mut p: f32;
         
         // Empty model: no matter how many features, prediction is 0.5
-        p = rr.learn(&lr_vec(vec![]), false, 0);
-        assert_eq!(p, 0.5);
+        assert_eq!(rr.learn(&lr_vec(vec![]), false, 0), 0.5);
         p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), false, 0);
         assert_eq!(p, 0.5);
         p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), false, 0);
@@ -446,20 +459,28 @@ mod tests {
 
     #[test]
     fn test_power_t_zero() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        // When power_t is zero, then all optimizers behave exactly like SGD
+        // So we want to test all three   
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
-        mi.bit_precision = 18;
         
+        let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);
         let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
-        let mut p: f32;
-        
-        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), true, 0);
-        assert_eq!(p, 0.5);
-        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), true, 0);
-        assert_eq!(p, 0.48750263);
-        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), true, 0);
-        assert_eq!(p, 0.47533244);
+
+        assert_eq!(rr.learn(vec_in, true, 0), 0.5);
+        assert_eq!(rr.learn(vec_in, true, 0), 0.48750263);
+        assert_eq!(rr.learn(vec_in, true, 0), 0.47533244);
+
+        let mut rr = Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
+        assert_eq!(rr.learn(vec_in, true, 0), 0.5);
+        assert_eq!(rr.learn(vec_in, true, 0), 0.48750263);
+        assert_eq!(rr.learn(vec_in, true, 0), 0.47533244);
+
+        let mut rr = Regressor::<learning_rate::LearningRateSGD>::new(&mi);
+        assert_eq!(rr.learn(vec_in, true, 0), 0.5);
+        assert_eq!(rr.learn(vec_in, true, 0), 0.48750263);
+        assert_eq!(rr.learn(vec_in, true, 0), 0.47533244);
     }
 
     #[test]
@@ -467,21 +488,18 @@ mod tests {
         // this is a tricky test - what happens on collision
         // depending on the order of math, results are different
         // so this is here, to make sure the math is always the same
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
-        mi.bit_precision = 18;
         
         let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
         let mut p: f32;
         let two = 2.0_f32.to_bits();
         
-        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash: 1, value: 2.0}]), true, 0);
-        assert_eq!(p, 0.5);
-        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash: 1, value: 2.0}]), true, 0);
-        assert_eq!(p, 0.38936076);
-        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash: 1, value: 2.0}]), true, 0);
-        assert_eq!(p, 0.30993468);
+        let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash: 1, value: 2.0}]);
+        assert_eq!(rr.learn(vec_in, true, 0), 0.5);
+        assert_eq!(rr.learn(vec_in, true, 0), 0.38936076);
+        assert_eq!(rr.learn(vec_in, true, 0), 0.30993468);
     }
 
 
@@ -492,7 +510,7 @@ mod tests {
         mi.power_t = 0.5;
         mi.bit_precision = 18;
         
-        let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
+        let mut rr = Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
         let mut p: f32;
         
         p = rr.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0);
@@ -531,7 +549,7 @@ mod tests {
         mi.power_t = 0.5;
         mi.bit_precision = 18;
         
-        let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
+        let mut rr = Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
         let mut p: f32;
         // Here we take twice two features and then once just one
         p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true, 0);
@@ -583,7 +601,9 @@ mod tests {
     fn test_ffm() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.learning_rate = 0.1;
+        mi.ffm_learning_rate = 0.1;
         mi.power_t = 0.0;
+        mi.ffm_power_t = 0.0;
         mi.bit_precision = 18;
         mi.ffm_k = 1;
         mi.ffm_bit_precision = 18;
@@ -601,7 +621,7 @@ mod tests {
 
         // With two fields, things start to happen
         // Since fields depend on initial randomization, these tests are ... peculiar.
-        let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
+        let mut rr = Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
         ffm_fixed_init(&mut rr);
         let ffm_buf = ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
@@ -634,6 +654,8 @@ mod tests {
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
         mi.bit_precision = 18;
+        mi.optimizer = model_instance::Optimizer::Adagrad;
+        mi.fastmath = true;
         
         let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
         let mut p: f32;
