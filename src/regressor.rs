@@ -91,16 +91,7 @@ pub trait RegressorTrait {
     fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32;
     fn get_fixed_regressor(&mut self) -> FixedRegressor;
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>>;
-
-    fn save_to_filename(&self, 
-                        filename: &str, 
-                        model_instance: &model_instance::ModelInstance,
-                        vwmap: &vwmap::VwNamespaceMap) -> Result<(), Box<dyn Error>>;
-    fn new_from_filename(
-                        filename: &str, 
-                        ) -> Result<(model_instance::ModelInstance,
-                                     vwmap::VwNamespaceMap,
-                                     Self), Box<dyn Error>> where Self: Sized;
+    fn overwrite_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>; 
 }
 
 
@@ -329,32 +320,6 @@ impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
         }
     }
 
-    fn save_to_filename(&self, 
-                        filename: &str, 
-                        model_instance: &model_instance::ModelInstance,
-                        vwmap: &vwmap::VwNamespaceMap) -> Result<(), Box<dyn Error>> {
-        let mut output_bufwriter = &mut io::BufWriter::new(fs::File::create(filename).unwrap());
-        Self::write_header(output_bufwriter)?;    
-        vwmap.save_to_buf(output_bufwriter)?;
-        model_instance.save_to_buf(output_bufwriter)?;
-        self.write_weights_to_buf(output_bufwriter)?;
-        Ok(())
-    }
-    
-    fn new_from_filename(
-                        filename: &str, 
-                        ) -> Result<(model_instance::ModelInstance,
-                                     vwmap::VwNamespaceMap,
-                                     Self), Box<dyn Error>> {
-        let mut input_bufreader = &mut io::BufReader::new(fs::File::open(filename).unwrap());
-        Self::verify_header(input_bufreader).expect("Regressor header error");    
-        let vw = vwmap::VwNamespaceMap::new_from_buf(input_bufreader).expect("Loading vwmap from regressor failed");
-        let mi = model_instance::ModelInstance::new_from_buf(input_bufreader).expect("Loading model instance from regressor failed");
-        let mut re = Regressor::new(&mi);
-        re.overwrite_weights_from_buf(&mut input_bufreader)?;
-        Ok((mi, vw, re))
-    }
-
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
         // It's OK! I am a limo driver!
         output_bufwriter.write_u64::<LittleEndian>(self.weights.len() as u64)?;
@@ -367,6 +332,19 @@ impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
         Ok(())
     }
 
+    fn overwrite_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
+        let len = input_bufreader.read_u64::<LittleEndian>()?;
+        if len != self.weights.len() as u64 {
+            return Err(format!("Lenghts of weights array in regressor file differ: got {}, expected {}", len, self.weights.len()))?;
+        }
+        unsafe {
+            let mut buf_view:&mut [u8] = slice::from_raw_parts_mut(self.weights.as_mut_ptr() as *mut u8, 
+                                             self.weights.len() *mem::size_of::<Weight>());
+            input_bufreader.read_exact(&mut buf_view)?;
+        }
+
+        Ok(())
+    }
 
 }
 
