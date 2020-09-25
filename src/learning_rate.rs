@@ -21,6 +21,7 @@ impl LearningRateTrait for LearningRateSGD {
 
     #[inline(always)]
     unsafe fn calculate_update(&self, update: f32, accumulated_squared_gradient: f32) -> f32{
+        println!("LR: {}", self.learning_rate);
         return update * self.learning_rate;
     }
 }
