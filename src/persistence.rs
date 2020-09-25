@@ -77,85 +77,37 @@ fn write_regressor_header(output_bufwriter: &mut dyn io::Write) -> Result<(), Bo
     Ok(())
 }
 
+pub fn new_regressor_from_filename(
+                    filename: &str, 
+                    ) -> Result<(model_instance::ModelInstance,
+                                 vwmap::VwNamespaceMap,
+                                 Box<dyn regressor::RegressorTrait>), Box<dyn Error>> {
+    let mut input_bufreader = &mut io::BufReader::new(fs::File::open(filename).unwrap());
+    verify_header(input_bufreader).expect("Regressor header error");    
+    let vw = vwmap::VwNamespaceMap::new_from_buf(input_bufreader).expect("Loading vwmap from regressor failed");
+    let mi = model_instance::ModelInstance::new_from_buf(input_bufreader).expect("Loading model instance from regressor failed");
+    let mut re = regressor::get_regressor(&mi);
+    re.overwrite_weights_from_buf(&mut input_bufreader)?;
+    Ok((mi, vw, re))
+}
 
-
-
-impl <L:LearningRateTrait>Regressor<L> {
-    /*pub fn save_to_filename(&self, 
-                        filename: &str, 
-                        model_instance: &model_instance::ModelInstance,
-                        vwmap: &vwmap::VwNamespaceMap) -> Result<(), Box<dyn Error>> {
-        let mut output_bufwriter = &mut io::BufWriter::new(fs::File::create(filename).unwrap());
-        regressor::Regressor::<L>::write_header(output_bufwriter)?;    
-        vwmap.save_to_buf(output_bufwriter)?;
-        model_instance.save_to_buf(output_bufwriter)?;
-        self.write_weights_to_buf(output_bufwriter)?;
-        Ok(())
+fn verify_header(input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
+    let mut magic_string: [u8; 4] = [0;4];
+    input_bufreader.read(&mut magic_string)?;
+    if &magic_string != REGRESSOR_HEADER_MAGIC_STRING {
+        return Err("Cache header does not begin with magic bytes FWFW")?;
     }
     
-    pub fn new_from_filename(
-                        filename: &str, 
-                        ) -> Result<(model_instance::ModelInstance,
-                                     vwmap::VwNamespaceMap,
-                                     regressor::Regressor<L>), Box<dyn Error>> {
-        let mut input_bufreader = &mut io::BufReader::new(fs::File::open(filename).unwrap());
-        regressor::Regressor::verify_header(input_bufreader).expect("Regressor header error");    
-        let vw = vwmap::VwNamespaceMap::new_from_buf(input_bufreader).expect("Loading vwmap from regressor failed");
-        let mi = model_instance::ModelInstance::new_from_buf(input_bufreader).expect("Loading model instance from regressor failed");
-        let mut re = regressor::Regressor::new(&mi);
-        re.overwrite_weights_from_buf(&mut input_bufreader)?;
-        Ok((mi, vw, re))
-    }*/
-
-    pub fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
-        // It's OK! I am a limo driver!
-        output_bufwriter.write_u64::<LittleEndian>(self.weights.len() as u64)?;
-        unsafe {
-             let buf_view:&[u8] = slice::from_raw_parts(self.weights.as_ptr() as *const u8, 
-                                              self.weights.len() *mem::size_of::<regressor::Weight>());
-             output_bufwriter.write(buf_view)?;
-        }
-        
-        Ok(())
+    let version = input_bufreader.read_u32::<LittleEndian>()?;
+    if REGRESSOR_HEADER_VERSION != version {
+        return Err(format!("Cache file version of this binary: {}, version of the cache file: {}", REGRESSOR_HEADER_VERSION, version))?;
     }
-    pub fn overwrite_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
-        let len = input_bufreader.read_u64::<LittleEndian>()?;
-        if len != self.weights.len() as u64 {
-            return Err(format!("Lenghts of weights array in regressor file differ: got {}, expected {}", len, self.weights.len()))?;
-        }
-        unsafe {
-            let mut buf_view:&mut [u8] = slice::from_raw_parts_mut(self.weights.as_mut_ptr() as *mut u8, 
-                                             self.weights.len() *mem::size_of::<regressor::Weight>());
-            input_bufreader.read_exact(&mut buf_view)?;
-        }
+    Ok(())
+}        
 
-        Ok(())
-    }
 
-    pub fn write_header(output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
-        // we will write magic string FWFW
-        // And then 32 bit unsigned version of the cache
-        output_bufwriter.write(REGRESSOR_HEADER_MAGIC_STRING)?;
-        output_bufwriter.write_u32::<LittleEndian>(REGRESSOR_HEADER_VERSION)?;
-        Ok(())
-    }
-    
-    pub fn verify_header(input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
-        let mut magic_string: [u8; 4] = [0;4];
-        input_bufreader.read(&mut magic_string)?;
-        if &magic_string != REGRESSOR_HEADER_MAGIC_STRING {
-            return Err("Cache header does not begin with magic bytes FWFW")?;
-        }
-        
-        let version = input_bufreader.read_u32::<LittleEndian>()?;
-        if REGRESSOR_HEADER_VERSION != version {
-            return Err(format!("Cache file version of this binary: {}, version of the cache file: {}", REGRESSOR_HEADER_VERSION, version))?;
-        }
-        Ok(())
-    }        
 
-}    
-    
+
 #[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
@@ -218,7 +170,7 @@ B,featureB
         save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, Box::new(rr)).unwrap();
 
         // Now let's load the saved regressor
-        let (mi2, vw2, mut re2) = regressor::Regressor::<learning_rate::LearningRateAdagradFlex>::new_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
+        let (mi2, vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
 
         // predict with the same feature vector
         p = re2.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), false, 0);
@@ -283,7 +235,7 @@ B,featureB
         save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, Box::new(rr)).unwrap();
 
         // Now let's load the saved regressor
-        let (mi2, vw2, mut re2) = regressor::Regressor::<learning_rate::LearningRateAdagradFlex>::new_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
+        let (mi2, vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
 
         // predict with the same feature vector
         p = re2.learn(&ffm_buf, false, 0);
