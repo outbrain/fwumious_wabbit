@@ -181,7 +181,7 @@ B,featureB
         let mut rr = regressor::Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
         let dir = tempfile::tempdir().unwrap();
         let regressor_filepath = dir.path().join("test_regressor.fw");
-        rr.save_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw).unwrap();
+        save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, Box::new(rr)).unwrap();
     }    
 
     fn lr_vec(v:Vec<feature_buffer::HashAndValue>) -> feature_buffer::FeatureBuffer {
@@ -215,7 +215,7 @@ B,featureB
         assert_eq!(p, 0.41731137);
         let dir = tempdir().unwrap();
         let regressor_filepath = dir.path().join("test_regressor.fw");
-        rr.save_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw).unwrap();
+        save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, Box::new(rr)).unwrap();
 
         // Now let's load the saved regressor
         let (mi2, vw2, mut re2) = regressor::Regressor::<learning_rate::LearningRateAdagradFlex>::new_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
@@ -261,6 +261,8 @@ B,featureB
         mi.bit_precision = 18;
         mi.ffm_k = 1;
         mi.ffm_bit_precision = 18;
+        mi.ffm_power_t = 0.0;
+        mi.ffm_learning_rate = 0.1;
         mi.ffm_fields = vec![vec![],vec![]]; 
         let mut rr = regressor::Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
         let mut p: f32;
@@ -278,7 +280,7 @@ B,featureB
 
         let dir = tempdir().unwrap();
         let regressor_filepath = dir.path().join("test_regressor2.fw");
-        rr.save_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw).unwrap();
+        save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, Box::new(rr)).unwrap();
 
         // Now let's load the saved regressor
         let (mi2, vw2, mut re2) = regressor::Regressor::<learning_rate::LearningRateAdagradFlex>::new_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
