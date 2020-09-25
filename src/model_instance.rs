@@ -250,12 +250,12 @@ impl ModelInstance {
         }
 
         // We currently only support SGD + adaptive, which means both options have to be specified
-        if !cl.is_present("sgd") {
+        if cl.is_present("sgd") {
             //   return Err(Box::new(IOError::new(ErrorKind::Other, format!("You must use --sgd"))))
             mi.optimizer = Optimizer::SGD;
         }
 
-        if !cl.is_present("adaptive") {
+        if cl.is_present("adaptive") {
             mi.optimizer = Optimizer::Adagrad;
             //       return Err(Box::new(IOError::new(ErrorKind::Other, format!("You must use --adaptive"))))
         }
