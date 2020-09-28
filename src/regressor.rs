@@ -39,8 +39,6 @@ pub struct IndexAccgradientValueFFM {
 
 pub struct Regressor<L:LearningRateTrait> {
     hash_mask: u32,
-    learning_rate: f32,
-    minus_power_t:f32,
     pub weights: Vec<Weight>,       // all weights and gradients (has sub-spaces)
     pub ffm_weights_offset: u32, 
     ffm_k: u32,
@@ -114,8 +112,6 @@ impl <L:LearningRateTrait>Regressor<L> {
         let lr_weights_len = hash_mask + 1;
         let mut rg = Regressor::<L>{
                             hash_mask: hash_mask,
-                            learning_rate: mi.learning_rate,
-                            minus_power_t : - mi.power_t,
                             //minimum_learning_rate: mi.minimum_learning_rate,
                             weights: Vec::new(), 
                             ffm_weights_offset: 0,
@@ -130,8 +126,8 @@ impl <L:LearningRateTrait>Regressor<L> {
                             local_data_ffm: Vec::with_capacity(1024),
                         };
 
-        rg.adagrad_lr.init(rg.learning_rate, rg.minus_power_t);
-        rg.adagrad_ffm.init(mi.ffm_learning_rate, -mi.ffm_power_t);
+        rg.adagrad_lr.init(mi.learning_rate, mi.power_t);
+        rg.adagrad_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t);
 
         let mut ffm_weights_len = 0;
         if mi.ffm_k > 0 {
