@@ -15,9 +15,9 @@ use std::fs;
 use crate::model_instance;
 use crate::regressor;
 use crate::vwmap;
-use crate::learning_rate;
+use crate::optimizer;
 use crate::regressor::Regressor;
-use learning_rate::LearningRateTrait;
+use optimizer::OptimizerTrait;
 use regressor::RegressorTrait;
 use std::any::type_name;
 
@@ -190,7 +190,7 @@ B,featureB
         assert_eq!(p, 0.41731137);
     }    
 
-    fn ffm_fixed_init<T:LearningRateTrait>(mut rg: &mut Regressor<T>) -> () {
+    fn ffm_fixed_init<T:OptimizerTrait>(mut rg: &mut Regressor<T>) -> () {
         for i in rg.ffm_weights_offset as usize..rg.weights.len() {
             rg.weights[i].weight = 1.0;
             rg.weights[i].optimizer_data = T::ffm_initial_data();
@@ -227,7 +227,7 @@ B,featureB
         mi.ffm_fields = vec![vec![],vec![]]; 
         mi.optimizer = model_instance::Optimizer::Adagrad;
         mi.fastmath = false;
-        let mut rr = regressor::Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
+        let mut rr = regressor::Regressor::<optimizer::OptimizerAdagradFlex>::new(&mi);
         let mut p: f32;
 
         ffm_fixed_init(&mut rr);
