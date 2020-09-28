@@ -21,7 +21,7 @@ use learning_rate::LearningRateTrait;
 use regressor::RegressorTrait;
 
 const REGRESSOR_HEADER_MAGIC_STRING: &[u8; 4] = b"FWRE";    // Fwumious Wabbit REgressor
-const REGRESSOR_HEADER_VERSION:u32 = 5;
+const REGRESSOR_HEADER_VERSION:u32 = 4;
 
 impl model_instance::ModelInstance {
     pub fn save_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
