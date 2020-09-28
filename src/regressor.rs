@@ -278,6 +278,7 @@ impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
 
         if update && fb.example_importance != 0.0 {
             let general_gradient = (y - prediction_probability) * fb.example_importance;
+//            println!("General gradient: {}", general_gradient);
             for i in 0..local_data_lr_len {
                 let feature_value = local_data_lr.get_unchecked(i).value;
                 let feature_index = local_data_lr.get_unchecked(i).index as usize;
@@ -405,7 +406,6 @@ mod tests {
     use super::*;
 
     /* LR TESTS */
-
     fn lr_vec(v:Vec<feature_buffer::HashAndValue>) -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {
                     label: 0.0,
@@ -420,19 +420,11 @@ mod tests {
     #[test]
     fn test_learning_turned_off() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
-        mi.learning_rate = 0.1;
-        mi.power_t = 0.0;
-        mi.bit_precision = 18;
-        
-        let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
-        let mut p: f32;
-        
+        let mut re = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
         // Empty model: no matter how many features, prediction is 0.5
-        assert_eq!(rr.learn(&lr_vec(vec![]), false, 0), 0.5);
-        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), false, 0);
-        assert_eq!(p, 0.5);
-        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), false, 0);
-        assert_eq!(p, 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![]), false, 0), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), false, 0), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), false, 0), 0.5);
     }
 
     #[test]
@@ -444,21 +436,18 @@ mod tests {
         mi.power_t = 0.0;
         
         let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);
-        let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
-
-        assert_eq!(rr.learn(vec_in, true, 0), 0.5);
-        assert_eq!(rr.learn(vec_in, true, 0), 0.48750263);
-        assert_eq!(rr.learn(vec_in, true, 0), 0.47533244);
-
-        let mut rr = Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
-        assert_eq!(rr.learn(vec_in, true, 0), 0.5);
-        assert_eq!(rr.learn(vec_in, true, 0), 0.48750263);
-        assert_eq!(rr.learn(vec_in, true, 0), 0.47533244);
-
-        let mut rr = Regressor::<learning_rate::LearningRateSGD>::new(&mi);
-        assert_eq!(rr.learn(vec_in, true, 0), 0.5);
-        assert_eq!(rr.learn(vec_in, true, 0), 0.48750263);
-        assert_eq!(rr.learn(vec_in, true, 0), 0.47533244);
+        
+        // Here learning rate mechanism does not affect the results, so let's verify three different ones
+        let mut regressors: Vec<Box<dyn RegressorTrait>> = vec![
+            Box::new(Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi)),
+            Box::new(Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi)),
+            Box::new(Regressor::<learning_rate::LearningRateSGD>::new(&mi))];
+        
+        for re in &mut regressors {
+            assert_eq!(re.learn(vec_in, true, 0), 0.5);
+            assert_eq!(re.learn(vec_in, true, 0), 0.48750263);
+            assert_eq!(re.learn(vec_in, true, 0), 0.47533244);
+        }
     }
 
     #[test]
@@ -470,14 +459,13 @@ mod tests {
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
         
-        let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
-        let mut p: f32;
+        let mut re = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
         let two = 2.0_f32.to_bits();
         
         let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash: 1, value: 2.0}]);
-        assert_eq!(rr.learn(vec_in, true, 0), 0.5);
-        assert_eq!(rr.learn(vec_in, true, 0), 0.38936076);
-        assert_eq!(rr.learn(vec_in, true, 0), 0.30993468);
+        assert_eq!(re.learn(vec_in, true, 0), 0.5);
+        assert_eq!(re.learn(vec_in, true, 0), 0.38936076);
+        assert_eq!(re.learn(vec_in, true, 0), 0.30993468);
     }
 
 
@@ -486,17 +474,12 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
-        mi.bit_precision = 18;
         
-        let mut rr = Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
-        let mut p: f32;
+        let mut re = Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
         
-        p = rr.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0);
-        assert_eq!(p, 0.5);
-        p = rr.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0);
-        assert_eq!(p, 0.4750208);
-        p = rr.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0);
-        assert_eq!(p, 0.45788094);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0), 0.4750208);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0), 0.45788094);
     }
 
     #[test]
@@ -505,18 +488,20 @@ mod tests {
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
         mi.fastmath = true;
-        mi.bit_precision = 18;
+        mi.optimizer = model_instance::Optimizer::Adagrad;
         
-        let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
+        let mut re = get_regressor(&mi);
         let mut p: f32;
         
-        p = rr.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0);
+        p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0);
         assert_eq!(p, 0.5);
-        p = rr.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0);
+        p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0);
         if learning_rate::FASTMATH_LR_LUT_BITS == 12 { 
-            assert_eq!(p, 0.47539312); // when LUT = 12
-        } else {
+            assert_eq!(p, 0.47539312);
+        } else if learning_rate::FASTMATH_LR_LUT_BITS == 11 { 
             assert_eq!(p, 0.475734);
+        } else {
+            assert!(false, "Exact value for the test is missing, please edit the test");
         }
     }
 
@@ -527,15 +512,11 @@ mod tests {
         mi.power_t = 0.5;
         mi.bit_precision = 18;
         
-        let mut rr = Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
-        let mut p: f32;
+        let mut re = Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
         // Here we take twice two features and then once just one
-        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true, 0);
-        assert_eq!(p, 0.5);
-        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true, 0);
-        assert_eq!(p, 0.45016602);
-        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), true, 0);
-        assert_eq!(p, 0.45836908);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true, 0), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true, 0), 0.45016602);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), true, 0), 0.45836908);
     }
 
     #[test]
@@ -545,15 +526,11 @@ mod tests {
         mi.power_t = 0.0;
         mi.bit_precision = 18;
         
-        let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
-        let mut p: f32;
+        let mut re = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
         
-        p = rr.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true, 0);
-        assert_eq!(p, 0.5);
-        p = rr.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true, 0);
-        assert_eq!(p, 0.45016602);
-        p = rr.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true, 0);
-        assert_eq!(p, 0.40611085);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true, 0), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true, 0), 0.45016602);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true, 0), 0.40611085);
     }
 
 /* FFM TESTS */
@@ -590,36 +567,36 @@ mod tests {
         let mut p: f32;
         
         // Nothing can be learned from a single field
-        let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
+        let mut re = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
         let ffm_buf = ffm_vec(vec![HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0}], 1);
-        p = rr.learn(&ffm_buf, true, 0);
+        p = re.learn(&ffm_buf, true, 0);
         assert_eq!(p, 0.5);
-        p = rr.learn(&ffm_buf, true, 0);
+        p = re.learn(&ffm_buf, true, 0);
         assert_eq!(p, 0.5);
 
         // With two fields, things start to happen
         // Since fields depend on initial randomization, these tests are ... peculiar.
-        let mut rr = Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
-        ffm_fixed_init(&mut rr);
+        let mut re = Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
+        ffm_fixed_init(&mut re);
         let ffm_buf = ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: 1}
                                   ], 2);
-        p = rr.learn(&ffm_buf, true, 0);
+        p = re.learn(&ffm_buf, true, 0);
         assert_eq!(p, 0.7310586); 
-        p = rr.learn(&ffm_buf, true, 0);
+        p = re.learn(&ffm_buf, true, 0);
         assert_eq!(p, 0.7024794);
 
         // Two fields, use values
-        let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
-        ffm_fixed_init(&mut rr);
+        let mut re = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
+        ffm_fixed_init(&mut re);
         let ffm_buf = ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 2.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: 1}
                                   ], 2);
-        p = rr.learn(&ffm_buf, true, 0);
+        p = re.learn(&ffm_buf, true, 0);
         assert_eq!(p, 0.98201376);
-        p = rr.learn(&ffm_buf, true, 0);
+        p = re.learn(&ffm_buf, true, 0);
         assert_eq!(p, 0.81377685);
 
 
@@ -635,16 +612,16 @@ mod tests {
         mi.optimizer = model_instance::Optimizer::Adagrad;
         mi.fastmath = true;
         
-        let mut rr = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
+        let mut re = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
         let mut p: f32;
         
         let mut fb_instance = lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);
         fb_instance.example_importance = 0.5;
-        p = rr.learn(&fb_instance, true, 0);
+        p = re.learn(&fb_instance, true, 0);
         assert_eq!(p, 0.5);
-        p = rr.learn(&fb_instance, true, 0);
+        p = re.learn(&fb_instance, true, 0);
         assert_eq!(p, 0.49375027);
-        p = rr.learn(&fb_instance, true, 0);
+        p = re.learn(&fb_instance, true, 0);
         assert_eq!(p, 0.4875807);
     }
 
