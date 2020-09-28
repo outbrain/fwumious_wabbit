@@ -2,7 +2,7 @@
 use std::marker::PhantomData;
 
 
-pub trait LearningRateTrait {
+pub trait OptimizerTrait {
     type PerWeightStore;
     fn new() -> Self;
     fn init(&mut self, learning_rate: f32, power_t: f32);
@@ -15,11 +15,11 @@ pub trait LearningRateTrait {
 /******************* SGD **************************/
 // This is non-adaptive fixed learning rate SGD, which is exactly the same as Vowpal when --power_t is 0.0
 #[derive(Clone)]
-pub struct LearningRateSGD {
+pub struct OptimizerSGD {
     learning_rate: f32,    
 }
 
-impl LearningRateTrait for LearningRateSGD {
+impl OptimizerTrait for OptimizerSGD {
     type PerWeightStore = PhantomData<u32>;
     
     fn get_name() -> &'static str {
@@ -27,7 +27,7 @@ impl LearningRateTrait for LearningRateSGD {
     }
     
     fn new() -> Self {
-        LearningRateSGD{learning_rate: 0.0}
+        OptimizerSGD{learning_rate: 0.0}
     } 
     
     fn init(&mut self, learning_rate: f32, power_t: f32) {
@@ -49,20 +49,21 @@ impl LearningRateTrait for LearningRateSGD {
 
 
 /******************* Adagrad with flexible power_t  **************************/
+/* Regular Adagrad always uses sqrt (power_t = 0.5)                          */
 #[derive(Clone)]
-pub struct LearningRateAdagradFlex {
+pub struct OptimizerAdagradFlex {
     learning_rate: f32,   
     minus_power_t: f32,
 }
 
-impl LearningRateTrait for LearningRateAdagradFlex {
+impl OptimizerTrait for OptimizerAdagradFlex {
     fn get_name() -> &'static str {
         "AdagradFlex"
     }
     type PerWeightStore = f32;
 
     fn new() -> Self {
-        LearningRateAdagradFlex{learning_rate: 0.0, minus_power_t: 0.0}
+        OptimizerAdagradFlex{learning_rate: 0.0, minus_power_t: 0.0}
     } 
 
     fn init(&mut self, learning_rate: f32, power_t: f32) {
@@ -70,7 +71,6 @@ impl LearningRateTrait for LearningRateAdagradFlex {
         self.minus_power_t = - power_t;
     }
 
-//    unsafe fn calculate_update(&self, update: f32, accumulated_squared_gradient: f32) -> f32{
     #[inline(always)]
     unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32 {
         let accumulated_gradient_squared = *data;
@@ -97,18 +97,18 @@ pub const FASTMATH_LR_LUT_BITS:u8 = 11;
 pub const FASTMATH_LR_LUT_SIZE:usize = 1 <<  FASTMATH_LR_LUT_BITS;
 
 #[derive(Clone)]
-pub struct LearningRateAdagradLUT {
+pub struct OptimizerAdagradLUT {
    pub fastmath_lr_lut: [f32; FASTMATH_LR_LUT_SIZE], 
 }
 
-impl LearningRateTrait for LearningRateAdagradLUT {
+impl OptimizerTrait for OptimizerAdagradLUT {
     fn get_name() -> &'static str {
         "AdagradLUT"
     }
     type PerWeightStore = f32;
 
     fn new() -> Self {
-        LearningRateAdagradLUT{fastmath_lr_lut: [0.0;FASTMATH_LR_LUT_SIZE]}
+        OptimizerAdagradLUT{fastmath_lr_lut: [0.0;FASTMATH_LR_LUT_SIZE]}
     } 
     
     fn init(&mut self, learning_rate: f32, power_t: f32) {
@@ -131,13 +131,6 @@ impl LearningRateTrait for LearningRateAdagradLUT {
         }
     }
     
-/*    #[inline(always)]
-    unsafe fn calculate_update(&self, update: f32, accumulated_squared_gradient: f32) -> f32 {
-        debug_assert!(accumulated_squared_gradient >= 0.0);
-        let key = accumulated_squared_gradient.to_bits() >> (31-FASTMATH_LR_LUT_BITS);
-        return update * *self.fastmath_lr_lut.get_unchecked(key as usize);
-    }*/
-
     #[inline(always)]
     unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32 {
         let accumulated_gradient_squared = *data;
@@ -169,7 +162,7 @@ mod tests {
 
     #[test]
     fn test_sgd() {
-        let mut l = LearningRateSGD::new();
+        let mut l = OptimizerSGD::new();
         l.init(0.15, 0.4);
         unsafe {
             let mut acc: PhantomData<u32> = std::marker::PhantomData{};
@@ -180,7 +173,7 @@ mod tests {
 
     #[test]
     fn test_adagradflex() {
-        let mut l = LearningRateAdagradFlex::new();
+        let mut l = OptimizerAdagradFlex::new();
         l.init(0.15, 0.4);
         unsafe {
             let mut acc: f32;
@@ -199,7 +192,7 @@ mod tests {
 
     #[test]
     fn test_adagradlut() {
-        let mut l = LearningRateAdagradLUT::new();
+        let mut l = OptimizerAdagradLUT::new();
         l.init(0.15, 0.4);
         unsafe {
             let mut acc: f32;
@@ -221,8 +214,8 @@ mod tests {
     #[test]
     fn test_adagradlut_comparison() {
         // Here we test that our implementation of LUT has small enough relative error
-        let mut l_lut = LearningRateAdagradFlex::new();
-        let mut l_flex = LearningRateAdagradLUT::new();
+        let mut l_lut = OptimizerAdagradFlex::new();
+        let mut l_flex = OptimizerAdagradLUT::new();
         l_lut.init(0.15, 0.4);
         l_flex.init(0.15, 0.4);
         let test_gradients = [-1.0, -0.9, -0.1, -0.00001, 0.0, 0.00001, 0.1, 0.5, 0.9, 1.0];
