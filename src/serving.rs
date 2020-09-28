@@ -17,7 +17,7 @@ use crate::vwmap;
 use crate::regressor;
 use crate::feature_buffer;
 use crate::model_instance;
-use crate::learning_rate;
+use crate::optimizer;
 use crate::regressor::RegressorTrait;
 
 
@@ -238,7 +238,7 @@ C,featureC
 "#;
         let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
-        let mut re = regressor::Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
+        let mut re = regressor::Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
         let re_fixed = Arc::new(re.get_fixed_regressor());
         let fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
         let pa = parser::VowpalParser::new(&vw);

@@ -223,6 +223,7 @@ impl ModelInstance {
         } else {
             mi.ffm_power_t = mi.power_t;
         }
+        
         if let Some(val) = cl.value_of("link") {
             if val != "logistic" {
                 return Err(Box::new(IOError::new(ErrorKind::Other, format!("--link only supports 'logistic'"))))
