@@ -16,8 +16,8 @@ use crate::model_instance;
 use crate::feature_buffer;
 use crate::feature_buffer::HashAndValue;
 use crate::feature_buffer::HashAndValueAndSeq;
-use crate::learning_rate;
-use learning_rate::LearningRateTrait;
+use crate::optimizer;
+use optimizer::OptimizerTrait;
 use crate::vwmap;
 
 #[derive(Clone, Debug)]
@@ -30,21 +30,17 @@ pub struct IndexAccgradientValue {
     index: u32,
     value: f32,
 }
-pub struct IndexAccgradientValueFFM {
-    index: u32,
-    value: f32,
-}
 
 #[derive(Clone, Debug, Copy)]
 #[repr(C)]
-pub struct Weight2<L:LearningRateTrait> {
+pub struct WeightAndOptimizerData<L:OptimizerTrait> {
     pub weight: f32, 
     pub optimizer_data: L::PerWeightStore,
 }
 
-pub struct Regressor<L:LearningRateTrait> {
+pub struct Regressor<L:OptimizerTrait> {
     hash_mask: u32,
-    pub weights: Vec<Weight2<L>>,       // all weights and gradients (has sub-spaces)
+    pub weights: Vec<WeightAndOptimizerData<L>>,       // all weights and gradients (has sub-spaces)
     pub ffm_weights_offset: u32, 
     ffm_k: u32,
     ffm_hashmask: u32,
@@ -54,7 +50,7 @@ pub struct Regressor<L:LearningRateTrait> {
     adagrad_lr: L,
     adagrad_ffm: L,
     local_data_lr: Vec<IndexAccgradientValue>,
-    local_data_ffm: Vec<IndexAccgradientValueFFM>,
+    local_data_ffm: Vec<IndexAccgradientValue>,
 }
 
 #[derive(Clone)]
@@ -92,18 +88,18 @@ pub trait RegressorTrait {
 pub fn get_regressor(mi: &model_instance::ModelInstance) -> Box<dyn RegressorTrait> {
     if mi.optimizer == model_instance::Optimizer::Adagrad {
         if mi.fastmath {
-            Box::new(Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi))
+            Box::new(Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi))
         } else {
-            Box::new(Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi))
+            Box::new(Regressor::<optimizer::OptimizerAdagradFlex>::new(&mi))
         }
     } else {
-        Box::new(Regressor::<learning_rate::LearningRateSGD>::new(&mi))
+        Box::new(Regressor::<optimizer::OptimizerSGD>::new(&mi))
     }    
 }
 
 
-impl <L:LearningRateTrait>Regressor<L> 
-where <L as learning_rate::LearningRateTrait>::PerWeightStore: std::clone::Clone,
+impl <L:OptimizerTrait>Regressor<L> 
+where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
 L: std::clone::Clone
 {
     
@@ -113,7 +109,7 @@ L: std::clone::Clone
         let lr_weights_len = hash_mask + 1;
         let mut rg = Regressor::<L>{
                             hash_mask: hash_mask,
-                            //minimum_learning_rate: mi.minimum_learning_rate,
+                            //minimum_optimizer: mi.minimum_optimizer,
                             weights: Vec::new(), 
                             ffm_weights_offset: 0,
                             ffm_k: 0, 
@@ -148,7 +144,7 @@ L: std::clone::Clone
         // Now allocate weights
         let iw_weights_len = 0;
         rg.ffm_iw_weights_offset = lr_weights_len + ffm_weights_len;
-        rg.weights = vec![Weight2{weight:0.0, optimizer_data: L::empty_initial_data()}; (lr_weights_len + ffm_weights_len + iw_weights_len) as usize];
+        rg.weights = vec![WeightAndOptimizerData{weight:0.0, optimizer_data: L::empty_initial_data()}; (lr_weights_len + ffm_weights_len + iw_weights_len) as usize];
 
         if mi.ffm_k > 0 {       
             if mi.ffm_init_width == 0.0 {
@@ -158,7 +154,6 @@ L: std::clone::Clone
                     rg.weights[(rg.ffm_weights_offset + i) as usize].weight = (0.2*merand48((rg.ffm_weights_offset+i) as u64)-0.1) * rg.ffm_one_over_k_root;
                     //rng.gen_range(-0.1 * rg.ffm_one_over_k_root , 0.1 * rg.ffm_one_over_k_root );
                     // we set FFM gradients to 1.0, so we avoid NaN updates due to adagrad (accumulated_squared_gradients+grad^2).powf(negative_number) * 0.0 
-//                    rg.weights[(rg.ffm_weights_offset + i) as usize].acc_grad = 1.0;
                       rg.weights[(rg.ffm_weights_offset + i) as usize].optimizer_data = L::ffm_initial_data();
                 }
             } else {
@@ -167,7 +162,6 @@ L: std::clone::Clone
                                                                          merand48(i as u64) * mi.ffm_init_width;
                     //rng.gen_range(-0.1 * rg.ffm_one_over_k_root , 0.1 * rg.ffm_one_over_k_root );
                     // we set FFM gradients to 1.0, so we avoid NaN updates due to adagrad (accumulated_squared_gradients+grad^2).powf(negative_number) * 0.0 
-//                    rg.weights[(rg.ffm_weights_offset + i) as usize].acc_grad = 1.0;
                       rg.weights[(rg.ffm_weights_offset + i) as usize].optimizer_data = L::ffm_initial_data();
                 }
 
@@ -177,7 +171,7 @@ L: std::clone::Clone
     }
 }
     
-impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
+impl <L:OptimizerTrait>RegressorTrait for Regressor<L> {
     fn get_name(&self) -> &'static str {
         L::get_name()
     }
@@ -200,7 +194,7 @@ impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
         let local_data_lr = &mut self.local_data_lr;
         let local_data_ffm = &mut self.local_data_ffm;
 //        let mut local_data_lr: [IndexAccgradientValue; BUF_LEN as usize] = MaybeUninit::uninit().assume_init() ;
-//        let mut local_data_ffm: [IndexAccgradientValueFFM; BUF_LEN as usize] = MaybeUninit::uninit().assume_init() ;
+//        let mut local_data_ffm: [IndexAccgradientValue; BUF_LEN as usize] = MaybeUninit::uninit().assume_init() ;
 
         let weights = &self.weights;
 
@@ -307,19 +301,19 @@ impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
     fn get_fixed_regressor(&mut self) -> FixedRegressor {
         // This operation effectively destroys initial regressor since it 'steals' its weights array and doesn't make a copy
         let v_from_raw = unsafe {
-            // let's establish this is a valid operation first, this means Weights2 has to be multiplier of Weight in size
-            assert!(mem::size_of::<Weight2<L>>() % mem::size_of::<Weight>() == 0);
+            // let's establish this is a valid operation first, this means WeightAndOptimizerData has to be multiplier of Weight in size
+            assert!(mem::size_of::<WeightAndOptimizerData<L>>() % mem::size_of::<Weight>() == 0);
             // steal the old vector
             let mut original_weights_vec = std::mem::replace(&mut self.weights, Vec::new());
             // create an unsafe slice from it, so we will be able to address it in the old way
             let original_weights_slice = slice::from_raw_parts(original_weights_vec.as_mut_ptr(), 
-                                        original_weights_vec.len() *mem::size_of::<Weight2<L>>());
+                                        original_weights_vec.len() *mem::size_of::<WeightAndOptimizerData<L>>());
             // now take the old vec away from "GC"
             let mut v_clone = std::mem::ManuallyDrop::new(original_weights_vec);
             // assemble the new vector from the raw parts of the old one
             let mut new_v = Vec::from_raw_parts(v_clone.as_mut_ptr() as *mut Weight,
                                 v_clone.len(),
-                                v_clone.capacity() * mem::size_of::<Weight2<L>>() / mem::size_of::<Weight>());
+                                v_clone.capacity() * mem::size_of::<WeightAndOptimizerData<L>>() / mem::size_of::<Weight>());
             // now we take only the weight part of original vector and copy it to new one
             // ISSUE: if any loop unrolling happens here, we might be in deep trouble
             for (i, v) in v_clone.iter().enumerate() {
@@ -347,7 +341,7 @@ impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
         output_bufwriter.write_u64::<LittleEndian>(self.weights.len() as u64)?;
         unsafe {
              let buf_view:&[u8] = slice::from_raw_parts(self.weights.as_ptr() as *const u8, 
-                                              self.weights.len() *mem::size_of::<Weight2<L>>());
+                                              self.weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
              output_bufwriter.write(buf_view)?;
         }
         
@@ -361,7 +355,7 @@ impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
         }
         unsafe {
             let mut buf_view:&mut [u8] = slice::from_raw_parts_mut(self.weights.as_mut_ptr() as *mut u8, 
-                                             self.weights.len() *mem::size_of::<Weight2<L>>());
+                                             self.weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
             input_bufreader.read_exact(&mut buf_view)?;
         }
 
@@ -441,7 +435,7 @@ mod tests {
     #[test]
     fn test_learning_turned_off() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
-        let mut re = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
+        let mut re = Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
         // Empty model: no matter how many features, prediction is 0.5
         assert_eq!(re.learn(&lr_vec(vec![]), false, 0), 0.5);
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), false, 0), 0.5);
@@ -460,9 +454,9 @@ mod tests {
         
         // Here learning rate mechanism does not affect the results, so let's verify three different ones
         let mut regressors: Vec<Box<dyn RegressorTrait>> = vec![
-            //Box::new(Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi)),
-            Box::new(Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi)),
-            //Box::new(Regressor::<learning_rate::LearningRateSGD>::new(&mi))
+            //Box::new(Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi)),
+            Box::new(Regressor::<optimizer::OptimizerAdagradFlex>::new(&mi)),
+            //Box::new(Regressor::<optimizer::OptimizerSGD>::new(&mi))
             ];
         
         for re in &mut regressors {
@@ -481,7 +475,7 @@ mod tests {
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
         
-        let mut re = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
+        let mut re = Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
         let two = 2.0_f32.to_bits();
         
         let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash: 1, value: 2.0}]);
@@ -497,7 +491,7 @@ mod tests {
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
         
-        let mut re = Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
+        let mut re = Regressor::<optimizer::OptimizerAdagradFlex>::new(&mi);
         
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0), 0.5);
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0), 0.4750208);
@@ -518,9 +512,9 @@ mod tests {
         p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0);
         assert_eq!(p, 0.5);
         p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0);
-        if learning_rate::FASTMATH_LR_LUT_BITS == 12 { 
+        if optimizer::FASTMATH_LR_LUT_BITS == 12 { 
             assert_eq!(p, 0.47539312);
-        } else if learning_rate::FASTMATH_LR_LUT_BITS == 11 { 
+        } else if optimizer::FASTMATH_LR_LUT_BITS == 11 { 
             assert_eq!(p, 0.475734);
         } else {
             assert!(false, "Exact value for the test is missing, please edit the test");
@@ -534,7 +528,7 @@ mod tests {
         mi.power_t = 0.5;
         mi.bit_precision = 18;
         
-        let mut re = Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
+        let mut re = Regressor::<optimizer::OptimizerAdagradFlex>::new(&mi);
         // Here we take twice two features and then once just one
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true, 0), 0.5);
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true, 0), 0.45016602);
@@ -548,7 +542,7 @@ mod tests {
         mi.power_t = 0.0;
         mi.bit_precision = 18;
         
-        let mut re = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
+        let mut re = Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
         
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true, 0), 0.5);
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true, 0), 0.45016602);
@@ -566,7 +560,7 @@ mod tests {
         }
     }
 
-    fn ffm_fixed_init<T:LearningRateTrait>(mut rg: &mut Regressor<T>) -> () {
+    fn ffm_fixed_init<T:OptimizerTrait>(mut rg: &mut Regressor<T>) -> () {
         for i in rg.ffm_weights_offset as usize..rg.weights.len() {
             rg.weights[i].weight = 1.0;
 //            rg.weights[i].acc_grad = 1.0;
@@ -590,7 +584,7 @@ mod tests {
         let mut p: f32;
         
         // Nothing can be learned from a single field
-        let mut re = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
+        let mut re = Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
         let ffm_buf = ffm_vec(vec![HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0}], 1);
         p = re.learn(&ffm_buf, true, 0);
         assert_eq!(p, 0.5);
@@ -599,7 +593,7 @@ mod tests {
 
         // With two fields, things start to happen
         // Since fields depend on initial randomization, these tests are ... peculiar.
-        let mut re = Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
+        let mut re = Regressor::<optimizer::OptimizerAdagradFlex>::new(&mi);
         ffm_fixed_init(&mut re);
         let ffm_buf = ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
@@ -609,7 +603,7 @@ mod tests {
         assert_eq!(re.learn(&ffm_buf, true, 0), 0.7024794);
 
         // Two fields, use values
-        let mut re = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
+        let mut re = Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
         ffm_fixed_init(&mut re);
         let ffm_buf = ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 2.0, contra_field_index: 0},
@@ -631,7 +625,7 @@ mod tests {
         mi.optimizer = model_instance::Optimizer::Adagrad;
         mi.fastmath = true;
         
-        let mut re = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
+        let mut re = Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
         let mut p: f32;
         
         let mut fb_instance = lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);

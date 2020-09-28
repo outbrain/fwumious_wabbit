@@ -35,7 +35,7 @@ mod cmdline;
 mod cache;
 mod persistence;
 mod serving;
-mod learning_rate;
+mod optimizer;
 
 use crate::regressor::RegressorTrait;
 
