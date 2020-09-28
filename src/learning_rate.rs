@@ -7,6 +7,7 @@ pub trait LearningRateTrait {
 }
 
 /******************* SGD **************************/
+// This is non-adaptive fixed learning rate SGD, which is exactly the same as Vowpal when --power_t is 0.0
 pub struct LearningRateSGD {
     learning_rate: f32,    
 }
@@ -21,7 +22,6 @@ impl LearningRateTrait for LearningRateSGD {
 
     #[inline(always)]
     unsafe fn calculate_update(&self, update: f32, accumulated_squared_gradient: f32) -> f32{
-   //     println!("LR: {}", self.learning_rate);
         return update * self.learning_rate;
     }
 }
@@ -46,7 +46,6 @@ impl LearningRateTrait for LearningRateAdagradFlex {
     #[inline(always)]
     unsafe fn calculate_update(&self, update: f32, accumulated_squared_gradient: f32) -> f32{
         let learning_rate = self.learning_rate * (accumulated_squared_gradient).powf(self.minus_power_t);
-      //  println("Flex: {}", learning_rate);
         return update * learning_rate;
     }
 }
@@ -92,6 +91,46 @@ impl LearningRateTrait for LearningRateAdagradLUT {
         return update * *self.fastmath_lr_lut.get_unchecked(key as usize);
     }
 }
+
+
+
+
+mod tests {
+    // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
+
+    #[test]
+    fn test_adagradlut() {
+        let mut l = LearningRateAdagradLUT::new();
+        l.init(0.15, 0.4);
+        unsafe {
+            let p = l.calculate_update(0.1, 0.9);
+            assert_eq!(p, 0.014418778);         
+        }
+    }
+
+    #[test]
+    fn test_adagradflex() {
+        let mut l = LearningRateAdagradFlex::new();
+        l.init(0.15, 0.4);
+        unsafe {
+            let p = l.calculate_update(0.1, 0.9);
+            assert_eq!(p, 0.014380974);
+        }
+    }
+    
+    #[test]
+    fn test_sgd() {
+        let mut l = LearningRateSGD::new();
+        l.init(0.15, 0.4);
+        unsafe {
+            let p = l.calculate_update(0.1, 0.9);
+            assert_eq!(p, 0.1* 0.15);
+        }
+    }
+
+}
+
 
 
 
