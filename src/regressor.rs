@@ -21,9 +21,9 @@ use learning_rate::LearningRateTrait;
 use crate::vwmap;
 
 #[derive(Clone, Debug)]
+#[repr(C)]
 pub struct Weight {
     pub weight: f32, 
-    pub acc_grad: f32,
 }
 
 pub struct IndexAccgradientValue {
@@ -35,9 +35,16 @@ pub struct IndexAccgradientValueFFM {
     value: f32,
 }
 
+#[derive(Clone, Debug, Copy)]
+#[repr(C)]
+pub struct Weight2<L:LearningRateTrait> {
+    pub weight: f32, 
+    pub optimizer_data: L::PerWeightStore,
+}
+
 pub struct Regressor<L:LearningRateTrait> {
     hash_mask: u32,
-    pub weights: Vec<Weight>,       // all weights and gradients (has sub-spaces)
+    pub weights: Vec<Weight2<L>>,       // all weights and gradients (has sub-spaces)
     pub ffm_weights_offset: u32, 
     ffm_k: u32,
     ffm_hashmask: u32,
@@ -78,6 +85,7 @@ pub trait RegressorTrait {
     fn get_fixed_regressor(&mut self) -> FixedRegressor;
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>>;
     fn overwrite_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>; 
+    fn get_name(&self) -> &'static str;
 }
 
 
@@ -94,7 +102,12 @@ pub fn get_regressor(mi: &model_instance::ModelInstance) -> Box<dyn RegressorTra
 }
 
 
-impl <L:LearningRateTrait>Regressor<L> {
+impl <L:LearningRateTrait>Regressor<L> 
+where <L as learning_rate::LearningRateTrait>::PerWeightStore: std::clone::Clone,
+L: std::clone::Clone
+{
+    
+
     pub fn new(mi: &model_instance::ModelInstance) -> Regressor<L> {
         let hash_mask = (1 << mi.bit_precision) -1;
         let lr_weights_len = hash_mask + 1;
@@ -135,7 +148,7 @@ impl <L:LearningRateTrait>Regressor<L> {
         // Now allocate weights
         let iw_weights_len = 0;
         rg.ffm_iw_weights_offset = lr_weights_len + ffm_weights_len;
-        rg.weights = vec![Weight{weight:0.0, acc_grad:0.0}; (lr_weights_len + ffm_weights_len + iw_weights_len) as usize];
+        rg.weights = vec![Weight2{weight:0.0, optimizer_data: L::empty_initial_data()}; (lr_weights_len + ffm_weights_len + iw_weights_len) as usize];
 
         if mi.ffm_k > 0 {       
             if mi.ffm_init_width == 0.0 {
@@ -145,7 +158,8 @@ impl <L:LearningRateTrait>Regressor<L> {
                     rg.weights[(rg.ffm_weights_offset + i) as usize].weight = (0.2*merand48((rg.ffm_weights_offset+i) as u64)-0.1) * rg.ffm_one_over_k_root;
                     //rng.gen_range(-0.1 * rg.ffm_one_over_k_root , 0.1 * rg.ffm_one_over_k_root );
                     // we set FFM gradients to 1.0, so we avoid NaN updates due to adagrad (accumulated_squared_gradients+grad^2).powf(negative_number) * 0.0 
-                    rg.weights[(rg.ffm_weights_offset + i) as usize].acc_grad = 1.0;
+//                    rg.weights[(rg.ffm_weights_offset + i) as usize].acc_grad = 1.0;
+                      rg.weights[(rg.ffm_weights_offset + i) as usize].optimizer_data = L::ffm_initial_data();
                 }
             } else {
                 for i in 0..ffm_weights_len {
@@ -153,7 +167,8 @@ impl <L:LearningRateTrait>Regressor<L> {
                                                                          merand48(i as u64) * mi.ffm_init_width;
                     //rng.gen_range(-0.1 * rg.ffm_one_over_k_root , 0.1 * rg.ffm_one_over_k_root );
                     // we set FFM gradients to 1.0, so we avoid NaN updates due to adagrad (accumulated_squared_gradients+grad^2).powf(negative_number) * 0.0 
-                    rg.weights[(rg.ffm_weights_offset + i) as usize].acc_grad = 1.0;
+//                    rg.weights[(rg.ffm_weights_offset + i) as usize].acc_grad = 1.0;
+                      rg.weights[(rg.ffm_weights_offset + i) as usize].optimizer_data = L::ffm_initial_data();
                 }
 
             }
@@ -163,6 +178,10 @@ impl <L:LearningRateTrait>Regressor<L> {
 }
     
 impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
+    fn get_name(&self) -> &'static str {
+        L::get_name()
+    }
+
     fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32 {
         unsafe {
         let y = fb.label; // 0.0 or 1.0
@@ -191,7 +210,7 @@ impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
             let feature_index     = hashvalue.hash;
             let feature_value:f32 = hashvalue.value;
             let feature_weight       = weights.get_unchecked(feature_index as usize).weight;
-            let accumulated_gradient = weights.get_unchecked(feature_index as usize).acc_grad;
+//            let accumulated_gradient = weights.get_unchecked(feature_index as usize).acc_grad;
             wsum += feature_weight * feature_value;
             local_data_lr.get_unchecked_mut(i).index       = feature_index;
             local_data_lr.get_unchecked_mut(i).value       = feature_value;
@@ -210,7 +229,7 @@ impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
 
             specialize_k!(self.ffm_k, FFMK, {
             for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                for (j, right_hash) in fb.ffm_buffer[i+1 ..].iter().enumerate() {
+                for (j, right_hash) in fb.ffm_buffer.get_unchecked(i+1 ..).iter().enumerate() {
                     if left_hash.contra_field_index == right_hash.contra_field_index {
                         continue	// not combining within a field
                     }
@@ -265,11 +284,7 @@ impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
                 let feature_value = local_data_lr.get_unchecked(i).value;
                 let feature_index = local_data_lr.get_unchecked(i).index as usize;
                 let gradient = general_gradient * feature_value;
-                let gradient_squared = gradient * gradient;
-                let accumulated_gradient_squared = weights.get_unchecked_mut(feature_index).acc_grad;
-                let new_accumulated_gradient_squared = accumulated_gradient_squared + gradient_squared;
-                let update = self.adagrad_lr.calculate_update(gradient, new_accumulated_gradient_squared);
-                weights.get_unchecked_mut(feature_index).acc_grad = new_accumulated_gradient_squared;
+                let update = self.adagrad_lr.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
                 weights.get_unchecked_mut(feature_index).weight += update;
             }
             
@@ -280,11 +295,7 @@ impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
                 }
                 let feature_index = local_data_ffm.get_unchecked(i).index as usize;
                 let gradient = general_gradient * feature_value;
-                let gradient_squared = gradient * gradient;
-                let accumulated_gradient_squared = weights.get_unchecked_mut(feature_index).acc_grad;
-                let new_accumulated_gradient_squared = accumulated_gradient_squared + gradient_squared;
-                let update = self.adagrad_ffm.calculate_update(gradient, new_accumulated_gradient_squared);
-                weights.get_unchecked_mut(feature_index).acc_grad = new_accumulated_gradient_squared;
+                let update = self.adagrad_ffm.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
                 weights.get_unchecked_mut(feature_index).weight += update;
             }
         }
@@ -295,9 +306,36 @@ impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
     
     fn get_fixed_regressor(&mut self) -> FixedRegressor {
         // This operation effectively destroys initial regressor since it 'steals' its weights array and doesn't make a copy
+        let v_from_raw = unsafe {
+            // let's establish this is a valid operation first, this means Weights2 has to be multiplier of Weight in size
+            assert!(mem::size_of::<Weight2<L>>() % mem::size_of::<Weight>() == 0);
+            // steal the old vector
+            let mut original_weights_vec = std::mem::replace(&mut self.weights, Vec::new());
+            // create an unsafe slice from it, so we will be able to address it in the old way
+            let original_weights_slice = slice::from_raw_parts(original_weights_vec.as_mut_ptr(), 
+                                        original_weights_vec.len() *mem::size_of::<Weight2<L>>());
+            // now take the old vec away from "GC"
+            let mut v_clone = std::mem::ManuallyDrop::new(original_weights_vec);
+            // assemble the new vector from the raw parts of the old one
+            let mut new_v = Vec::from_raw_parts(v_clone.as_mut_ptr() as *mut Weight,
+                                v_clone.len(),
+                                v_clone.capacity() * mem::size_of::<Weight2<L>>() / mem::size_of::<Weight>());
+            // now we take only the weight part of original vector and copy it to new one
+            // ISSUE: if any loop unrolling happens here, we might be in deep trouble
+            for (i, v) in v_clone.iter().enumerate() {
+                new_v[i].weight = v.weight;
+            }
+            // Let's resize the new vector, so it throws away unneeded memory
+            new_v.shrink_to_fit();
+//            println!("Size orig: {}, Size new: {}", v_clone.len(), new_v.len());
+//            println!("capacity orig: {}, capacitye new: {}", v_clone.capacity(), new_v.capacity());
+            new_v
+        };
+      
+        
         FixedRegressor {
                         hash_mask: self.hash_mask,
-                        weights: Arc::new(std::mem::replace(&mut self.weights, Vec::new())),
+                        weights: Arc::new(v_from_raw), //Arc::new(std::mem::replace(&mut self.weights, Vec::new())),
                         ffm_weights_offset: self.ffm_weights_offset,
                         ffm_k: self.ffm_k,
                         ffm_hashmask: self.ffm_hashmask,
@@ -309,7 +347,7 @@ impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
         output_bufwriter.write_u64::<LittleEndian>(self.weights.len() as u64)?;
         unsafe {
              let buf_view:&[u8] = slice::from_raw_parts(self.weights.as_ptr() as *const u8, 
-                                              self.weights.len() *mem::size_of::<Weight>());
+                                              self.weights.len() *mem::size_of::<Weight2<L>>());
              output_bufwriter.write(buf_view)?;
         }
         
@@ -323,7 +361,7 @@ impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
         }
         unsafe {
             let mut buf_view:&mut [u8] = slice::from_raw_parts_mut(self.weights.as_mut_ptr() as *mut u8, 
-                                             self.weights.len() *mem::size_of::<Weight>());
+                                             self.weights.len() *mem::size_of::<Weight2<L>>());
             input_bufreader.read_exact(&mut buf_view)?;
         }
 
@@ -422,9 +460,10 @@ mod tests {
         
         // Here learning rate mechanism does not affect the results, so let's verify three different ones
         let mut regressors: Vec<Box<dyn RegressorTrait>> = vec![
-            Box::new(Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi)),
+            //Box::new(Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi)),
             Box::new(Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi)),
-            Box::new(Regressor::<learning_rate::LearningRateSGD>::new(&mi))];
+            //Box::new(Regressor::<learning_rate::LearningRateSGD>::new(&mi))
+            ];
         
         for re in &mut regressors {
             assert_eq!(re.learn(vec_in, true, 0), 0.5);
@@ -453,7 +492,7 @@ mod tests {
 
 
     #[test]
-    fn test_power_t_half() {
+    fn test_power_t_half__() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
@@ -530,7 +569,8 @@ mod tests {
     fn ffm_fixed_init<T:LearningRateTrait>(mut rg: &mut Regressor<T>) -> () {
         for i in rg.ffm_weights_offset as usize..rg.weights.len() {
             rg.weights[i].weight = 1.0;
-            rg.weights[i].acc_grad = 1.0;
+//            rg.weights[i].acc_grad = 1.0;
+            rg.weights[i].optimizer_data = T::ffm_initial_data();
         }
     }
 
@@ -602,10 +642,4 @@ mod tests {
     }
 
 }
-
-
-
-
-
-
 
