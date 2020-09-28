@@ -26,10 +26,8 @@ pub struct Weight {
     pub acc_grad: f32,
 }
 
-
 pub struct IndexAccgradientValue {
     index: u32,
-    accgradient: f32,
     value: f32,
 }
 pub struct IndexAccgradientValueFFM {
@@ -62,16 +60,6 @@ pub struct FixedRegressor {
 }
 
 
-macro_rules! specialize_boolean {
-    ( $input_expr:expr, 
-      $output_const:ident,
-      $code_block:block  ) => {
-         match $input_expr {
-                true => {const $output_const:bool = true; $code_block},
-                false => {const $output_const:bool = false; $code_block},
-            }
-    };
-}
 macro_rules! specialize_k {
     ( $input_expr:expr, 
       $output_const:ident,
@@ -206,11 +194,8 @@ impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
             let accumulated_gradient = weights.get_unchecked(feature_index as usize).acc_grad;
             wsum += feature_weight * feature_value;
             local_data_lr.get_unchecked_mut(i).index       = feature_index;
-            local_data_lr.get_unchecked_mut(i).accgradient = accumulated_gradient;
             local_data_lr.get_unchecked_mut(i).value       = feature_value;
-            
         }
-
         
         if self.ffm_k > 0 {
             let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
@@ -275,14 +260,16 @@ impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
         if update && fb.example_importance != 0.0 {
             let general_gradient = (y - prediction_probability) * fb.example_importance;
 //            println!("General gradient: {}", general_gradient);
+
             for i in 0..local_data_lr_len {
                 let feature_value = local_data_lr.get_unchecked(i).value;
                 let feature_index = local_data_lr.get_unchecked(i).index as usize;
                 let gradient = general_gradient * feature_value;
                 let gradient_squared = gradient * gradient;
-                weights.get_unchecked_mut(feature_index).acc_grad += gradient_squared;
-                let accumulated_squared_gradient = local_data_lr.get_unchecked(i).accgradient;
-                let update = self.adagrad_lr.calculate_update(gradient, accumulated_squared_gradient + gradient_squared);
+                let accumulated_gradient_squared = weights.get_unchecked_mut(feature_index).acc_grad;
+                let new_accumulated_gradient_squared = accumulated_gradient_squared + gradient_squared;
+                let update = self.adagrad_lr.calculate_update(gradient, new_accumulated_gradient_squared);
+                weights.get_unchecked_mut(feature_index).acc_grad = new_accumulated_gradient_squared;
                 weights.get_unchecked_mut(feature_index).weight += update;
             }
             
@@ -296,8 +283,8 @@ impl <L:LearningRateTrait>RegressorTrait for Regressor<L> {
                 let gradient_squared = gradient * gradient;
                 let accumulated_gradient_squared = weights.get_unchecked_mut(feature_index).acc_grad;
                 let new_accumulated_gradient_squared = accumulated_gradient_squared + gradient_squared;
-                weights.get_unchecked_mut(feature_index).acc_grad = new_accumulated_gradient_squared;
                 let update = self.adagrad_ffm.calculate_update(gradient, new_accumulated_gradient_squared);
+                weights.get_unchecked_mut(feature_index).acc_grad = new_accumulated_gradient_squared;
                 weights.get_unchecked_mut(feature_index).weight += update;
             }
         }
@@ -578,10 +565,8 @@ mod tests {
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: 1}
                                   ], 2);
-        p = re.learn(&ffm_buf, true, 0);
-        assert_eq!(p, 0.7310586); 
-        p = re.learn(&ffm_buf, true, 0);
-        assert_eq!(p, 0.7024794);
+        assert_eq!(re.learn(&ffm_buf, true, 0), 0.7310586); 
+        assert_eq!(re.learn(&ffm_buf, true, 0), 0.7024794);
 
         // Two fields, use values
         let mut re = Regressor::<learning_rate::LearningRateAdagradLUT>::new(&mi);
@@ -590,10 +575,8 @@ mod tests {
                                   HashAndValueAndSeq{hash:1, value: 2.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: 1}
                                   ], 2);
-        p = re.learn(&ffm_buf, true, 0);
-        assert_eq!(p, 0.98201376);
-        p = re.learn(&ffm_buf, true, 0);
-        assert_eq!(p, 0.81377685);
+        assert_eq!(re.learn(&ffm_buf, true, 0), 0.98201376);
+        assert_eq!(re.learn(&ffm_buf, true, 0), 0.81377685);
 
 
     }
@@ -613,12 +596,9 @@ mod tests {
         
         let mut fb_instance = lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);
         fb_instance.example_importance = 0.5;
-        p = re.learn(&fb_instance, true, 0);
-        assert_eq!(p, 0.5);
-        p = re.learn(&fb_instance, true, 0);
-        assert_eq!(p, 0.49375027);
-        p = re.learn(&fb_instance, true, 0);
-        assert_eq!(p, 0.4875807);
+        assert_eq!(re.learn(&fb_instance, true, 0), 0.5);
+        assert_eq!(re.learn(&fb_instance, true, 0), 0.49375027);
+        assert_eq!(re.learn(&fb_instance, true, 0), 0.4875807);
     }
 
 }
