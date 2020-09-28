@@ -141,7 +141,7 @@ mod tests {
         let mut l_flex = LearningRateAdagradLUT::new();
         l_lut.init(0.15, 0.4);
         l_flex.init(0.15, 0.4);
-        let test_gradients = [-1.0, -0.9, -0.1, -0.00001, 0.00001, 0.1, 0.5, 0.9, 1.0];
+        let test_gradients = [-1.0, -0.9, -0.1, -0.00001, 0.0, 0.00001, 0.1, 0.5, 0.9, 1.0];
         let test_accumulations = [0.0000000001, 0.00001, 0.1, 0.5, 1.1, 2.0, 20.0, 200.0, 2000.0, 200000.0, 2000000.0];
 
         unsafe {
@@ -151,10 +151,15 @@ mod tests {
                     let p_flex = l_flex.calculate_update(*gradient, *accumulation);
                     let p_lut = l_lut.calculate_update(*gradient, *accumulation);
                     let error = (p_flex - p_lut).abs();
-                    let relative_error = error / p_flex.abs();
-                    println!("Relative error {}", relative_error);
-                    assert!(relative_error < 0.05); 
+                    let mut relative_error:f32;
+                    if p_flex != 0.0 {
+                        relative_error = error / p_flex.abs();
+                    } else {
+                        relative_error = error; // happens when the update is 0.0
+                    }
+//                    println!("Relative error {}", relative_error);
 //                    println!("Err: {} - p_flex: {}, p_lut: {}, gradient: {}, accumulation {}", error, p_flex, p_lut, *gradient, *accumulation);
+                    assert!(relative_error < 0.05); 
                 }
             }
         }
