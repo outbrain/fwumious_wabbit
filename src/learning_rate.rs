@@ -1,39 +1,66 @@
 
+use std::marker::PhantomData;
+
 
 pub trait LearningRateTrait {
+    type PerWeightStore;
     fn new() -> Self;
     fn init(&mut self, learning_rate: f32, power_t: f32);
-    unsafe fn calculate_update(&self, update: f32, accumulated_squared_gradient: f32) -> f32;
+    unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32;
+    fn empty_initial_data() -> Self::PerWeightStore;
+    fn ffm_initial_data() -> Self::PerWeightStore;
+    fn get_name() -> &'static str;
 }
 
 /******************* SGD **************************/
 // This is non-adaptive fixed learning rate SGD, which is exactly the same as Vowpal when --power_t is 0.0
+#[derive(Clone)]
 pub struct LearningRateSGD {
     learning_rate: f32,    
 }
 
 impl LearningRateTrait for LearningRateSGD {
+    type PerWeightStore = PhantomData<u32>;
+    
+    fn get_name() -> &'static str {
+        "SGD"
+    }
+    
     fn new() -> Self {
         LearningRateSGD{learning_rate: 0.0}
     } 
+    
     fn init(&mut self, learning_rate: f32, power_t: f32) {
         self.learning_rate = learning_rate;
     }
 
     #[inline(always)]
-    unsafe fn calculate_update(&self, update: f32, accumulated_squared_gradient: f32) -> f32{
-        return update * self.learning_rate;
+    unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32 {
+        return gradient * self.learning_rate;
+    }
+
+    fn empty_initial_data() -> Self::PerWeightStore {
+        std::marker::PhantomData{}
+    }
+    fn ffm_initial_data() -> Self::PerWeightStore {
+        std::marker::PhantomData{}
     }
 }
 
 
 /******************* Adagrad with flexible power_t  **************************/
+#[derive(Clone)]
 pub struct LearningRateAdagradFlex {
     learning_rate: f32,   
     minus_power_t: f32,
 }
 
 impl LearningRateTrait for LearningRateAdagradFlex {
+    fn get_name() -> &'static str {
+        "AdagradFlex"
+    }
+    type PerWeightStore = f32;
+
     fn new() -> Self {
         LearningRateAdagradFlex{learning_rate: 0.0, minus_power_t: 0.0}
     } 
@@ -43,11 +70,24 @@ impl LearningRateTrait for LearningRateAdagradFlex {
         self.minus_power_t = - power_t;
     }
 
+//    unsafe fn calculate_update(&self, update: f32, accumulated_squared_gradient: f32) -> f32{
     #[inline(always)]
-    unsafe fn calculate_update(&self, update: f32, accumulated_squared_gradient: f32) -> f32{
-        let learning_rate = self.learning_rate * (accumulated_squared_gradient).powf(self.minus_power_t);
-        return update * learning_rate;
+    unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32 {
+        let accumulated_gradient_squared = *data;
+        let gradient_squared = gradient * gradient;
+        let new_accumulated_gradient_squared = accumulated_gradient_squared + gradient_squared;
+        *data = new_accumulated_gradient_squared;
+        let update =  gradient * self.learning_rate * (new_accumulated_gradient_squared).powf(self.minus_power_t);
+        return update;
     }
+    
+    fn empty_initial_data() -> Self::PerWeightStore {
+        0.0f32
+    }
+    fn ffm_initial_data() -> Self::PerWeightStore {
+        1.0f32
+    }
+    
 }
 
 
@@ -56,11 +96,17 @@ impl LearningRateTrait for LearningRateAdagradFlex {
 pub const FASTMATH_LR_LUT_BITS:u8 = 11;
 pub const FASTMATH_LR_LUT_SIZE:usize = 1 <<  FASTMATH_LR_LUT_BITS;
 
+#[derive(Clone)]
 pub struct LearningRateAdagradLUT {
    pub fastmath_lr_lut: [f32; FASTMATH_LR_LUT_SIZE], 
 }
 
 impl LearningRateTrait for LearningRateAdagradLUT {
+    fn get_name() -> &'static str {
+        "AdagradLUT"
+    }
+    type PerWeightStore = f32;
+
     fn new() -> Self {
         LearningRateAdagradLUT{fastmath_lr_lut: [0.0;FASTMATH_LR_LUT_SIZE]}
     } 
@@ -85,13 +131,34 @@ impl LearningRateTrait for LearningRateAdagradLUT {
         }
     }
     
-    #[inline(always)]
+/*    #[inline(always)]
     unsafe fn calculate_update(&self, update: f32, accumulated_squared_gradient: f32) -> f32 {
         debug_assert!(accumulated_squared_gradient >= 0.0);
         let key = accumulated_squared_gradient.to_bits() >> (31-FASTMATH_LR_LUT_BITS);
         return update * *self.fastmath_lr_lut.get_unchecked(key as usize);
+    }*/
+
+    #[inline(always)]
+    unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32 {
+        let accumulated_gradient_squared = *data;
+        debug_assert!(accumulated_gradient_squared >= 0.0);
+        let gradient_squared = gradient * gradient;
+        let new_accumulated_gradient_squared = accumulated_gradient_squared + gradient_squared;
+        *data = new_accumulated_gradient_squared;
+        let key = new_accumulated_gradient_squared.to_bits() >> (31-FASTMATH_LR_LUT_BITS);
+        let update = gradient * *self.fastmath_lr_lut.get_unchecked(key as usize);
+        return update;
     }
+
+    fn empty_initial_data() -> Self::PerWeightStore {
+        0.0f32
+    }
+    fn ffm_initial_data() -> Self::PerWeightStore {
+        1.0f32
+    }
+
 }
+
 
 
 
@@ -105,7 +172,8 @@ mod tests {
         let mut l = LearningRateSGD::new();
         l.init(0.15, 0.4);
         unsafe {
-            let p = l.calculate_update(0.1, 0.9);
+            let mut acc: PhantomData<u32> = std::marker::PhantomData{};
+            let p = l.calculate_update(0.1, &mut acc);
             assert_eq!(p, 0.1* 0.15);
         }
     }
@@ -115,25 +183,41 @@ mod tests {
         let mut l = LearningRateAdagradFlex::new();
         l.init(0.15, 0.4);
         unsafe {
-            let p = l.calculate_update(0.1, 0.9);
-            assert_eq!(p, 0.015645673);
-            let p = l.calculate_update(0.1, 0.0);
-            assert_eq!(p, f32::INFINITY);
+            let mut acc: f32;
+            acc = 0.9;
+            let p = l.calculate_update(0.1, &mut acc);
+            assert_eq!(p, 0.015576674);
+            assert_eq!(acc, 0.9 + 0.1*0.1);
+
+            acc = 0.0;
+            let p = l.calculate_update(0.1, &mut acc);
+            assert_eq!(p, 0.09464361);
+            assert_eq!(acc, 0.1*0.1);
+            
         }
     }
-    
+
     #[test]
     fn test_adagradlut() {
         let mut l = LearningRateAdagradLUT::new();
         l.init(0.15, 0.4);
         unsafe {
-            let p = l.calculate_update(0.1, 0.9);
-            assert_eq!(p, 0.015607622);         
-            let p = l.calculate_update(0.1, 0.0);
-            assert_eq!(p, f32::INFINITY);
+            let mut acc: f32;
+            acc = 0.9;
+            let p = l.calculate_update(0.1, &mut acc);
+            assert_eq!(p, 0.015607622);
+            assert_eq!(acc, 0.9 + 0.1*0.1);
+
+            acc = 0.0;
+            let p = l.calculate_update(0.1, &mut acc);
+            assert_eq!(p, 0.09375872);
+            assert_eq!(acc, 0.1*0.1);
+            
         }
     }
 
+
+    
     #[test]
     fn test_adagradlut_comparison() {
         // Here we test that our implementation of LUT has small enough relative error
@@ -148,8 +232,10 @@ mod tests {
             let mut error_sum = 0.0;
             for gradient in test_gradients.iter() {
                 for accumulation in test_accumulations.iter() {
-                    let p_flex = l_flex.calculate_update(*gradient, *accumulation);
-                    let p_lut = l_lut.calculate_update(*gradient, *accumulation);
+                    let mut acc_flex: f32 = *accumulation;
+                    let p_flex = l_flex.calculate_update(*gradient, &mut acc_flex);
+                    let mut acc_lut: f32 = *accumulation;
+                    let p_lut = l_lut.calculate_update(*gradient, &mut acc_lut);
                     let error = (p_flex - p_lut).abs();
                     let mut relative_error:f32;
                     if p_flex != 0.0 {

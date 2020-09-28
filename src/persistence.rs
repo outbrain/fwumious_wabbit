@@ -19,6 +19,7 @@ use crate::learning_rate;
 use crate::regressor::Regressor;
 use learning_rate::LearningRateTrait;
 use regressor::RegressorTrait;
+use std::any::type_name;
 
 const REGRESSOR_HEADER_MAGIC_STRING: &[u8; 4] = b"FWRE";    // Fwumious Wabbit REgressor
 const REGRESSOR_HEADER_VERSION:u32 = 4;
@@ -65,6 +66,7 @@ pub fn save_regressor_to_filename(
         write_regressor_header(output_bufwriter)?;
         vwmap.save_to_buf(output_bufwriter)?;
         mi.save_to_buf(output_bufwriter)?;
+        println!("SAVE MI optimizer: {:?}", mi.optimizer);
         re.write_weights_to_buf(output_bufwriter)?;
         Ok(())
     }
@@ -86,6 +88,7 @@ pub fn new_regressor_from_filename(
     verify_header(input_bufreader).expect("Regressor header error");    
     let vw = vwmap::VwNamespaceMap::new_from_buf(input_bufreader).expect("Loading vwmap from regressor failed");
     let mi = model_instance::ModelInstance::new_from_buf(input_bufreader).expect("Loading model instance from regressor failed");
+    println!("LOAD MI optimizer: {:?}", mi.optimizer);
     let mut re = regressor::get_regressor(&mi);
     re.overwrite_weights_from_buf(&mut input_bufreader)?;
     Ok((mi, vw, re))
@@ -129,11 +132,13 @@ B,featureB
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
-        mi.bit_precision = 18;        
-        let mut rr = regressor::Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
+        mi.bit_precision = 18;
+        mi.optimizer = model_instance::Optimizer::Adagrad;
+        mi.fastmath = false;
+        let mut rr = regressor::get_regressor(&mi);
         let dir = tempfile::tempdir().unwrap();
         let regressor_filepath = dir.path().join("test_regressor.fw");
-        save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, Box::new(rr)).unwrap();
+        save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, rr).unwrap();
     }    
 
     fn lr_vec(v:Vec<feature_buffer::HashAndValue>) -> feature_buffer::FeatureBuffer {
@@ -157,34 +162,38 @@ B,featureB
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
         mi.bit_precision = 18;        
-        let mut rr = regressor::Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
+        mi.optimizer = model_instance::Optimizer::Adagrad;
+        mi.fastmath = false;
+        let mut rr = regressor::get_regressor(&mi);
+
         let mut p: f32;
-        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true, 0);
-        assert_eq!(p, 0.5);
-        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true, 0);
-        assert_eq!(p, 0.45016602);
-        p = rr.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), false, 0);
-        assert_eq!(p, 0.41731137);
+        let v = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]);
+        assert_eq!(rr.learn(v, true, 0), 0.5);
+        assert_eq!(rr.learn(v, true, 0), 0.45016602);
+        assert_eq!(rr.learn(v, false, 0), 0.41731137);
         let dir = tempdir().unwrap();
         let regressor_filepath = dir.path().join("test_regressor.fw");
-        save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, Box::new(rr)).unwrap();
+        println!("Type 1: {}", rr.get_name());
+        save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, rr).unwrap();
 
         // Now let's load the saved regressor
+        
         let (mi2, vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
+        println!("Type 2: {}", re2.get_name());
 
         // predict with the same feature vector
-        p = re2.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), false, 0);
+        p = re2.learn(v, false, 0);
         assert_eq!(p, 0.41731137);
 
         let re_fixed = Arc::new(re2.get_fixed_regressor());
-        p = re_fixed.predict(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), 0);
+        p = re_fixed.predict(v, 0);
         assert_eq!(p, 0.41731137);
     }    
 
     fn ffm_fixed_init<T:LearningRateTrait>(mut rg: &mut Regressor<T>) -> () {
         for i in rg.ffm_weights_offset as usize..rg.weights.len() {
             rg.weights[i].weight = 1.0;
-            rg.weights[i].acc_grad = 1.0;
+            rg.weights[i].optimizer_data = T::ffm_initial_data();
         }
     }
 
@@ -216,6 +225,8 @@ B,featureB
         mi.ffm_power_t = 0.0;
         mi.ffm_learning_rate = 0.1;
         mi.ffm_fields = vec![vec![],vec![]]; 
+        mi.optimizer = model_instance::Optimizer::Adagrad;
+        mi.fastmath = false;
         let mut rr = regressor::Regressor::<learning_rate::LearningRateAdagradFlex>::new(&mi);
         let mut p: f32;
 
