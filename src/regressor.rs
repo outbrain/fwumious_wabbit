@@ -203,8 +203,7 @@ impl <L:OptimizerTrait>RegressorTrait for Regressor<L> {
 //            _mm_prefetch(mem::transmute::<&f32, &i8>(weights.get_unchecked((fbuf.get_unchecked(i+8).hash << 1) as usize)), _MM_HINT_T0);  // No benefit for now
             let feature_index     = hashvalue.hash;
             let feature_value:f32 = hashvalue.value;
-            let feature_weight       = weights.get_unchecked(feature_index as usize).weight;
-//            let accumulated_gradient = weights.get_unchecked(feature_index as usize).acc_grad;
+            let feature_weight    = weights.get_unchecked(feature_index as usize).weight;
             wsum += feature_weight * feature_value;
             local_data_lr.get_unchecked_mut(i).index       = feature_index;
             local_data_lr.get_unchecked_mut(i).value       = feature_value;
@@ -222,13 +221,18 @@ impl <L:OptimizerTrait>RegressorTrait for Regressor<L> {
             }
 
             specialize_k!(self.ffm_k, FFMK, {
+            let mut ifc:usize = 0;
             for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                for (j, right_hash) in fb.ffm_buffer.get_unchecked(i+1 ..).iter().enumerate() {
+                let mut right_local_index = left_hash.contra_field_index as usize + ifc;
+                for right_hash in fb.ffm_buffer.get_unchecked(i+1 ..).iter() {
+                    right_local_index += fc;
                     if left_hash.contra_field_index == right_hash.contra_field_index {
                         continue	// not combining within a field
                     }
-                    let left_local_index = i*fc as usize + right_hash.contra_field_index as usize;
-                    let right_local_index = (i+1+j) * fc as usize + left_hash.contra_field_index as usize;
+                    // FYI this is effectively what happens:
+//                    let left_local_index =  i*fc + right_hash.contra_field_index as usize;
+//                    let right_local_index = (i+1+j) * fc + left_hash.contra_field_index as usize;
+                    let left_local_index = ifc + right_hash.contra_field_index as usize;
                     let joint_value = left_hash.value * right_hash.value;
                     let lindex = local_data_ffm.get_unchecked(left_local_index).index as usize;
                     let rindex = local_data_ffm.get_unchecked(right_local_index).index as usize;
@@ -245,6 +249,8 @@ impl <L:OptimizerTrait>RegressorTrait for Regressor<L> {
                         wsum += left_hash_weight * right_side;
                     }
                 }
+                ifc += fc;
+                
             }
         
             });
@@ -303,6 +309,8 @@ impl <L:OptimizerTrait>RegressorTrait for Regressor<L> {
         let v_from_raw = unsafe {
             // let's establish this is a valid operation first, this means WeightAndOptimizerData has to be multiplier of Weight in size
             assert!(mem::size_of::<WeightAndOptimizerData<L>>() % mem::size_of::<Weight>() == 0);
+            assert!(mem::align_of::<WeightAndOptimizerData<L>>() == mem::align_of::<Weight>());
+            
             // steal the old vector
             let mut original_weights_vec = std::mem::replace(&mut self.weights, Vec::new());
             // create an unsafe slice from it, so we will be able to address it in the old way
