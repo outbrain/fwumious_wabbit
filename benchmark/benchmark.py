@@ -74,6 +74,7 @@ if __name__ == "__main__":
         cleanup()
 
     if action == "generate" or action == "all":
+        print("generating dataset, this may take a while")
         generate.generate()
         gzip_file("train.vw")
 
@@ -84,13 +85,13 @@ if __name__ == "__main__":
             vw_train_cmd = "vw --data train.vw.gz -l 0.1 -b 25 -c --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor vw_model --save_resume --interactions AB"
             vw_train_time, vw_train_mem, vw_train_cpu = time_bash_cmd(vw_train_cmd)
             vw_train_time_with_cache, vw_mem_with_cache, vw_cpu_with_cache = time_bash_cmd(vw_train_cmd)
-            print(f"vw train time: {vw_train_time}")
-            print(f"vw train time - with cache: {vw_train_time_with_cache}")
+            print(f"vw train time: {vw_train_time} seconds, using {vw_train_mem} KB and {vw_train_cpu} CPU")
+            print(f"vw train time - with cache: {vw_train_time_with_cache} seconds, using {vw_mem_with_cache} KB and {vw_cpu_with_cache} CPU")
 
         if benchmark_fw:
             fw_train_cmd = "../target/release/fw --data train.vw.gz -l 0.1 -b 25 -c --adaptive --fastmath --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor fw_model --save_resume --interactions AB"
 
             fw_train_time, fw_train_mem, fw_train_cpu = time_bash_cmd(fw_train_cmd)
             fw_train_time_with_cache, fw_mem_with_cache, fw_cpu_with_cache = time_bash_cmd(fw_train_cmd)
-            print(f"fw train time: {fw_train_time}")
-            print(f"fw train time - with cache: {fw_train_time_with_cache}")
+            print(f"fw train time: {fw_train_time} seconds, using {fw_train_mem} KB and {fw_train_cpu} CPU")
+            print(f"fw train time - with cache: {fw_train_time_with_cache} seconds, using {fw_mem_with_cache} KB and {fw_cpu_with_cache} CPU")
