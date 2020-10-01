@@ -32,7 +32,8 @@ def memit(cmd):
         elif "percent of cpu this job got" in line:
             cpu = line.split(" ")[-1]
         elif "elapsed (wall clock) time" in line:
-            time = line.split(" ")[-1]
+            split_line = line.split(" ")[-1].split(":")
+            time = 60*float(split_line[0]) + float(split_line[1])
         elif "maximum resident set size" in line:
             split_line = [t.strip() for t in line.strip().split(" ")]
             if s == "Linux":
