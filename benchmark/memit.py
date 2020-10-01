@@ -17,20 +17,32 @@ def memit(cmd):
         output = check_output(f"{time_cmd} {cmd}", shell=True, stderr=subprocess.STDOUT).decode()
     except CalledProcessError as e:
         output = e.output.decode()
-        success = False
+        print(output)
+        return None
 
     lines = output.lower().replace("\t", "").split("\n")
+
+    mem = 0
+    time = 0
+    cpu = 0
+
     for line in lines:
-        if "maximum resident set size" in line:
+        if line.startswith("real"):
+            time = line.split(" ")[-1]
+        elif "percent of cpu this job got" in line:
+            cpu = line.split(" ")[-1]
+        elif "elapsed (wall clock) time" in line:
+            time = line.split(" ")[-1]
+        elif "maximum resident set size" in line:
             split_line = [t.strip() for t in line.strip().split(" ")]
             if s == "Linux":
-                res = int(split_line[-1])
+                mem = int(split_line[-1])
             elif s == "Darwin":
-                res = int(split_line[0])/1024.0
-            break
-    return res
-   
+                mem = int(split_line[0])/1024.0
+    return time, mem, cpu
+
+
 if __name__ == "__main__":
     cmd = " ".join(sys.argv[1:])
-    res = memit(cmd)
-    print(res)
+    time, mem, cpu = memit(cmd)
+    print(f"{time}, {mem}, {cpu}")
