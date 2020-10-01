@@ -1,8 +1,7 @@
 import os.path
 import sys
-import timeit
+import memit
 import subprocess
-import timeit
 import psutil
 import platform
 import generate
@@ -54,8 +53,9 @@ def gzip_file(f):
 
 
 def time_bash_cmd(cmd, number=1):
-    return timeit.Timer("subprocess.call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)",
-                        f"import subprocess; cmd='{cmd}'").timeit(number=number)
+    return memit.memit(cmd)
+    # return timeit.Timer("subprocess.call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)",
+    #                     f"import subprocess; cmd='{cmd}'").timeit(number=number)
 
 
 if __name__ == "__main__":
@@ -82,15 +82,15 @@ if __name__ == "__main__":
 
         if benchmark_vw:
             vw_train_cmd = "vw --data train.vw.gz -l 0.1 -b 25 -c --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor vw_model --save_resume --interactions AB"
-            vw_train_time = time_bash_cmd(vw_train_cmd)
-            vw_train_time_with_cache = time_bash_cmd(vw_train_cmd)
+            vw_train_time, vw_train_mem, vw_train_cpu = time_bash_cmd(vw_train_cmd)
+            vw_train_time_with_cache, vw_mem_with_cache, vw_cpu_with_cache = time_bash_cmd(vw_train_cmd)
             print(f"vw train time: {vw_train_time}")
             print(f"vw train time - with cache: {vw_train_time_with_cache}")
 
         if benchmark_fw:
             fw_train_cmd = "../target/release/fw --data train.vw.gz -l 0.1 -b 25 -c --adaptive --fastmath --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor fw_model --save_resume --interactions AB"
 
-            fw_train_time = time_bash_cmd(fw_train_cmd)
-            fw_train_time_with_cache = time_bash_cmd(fw_train_cmd)
+            fw_train_time, fw_train_mem, fw_train_cpu = time_bash_cmd(fw_train_cmd)
+            fw_train_time_with_cache, fw_mem_with_cache, fw_cpu_with_cache = time_bash_cmd(fw_train_cmd)
             print(f"fw train time: {fw_train_time}")
             print(f"fw train time - with cache: {fw_train_time_with_cache}")
