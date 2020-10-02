@@ -170,6 +170,23 @@ L: std::clone::Clone
         rg
     }
 }
+
+
+#[inline(always)]
+pub fn stable_logistic(t: f32) -> f32 {
+    if t > 0.0 {
+        return (1.0 +(-t).exp()).recip();
+    } else {
+        let texp = t.exp();
+        return texp / (1.0 + texp);
+    }
+}
+
+#[inline(always)]
+pub fn logistic(t: f32) -> f32 {
+    return (1.0+(-t).exp()).recip();
+}
+
     
 impl <L:OptimizerTrait>RegressorTrait for Regressor<L> {
     fn get_name(&self) -> &'static str {
@@ -256,21 +273,18 @@ impl <L:OptimizerTrait>RegressorTrait for Regressor<L> {
             });
         }
         // Trick: instead of multiply in the updates with learning rate, multiply the result
-        let prediction = -wsum;
+        let prediction = wsum;
         // vowpal compatibility
         if prediction.is_nan() {
             eprintln!("NAN prediction in example {}, forcing 0.0", example_num);
-            let prediction_finalized:f32 = 0.0;
-            return (1.0+(prediction_finalized).exp()).recip();
+            return logistic(0.0);
         } else if prediction < -50.0 {
-            let prediction_finalized:f32 = -50.0;
-            return (1.0+(prediction_finalized).exp()).recip();
+            return logistic(-50.0);
         } else if prediction > 50.0 {
-            let prediction_finalized:f32 = 50.0;
-            return (1.0+(prediction_finalized).exp()).recip();
+            return logistic(50.0);
         }
 
-        let prediction_probability:f32 = (1.0+(prediction).exp()).recip();
+        let prediction_probability:f32 = logistic(prediction);
 
         // Weights are now writable, but local_data is read only
         let weights = &mut self.weights;
