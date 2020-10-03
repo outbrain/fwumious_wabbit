@@ -2,7 +2,7 @@ use crate::model_instance;
 use crate::parser;
 
 const VOWPAL_FNV_PRIME:u32 = 16777619;	// vowpal magic number
-const CONSTANT_NAMESPACE:usize = 128;
+//const CONSTANT_NAMESPACE:usize = 128;
 const CONSTANT_HASH:u32 = 11650396;
 
 
@@ -79,7 +79,7 @@ impl FeatureBufferTranslator {
         };
         fb.lr_buffer.resize(LR_BUFFER_LEN, HashAndValue {hash:0, value:0.0});
         // avoid doing any allocations in translate
-        let mut fbt = FeatureBufferTranslator{
+        let fbt = FeatureBufferTranslator{
                             model_instance: model_instance.clone(),
                             hashes_vec_in : Vec::with_capacity(100),
                             hashes_vec_out : Vec::with_capacity(100),
@@ -153,7 +153,7 @@ impl FeatureBufferTranslator {
             let ffm_buffer = &mut self.feature_buffer.ffm_buffer;
             ffm_buffer.truncate(0);
             self.feature_buffer.ffm_fields_count = self.model_instance.ffm_fields.len() as u32;    
-            let feature_len = self.feature_buffer.ffm_fields_count * self.model_instance.ffm_k;
+            //let feature_len = self.feature_buffer.ffm_fields_count * self.model_instance.ffm_k;
             for (contra_field_index, ffm_field) in self.model_instance.ffm_fields.iter().enumerate() {
                 for feature_index in ffm_field {
                     feature_reader!(record_buffer, feature_index, hash_data, hash_value, {
@@ -362,7 +362,7 @@ mod tests {
                                                         weight: 1.0});
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
-        let mut rb = add_header(vec![parser::NULL]); // no feature
+        let rb = add_header(vec![parser::NULL]); // no feature
         fbt.translate_vowpal(&rb);
         assert_eq!(fbt.feature_buffer.example_importance, 1.0); // Did example importance get parsed correctly
     }

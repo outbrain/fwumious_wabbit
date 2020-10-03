@@ -5,8 +5,7 @@ use std::io::ErrorKind;
 use std::io::Read;
 use std::fs::File;
 use serde::{Serialize,Deserialize};//, Deserialize};
-use clap::Arg;
-use serde_json::{Value,from_str};
+use serde_json::{Value};
 
 use crate::vwmap;
 
@@ -102,7 +101,7 @@ fn create_feature_combo_desc(vw: &vwmap::VwNamespaceMap, s: &str) -> Result<Feat
 
 impl ModelInstance {
     pub fn new_empty() -> Result<ModelInstance, Box<dyn Error>> {
-        let mut mi = ModelInstance {
+        let mi = ModelInstance {
             learning_rate: 0.5, // vw default
             ffm_learning_rate: 0.5, // vw default
             minimum_learning_rate: 0.0, 
@@ -296,11 +295,9 @@ impl ModelInstance {
                                 weight: 1.0,
                                 };
 
-//            let mut feature_vec: Vec<usize> = Vec::new();
             let fname = feature.as_str().unwrap();
             let primitive_features = fname.split(",");
             for primitive_feature_name in primitive_features {
-            //println!("F: {:?}", primitive_feature_name);
                 let index = match vw.map_name_to_index.get(primitive_feature_name) {
                     Some(index) => *index,
                     None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown feature name in model json: {}", primitive_feature_name))))
