@@ -85,7 +85,7 @@ impl OptimizerTrait for OptimizerAdagradFlex {
         0.0f32
     }
     fn ffm_initial_data() -> Self::PerWeightStore {
-        1.0f32
+        0.1f32
     }
     
 }
@@ -147,7 +147,7 @@ impl OptimizerTrait for OptimizerAdagradLUT {
         0.0f32
     }
     fn ffm_initial_data() -> Self::PerWeightStore {
-        1.0f32
+        0.1f32
     }
 
 }
