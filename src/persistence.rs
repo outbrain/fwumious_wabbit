@@ -1,14 +1,8 @@
-use std::{mem,slice};
-
 use std::str;
 use std::error::Error;
-use std::io::Error as IOError;
-use std::io::ErrorKind;
-use std::sync::Arc;
 
-use std::io::{Read, Write};
+use std::io::{Read};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use std::io::Take;
 use std::fs::File;
 use std::io;
 use std::fs;
@@ -17,10 +11,8 @@ use crate::model_instance;
 use crate::regressor;
 use crate::vwmap;
 use crate::optimizer;
-use crate::regressor::Regressor;
 use optimizer::OptimizerTrait;
 use regressor::RegressorTrait;
-use std::any::type_name;
 
 const REGRESSOR_HEADER_MAGIC_STRING: &[u8; 4] = b"FWRE";    // Fwumious Wabbit REgressor
 const REGRESSOR_HEADER_VERSION:u32 = 4;
@@ -63,7 +55,7 @@ pub fn save_regressor_to_filename(
                         vwmap: &vwmap::VwNamespaceMap,
                         re: Box<dyn regressor::RegressorTrait>,
                         ) -> Result<(), Box<dyn Error>> {
-        let mut output_bufwriter = &mut io::BufWriter::new(fs::File::create(filename).unwrap());
+        let output_bufwriter = &mut io::BufWriter::new(fs::File::create(filename).unwrap());
         write_regressor_header(output_bufwriter)?;
         vwmap.save_to_buf(output_bufwriter)?;
         mi.save_to_buf(output_bufwriter)?;
@@ -87,7 +79,7 @@ fn load_regressor_without_weights(input_bufreader: &mut io::BufReader::<File>)
     verify_header(input_bufreader).expect("Regressor header error");    
     let vw = vwmap::VwNamespaceMap::new_from_buf(input_bufreader).expect("Loading vwmap from regressor failed");
     let mi = model_instance::ModelInstance::new_from_buf(input_bufreader).expect("Loading model instance from regressor failed");
-    let mut re = regressor::get_regressor_without_weights(&mi);//_without_weights(&mi);
+    let re = regressor::get_regressor_without_weights(&mi);//_without_weights(&mi);
     Ok((mi, vw, re))
 }
 
@@ -142,10 +134,9 @@ mod tests {
     use crate::feature_buffer;
     use crate::feature_buffer::HashAndValue;
     use crate::feature_buffer::HashAndValueAndSeq;
-    use std::sync::Arc;
     use regressor::Regressor;
 
-    use tempfile::{tempdir, NamedTempFile};
+    use tempfile::{tempdir};
     #[test]
     fn save_empty_model() {
         let vw_map_string = r#"
@@ -159,7 +150,7 @@ B,featureB
         mi.bit_precision = 18;
         mi.optimizer = model_instance::Optimizer::Adagrad;
         mi.fastmath = false;
-        let mut rr = regressor::get_regressor(&mi);
+        let rr = regressor::get_regressor(&mi);
         let dir = tempfile::tempdir().unwrap();
         let regressor_filepath = dir.path().join("test_regressor.fw");
         save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, rr).unwrap();
@@ -190,15 +181,13 @@ B,featureB
         mi.fastmath = false;
         let mut re = regressor::get_regressor(&mi);
 
-        let mut p: f32;
         let fbuf = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]);
         assert_eq!(re.learn(fbuf, true, 0), 0.5);
         assert_eq!(re.learn(fbuf, true, 0), 0.45016602);
         assert_eq!(re.learn(fbuf, false, 0), 0.41731137);
 
-        p = re.learn(fbuf, false, 0);
         let CONST_RESULT = 0.41731137;
-        assert_eq!(p, CONST_RESULT);
+        assert_eq!(re.learn(fbuf, false, 0), CONST_RESULT);
 
         // Now we test conversion to fixed regressor 
         {
@@ -213,17 +202,17 @@ B,featureB
             save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, re).unwrap();
 
             // a) load as regular regressor
-            let (mi2, vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
+            let (_mi2, _vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
             assert_eq!(re2.learn(fbuf, false, 0), CONST_RESULT);
 
             // b) load as fixed regressor
-            let (mi2, vw2, mut re_fixed) = new_fixed_regressor_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
+            let (_mi2, _vw2, re_fixed) = new_fixed_regressor_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
             assert_eq!(re_fixed.predict(fbuf, 0), CONST_RESULT);
         }
 
     }    
 
-    fn ffm_fixed_init<T:OptimizerTrait>(mut rg: &mut Regressor<T>) -> () {
+    fn ffm_fixed_init<T:OptimizerTrait>(rg: &mut Regressor<T>) -> () {
         for i in rg.ffm_weights_offset as usize..rg.weights.len() {
             rg.weights[i].weight = 1.0;
             rg.weights[i].optimizer_data = T::ffm_initial_data();
@@ -287,11 +276,11 @@ B,featureB
             save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, Box::new(re)).unwrap();
 
             // a) load as regular regressor
-            let (mi2, vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
+            let (_mi2, _vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
             assert_eq!(re2.learn(fbuf, false, 0), CONST_RESULT);
 
             // b) load as fixed regressor
-            let (mi2, vw2, mut re_fixed) = new_fixed_regressor_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
+            let (_mi2, _vw2, re_fixed) = new_fixed_regressor_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
             assert_eq!(re_fixed.predict(fbuf, 0), CONST_RESULT);
         }
 
