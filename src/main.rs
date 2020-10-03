@@ -1,27 +1,17 @@
 #![allow(dead_code)]
-//#![allow(unused_imports)]
+#![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(unused_mut)]
 #![allow(non_snake_case)]
-use std::io::Error as IOError;
-use std::io::ErrorKind;
 use std::error::Error;
-use std::env;
 use std::path::Path;
-use std::process::exit;
 use std::fs::File;
 use std::io;
 use std::io::BufWriter;
-use std::fmt;
-use std::str;
 use std::io::Write;
 use std::io::BufRead;
 use std::f32;
-//use std::cmp::min;
 use std::collections::VecDeque;
-//use std::io::ErrorKind;
-//use std::iter::Peekable;
-use fasthash::xx;
 use std::time::Instant;
 use flate2::read::MultiGzDecoder;
 
@@ -37,7 +27,7 @@ mod persistence;
 mod serving;
 mod optimizer;
 
-use crate::regressor::RegressorTrait;
+//use crate::regressor::RegressorTrait;
 
 
 fn main() {
@@ -74,9 +64,9 @@ fn main2() -> Result<(), Box<dyn Error>>  {
     
     /* setting up the pipeline, either from command line or from existing regressor */
     // we want heal-allocated objects here
-    let mut vw: vwmap::VwNamespaceMap;
+    let vw: vwmap::VwNamespaceMap;
     let mut re: Box<dyn regressor::RegressorTrait>;
-    let mut mi: model_instance::ModelInstance;
+    let mi: model_instance::ModelInstance;
 
 
     if cl.is_present("daemon") {
@@ -86,7 +76,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         let (mi2, vw2, re_fixed) = persistence::new_fixed_regressor_from_filename(filename)?;
         mi = mi2; vw = vw2;
         let mut se = serving::Serving::new(&cl, &vw, re_fixed, &mi)?;
-        let s = se.serve();
+        se.serve()?;
     } else {
         if let Some(filename) = cl.value_of("initial_regressor") {
             println!("initial_regressor = {}", filename);
@@ -131,7 +121,6 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             false => { bb = io::BufReader::new(input); &mut bb}
         };
 
-        let mut empty = io::empty();
         let mut pa = parser::VowpalParser::new(&vw);
 
         let now = Instant::now();
@@ -139,13 +128,13 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         loop {
 
             let reading_result;
-            let mut buffer:&[u32];
+            let buffer:&[u32];
             if !cache.reading {
                 reading_result = pa.next_vowpal(&mut bufferred_input);
                 buffer = match reading_result {
                         Ok([]) => break, // EOF
                         Ok(buffer2) => buffer2,
-                        Err(e) => return Err("Error")?
+                        Err(_e) => return Err("Error")?
                 };
                 if cache.writing {
                         cache.push_record(buffer)?;
@@ -155,7 +144,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
                 buffer = match reading_result {
                         Ok([]) => break, // EOF
                         Ok(buffer) => buffer,
-                        Err(e) => return Err("Error")?
+                        Err(_e) => return Err("Error")?
                 };
             }
             example_num += 1;
