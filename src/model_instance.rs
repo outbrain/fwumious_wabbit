@@ -51,6 +51,8 @@ pub struct ModelInstance {
     pub ffm_init_center: f32,
     #[serde(default = "default_f32_zero")]
     pub ffm_init_width: f32,
+    #[serde(default = "default_f32_zero")]
+    pub ffm_init_zero_band: f32,	// from 0.0 to 1.0, percentage of ffm_init_width
     // these are only used for learning, so it doesnt matter they got set to zero as default        
     #[serde(default = "default_f32_zero")]
     pub ffm_learning_rate: f32,    
@@ -118,6 +120,7 @@ impl ModelInstance {
             ffm_k_threshold: 0.0,
             ffm_init_center: 0.0,
             ffm_init_width: 0.0,
+            ffm_init_zero_band: 0.0,
             optimizer: Optimizer::SGD,
         };
         Ok(mi)
