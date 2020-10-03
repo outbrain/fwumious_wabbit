@@ -164,14 +164,23 @@ L: std::clone::Clone
                 // Initialization, from ffm.pdf with added division by 10 and centered on zero (determined empirically)
                 rg.ffm_one_over_k_root = 1.0 / (rg.ffm_k as f32).sqrt() / 10.0;
                 for i in 0..rg.ffm_weights_len {
-                    rg.weights[(rg.ffm_weights_offset + i) as usize].weight = (0.2*merand48((rg.ffm_weights_offset+i) as u64)-0.1) * rg.ffm_one_over_k_root;
-                    rg.weights[(rg.ffm_weights_offset + i) as usize].optimizer_data = L::ffm_initial_data();
+                    rg.weights[(rg.ffm_weights_offset + i) as usize].weight
+                    = (0.2*merand48((rg.ffm_weights_offset+i) as u64)-0.1) *
+                    rg.ffm_one_over_k_root;
+                    rg.weights[(rg.ffm_weights_offset + i) as
+                    usize].optimizer_data = L::ffm_initial_data();
                 }
             } else {
+                let zero_half_band_width = mi.ffm_init_width * mi.ffm_init_zero_band * 0.5;
+                let band_width = mi.ffm_init_width * (1.0 - mi.ffm_init_zero_band);
                 for i in 0..rg.ffm_weights_len {
-                    let mut w =   mi.ffm_init_center 
-                                - mi.ffm_init_width * 0.5 
-                                + merand48(i as u64) * mi.ffm_init_width;
+                    let mut w = merand48(i as u64) * band_width - band_width * 0.5;
+                    if w > 0.0 { 
+                        w += zero_half_band_width ;
+                    } else {
+                        w -= zero_half_band_width;
+                    }
+                    w += mi.ffm_init_center;
                     rg.weights[(rg.ffm_weights_offset + i) as usize].weight = w; 
                     rg.weights[(rg.ffm_weights_offset + i) as usize].optimizer_data = L::ffm_initial_data();
                 }
