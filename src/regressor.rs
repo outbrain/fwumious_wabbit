@@ -1,13 +1,12 @@
 #![allow(unused_macros)]
-use std::mem::{self, MaybeUninit};
+use std::mem::{self};
+//use std::mem::{MaybeUninit};
 use std::slice;
 //use fastapprox::fast::sigmoid; // surprisingly this doesn't work very well
-use std::process;
 use std::sync::Arc;
-use core::arch::x86_64::*;
+//use core::arch::x86_64::*;
 use merand48::*;
 use std::io;
-use std::fs;
 use std::error::Error;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::cmp::min;
@@ -18,7 +17,6 @@ use crate::feature_buffer::HashAndValue;
 use crate::feature_buffer::HashAndValueAndSeq;
 use crate::optimizer;
 use optimizer::OptimizerTrait;
-use crate::vwmap;
 
 #[derive(Clone, Debug)]
 #[repr(C)]
@@ -133,7 +131,6 @@ L: std::clone::Clone
         rg.adagrad_lr.init(mi.learning_rate, mi.power_t);
         rg.adagrad_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t);
 
-        let mut ffm_weights_len = 0;
         if mi.ffm_k > 0 {
             
             rg.ffm_weights_offset = lr_weights_len;            // Since we will align our dimensions, we need to know the number of bits for them
@@ -445,9 +442,8 @@ impl ImmutableRegressor {
         }
 
         if self.ffm_k > 0 {
-            let fc = fb.ffm_fields_count  as usize * self.ffm_k as usize;
             for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                for (j, right_hash) in fb.ffm_buffer[i+1 ..].iter().enumerate() {
+                for (_j, right_hash) in fb.ffm_buffer[i+1 ..].iter().enumerate() {
                     if left_hash.contra_field_index == right_hash.contra_field_index {
                         continue	// not combining within a field
                     }
@@ -503,7 +499,7 @@ mod tests {
 
     #[test]
     fn test_learning_turned_off() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        let mi = model_instance::ModelInstance::new_empty().unwrap();        
         let mut re = Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
         // Empty model: no matter how many features, prediction is 0.5
         assert_eq!(re.learn(&lr_vec(vec![]), false, 0), 0.5);
@@ -545,9 +541,8 @@ mod tests {
         mi.power_t = 0.0;
         
         let mut re = Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
-        let two = 2.0_f32.to_bits();
-        
         let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash: 1, value: 2.0}]);
+
         assert_eq!(re.learn(vec_in, true, 0), 0.5);
         assert_eq!(re.learn(vec_in, true, 0), 0.38936076);
         assert_eq!(re.learn(vec_in, true, 0), 0.30993468);
@@ -629,7 +624,7 @@ mod tests {
         }
     }
 
-    fn ffm_init<T:OptimizerTrait>(mut rg: &mut Regressor<T>) -> () {
+    fn ffm_init<T:OptimizerTrait>(rg: &mut Regressor<T>) -> () {
         for i in rg.ffm_weights_offset as usize..rg.weights.len() {
             rg.weights[i].weight = 1.0;
 //            rg.weights[i].acc_grad = 1.0;
@@ -695,7 +690,6 @@ mod tests {
         mi.fastmath = true;
         
         let mut re = Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
-        let mut p: f32;
         
         let mut fb_instance = lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);
         fb_instance.example_importance = 0.5;

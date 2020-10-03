@@ -2,13 +2,10 @@ use std::error::Error;
 use std::net;
 use std::io::{BufReader, BufWriter};
 use std::io;
-use std::io::Write;
 use std::thread;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::time;
-use std::fs::File;
 
 use daemonize::Daemonize;
 
@@ -89,7 +86,7 @@ impl WorkerThread {
                     let p_res = format!("{:.6}\n", p);
                     match writer.write_all(p_res.as_bytes()) {
                         Ok(_) => {},
-                        Err(e) => { /*println!("Write to socket failed, dropping it"); */ return ConnectionEnd::StreamWriteError; }
+                        Err(_e) => { /*println!("Write to socket failed, dropping it"); */ return ConnectionEnd::StreamWriteError; }
                     };
                 },
                 Err(e) =>
@@ -98,7 +95,7 @@ impl WorkerThread {
                             // FlushCommand just causes us to flush, not to break
                             match writer.flush() {
                                 Ok(_) => {},
-                                Err(e) => { /*println!("Flushing the socket failed, dropping it");*/ return ConnectionEnd::StreamFlushError; }
+                                Err(_e) => { /*println!("Flushing the socket failed, dropping it");*/ return ConnectionEnd::StreamFlushError; }
                             }
                         } else
                         {
@@ -106,9 +103,9 @@ impl WorkerThread {
                             match writer.write_all(p_res.as_bytes()) {
                                 Ok(_) => match writer.flush() {
                                     Ok(_) => {},
-                                    Err(e) => { /*println!("Flushing the socket failed, dropping it");*/ return ConnectionEnd::StreamFlushError; }
+                                    Err(_e) => { /*println!("Flushing the socket failed, dropping it");*/ return ConnectionEnd::StreamFlushError; }
                                 },
-                                Err(e) => { /*println!("Write to socket failed, dropping it"); */return ConnectionEnd::StreamWriteError; }
+                                Err(_e) => { /*println!("Write to socket failed, dropping it"); */return ConnectionEnd::StreamWriteError; }
                             };
                             return ConnectionEnd::ParseError;
                         }
@@ -119,7 +116,7 @@ impl WorkerThread {
             if reader.is_empty() {
                 match writer.flush() {
                     Ok(_) => {},
-                    Err(e) => { /*println!("Flushing the socket failed, dropping it");*/ return ConnectionEnd::StreamFlushError; }
+                    Err(_e) => { /*println!("Flushing the socket failed, dropping it");*/ return ConnectionEnd::StreamFlushError; }
                 };
             }
             i += 1;
@@ -237,7 +234,7 @@ B,featureB
 C,featureC
 "#;
         let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        let mi = model_instance::ModelInstance::new_empty().unwrap();        
         let mut re = regressor::Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
         let re_fixed = Arc::new(re.immutable_regressor().unwrap());
         let fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
@@ -279,7 +276,7 @@ C,featureC
         
         {
             let mut mocked_stream_ok = SharedMockStream::new();
-            let mut mocked_stream_error = FailingMockStream::new(ErrorKind::Other, "Failing", 3);
+            let mocked_stream_error = FailingMockStream::new(ErrorKind::Other, "Failing", 3);
             let mut reader = BufReader::new(mocked_stream_ok.clone());
             let mut writer = BufWriter::new(mocked_stream_error.clone());
             mocked_stream_ok.push_bytes_to_read(b"|A 0 |A 0");
