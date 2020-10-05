@@ -17,6 +17,12 @@ pub struct FeatureComboDesc {
     pub weight:f32,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Copy)]
+pub enum Optimizer {
+    SGD = 1,
+    Adagrad = 2,
+}
+
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ModelInstance {
@@ -51,13 +57,16 @@ pub struct ModelInstance {
     #[serde(default = "default_f32_zero")]
     pub ffm_power_t: f32,
 
-
+    #[serde(default = "default_optimizer_adagrad")]
+    pub optimizer: Optimizer,
     
+ 
 }
 
 fn default_u32_zero() -> u32{0}
 fn default_f32_zero() -> f32{0.0}
 fn default_bool_false() -> bool{false}
+fn default_optimizer_adagrad() -> Optimizer{Optimizer::Adagrad}
 
 
 fn create_feature_combo_desc(vw: &vwmap::VwNamespaceMap, s: &str) -> Result<FeatureComboDesc, Box<dyn Error>> {
@@ -109,7 +118,7 @@ impl ModelInstance {
             ffm_k_threshold: 0.0,
             ffm_init_center: 0.0,
             ffm_init_width: 0.0,
-            
+            optimizer: Optimizer::SGD,
         };
         Ok(mi)
     }
@@ -214,6 +223,7 @@ impl ModelInstance {
         } else {
             mi.ffm_power_t = mi.power_t;
         }
+        
         if let Some(val) = cl.value_of("link") {
             if val != "logistic" {
                 return Err(Box::new(IOError::new(ErrorKind::Other, format!("--link only supports 'logistic'"))))
@@ -238,15 +248,17 @@ impl ModelInstance {
         
         if cl.is_present("noconstant") {
             mi.add_constant_feature = false;
-//               return Err(Box::new(IOError::new(ErrorKind::Other, format!("You must use --noconstant"))))
         }
 
         // We currently only support SGD + adaptive, which means both options have to be specified
-        if !cl.is_present("sgd") {
-               return Err(Box::new(IOError::new(ErrorKind::Other, format!("You must use --sgd"))))
+        if cl.is_present("sgd") {
+            //   return Err(Box::new(IOError::new(ErrorKind::Other, format!("You must use --sgd"))))
+            mi.optimizer = Optimizer::SGD;
         }
-        if !cl.is_present("adaptive") {
-               return Err(Box::new(IOError::new(ErrorKind::Other, format!("You must use --adaptive"))))
+
+        if cl.is_present("adaptive") {
+            mi.optimizer = Optimizer::Adagrad;
+            //       return Err(Box::new(IOError::new(ErrorKind::Other, format!("You must use --adaptive"))))
         }
 
         
