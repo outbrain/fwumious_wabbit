@@ -30,7 +30,7 @@ def memit(cmd):
         if line.startswith("real"):
             time = float(line.split(" ")[-1])
         elif "percent of cpu this job got" in line:
-            cpu = float(line.split(" ")[-1]) / 100.
+            cpu = float(line.split(" ")[-1].rstrip("%")) / 100.
         elif "elapsed (wall clock) time" in line:
             split_line = line.split(" ")[-1].split(":")
             time = 60*float(split_line[0]) + float(split_line[1])
