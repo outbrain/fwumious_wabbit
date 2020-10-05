@@ -96,7 +96,7 @@ impl OptimizerTrait for OptimizerAdagradFlex {
 pub const FASTMATH_LR_LUT_BITS:u8 = 11;
 pub const FASTMATH_LR_LUT_SIZE:usize = 1 <<  FASTMATH_LR_LUT_BITS;
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct OptimizerAdagradLUT {
    pub fastmath_lr_lut: [f32; FASTMATH_LR_LUT_SIZE], 
 }

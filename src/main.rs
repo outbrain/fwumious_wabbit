@@ -78,25 +78,30 @@ fn main2() -> Result<(), Box<dyn Error>>  {
     let mut re: Box<dyn regressor::RegressorTrait>;
     let mut mi: model_instance::ModelInstance;
 
-    if let Some(filename) = cl.value_of("initial_regressor") {
+
+    if cl.is_present("daemon") {
+        let filename = cl.value_of("initial_regressor").expect("Daemon mode only supports serving from --initial regressor");
+        println!("initial_regressor = {}", filename);
+        println!("WARNING: Command line model parameters will be ignored");
+        let (mi2, vw2, re_fixed) = persistence::new_fixed_regressor_from_filename(filename)?;
+        mi = mi2; vw = vw2;
+        let mut se = serving::Serving::new(&cl, &vw, re_fixed, &mi)?;
+        let s = se.serve();
+    } else {
+        if let Some(filename) = cl.value_of("initial_regressor") {
             println!("initial_regressor = {}", filename);
             println!("WARNING: Command line model parameters will be ignored");
             let (mi2, vw2, re2) = persistence::new_regressor_from_filename(filename)?;
             mi = mi2; vw = vw2; re = re2;
-    } else {
+        } else {
             // We load vw_namespace_map.csv just so we know all the namespaces ahead of time
             // This is one of the major differences from vowpal
             let input_filename = cl.value_of("data").expect("--data expected");
-            let vw_namespace_map_filepath = Path::new(input_filename).parent().expect("--data expected").join("vw_namespace_map.csv");
+            let vw_namespace_map_filepath = Path::new(input_filename).parent().expect("Couldn't access path given by --data").join("vw_namespace_map.csv");
             vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
             mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
             re = regressor::get_regressor(&mi);
-    };
-
-    if cl.is_present("daemon") {
-        let mut se = serving::Serving::new(&cl, &vw, re, &mi)?;
-        let s = se.serve();
-    } else {
+        };
         let input_filename = cl.value_of("data").expect("--data expected");
         let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"), &vw);
         let mut fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
