@@ -112,7 +112,7 @@ if __name__ == "__main__":
     vw_train_cmd = "vw --data train.vw.gz -l 0.1 -b 25 -c --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor vw_model --save_resume --interactions AB"
     fw_train_cmd = "../target/release/fw --data train.vw.gz -l 0.1 -b 25 -c --adaptive --fastmath --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor fw_model --save_resume --interactions AB"
 
-    vw_predict_cmd = "vw --data easy.vw -t -b 25 -p vw_preds.out --link logistic --initial_regressor vw_model --hash all --interactions AB"
+    vw_predict_cmd = "vw --data easy.vw -t -p vw_preds.out --initial_regressor vw_model --hash all --interactions AB"
     fw_predict_cmd = "../target/release/fw --data easy.vw --sgd --adaptive -t -b 25 -p fw_preds.out --initial_regressor fw_model --link logistic --hash all --interactions AB"
 
     if action == "cleanup" or action == "generate" or action == "all":
