@@ -5,17 +5,15 @@ use std::io::Read;
 use std::fs;
 use std::error::Error;
 use std::path;
-use flate2::write::DeflateEncoder;
-use flate2::Compression;
-use flate2::read::DeflateDecoder;
+//use flate2::write::DeflateEncoder;
+//use flate2::Compression;
+//use flate2::read::DeflateDecoder;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 //use zstd::stream::{Encoder, Decoder};
 
-use lz4::{Decoder, EncoderBuilder};
+//use lz4::{Decoder, EncoderBuilder};
 
-use crate::parser;
 use crate::vwmap;
-use crate::persistence;
 
 const CACHE_HEADER_MAGIC_STRING: &[u8; 4] = b"FWCA";    // Fwumious Wabbit CAche
 const CACHE_HEADER_VERSION:u32 = 8;
@@ -123,9 +121,8 @@ impl RecordCache {
     pub fn push_record(&mut self, record_buf: &[u32]) -> Result<(), Box<dyn Error>> {
         if self.writing {
             let element_size = mem::size_of::<u32>();
-            let mut vv:&[u8];
             unsafe { 
-                vv = slice::from_raw_parts(record_buf.as_ptr() as *const u8, 
+                let vv:&[u8] = slice::from_raw_parts(record_buf.as_ptr() as *const u8, 
                                             record_buf.len() * element_size) ;
                 self.output_bufwriter.write(&vv)?;
             }
