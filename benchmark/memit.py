@@ -1,45 +1,41 @@
 import subprocess
-from subprocess import check_output, CalledProcessError, STDOUT
-import platform
+from subprocess import CalledProcessError
 import sys
-
-s = platform.system()
-if s == "Linux":
-    time_cmd = "/usr/bin/time -v"
-elif s == "Darwin":
-    time_cmd = "/usr/bin/time -lp"
-else:
-    print("WARN: memory utilization reporting not supported for Windows!")
+import psutil
+import platform
+from timeit import default_timer as timer
 
 
 def memit(cmd):
     try:
-        output = check_output(f"{time_cmd} {cmd}", shell=True, stderr=subprocess.STDOUT).decode()
+        start = timer()
+        cmdp = subprocess.Popen(f"{cmd}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+        psp = psutil.Process(cmdp.pid)
+        psp.cpu_percent()
+        cpu = 0
+        mem = 0
+        time = 0
+
+        def on_process_termination(p):
+            nonlocal time
+            time = timer() - start
+
+        while True:
+            gone, alive = psutil.wait_procs(procs=[psp], timeout=1, callback=on_process_termination)
+            if psp in alive:
+                with psp.oneshot():
+                    cpu = max(cpu, psp.cpu_percent())
+                    if platform.system() == "Darwin":
+                        mem = max(mem, psp.memory_info().rss / 1024.)
+                    else:
+                        mem = max(mem, psp.memory_full_info().uss / 1024.)
+            else:
+                break
     except CalledProcessError as e:
         output = e.output.decode()
         print(output)
         return None
 
-    lines = output.lower().replace("\t", "").split("\n")
-
-    mem = 0
-    time = 0
-    cpu = 0
-
-    for line in lines:
-        if line.startswith("real"):
-            time = float(line.split(" ")[-1])
-        elif "percent of cpu this job got" in line:
-            cpu = float(line.split(" ")[-1].rstrip("%")) / 100.
-        elif "elapsed (wall clock) time" in line:
-            split_line = line.split(" ")[-1].split(":")
-            time = 60*float(split_line[0]) + float(split_line[1])
-        elif "maximum resident set size" in line:
-            split_line = [t.strip() for t in line.strip().split(" ")]
-            if s == "Linux":
-                mem = int(split_line[-1])
-            elif s == "Darwin":
-                mem = int(split_line[0])/1024.0
     return time, mem, cpu
 
 
