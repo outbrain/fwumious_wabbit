@@ -1,4 +1,4 @@
-use clap::{App, Arg, ArgMatches, ArgGroup, AppSettings};
+use clap::{App, Arg,  AppSettings};
 
 pub fn parse<'a>() -> clap::ArgMatches<'a> {
     
@@ -180,6 +180,11 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                     .arg(Arg::with_name("ffm_init_width")
                      .long("ffm_init_width")
                      .help("Total width of the initial weights distribution")
+                     .multiple(false)
+                     .takes_value(true))
+                    .arg(Arg::with_name("ffm_init_zero_band")
+                     .long("ffm_init_zero_band")
+                     .help("Percentage of ffm_init_width where init is zero")
                      .multiple(false)
                      .takes_value(true))
 

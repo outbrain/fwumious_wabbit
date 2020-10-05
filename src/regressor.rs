@@ -1,16 +1,15 @@
 #![allow(unused_macros)]
-use std::mem::{self, MaybeUninit};
+use std::mem::{self};
+//use std::mem::{MaybeUninit};
 use std::slice;
 //use fastapprox::fast::sigmoid; // surprisingly this doesn't work very well
-use std::process;
 use std::sync::Arc;
-use core::arch::x86_64::*;
+//use core::arch::x86_64::*;
 use merand48::*;
 use std::io;
-use std::fs;
 use std::error::Error;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-
+use std::cmp::min;
 
 use crate::model_instance;
 use crate::feature_buffer;
@@ -18,7 +17,6 @@ use crate::feature_buffer::HashAndValue;
 use crate::feature_buffer::HashAndValueAndSeq;
 use crate::optimizer;
 use optimizer::OptimizerTrait;
-use crate::vwmap;
 
 #[derive(Clone, Debug)]
 #[repr(C)]
@@ -39,8 +37,9 @@ pub struct WeightAndOptimizerData<L:OptimizerTrait> {
 }
 
 pub struct Regressor<L:OptimizerTrait> {
-    hash_mask: u32,
     pub weights: Vec<WeightAndOptimizerData<L>>,       // all weights and gradients (has sub-spaces)
+    pub weights_len: u32,
+    pub ffm_weights_len: u32, 
     pub ffm_weights_offset: u32, 
     ffm_k: u32,
     ffm_hashmask: u32,
@@ -54,8 +53,7 @@ pub struct Regressor<L:OptimizerTrait> {
 }
 
 #[derive(Clone)]
-pub struct FixedRegressor {
-    hash_mask: u32,
+pub struct ImmutableRegressor {
     pub weights: Arc<Vec<Weight>>,
     ffm_weights_offset: u32, 
     ffm_k: u32,
@@ -78,23 +76,31 @@ macro_rules! specialize_k {
 
 pub trait RegressorTrait {
     fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32;
-    fn get_fixed_regressor(&mut self) -> FixedRegressor;
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>>;
     fn overwrite_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>; 
     fn get_name(&self) -> &'static str;
+    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance);
+    fn immutable_regressor_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<ImmutableRegressor, Box<dyn Error>>; 
+    fn immutable_regressor(&mut self) -> Result<ImmutableRegressor, Box<dyn Error>>; 
 }
 
 
-pub fn get_regressor(mi: &model_instance::ModelInstance) -> Box<dyn RegressorTrait> {
+pub fn get_regressor_without_weights(mi: &model_instance::ModelInstance) -> Box<dyn RegressorTrait> {
     if mi.optimizer == model_instance::Optimizer::Adagrad {
         if mi.fastmath {
-            Box::new(Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi))
+            Box::new(Regressor::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi))
         } else {
-            Box::new(Regressor::<optimizer::OptimizerAdagradFlex>::new(&mi))
+            Box::new(Regressor::<optimizer::OptimizerAdagradFlex>::new_without_weights(&mi))
         }
     } else {
-        Box::new(Regressor::<optimizer::OptimizerSGD>::new(&mi))
+        Box::new(Regressor::<optimizer::OptimizerSGD>::new_without_weights(&mi))
     }    
+}
+
+pub fn get_regressor(mi: &model_instance::ModelInstance) -> Box<dyn RegressorTrait> {
+    let mut re = get_regressor_without_weights(mi);
+    re.allocate_and_init_weights(mi);
+    re
 }
 
 
@@ -102,16 +108,15 @@ impl <L:OptimizerTrait>Regressor<L>
 where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
 L: std::clone::Clone
 {
-    
-
-    pub fn new(mi: &model_instance::ModelInstance) -> Regressor<L> {
+    pub fn new_without_weights(mi: &model_instance::ModelInstance) -> Regressor<L> {
         let hash_mask = (1 << mi.bit_precision) -1;
         let lr_weights_len = hash_mask + 1;
         let mut rg = Regressor::<L>{
-                            hash_mask: hash_mask,
                             //minimum_optimizer: mi.minimum_optimizer,
-                            weights: Vec::new(), 
+                            weights: Vec::new(),
+                            weights_len: 0, 
                             ffm_weights_offset: 0,
+                            ffm_weights_len: 0,
                             ffm_k: 0, 
                             ffm_hashmask: 0, 
                             ffm_one_over_k_root: 0.0, 
@@ -121,18 +126,17 @@ L: std::clone::Clone
                             mi.ffm_k_threshold, 
                             local_data_lr: Vec::with_capacity(1024), 
                             local_data_ffm: Vec::with_capacity(1024),
-                        };
+                     };
 
         rg.adagrad_lr.init(mi.learning_rate, mi.power_t);
         rg.adagrad_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t);
 
-        let mut ffm_weights_len = 0;
         if mi.ffm_k > 0 {
             
             rg.ffm_weights_offset = lr_weights_len;            // Since we will align our dimensions, we need to know the number of bits for them
             rg.ffm_k = mi.ffm_k;
             // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
-            ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * rg.ffm_k);
+            rg.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * rg.ffm_k);
             let mut ffm_bits_for_dimensions = 0;
             while rg.ffm_k > (1 << (ffm_bits_for_dimensions)) {
                 ffm_bits_for_dimensions += 1;
@@ -143,30 +147,48 @@ L: std::clone::Clone
         }
         // Now allocate weights
         let iw_weights_len = 0;
-        rg.ffm_iw_weights_offset = lr_weights_len + ffm_weights_len;
-        rg.weights = vec![WeightAndOptimizerData{weight:0.0, optimizer_data: L::empty_initial_data()}; (lr_weights_len + ffm_weights_len + iw_weights_len) as usize];
+        rg.ffm_iw_weights_offset = lr_weights_len + rg.ffm_weights_len;        
+        rg.weights_len = lr_weights_len + rg.ffm_weights_len + iw_weights_len;
+        rg
+    }
+    
+    pub fn allocate_and_init_weights_(&mut self, mi: &model_instance::ModelInstance) {
+        let rg = self;
+        rg.weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: L::empty_initial_data()}; rg.weights_len as usize];
 
         if mi.ffm_k > 0 {       
             if mi.ffm_init_width == 0.0 {
-                // Initialization, from ffm.pdf with added division by 100 and centered on zero (determined empirically)
+                // Initialization, from ffm.pdf with added division by 10 and centered on zero (determined empirically)
                 rg.ffm_one_over_k_root = 1.0 / (rg.ffm_k as f32).sqrt() / 10.0;
-                for i in 0..ffm_weights_len {
-                    rg.weights[(rg.ffm_weights_offset + i) as usize].weight = (0.2*merand48((rg.ffm_weights_offset+i) as u64)-0.1) * rg.ffm_one_over_k_root;
-                    //rng.gen_range(-0.1 * rg.ffm_one_over_k_root , 0.1 * rg.ffm_one_over_k_root );
-                    // we set FFM gradients to 1.0, so we avoid NaN updates due to adagrad (accumulated_squared_gradients+grad^2).powf(negative_number) * 0.0 
-                      rg.weights[(rg.ffm_weights_offset + i) as usize].optimizer_data = L::ffm_initial_data();
+                for i in 0..rg.ffm_weights_len {
+                    rg.weights[(rg.ffm_weights_offset + i) as usize].weight
+                    = (0.2*merand48((rg.ffm_weights_offset+i) as u64)-0.1) *
+                    rg.ffm_one_over_k_root;
+                    rg.weights[(rg.ffm_weights_offset + i) as
+                    usize].optimizer_data = L::ffm_initial_data();
                 }
             } else {
-                for i in 0..ffm_weights_len {
-                    rg.weights[(rg.ffm_weights_offset + i) as usize].weight = mi.ffm_init_center - mi.ffm_init_width * 0.5 + 
-                                                                         merand48(i as u64) * mi.ffm_init_width;
-                    //rng.gen_range(-0.1 * rg.ffm_one_over_k_root , 0.1 * rg.ffm_one_over_k_root );
-                    // we set FFM gradients to 1.0, so we avoid NaN updates due to adagrad (accumulated_squared_gradients+grad^2).powf(negative_number) * 0.0 
-                      rg.weights[(rg.ffm_weights_offset + i) as usize].optimizer_data = L::ffm_initial_data();
+                let zero_half_band_width = mi.ffm_init_width * mi.ffm_init_zero_band * 0.5;
+                let band_width = mi.ffm_init_width * (1.0 - mi.ffm_init_zero_band);
+                for i in 0..rg.ffm_weights_len {
+                    let mut w = merand48(i as u64) * band_width - band_width * 0.5;
+                    if w > 0.0 { 
+                        w += zero_half_band_width ;
+                    } else {
+                        w -= zero_half_band_width;
+                    }
+                    w += mi.ffm_init_center;
+                    rg.weights[(rg.ffm_weights_offset + i) as usize].weight = w; 
+                    rg.weights[(rg.ffm_weights_offset + i) as usize].optimizer_data = L::ffm_initial_data();
                 }
 
             }
         }
+    }
+
+    pub fn new(mi: &model_instance::ModelInstance) -> Regressor<L> {
+        let mut rg = Regressor::<L>::new_without_weights(mi);
+        rg.allocate_and_init_weights(mi);
         rg
     }
 }
@@ -188,9 +210,17 @@ pub fn logistic(t: f32) -> f32 {
 }
 
     
-impl <L:OptimizerTrait>RegressorTrait for Regressor<L> {
+impl <L:OptimizerTrait>RegressorTrait for Regressor<L> 
+where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
+L: std::clone::Clone
+{
+
     fn get_name(&self) -> &'static str {
         L::get_name()
+    }
+
+    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
+        self.allocate_and_init_weights_(mi);
     }
 
     fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32 {
@@ -210,6 +240,7 @@ impl <L:OptimizerTrait>RegressorTrait for Regressor<L> {
         // local_data is writable, but weights are read-only in this section
         let local_data_lr = &mut self.local_data_lr;
         let local_data_ffm = &mut self.local_data_ffm;
+// TODO: Opportunistic use of buffers on stack instead of head - ~10% performance improvement for FFMs
 //        let mut local_data_lr: [IndexAccgradientValue; BUF_LEN as usize] = MaybeUninit::uninit().assume_init() ;
 //        let mut local_data_ffm: [IndexAccgradientValue; BUF_LEN as usize] = MaybeUninit::uninit().assume_init() ;
 
@@ -318,46 +349,6 @@ impl <L:OptimizerTrait>RegressorTrait for Regressor<L> {
         }
     }
     
-    fn get_fixed_regressor(&mut self) -> FixedRegressor {
-        // This operation effectively destroys initial regressor since it 'steals' its weights array and doesn't make a copy
-        let v_from_raw = unsafe {
-            // let's establish this is a valid operation first, this means WeightAndOptimizerData has to be multiplier of Weight in size
-            assert!(mem::size_of::<WeightAndOptimizerData<L>>() % mem::size_of::<Weight>() == 0);
-            assert!(mem::align_of::<WeightAndOptimizerData<L>>() == mem::align_of::<Weight>());
-            
-            // steal the old vector
-            let mut original_weights_vec = std::mem::replace(&mut self.weights, Vec::new());
-            // create an unsafe slice from it, so we will be able to address it in the old way
-            let original_weights_slice = slice::from_raw_parts(original_weights_vec.as_mut_ptr(), 
-                                        original_weights_vec.len() *mem::size_of::<WeightAndOptimizerData<L>>());
-            // now take the old vec away from "GC"
-            let mut v_clone = std::mem::ManuallyDrop::new(original_weights_vec);
-            // assemble the new vector from the raw parts of the old one
-            let mut new_v = Vec::from_raw_parts(v_clone.as_mut_ptr() as *mut Weight,
-                                v_clone.len(),
-                                v_clone.capacity() * mem::size_of::<WeightAndOptimizerData<L>>() / mem::size_of::<Weight>());
-            // now we take only the weight part of original vector and copy it to new one
-            // ISSUE: if any loop unrolling happens here, we might be in deep trouble
-            for (i, v) in v_clone.iter().enumerate() {
-                new_v[i].weight = v.weight;
-            }
-            // Let's resize the new vector, so it throws away unneeded memory
-            new_v.shrink_to_fit();
-//            println!("Size orig: {}, Size new: {}", v_clone.len(), new_v.len());
-//            println!("capacity orig: {}, capacitye new: {}", v_clone.capacity(), new_v.capacity());
-            new_v
-        };
-      
-        
-        FixedRegressor {
-                        hash_mask: self.hash_mask,
-                        weights: Arc::new(v_from_raw), //Arc::new(std::mem::replace(&mut self.weights, Vec::new())),
-                        ffm_weights_offset: self.ffm_weights_offset,
-                        ffm_k: self.ffm_k,
-                        ffm_hashmask: self.ffm_hashmask,
-        }
-    }
-
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
         // It's OK! I am a limo driver!
         output_bufwriter.write_u64::<LittleEndian>(self.weights.len() as u64)?;
@@ -384,9 +375,62 @@ impl <L:OptimizerTrait>RegressorTrait for Regressor<L> {
         Ok(())
     }
 
+    
+    // Creates immutable regressor from current setup and weights from buffer
+    fn immutable_regressor_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<ImmutableRegressor, Box<dyn Error>> {
+        let len = input_bufreader.read_u64::<LittleEndian>()?;
+        if len != self.weights_len as u64 {
+            return Err(format!("Lenghts of weights array in regressor file differ: got {}, expected {}", len, self.weights_len))?;
+        }
+              
+        const BUF_LEN:usize = 256000;
+        let mut in_weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: L::empty_initial_data()}; BUF_LEN as usize];
+        let mut out_weights = Vec::<Weight>::new();
+        
+        let mut remaining_weights = self.weights_len as usize;
+        unsafe {
+            while remaining_weights > 0 {
+                let chunk_size = min(remaining_weights, BUF_LEN);
+                in_weights.set_len(chunk_size);
+                let mut in_weights_view:&mut [u8] = slice::from_raw_parts_mut(in_weights.as_mut_ptr() as *mut u8, 
+                                             chunk_size *mem::size_of::<WeightAndOptimizerData<L>>());
+                input_bufreader.read_exact(&mut in_weights_view)?;
+                for w in &in_weights {
+                    out_weights.push(Weight{weight:w.weight});
+                    
+                }
+                remaining_weights -= chunk_size;
+            }
+        }
+
+        let fr = ImmutableRegressor {
+                        weights: Arc::new(out_weights), 
+                        ffm_weights_offset: self.ffm_weights_offset,
+                        ffm_k: self.ffm_k,
+                        ffm_hashmask: self.ffm_hashmask,
+        };
+        Ok(fr)
+    }
+
+    fn immutable_regressor(&mut self) -> Result<ImmutableRegressor, Box<dyn Error>> {
+        let mut weights = Vec::<Weight>::new();
+        for w in &self.weights {
+            weights.push(Weight{weight:w.weight});
+        }
+        let fr = ImmutableRegressor {
+                        weights: Arc::new(weights), 
+                        ffm_weights_offset: self.ffm_weights_offset,
+                        ffm_k: self.ffm_k,
+                        ffm_hashmask: self.ffm_hashmask,
+        };
+        Ok(fr)
+    }
+
+
+
 }
 
-impl FixedRegressor {
+impl ImmutableRegressor {
 
     pub fn predict(&self, fb: &feature_buffer::FeatureBuffer, example_num: u32) -> f32 {
         let fbuf = &fb.lr_buffer;
@@ -398,9 +442,8 @@ impl FixedRegressor {
         }
 
         if self.ffm_k > 0 {
-            let fc = fb.ffm_fields_count  as usize * self.ffm_k as usize;
             for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                for (j, right_hash) in fb.ffm_buffer[i+1 ..].iter().enumerate() {
+                for (_j, right_hash) in fb.ffm_buffer[i+1 ..].iter().enumerate() {
                     if left_hash.contra_field_index == right_hash.contra_field_index {
                         continue	// not combining within a field
                     }
@@ -456,7 +499,7 @@ mod tests {
 
     #[test]
     fn test_learning_turned_off() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        let mi = model_instance::ModelInstance::new_empty().unwrap();        
         let mut re = Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
         // Empty model: no matter how many features, prediction is 0.5
         assert_eq!(re.learn(&lr_vec(vec![]), false, 0), 0.5);
@@ -498,9 +541,8 @@ mod tests {
         mi.power_t = 0.0;
         
         let mut re = Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
-        let two = 2.0_f32.to_bits();
-        
         let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash: 1, value: 2.0}]);
+
         assert_eq!(re.learn(vec_in, true, 0), 0.5);
         assert_eq!(re.learn(vec_in, true, 0), 0.38936076);
         assert_eq!(re.learn(vec_in, true, 0), 0.30993468);
@@ -582,7 +624,7 @@ mod tests {
         }
     }
 
-    fn ffm_fixed_init<T:OptimizerTrait>(mut rg: &mut Regressor<T>) -> () {
+    fn ffm_init<T:OptimizerTrait>(rg: &mut Regressor<T>) -> () {
         for i in rg.ffm_weights_offset as usize..rg.weights.len() {
             rg.weights[i].weight = 1.0;
 //            rg.weights[i].acc_grad = 1.0;
@@ -616,7 +658,7 @@ mod tests {
         // With two fields, things start to happen
         // Since fields depend on initial randomization, these tests are ... peculiar.
         let mut re = Regressor::<optimizer::OptimizerAdagradFlex>::new(&mi);
-        ffm_fixed_init(&mut re);
+        ffm_init(&mut re);
         let ffm_buf = ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: 1}
@@ -626,7 +668,7 @@ mod tests {
 
         // Two fields, use values
         let mut re = Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
-        ffm_fixed_init(&mut re);
+        ffm_init(&mut re);
         let ffm_buf = ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 2.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: 1}
@@ -648,7 +690,6 @@ mod tests {
         mi.fastmath = true;
         
         let mut re = Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
-        let mut p: f32;
         
         let mut fb_instance = lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);
         fb_instance.example_importance = 0.5;
