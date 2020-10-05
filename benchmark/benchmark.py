@@ -97,6 +97,24 @@ def format_metrics(times, means, stds):
     return f"{means[0]:.2f} ± {stds[0]:.2f} seconds, {means[1]/1024:.0f} ± {stds[1]/1024:.0f} MB, {means[2]*100:.2f} ± {stds[2]:.0f}% CPU ({times} runs)"
 
 
+def cross_entropy(y_hat, y):
+    return -math.log(y_hat) if y == 1 else -math.log(1 - y_hat)
+
+
+def calc_loss(model_preds_file, input_file):
+    model_preds = open(model_preds_file, 'rt')
+    input = open(input_file, 'rt')
+
+    loss = 0.
+    i = 0
+    for y_hat in model_preds:
+        i += 1
+        y = next(input).split("|")[0].strip()
+        loss += cross_entropy(float(y_hat), float(y))
+
+    return loss / float(i)
+
+
 if __name__ == "__main__":
     if len(sys.argv) != 3:
         print("syntax: benchmark fw|vw|all cleanup|generate|train|predict|all")
@@ -123,7 +141,7 @@ if __name__ == "__main__":
         generate.generate()
         gzip_file("train.vw")
 
-    times = 10
+    times = 2
 
     if action == "train" or action == "all":
         vw_train_no_cache_benchmark_means, vw_train_no_cache_benchmark_stds = benchmark_cmd(vw_train_cmd, times, vw_clean_cache)
@@ -144,3 +162,9 @@ if __name__ == "__main__":
 
         print(f"vw predict, no cache: {format_metrics(times, vw_predict_no_cache_benchmark_means, vw_predict_no_cache_benchmark_stds)}")
         print(f"fw predict, no cache: {format_metrics(times, fw_predict_no_cache_benchmark_means, fw_predict_no_cache_benchmark_stds)}")
+
+        vw_model_loss = calc_loss("vw_preds.out", "easy.vw")
+        print(f"vw predictions loss: {vw_model_loss}")
+
+        fw_model_loss = calc_loss("fw_preds.out", "easy.vw")
+        print(f"fw predictions loss: {fw_model_loss}")
