@@ -30,12 +30,12 @@ impl OptimizerTrait for OptimizerSGD {
         OptimizerSGD{learning_rate: 0.0}
     } 
     
-    fn init(&mut self, learning_rate: f32, power_t: f32) {
+    fn init(&mut self, learning_rate: f32, _power_t: f32) {
         self.learning_rate = learning_rate;
     }
 
     #[inline(always)]
-    unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32 {
+    unsafe fn calculate_update(&self, gradient: f32, _data: &mut Self::PerWeightStore) -> f32 {
         return gradient * self.learning_rate;
     }
 
@@ -85,7 +85,7 @@ impl OptimizerTrait for OptimizerAdagradFlex {
         0.0f32
     }
     fn ffm_initial_data() -> Self::PerWeightStore {
-        1.0f32
+        0.1f32
     }
     
 }
@@ -96,7 +96,7 @@ impl OptimizerTrait for OptimizerAdagradFlex {
 pub const FASTMATH_LR_LUT_BITS:u8 = 11;
 pub const FASTMATH_LR_LUT_SIZE:usize = 1 <<  FASTMATH_LR_LUT_BITS;
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct OptimizerAdagradLUT {
    pub fastmath_lr_lut: [f32; FASTMATH_LR_LUT_SIZE], 
 }
@@ -121,7 +121,7 @@ impl OptimizerTrait for OptimizerAdagradLUT {
             // we take two consequtive such values, so we act as if had rounding
             let float_x = f32::from_bits((x as u32)  << (31-FASTMATH_LR_LUT_BITS));
             let float_x_plus_one = f32::from_bits(((x+1) as u32)  << (31-FASTMATH_LR_LUT_BITS));
-            let mut val = learning_rate * ((float_x).powf(minus_power_t) + (float_x_plus_one).powf(minus_power_t)) * 0.5;
+            let val = learning_rate * ((float_x).powf(minus_power_t) + (float_x_plus_one).powf(minus_power_t)) * 0.5;
             // Safety measure
             /*if val > learning_rate || val.is_nan() {
                 val = learning_rate;
@@ -147,7 +147,7 @@ impl OptimizerTrait for OptimizerAdagradLUT {
         0.0f32
     }
     fn ffm_initial_data() -> Self::PerWeightStore {
-        1.0f32
+        0.1f32
     }
 
 }
@@ -222,7 +222,6 @@ mod tests {
         let test_accumulations = [0.0000000001, 0.00001, 0.1, 0.5, 1.1, 2.0, 20.0, 200.0, 2000.0, 200000.0, 2000000.0];
 
         unsafe {
-            let mut error_sum = 0.0;
             for gradient in test_gradients.iter() {
                 for accumulation in test_accumulations.iter() {
                     let mut acc_flex: f32 = *accumulation;
@@ -230,7 +229,7 @@ mod tests {
                     let mut acc_lut: f32 = *accumulation;
                     let p_lut = l_lut.calculate_update(*gradient, &mut acc_lut);
                     let error = (p_flex - p_lut).abs();
-                    let mut relative_error:f32;
+                    let relative_error:f32;
                     if p_flex != 0.0 {
                         relative_error = error / p_flex.abs();
                     } else {
