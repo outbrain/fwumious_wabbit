@@ -123,7 +123,7 @@ if __name__ == "__main__":
         generate.generate()
         gzip_file("train.vw")
 
-    times = 2
+    times = 10
 
     if action == "train" or action == "all":
         vw_train_no_cache_benchmark_means, vw_train_no_cache_benchmark_stds = benchmark_cmd(vw_train_cmd, times, vw_clean_cache)
