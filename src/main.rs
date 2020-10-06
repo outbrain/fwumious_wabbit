@@ -3,25 +3,15 @@
 #![allow(unused_variables)]
 #![allow(unused_mut)]
 #![allow(non_snake_case)]
-use std::io::Error as IOError;
-use std::io::ErrorKind;
 use std::error::Error;
-use std::env;
 use std::path::Path;
-use std::process::exit;
 use std::fs::File;
 use std::io;
 use std::io::BufWriter;
-use std::fmt;
-use std::str;
 use std::io::Write;
 use std::io::BufRead;
 use std::f32;
-//use std::cmp::min;
 use std::collections::VecDeque;
-//use std::io::ErrorKind;
-//use std::iter::Peekable;
-use fasthash::xx;
 use std::time::Instant;
 use flate2::read::MultiGzDecoder;
 
@@ -35,6 +25,10 @@ mod cmdline;
 mod cache;
 mod persistence;
 mod serving;
+mod optimizer;
+
+//use crate::regressor::RegressorTrait;
+
 
 fn main() {
     match main2() {
@@ -70,29 +64,34 @@ fn main2() -> Result<(), Box<dyn Error>>  {
     
     /* setting up the pipeline, either from command line or from existing regressor */
     // we want heal-allocated objects here
-    let mut vw: vwmap::VwNamespaceMap;
-    let mut re: regressor::Regressor;
-    let mut mi: model_instance::ModelInstance;
-    
-    if let Some(filename) = cl.value_of("initial_regressor") {
+    let vw: vwmap::VwNamespaceMap;
+    let mut re: Box<dyn regressor::RegressorTrait>;
+    let mi: model_instance::ModelInstance;
+
+
+    if cl.is_present("daemon") {
+        let filename = cl.value_of("initial_regressor").expect("Daemon mode only supports serving from --initial regressor");
+        println!("initial_regressor = {}", filename);
+        println!("WARNING: Command line model parameters will be ignored");
+        let (mi2, vw2, re_fixed) = persistence::new_fixed_regressor_from_filename(filename)?;
+        mi = mi2; vw = vw2;
+        let mut se = serving::Serving::new(&cl, &vw, re_fixed, &mi)?;
+        se.serve()?;
+    } else {
+        if let Some(filename) = cl.value_of("initial_regressor") {
             println!("initial_regressor = {}", filename);
             println!("WARNING: Command line model parameters will be ignored");
-            let (mi2, vw2, re2) = regressor::Regressor::new_from_filename(filename)?;
+            let (mi2, vw2, re2) = persistence::new_regressor_from_filename(filename)?;
             mi = mi2; vw = vw2; re = re2;
-    } else {
+        } else {
             // We load vw_namespace_map.csv just so we know all the namespaces ahead of time
             // This is one of the major differences from vowpal
             let input_filename = cl.value_of("data").expect("--data expected");
-            let vw_namespace_map_filepath = Path::new(input_filename).parent().expect("--data expected").join("vw_namespace_map.csv");
+            let vw_namespace_map_filepath = Path::new(input_filename).parent().expect("Couldn't access path given by --data").join("vw_namespace_map.csv");
             vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
             mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
-            re = regressor::Regressor::new(&mi);
-    };
-
-    if cl.is_present("daemon") {
-        let mut se = serving::Serving::new(&cl, &vw, re, &mi)?;
-        let s = se.serve();
-    } else {
+            re = regressor::get_regressor(&mi);
+        };
         let input_filename = cl.value_of("data").expect("--data expected");
         let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"), &vw);
         let mut fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
@@ -122,7 +121,6 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             false => { bb = io::BufReader::new(input); &mut bb}
         };
 
-        let mut empty = io::empty();
         let mut pa = parser::VowpalParser::new(&vw);
 
         let now = Instant::now();
@@ -130,13 +128,13 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         loop {
 
             let reading_result;
-            let mut buffer:&[u32];
+            let buffer:&[u32];
             if !cache.reading {
                 reading_result = pa.next_vowpal(&mut bufferred_input);
                 buffer = match reading_result {
                         Ok([]) => break, // EOF
                         Ok(buffer2) => buffer2,
-                        Err(e) => return Err("Error")?
+                        Err(_e) => return Err("Error")?
                 };
                 if cache.writing {
                         cache.push_record(buffer)?;
@@ -146,7 +144,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
                 buffer = match reading_result {
                         Ok([]) => break, // EOF
                         Ok(buffer) => buffer,
-                        Err(e) => return Err("Error")?
+                        Err(_e) => return Err("Error")?
                 };
             }
             example_num += 1;
@@ -176,7 +174,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         }
         cache.write_finish()?;
         match final_regressor_filename {
-            Some(filename) => re.save_to_filename(filename, &mi, &vw)?,
+            Some(filename) => persistence::save_regressor_to_filename(filename, &mi, &vw, re).unwrap(),
             None => {}
         }
     
