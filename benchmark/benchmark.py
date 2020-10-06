@@ -87,7 +87,7 @@ def benchmark_cmd(cmd, proc_name, times, run_before=None):
 
 
 def format_metrics(times, means, stds):
-    return f"{means[0]:.2f} ± {stds[0]:.2f} seconds, {means[1]/1024:.0f} ± {stds[1]/1024:.0f} MB, {means[2]:.2f} ± {stds[2]:.2f}% CPU ({times} runs)"
+    return f"{means[0]:.2f} ± {stds[0]:.2f} seconds, {means[1]/1024.:.0f} ± {stds[1]/1024.:.2f} MB, {means[2]:.2f} ± {stds[2]:.2f}% CPU ({times} runs)"
 
 
 def cross_entropy(y_hat, y):
