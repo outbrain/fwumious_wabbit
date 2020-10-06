@@ -2,13 +2,10 @@ use std::error::Error;
 use std::net;
 use std::io::{BufReader, BufWriter};
 use std::io;
-use std::io::Write;
 use std::thread;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::time;
-use std::fs::File;
 
 use daemonize::Daemonize;
 
@@ -17,7 +14,9 @@ use crate::vwmap;
 use crate::regressor;
 use crate::feature_buffer;
 use crate::model_instance;
-
+use crate::optimizer;
+use crate::regressor::ImmutableRegressor;
+use crate::regressor::RegressorTrait;
 
 pub struct Serving {
     listening_interface: String,
@@ -28,7 +27,7 @@ pub struct Serving {
 
 pub struct WorkerThread {
     id: u32,
-    re_fixed: Arc<regressor::FixedRegressor>,
+    re_fixed: Arc<regressor::ImmutableRegressor>,
     fbt: feature_buffer::FeatureBufferTranslator,
     pa: parser::VowpalParser,
 }
@@ -53,7 +52,7 @@ pub enum ConnectionEnd {
 
 impl WorkerThread {
     pub fn new(
-        id: u32, re_fixed: Arc<regressor::FixedRegressor>, fbt:
+        id: u32, re_fixed: Arc<regressor::ImmutableRegressor>, fbt:
         feature_buffer::FeatureBufferTranslator, pa: parser::VowpalParser,
         receiver: Arc<Mutex<mpsc::Receiver<net::TcpStream>>>,
     ) -> Result<thread::JoinHandle<u32>, Box<dyn Error>> {
@@ -87,7 +86,7 @@ impl WorkerThread {
                     let p_res = format!("{:.6}\n", p);
                     match writer.write_all(p_res.as_bytes()) {
                         Ok(_) => {},
-                        Err(e) => { /*println!("Write to socket failed, dropping it"); */ return ConnectionEnd::StreamWriteError; }
+                        Err(_e) => { /*println!("Write to socket failed, dropping it"); */ return ConnectionEnd::StreamWriteError; }
                     };
                 },
                 Err(e) =>
@@ -96,7 +95,7 @@ impl WorkerThread {
                             // FlushCommand just causes us to flush, not to break
                             match writer.flush() {
                                 Ok(_) => {},
-                                Err(e) => { /*println!("Flushing the socket failed, dropping it");*/ return ConnectionEnd::StreamFlushError; }
+                                Err(_e) => { /*println!("Flushing the socket failed, dropping it");*/ return ConnectionEnd::StreamFlushError; }
                             }
                         } else
                         {
@@ -104,9 +103,9 @@ impl WorkerThread {
                             match writer.write_all(p_res.as_bytes()) {
                                 Ok(_) => match writer.flush() {
                                     Ok(_) => {},
-                                    Err(e) => { /*println!("Flushing the socket failed, dropping it");*/ return ConnectionEnd::StreamFlushError; }
+                                    Err(_e) => { /*println!("Flushing the socket failed, dropping it");*/ return ConnectionEnd::StreamFlushError; }
                                 },
-                                Err(e) => { /*println!("Write to socket failed, dropping it"); */return ConnectionEnd::StreamWriteError; }
+                                Err(_e) => { /*println!("Write to socket failed, dropping it"); */return ConnectionEnd::StreamWriteError; }
                             };
                             return ConnectionEnd::ParseError;
                         }
@@ -117,7 +116,7 @@ impl WorkerThread {
             if reader.is_empty() {
                 match writer.flush() {
                     Ok(_) => {},
-                    Err(e) => { /*println!("Flushing the socket failed, dropping it");*/ return ConnectionEnd::StreamFlushError; }
+                    Err(_e) => { /*println!("Flushing the socket failed, dropping it");*/ return ConnectionEnd::StreamFlushError; }
                 };
             }
             i += 1;
@@ -141,7 +140,7 @@ impl WorkerThread {
 impl Serving {
     pub fn new<'a>(cl: &clap::ArgMatches<'a>,
                    vw: &vwmap::VwNamespaceMap,
-                   re: regressor::Regressor,
+                   re_fixed: ImmutableRegressor,
                    mi: &model_instance::ModelInstance,
     ) -> Result<Serving, Box<dyn Error>> {
         let port = match cl.value_of("port") {
@@ -180,7 +179,7 @@ impl Serving {
             }
         }
 
-        let re_fixed = Arc::new(regressor::FixedRegressor::new(re));
+        let re_fixed = Arc::new(re_fixed);
         let fbt = feature_buffer::FeatureBufferTranslator::new(mi);
         let pa = parser::VowpalParser::new(&vw);
         for i in 0..num_children {
@@ -235,16 +234,16 @@ B,featureB
 C,featureC
 "#;
         let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
-        let mut re = regressor::Regressor::new(&mi);
-        let re_fixed = Arc::new(regressor::FixedRegressor::new(re));
+        let mi = model_instance::ModelInstance::new_empty().unwrap();        
+        let mut re = regressor::Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
+        let re_fixed = Arc::new(re.immutable_regressor().unwrap());
         let fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
         let pa = parser::VowpalParser::new(&vw);
 
         let mut newt = WorkerThread {id: 1,
                                  fbt: fbt,
                                  pa: pa,
-                                 re_fixed: re_fixed.clone(),
+                                 re_fixed: re_fixed,
                                  };
 
         { // WORKING STREAM TEST
@@ -277,7 +276,7 @@ C,featureC
         
         {
             let mut mocked_stream_ok = SharedMockStream::new();
-            let mut mocked_stream_error = FailingMockStream::new(ErrorKind::Other, "Failing", 3);
+            let mocked_stream_error = FailingMockStream::new(ErrorKind::Other, "Failing", 3);
             let mut reader = BufReader::new(mocked_stream_ok.clone());
             let mut writer = BufWriter::new(mocked_stream_error.clone());
             mocked_stream_ok.push_bytes_to_read(b"|A 0 |A 0");

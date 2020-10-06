@@ -1,8 +1,5 @@
 use std::fmt;
-use std::fs::File;
 use fasthash::murmur3;
-use fasthash::xx;
-use std::io;
 use std::io::BufRead;
 use std::error::Error;
 use std::io::Error as IOError;
@@ -81,7 +78,7 @@ impl VowpalParser {
         unsafe {
             match str::from_utf8_unchecked(&self.tmp_read_buf[i_start..i_end]).parse::<f32>() {
                 Ok(f) => return Ok(f),
-                Err(e) => return Err(Box::new(IOError::new(ErrorKind::Other, format!("{}: {}", error_str, String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end])))))
+                Err(_e) => return Err(Box::new(IOError::new(ErrorKind::Other, format!("{}: {}", error_str, String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end])))))
             };
         };
     }
@@ -94,7 +91,7 @@ impl VowpalParser {
                 Err(e) => Err(e)?
             };
 
-            let mut bufpos: usize = (self.vw_map.num_namespaces as usize) + HEADER_LEN;
+            let bufpos: usize = (self.vw_map.num_namespaces as usize) + HEADER_LEN;
             self.output_buffer.truncate(bufpos);
             for i in &mut self.output_buffer[0..bufpos] { *i = NULL };
 
@@ -102,7 +99,7 @@ impl VowpalParser {
 
             unsafe {
                 let p = self.tmp_read_buf.as_ptr();
-                let mut buf = self.output_buffer.as_mut_ptr();
+                let buf = self.output_buffer.as_mut_ptr();
 
                 // first token is a label or "flush" command
                 match *p.add(0) {
@@ -226,7 +223,6 @@ mod tests {
     use super::*;
     use vwmap;
     use std::io::Cursor;
-    use std::io::{Write,Seek};
         
     fn nd(start: u32, end: u32) -> u32 {
         return (start << 16) + end;
