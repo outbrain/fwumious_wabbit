@@ -56,18 +56,11 @@ def gzip_file(f):
         shutil.copyfileobj(f_in, f_out)
 
 
-def time_bash_cmd(cmd):
-    return memit.memit(cmd)
+def time_bash_cmd(cmd, proc_name):
+    return memit.memit(cmd, proc_name)
 
 
-def train_model(cmd):
-    vw_results = dict()
-    vw_results["no_cache"] = time_bash_cmd(cmd)
-    vw_results["with_cache"] = time_bash_cmd(cmd)
-    return vw_results
-
-
-def benchmark_cmd(cmd, times, run_before=None, ):
+def benchmark_cmd(cmd, proc_name, times, run_before=None):
     benchmark_means = [0., 0., 0.]
     results = []
 
@@ -75,7 +68,7 @@ def benchmark_cmd(cmd, times, run_before=None, ):
         if run_before:
             run_before()
 
-        result = time_bash_cmd(cmd)
+        result = time_bash_cmd(cmd, proc_name)
         results.append(result)
 
         for i in range(len(benchmark_means)):
@@ -94,7 +87,7 @@ def benchmark_cmd(cmd, times, run_before=None, ):
 
 
 def format_metrics(times, means, stds):
-    return f"{means[0]:.2f} ± {stds[0]:.2f} seconds, {means[1]/1024:.0f} ± {stds[1]/1024:.0f} MB, {means[2]:.2f} ± {stds[2]:.0f}% CPU ({times} runs)"
+    return f"{means[0]:.2f} ± {stds[0]:.2f} seconds, {means[1]/1024:.0f} ± {stds[1]/1024:.0f} MB, {means[2]:.2f} ± {stds[2]:.2f}% CPU ({times} runs)"
 
 
 def cross_entropy(y_hat, y):
@@ -144,21 +137,21 @@ if __name__ == "__main__":
     times = 2
 
     if action == "train" or action == "train+predict" or action == "all":
-        vw_train_no_cache_benchmark_means, vw_train_no_cache_benchmark_stds = benchmark_cmd(vw_train_cmd, times, vw_clean_cache)
-        fw_train_no_cache_benchmark_means, fw_train_no_cache_benchmark_stds = benchmark_cmd(fw_train_cmd, times, fw_clean_cache)
+        vw_train_no_cache_benchmark_means, vw_train_no_cache_benchmark_stds = benchmark_cmd(vw_train_cmd, "vw", times, vw_clean_cache)
+        fw_train_no_cache_benchmark_means, fw_train_no_cache_benchmark_stds = benchmark_cmd(fw_train_cmd, "fw", times, fw_clean_cache)
 
         print(f"vw train, no cache: {format_metrics(times, vw_train_no_cache_benchmark_means, vw_train_no_cache_benchmark_stds)}")
         print(f"fw train, no cache: {format_metrics(times, fw_train_no_cache_benchmark_means, fw_train_no_cache_benchmark_stds)}")
 
-        vw_train_with_cache_benchmark_means, vw_train_with_cache_benchmark_stds = benchmark_cmd(vw_train_cmd, times)
-        fw_train_with_cache_benchmark_means, fw_train_with_cache_benchmark_stds = benchmark_cmd(fw_train_cmd, times)
+        vw_train_with_cache_benchmark_means, vw_train_with_cache_benchmark_stds = benchmark_cmd(vw_train_cmd, "vw", times)
+        fw_train_with_cache_benchmark_means, fw_train_with_cache_benchmark_stds = benchmark_cmd(fw_train_cmd, "fw", times)
 
         print(f"vw train, using cache: {format_metrics(times, vw_train_with_cache_benchmark_means, vw_train_with_cache_benchmark_stds)}")
         print(f"fw train, using cache: {format_metrics(times, fw_train_with_cache_benchmark_means, fw_train_with_cache_benchmark_stds)}")
 
     if action == "predict" or action == "train+predict" or action == "all":
-        vw_predict_no_cache_benchmark_means, vw_predict_no_cache_benchmark_stds = benchmark_cmd(vw_predict_cmd, times)
-        fw_predict_no_cache_benchmark_means, fw_predict_no_cache_benchmark_stds = benchmark_cmd(fw_predict_cmd, times)
+        vw_predict_no_cache_benchmark_means, vw_predict_no_cache_benchmark_stds = benchmark_cmd(vw_predict_cmd, "vw", times)
+        fw_predict_no_cache_benchmark_means, fw_predict_no_cache_benchmark_stds = benchmark_cmd(fw_predict_cmd, "fw", times)
 
         print(f"vw predict, no cache: {format_metrics(times, vw_predict_no_cache_benchmark_means, vw_predict_no_cache_benchmark_stds)}")
         print(f"fw predict, no cache: {format_metrics(times, fw_predict_no_cache_benchmark_means, fw_predict_no_cache_benchmark_stds)}")
