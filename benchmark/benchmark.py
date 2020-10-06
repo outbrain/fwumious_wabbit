@@ -94,7 +94,7 @@ def benchmark_cmd(cmd, times, run_before=None, ):
 
 
 def format_metrics(times, means, stds):
-    return f"{means[0]:.2f} ± {stds[0]:.2f} seconds, {means[1]/1024:.0f} ± {stds[1]/1024:.0f} MB, {means[2]*100:.2f} ± {stds[2]:.0f}% CPU ({times} runs)"
+    return f"{means[0]:.2f} ± {stds[0]:.2f} seconds, {means[1]/1024:.0f} ± {stds[1]/1024:.0f} MB, {means[2]:.2f} ± {stds[2]:.0f}% CPU ({times} runs)"
 
 
 def cross_entropy(y_hat, y):
@@ -117,7 +117,7 @@ def calc_loss(model_preds_file, input_file):
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        print("syntax: benchmark fw|vw|all cleanup|generate|train|predict|all")
+        print("syntax: benchmark fw|vw|all cleanup|generate|train|predict|train+predict|all")
         exit()
 
     benchmark_fw = sys.argv[1] == "all" or sys.argv[1] == "fw"
@@ -143,7 +143,7 @@ if __name__ == "__main__":
 
     times = 2
 
-    if action == "train" or action == "all":
+    if action == "train" or action == "train+predict" or action == "all":
         vw_train_no_cache_benchmark_means, vw_train_no_cache_benchmark_stds = benchmark_cmd(vw_train_cmd, times, vw_clean_cache)
         fw_train_no_cache_benchmark_means, fw_train_no_cache_benchmark_stds = benchmark_cmd(fw_train_cmd, times, fw_clean_cache)
 
@@ -156,7 +156,7 @@ if __name__ == "__main__":
         print(f"vw train, using cache: {format_metrics(times, vw_train_with_cache_benchmark_means, vw_train_with_cache_benchmark_stds)}")
         print(f"fw train, using cache: {format_metrics(times, fw_train_with_cache_benchmark_means, fw_train_with_cache_benchmark_stds)}")
 
-    if action == "predict" or action == "all":
+    if action == "predict" or action == "train+predict" or action == "all":
         vw_predict_no_cache_benchmark_means, vw_predict_no_cache_benchmark_stds = benchmark_cmd(vw_predict_cmd, times)
         fw_predict_no_cache_benchmark_means, fw_predict_no_cache_benchmark_stds = benchmark_cmd(fw_predict_cmd, times)
 
