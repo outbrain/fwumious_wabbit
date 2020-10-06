@@ -21,14 +21,14 @@ def memit(cmd):
             time = timer() - start
 
         while True:
-            gone, alive = psutil.wait_procs(procs=[psp], timeout=1, callback=on_process_termination)
+            gone, alive = psutil.wait_procs(procs=[psp], timeout=0.5, callback=on_process_termination)
             if psp in alive:
                 with psp.oneshot():
                     cpu = max(cpu, psp.cpu_percent())
                     if platform.system() == "Darwin":
                         mem = max(mem, psp.memory_info().rss / 1024.)
                     else:
-                        mem = max(mem, psp.memory_full_info().uss / 1024.)
+                        mem = max(mem, psp.memory_full_info().pss / 1024.)
             else:
                 break
     except CalledProcessError as e:
