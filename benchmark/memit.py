@@ -6,11 +6,14 @@ import platform
 from timeit import default_timer as timer
 
 
-def memit(cmd):
+def memit(cmd, proc_name):
     try:
         start = timer()
         cmdp = subprocess.Popen(f"{cmd}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-        psp = psutil.Process(cmdp.pid)
+        psutil.wait_procs([psutil.Process(cmdp.pid)], timeout=0.4)
+        for proc in psutil.process_iter(['pid', 'name', 'username']):
+            if proc.name() == proc_name:
+                psp = psutil.Process(proc.pid)
         psp.cpu_percent()
         cpu = 0
         mem = 0
@@ -28,7 +31,10 @@ def memit(cmd):
                     if platform.system() == "Darwin":
                         mem = max(mem, psp.memory_info().rss / 1024.)
                     else:
-                        mem = max(mem, psp.memory_full_info().pss / 1024.)
+                        try:
+                            mem = max(mem, psp.memory_full_info().pss)
+                        except:
+                            pass
             else:
                 break
     except CalledProcessError as e:
