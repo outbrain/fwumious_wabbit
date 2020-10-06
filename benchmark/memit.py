@@ -32,7 +32,7 @@ def memit(cmd, proc_name):
                         mem = max(mem, psp.memory_info().rss / 1024.)
                     else:
                         try:
-                            mem = max(mem, psp.memory_full_info().pss)
+                            mem = max(mem, psp.memory_full_info().pss / 1024.)
                         except:
                             pass
             else:
