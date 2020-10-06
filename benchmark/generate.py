@@ -1,16 +1,13 @@
 import random
 import sys
 
-NUM_ANIMALS = 5
-NUM_FOODS = 5
-BLOCK_BEYOND = 3
-
-Aval = []
-Bval = []
+NUM_ANIMALS = 500
+NUM_FOODS = 500
+BLOCK_BEYOND = 250
 
 
 def get_score(a, b):
-    if (a[0] == "Herbivore" and b[0] == "Plant"):
+    if a[0] == "Herbivore" and b[0] == "Plant":
         return 1
     elif a[0] == "Carnivore" and b[0] == "Meat":
         return 1
@@ -19,7 +16,7 @@ def get_score(a, b):
 
 
 def render_example(a, b):
-    score = get_score(a, b);
+    score = get_score(a, b)
     #    print(a,b)
     return " ".join([str(score), u"|A", a[0] + u"-" + str(a[1]), u"|B", b[0] + u"-" + str(b[1])]) + "\n"
 
@@ -32,12 +29,12 @@ def generate(train_examples=5000000, test_examples=5000000):
         food_type = random.choices(['Plant', 'Meat'])[0]
         missone = random.randint(0, 1)
         if missone:
-            person = random.randint(0, NUM_ANIMALS)
-            movie = random.randint(0, BLOCK_BEYOND)
+            animal = random.randint(0, NUM_ANIMALS)
+            food = random.randint(0, BLOCK_BEYOND)
         else:
-            person = random.randint(0, BLOCK_BEYOND)
-            movie = random.randint(0, NUM_FOODS)
-        f.write(render_example((animal_type, person), (food_type, movie)))
+            animal = random.randint(0, BLOCK_BEYOND)
+            food = random.randint(0, NUM_FOODS)
+        f.write(render_example((animal_type, animal), (food_type, food)))
         i += 1
 
     i = 0
