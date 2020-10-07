@@ -129,10 +129,10 @@ def plot_results(vw_mem_values, fw_mem_values, vw_cpu_values, fw_cpu_values):
         ax3.bar(ind + width, fw_cpu_values, width, label='fw')
     ax1.set_ylabel('seconds')
     ax2.set_ylabel('MB')
-    ax3.set_ylabel('Max CPU %')
-    ax1.set_title('total runtime')
+    ax3.set_ylabel('CPU %')
+    ax1.set_title('Total runtime')
     ax2.set_title('Max memory use')
-    ax3.set_title('CPU utilization')
+    ax3.set_title('Max CPU utilization')
     ax1.set_xticks(ind + width / 2)
     ax1.set_xticklabels(actions)
     ax2.set_xticks(ind + width / 2)
@@ -169,7 +169,7 @@ if __name__ == "__main__":
 
     if action == "generate" or action == "all":
         print("generating dataset, this may take a while")
-        generate.generate()
+        generate.generate(10000000, 10000000)
         gzip_file("train.vw")
 
     times = 5

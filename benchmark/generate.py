@@ -1,9 +1,9 @@
 import random
 import sys
 
-NUM_ANIMALS = 500
-NUM_FOODS = 500
-BLOCK_BEYOND = 250
+NUM_ANIMALS = 100000
+NUM_FOODS = 100000
+BLOCK_BEYOND = 50000
 
 
 def get_score(a, b):
