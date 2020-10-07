@@ -8,6 +8,7 @@ import platform
 import generate
 import gzip
 import shutil
+import matplotlib.pyplot as plt
 
 
 def rm_quietly(f):
@@ -108,6 +109,43 @@ def calc_loss(model_preds_file, input_file):
     return loss / float(i)
 
 
+def plot_results(vw_mem_values, fw_mem_values, vw_cpu_values, fw_cpu_values):
+    plt.style.use('ggplot')
+    fig = plt.figure(figsize=(12, 4))
+    ax1 = fig.add_subplot(131)
+    ax2 = fig.add_subplot(132)
+    ax3 = fig.add_subplot(133)
+    import numpy as np
+    ind = np.arange(max(len(fw_time_values), len(vw_time_values)))
+    width = 0.35
+
+    if benchmark_vw:
+        ax1.bar(ind, vw_time_values, width, label='vw')
+        ax2.bar(ind, vw_mem_values, width, label='vw')
+        ax3.bar(ind, vw_cpu_values, width, label='vw')
+    if benchmark_fw:
+        ax1.bar(ind + width, fw_time_values, width, label='fw')
+        ax2.bar(ind + width, fw_mem_values, width, label='fw')
+        ax3.bar(ind + width, fw_cpu_values, width, label='fw')
+    ax1.set_ylabel('seconds')
+    ax2.set_ylabel('MB')
+    ax3.set_ylabel('Max CPU %')
+    ax1.set_title('total runtime')
+    ax2.set_title('Max memory use')
+    ax3.set_title('CPU utilization')
+    ax1.set_xticks(ind + width / 2)
+    ax1.set_xticklabels(actions)
+    ax2.set_xticks(ind + width / 2)
+    ax2.set_xticklabels(actions)
+    ax3.set_xticks(ind + width / 2)
+    ax3.set_xticklabels(actions)
+    ax1.legend(loc='best')
+    ax2.legend(loc='best')
+    ax3.legend(loc='best')
+    plt.tight_layout(w_pad=3.0)
+    plt.savefig('benchmark_results.png')
+
+
 if __name__ == "__main__":
     if len(sys.argv) != 3:
         print("syntax: benchmark fw|vw|all cleanup|generate|train|predict|train+predict|all")
@@ -134,30 +172,70 @@ if __name__ == "__main__":
         generate.generate()
         gzip_file("train.vw")
 
-    times = 2
+    times = 5
+    actions = []
+    vw_time_values = []
+    vw_mem_values = []
+    vw_cpu_values = []
+    fw_time_values = []
+    fw_mem_values = []
+    fw_cpu_values = []
 
     if action == "train" or action == "train+predict" or action == "all":
-        vw_train_no_cache_benchmark_means, vw_train_no_cache_benchmark_stds = benchmark_cmd(vw_train_cmd, "vw", times, vw_clean_cache)
-        fw_train_no_cache_benchmark_means, fw_train_no_cache_benchmark_stds = benchmark_cmd(fw_train_cmd, "fw", times, fw_clean_cache)
+        actions.append("train + \nbuild cache")
+        actions.append("train\nfrom cache")
 
-        print(f"vw train, no cache: {format_metrics(times, vw_train_no_cache_benchmark_means, vw_train_no_cache_benchmark_stds)}")
-        print(f"fw train, no cache: {format_metrics(times, fw_train_no_cache_benchmark_means, fw_train_no_cache_benchmark_stds)}")
+        if benchmark_vw:
+            vw_train_no_cache_benchmark_means, vw_train_no_cache_benchmark_stds = benchmark_cmd(vw_train_cmd, "vw", times, vw_clean_cache)
+            print(f"vw train, no cache: {format_metrics(times, vw_train_no_cache_benchmark_means, vw_train_no_cache_benchmark_stds)}")
+            vw_time_values.append(vw_train_no_cache_benchmark_means[0])
+            vw_mem_values.append(vw_train_no_cache_benchmark_means[1] / 1024.)
+            vw_cpu_values.append(vw_train_no_cache_benchmark_means[2])
 
-        vw_train_with_cache_benchmark_means, vw_train_with_cache_benchmark_stds = benchmark_cmd(vw_train_cmd, "vw", times)
-        fw_train_with_cache_benchmark_means, fw_train_with_cache_benchmark_stds = benchmark_cmd(fw_train_cmd, "fw", times)
+        if benchmark_fw:
+            fw_train_no_cache_benchmark_means, fw_train_no_cache_benchmark_stds = benchmark_cmd(fw_train_cmd, "fw", times, fw_clean_cache)
+            print(f"fw train, no cache: {format_metrics(times, fw_train_no_cache_benchmark_means, fw_train_no_cache_benchmark_stds)}")
+            fw_time_values.append(fw_train_no_cache_benchmark_means[0])
+            fw_mem_values.append(fw_train_no_cache_benchmark_means[1] / 1024.)
+            fw_cpu_values.append(fw_train_no_cache_benchmark_means[2])
 
-        print(f"vw train, using cache: {format_metrics(times, vw_train_with_cache_benchmark_means, vw_train_with_cache_benchmark_stds)}")
-        print(f"fw train, using cache: {format_metrics(times, fw_train_with_cache_benchmark_means, fw_train_with_cache_benchmark_stds)}")
+        if benchmark_vw:
+            vw_train_with_cache_benchmark_means, vw_train_with_cache_benchmark_stds = benchmark_cmd(vw_train_cmd, "vw", times)
+            print(f"vw train, using cache: {format_metrics(times, vw_train_with_cache_benchmark_means, vw_train_with_cache_benchmark_stds)}")
+            vw_time_values.append(vw_train_with_cache_benchmark_means[0])
+            vw_mem_values.append(vw_train_with_cache_benchmark_means[1] / 1024.)
+            vw_cpu_values.append(vw_train_with_cache_benchmark_means[2])
+
+        if benchmark_fw:
+            fw_train_with_cache_benchmark_means, fw_train_with_cache_benchmark_stds = benchmark_cmd(fw_train_cmd, "fw", times)
+            print(f"fw train, using cache: {format_metrics(times, fw_train_with_cache_benchmark_means, fw_train_with_cache_benchmark_stds)}")
+            fw_time_values.append(fw_train_with_cache_benchmark_means[0])
+            fw_mem_values.append(fw_train_with_cache_benchmark_means[1] / 1024.)
+            fw_cpu_values.append(fw_train_with_cache_benchmark_means[2])
 
     if action == "predict" or action == "train+predict" or action == "all":
-        vw_predict_no_cache_benchmark_means, vw_predict_no_cache_benchmark_stds = benchmark_cmd(vw_predict_cmd, "vw", times)
-        fw_predict_no_cache_benchmark_means, fw_predict_no_cache_benchmark_stds = benchmark_cmd(fw_predict_cmd, "fw", times)
+        actions.append("predict,\nno cache")
+        if benchmark_vw:
+            vw_predict_no_cache_benchmark_means, vw_predict_no_cache_benchmark_stds = benchmark_cmd(vw_predict_cmd, "vw", times)
+            vw_model_loss = calc_loss("vw_preds.out", "easy.vw")
+            print(f"vw predict, no cache: {format_metrics(times, vw_predict_no_cache_benchmark_means, vw_predict_no_cache_benchmark_stds)}")
+            vw_time_values.append(vw_predict_no_cache_benchmark_means[0])
+            vw_mem_values.append(vw_predict_no_cache_benchmark_means[1] / 1024.)
+            vw_cpu_values.append(vw_predict_no_cache_benchmark_means[2])
 
-        print(f"vw predict, no cache: {format_metrics(times, vw_predict_no_cache_benchmark_means, vw_predict_no_cache_benchmark_stds)}")
-        print(f"fw predict, no cache: {format_metrics(times, fw_predict_no_cache_benchmark_means, fw_predict_no_cache_benchmark_stds)}")
+        if benchmark_fw:
+            fw_predict_no_cache_benchmark_means, fw_predict_no_cache_benchmark_stds = benchmark_cmd(fw_predict_cmd, "fw", times)
+            fw_model_loss = calc_loss("fw_preds.out", "easy.vw")
+            print(f"fw predict, no cache: {format_metrics(times, fw_predict_no_cache_benchmark_means, fw_predict_no_cache_benchmark_stds)}")
+            fw_time_values.append(fw_predict_no_cache_benchmark_means[0])
+            fw_mem_values.append(fw_predict_no_cache_benchmark_means[1] / 1024.)
+            fw_cpu_values.append(fw_predict_no_cache_benchmark_means[2])
 
-        vw_model_loss = calc_loss("vw_preds.out", "easy.vw")
-        print(f"vw predictions loss: {vw_model_loss}")
+        if benchmark_vw:
+            print(f"vw predictions loss: {vw_model_loss}")
 
-        fw_model_loss = calc_loss("fw_preds.out", "easy.vw")
-        print(f"fw predictions loss: {fw_model_loss}")
+        if benchmark_fw:
+            print(f"fw predictions loss: {fw_model_loss}")
+
+    plot_results(vw_mem_values, fw_mem_values, vw_cpu_values, fw_cpu_values)
+
