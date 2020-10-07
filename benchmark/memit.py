@@ -27,14 +27,15 @@ def memit(cmd, proc_name):
             gone, alive = psutil.wait_procs(procs=[psp], timeout=0.5, callback=on_process_termination)
             if psp in alive:
                 with psp.oneshot():
-                    cpu = max(cpu, psp.cpu_percent())
-                    if platform.system() == "Darwin":
-                        mem = max(mem, psp.memory_info().rss / 1024.)
-                    else:
-                        try:
+                    try:
+                        cpu = max(cpu, psp.cpu_percent())
+
+                        if platform.system() == "Darwin":
+                            mem = max(mem, psp.memory_info().rss / 1024.)
+                        else:
                             mem = max(mem, psp.memory_full_info().pss / 1024.)
-                        except:
-                            pass
+                    except psutil.AccessDenied:
+                        pass
             else:
                 break
     except CalledProcessError as e:
