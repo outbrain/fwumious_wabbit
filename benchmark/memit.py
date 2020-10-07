@@ -14,7 +14,6 @@ def memit(cmd, proc_name):
         for proc in psutil.process_iter(['pid', 'name', 'username']):
             if proc.name() == proc_name:
                 psp = psutil.Process(proc.pid)
-        psp.cpu_percent()
         cpu = 0
         mem = 0
         time = 0
@@ -35,6 +34,8 @@ def memit(cmd, proc_name):
                         else:
                             mem = max(mem, psp.memory_full_info().pss / 1024.)
                     except psutil.AccessDenied:
+                        pass
+                    except psutil.ZombieProcess:
                         pass
             else:
                 break
