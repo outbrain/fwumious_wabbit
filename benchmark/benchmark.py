@@ -8,6 +8,7 @@ import platform
 import generate
 import gzip
 import shutil
+import matplotlib
 import matplotlib.pyplot as plt
 
 
@@ -110,6 +111,7 @@ def calc_loss(model_preds_file, input_file):
 
 
 def plot_results(vw_mem_values, fw_mem_values, vw_cpu_values, fw_cpu_values):
+    matplotlib.use('agg')
     plt.style.use('ggplot')
     fig = plt.figure(figsize=(12, 4))
     ax1 = fig.add_subplot(131)
