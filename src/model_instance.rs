@@ -282,6 +282,7 @@ impl ModelInstance {
         // Vowpal supports a mode with "prehashed" features, where numeric strings are treated as
         // numeric precomputed hashes. This is even default option.
         // It is generally a bad idea except if you strings really are precomputed hashes... 
+        /*
         if !cl.is_present("hash") {
                return Err(Box::new(IOError::new(ErrorKind::Other, format!("You have to use --hash all "))))
         } else
@@ -289,7 +290,7 @@ impl ModelInstance {
             if val != "all" {
                 return Err(Box::new(IOError::new(ErrorKind::Other, format!("Only --hash all supported"))))
             }            
-        }
+        }*/
         Ok(mi)
     }
 
