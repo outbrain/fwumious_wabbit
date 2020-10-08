@@ -5,10 +5,9 @@ use std::marker::PhantomData;
 pub trait OptimizerTrait {
     type PerWeightStore;
     fn new() -> Self;
-    fn init(&mut self, learning_rate: f32, power_t: f32);
+    fn init(&mut self, learning_rate: f32, power_t: f32, initial_acc_gradient: f32);
     unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32;
-    fn empty_initial_data() -> Self::PerWeightStore;
-    fn ffm_initial_data() -> Self::PerWeightStore;
+    fn initial_data(&self) -> Self::PerWeightStore;
     fn get_name() -> &'static str;
 }
 
@@ -30,7 +29,7 @@ impl OptimizerTrait for OptimizerSGD {
         OptimizerSGD{learning_rate: 0.0}
     } 
     
-    fn init(&mut self, learning_rate: f32, _power_t: f32) {
+    fn init(&mut self, learning_rate: f32, _power_t: f32, _initial_acc_gradient: f32) {
         self.learning_rate = learning_rate;
     }
 
@@ -39,10 +38,7 @@ impl OptimizerTrait for OptimizerSGD {
         return gradient * self.learning_rate;
     }
 
-    fn empty_initial_data() -> Self::PerWeightStore {
-        std::marker::PhantomData{}
-    }
-    fn ffm_initial_data() -> Self::PerWeightStore {
+    fn initial_data(&self) -> Self::PerWeightStore {
         std::marker::PhantomData{}
     }
 }
@@ -54,6 +50,7 @@ impl OptimizerTrait for OptimizerSGD {
 pub struct OptimizerAdagradFlex {
     learning_rate: f32,   
     minus_power_t: f32,
+    initial_acc_gradient: f32,
 }
 
 impl OptimizerTrait for OptimizerAdagradFlex {
@@ -63,12 +60,13 @@ impl OptimizerTrait for OptimizerAdagradFlex {
     type PerWeightStore = f32;
 
     fn new() -> Self {
-        OptimizerAdagradFlex{learning_rate: 0.0, minus_power_t: 0.0}
+        OptimizerAdagradFlex{learning_rate: 0.0, minus_power_t: 0.0, initial_acc_gradient: 0.0}
     } 
 
-    fn init(&mut self, learning_rate: f32, power_t: f32) {
+    fn init(&mut self, learning_rate: f32, power_t: f32, initial_acc_gradient: f32) {
         self.learning_rate = learning_rate;
         self.minus_power_t = - power_t;
+        self.initial_acc_gradient = initial_acc_gradient;
     }
 
     #[inline(always)]
@@ -81,11 +79,8 @@ impl OptimizerTrait for OptimizerAdagradFlex {
         return update;
     }
     
-    fn empty_initial_data() -> Self::PerWeightStore {
-        0.0f32
-    }
-    fn ffm_initial_data() -> Self::PerWeightStore {
-        0.1f32
+    fn initial_data(&self) -> Self::PerWeightStore {
+        self.initial_acc_gradient
     }
     
 }
@@ -111,7 +106,7 @@ impl OptimizerTrait for OptimizerAdagradLUT {
         OptimizerAdagradLUT{fastmath_lr_lut: [0.0;FASTMATH_LR_LUT_SIZE]}
     } 
     
-    fn init(&mut self, learning_rate: f32, power_t: f32) {
+    fn init(&mut self, learning_rate: f32, power_t: f32, initial_acc_gradient: f32) {
         println!("Calculating look-up tables for Adagrad learning rate calculation");
         let minus_power_t = -power_t;
         for x in 0..FASTMATH_LR_LUT_SIZE {
@@ -119,13 +114,14 @@ impl OptimizerTrait for OptimizerAdagradLUT {
             // floating point: 1 bit of sign, 7 bits of signed expontent then floating point bits (mantissa)
             // we will take 7 bits of exponent + whatever most significant bits of mantissa remain
             // we take two consequtive such values, so we act as if had rounding
-            let float_x = f32::from_bits((x as u32)  << (31-FASTMATH_LR_LUT_BITS));
-            let float_x_plus_one = f32::from_bits(((x+1) as u32)  << (31-FASTMATH_LR_LUT_BITS));
-            let val = learning_rate * ((float_x).powf(minus_power_t) + (float_x_plus_one).powf(minus_power_t)) * 0.5;
+            let float_x = (f32::from_bits((x as u32)  << (31-FASTMATH_LR_LUT_BITS))) + initial_acc_gradient + 1e-8;
+            let float_x_plus_one = (f32::from_bits(((x+1) as u32)  << (31-FASTMATH_LR_LUT_BITS))) + initial_acc_gradient + 1e-8;
+            let mut val = learning_rate * ((float_x).powf(minus_power_t) + (float_x_plus_one).powf(minus_power_t)) * 0.5;
             // Safety measure
-            /*if val > learning_rate || val.is_nan() {
+            if val.is_nan() || val.is_infinite(){
+//                println!("x: {} {} {} {}", x, float_x, val, initial_acc_gradient);
                 val = learning_rate;
-            }*/
+            }
             
             self.fastmath_lr_lut[x] = val;
         }
@@ -143,11 +139,8 @@ impl OptimizerTrait for OptimizerAdagradLUT {
         return update;
     }
 
-    fn empty_initial_data() -> Self::PerWeightStore {
-        0.0f32
-    }
-    fn ffm_initial_data() -> Self::PerWeightStore {
-        0.1f32
+    fn initial_data(&self) -> Self::PerWeightStore {
+        0.0
     }
 
 }
