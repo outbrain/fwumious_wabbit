@@ -92,6 +92,11 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .value_name("")
                      .help("No intercept")
                      .takes_value(false))
+                    .arg(Arg::with_name("ffm_separate_vectors")
+                     .long("ffm_separate_vectors")
+                     .value_name("")
+                     .help("NOT USED")
+                     .takes_value(false))
                     .arg(Arg::with_name("link")
                      .long("link")
                      .value_name("logistic")
@@ -162,11 +167,6 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .value_name("N")
                      .help("Bits to use for ffm hash space")
                      .takes_value(true))
-                    .arg(Arg::with_name("ffm_separate_vectors")
-                     .long("ffm_separate_vectors")
-                     .value_name("false")
-                     .help("Field will have a different vector for each counter-field")
-                     .takes_value(false))
                     .arg(Arg::with_name("ffm_k_threshold")
                      .long("ffm_k_threshold")
                      .help("A minum gradient on left and right side to increase k")
@@ -187,6 +187,18 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .help("Percentage of ffm_init_width where init is zero")
                      .multiple(false)
                      .takes_value(true))
+
+                    .arg(Arg::with_name("ffm_init_acc_gradient")
+                     .long("ffm_init_acc_gradient")
+                     .help("Adagrad initial accumulated gradient for ffm")
+                     .multiple(false)
+                     .takes_value(true))
+                    .arg(Arg::with_name("init_acc_gradient")
+                     .long("init_acc_gradient")
+                     .help("Adagrad initial accumulated gradient for ")
+                     .multiple(false)
+                     .takes_value(true))
+
 
                      
 

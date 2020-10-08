@@ -46,8 +46,8 @@ pub struct Regressor<L:OptimizerTrait> {
     ffm_one_over_k_root: f32,
     ffm_iw_weights_offset: u32,
     ffm_k_threshold: f32,
-    adagrad_lr: L,
-    adagrad_ffm: L,
+    optimizer_lr: L,
+    optimizer_ffm: L,
     local_data_lr: Vec<IndexAccgradientValue>,
     local_data_ffm: Vec<IndexAccgradientValue>,
 }
@@ -120,16 +120,16 @@ L: std::clone::Clone
                             ffm_k: 0, 
                             ffm_hashmask: 0, 
                             ffm_one_over_k_root: 0.0, 
-                            adagrad_lr: L::new(),
-                            adagrad_ffm: L::new(),
+                            optimizer_lr: L::new(),
+                            optimizer_ffm: L::new(),
                             ffm_iw_weights_offset: 0, ffm_k_threshold:
                             mi.ffm_k_threshold, 
                             local_data_lr: Vec::with_capacity(1024), 
                             local_data_ffm: Vec::with_capacity(1024),
                      };
 
-        rg.adagrad_lr.init(mi.learning_rate, mi.power_t);
-        rg.adagrad_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t);
+        rg.optimizer_lr.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
+        rg.optimizer_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
 
         if mi.ffm_k > 0 {
             
@@ -154,18 +154,15 @@ L: std::clone::Clone
     
     pub fn allocate_and_init_weights_(&mut self, mi: &model_instance::ModelInstance) {
         let rg = self;
-        rg.weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: L::empty_initial_data()}; rg.weights_len as usize];
+        rg.weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: rg.optimizer_lr.initial_data()}; rg.weights_len as usize];
 
         if mi.ffm_k > 0 {       
             if mi.ffm_init_width == 0.0 {
                 // Initialization, from ffm.pdf with added division by 10 and centered on zero (determined empirically)
                 rg.ffm_one_over_k_root = 1.0 / (rg.ffm_k as f32).sqrt() / 10.0;
                 for i in 0..rg.ffm_weights_len {
-                    rg.weights[(rg.ffm_weights_offset + i) as usize].weight
-                    = (0.2*merand48((rg.ffm_weights_offset+i) as u64)-0.1) *
-                    rg.ffm_one_over_k_root;
-                    rg.weights[(rg.ffm_weights_offset + i) as
-                    usize].optimizer_data = L::ffm_initial_data();
+                    rg.weights[(rg.ffm_weights_offset + i) as usize].weight = (0.2*merand48((rg.ffm_weights_offset+i) as u64)-0.1) * rg.ffm_one_over_k_root;
+                    rg.weights[(rg.ffm_weights_offset + i) as usize].optimizer_data = rg.optimizer_ffm.initial_data();
                 }
             } else {
                 let zero_half_band_width = mi.ffm_init_width * mi.ffm_init_zero_band * 0.5;
@@ -179,7 +176,7 @@ L: std::clone::Clone
                     }
                     w += mi.ffm_init_center;
                     rg.weights[(rg.ffm_weights_offset + i) as usize].weight = w; 
-                    rg.weights[(rg.ffm_weights_offset + i) as usize].optimizer_data = L::ffm_initial_data();
+                    rg.weights[(rg.ffm_weights_offset + i) as usize].optimizer_data = rg.optimizer_ffm.initial_data();
                 }
 
             }
@@ -329,7 +326,7 @@ L: std::clone::Clone
                 let feature_value = local_data_lr.get_unchecked(i).value;
                 let feature_index = local_data_lr.get_unchecked(i).index as usize;
                 let gradient = general_gradient * feature_value;
-                let update = self.adagrad_lr.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
+                let update = self.optimizer_lr.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
                 weights.get_unchecked_mut(feature_index).weight += update;
             }
             
@@ -340,7 +337,7 @@ L: std::clone::Clone
                 }
                 let feature_index = local_data_ffm.get_unchecked(i).index as usize;
                 let gradient = general_gradient * feature_value;
-                let update = self.adagrad_ffm.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
+                let update = self.optimizer_ffm.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
                 weights.get_unchecked_mut(feature_index).weight += update;
             }
         }
@@ -384,7 +381,7 @@ L: std::clone::Clone
         }
               
         const BUF_LEN:usize = 256000;
-        let mut in_weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: L::empty_initial_data()}; BUF_LEN as usize];
+        let mut in_weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_lr.initial_data()}; BUF_LEN as usize];
         let mut out_weights = Vec::<Weight>::new();
         
         let mut remaining_weights = self.weights_len as usize;
@@ -628,7 +625,7 @@ mod tests {
         for i in rg.ffm_weights_offset as usize..rg.weights.len() {
             rg.weights[i].weight = 1.0;
 //            rg.weights[i].acc_grad = 1.0;
-            rg.weights[i].optimizer_data = T::ffm_initial_data();
+            rg.weights[i].optimizer_data = rg.optimizer_ffm.initial_data();
         }
     }
 

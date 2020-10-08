@@ -40,7 +40,7 @@ pub struct ModelInstance {
     #[serde(default = "default_u32_zero")]
     pub ffm_bit_precision: u32,
     #[serde(default = "default_bool_false")]
-    pub ffm_separate_vectors: bool,
+    pub ffm_separate_vectors: bool, // NOT USED
     #[serde(default = "default_bool_false")]
     pub fastmath: bool,
 
@@ -52,6 +52,10 @@ pub struct ModelInstance {
     pub ffm_init_width: f32,
     #[serde(default = "default_f32_zero")]
     pub ffm_init_zero_band: f32,	// from 0.0 to 1.0, percentage of ffm_init_width
+    #[serde(default = "default_f32_zero")]
+    pub ffm_init_acc_gradient: f32,
+    #[serde(default = "default_f32_zero")]
+    pub init_acc_gradient: f32,
     // these are only used for learning, so it doesnt matter they got set to zero as default        
     #[serde(default = "default_f32_zero")]
     pub ffm_learning_rate: f32,    
@@ -120,6 +124,8 @@ impl ModelInstance {
             ffm_init_center: 0.0,
             ffm_init_width: 0.0,
             ffm_init_zero_band: 0.0,
+            ffm_init_acc_gradient: 0.0,
+            init_acc_gradient: 0.0,
             optimizer: Optimizer::SGD,
         };
         Ok(mi)
@@ -174,8 +180,13 @@ impl ModelInstance {
             mi.ffm_init_width = val.parse()?;
         }
 
-        if cl.is_present("ffm_separate_vectors") {
-            mi.ffm_separate_vectors = true;
+        if let Some(val) = cl.value_of("init_acc_gradient") {
+            mi.init_acc_gradient = val.parse()?;
+        }
+        if let Some(val) = cl.value_of("ffm_init_acc_gradient") {
+            mi.ffm_init_acc_gradient = val.parse()?;
+        } else {
+            mi.ffm_init_acc_gradient = mi.init_acc_gradient;
         }
 
 
@@ -204,6 +215,7 @@ impl ModelInstance {
             println!("Num weight bits = {}", mi.bit_precision); // vwcompat
             mi.hash_mask = (1 << mi.bit_precision) -1;
         }
+
         if let Some(val) = cl.value_of("learning_rate") {
             mi.learning_rate = val.parse()?;
         }
@@ -212,6 +224,9 @@ impl ModelInstance {
         } else {
             mi.ffm_learning_rate = mi.learning_rate;
         }
+
+
+
 
         if let Some(val) = cl.value_of("minimum_learning_rate") {
             mi.minimum_learning_rate = val.parse()?;
