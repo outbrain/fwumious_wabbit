@@ -215,7 +215,7 @@ B,featureB
     fn ffm_fixed_init<T:OptimizerTrait>(rg: &mut Regressor<T>) -> () {
         for i in rg.ffm_weights_offset as usize..rg.weights.len() {
             rg.weights[i].weight = 1.0;
-            rg.weights[i].optimizer_data = T::ffm_initial_data();
+            rg.weights[i].optimizer_data = rg.optimizer_ffm.initial_data();
         }
     }
 
