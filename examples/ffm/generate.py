@@ -1,4 +1,5 @@
-import random
+import random, pathlib
+DATASETS_DIRECTORY = pathlib.Path("datasets")
 TRAIN_EXAMPLES = 100000
 EVAL_EXAMPLES = 10000
 NUM_ANIMALS = 5
@@ -7,6 +8,8 @@ BLOCK_BEYOND = 3
 
 Aval = []
 Bval = []
+
+random.seed(1)
 
 def get_score(a,b):
     if (a[0] == "Herbivore" and b[0] == "Plant"):
@@ -18,12 +21,17 @@ def get_score(a,b):
     
 def render_example(a, b):
     score = get_score(a, b);
-#    print(a,b)
     return " ".join([str(score), u"|A", a[0] + u"-" + str(a[1]), u"|B", b[0] + u"-" + str(b[1])]) + "\n"
 
 
+DATASETS_DIRECTORY.mkdir(exist_ok=True);
+
+f = open(DATASETS_DIRECTORY / "vw_namespace_map.csv", "w");
+f.write("A,animal\n")
+f.write("B,food\n")
+
 i = 0 
-f = open("train.vw", "w")
+f = open(DATASETS_DIRECTORY / "train.vw", "w")
 while i < TRAIN_EXAMPLES:
     animal_type = random.choices(['Herbivore', 'Carnivore'])[0]
     food_type = random.choices(['Plant', 'Meat'])[0]
@@ -39,7 +47,7 @@ while i < TRAIN_EXAMPLES:
 
 i = 0
 # this has the same distribution as for train...
-f = open("easy.vw", "w")
+f = open(DATASETS_DIRECTORY /"test-easy.vw", "w")
 while i < EVAL_EXAMPLES:
     animal_type = random.choices(['Herbivore', 'Carnivore'])[0]
     food_type = random.choices(['Plant', 'Meat'])[0]
@@ -54,7 +62,7 @@ while i < EVAL_EXAMPLES:
     i+=1 
 
 # now we will test for completely unseen combos
-f = open("hard.vw", "w")
+f = open(DATASETS_DIRECTORY /"test-hard.vw", "w")
 i = 0
 while i < EVAL_EXAMPLES:
     animal_type = random.choices(['Herbivore', 'Carnivore'])[0]

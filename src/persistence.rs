@@ -55,7 +55,7 @@ pub fn save_regressor_to_filename(
                         vwmap: &vwmap::VwNamespaceMap,
                         re: Box<dyn regressor::RegressorTrait>,
                         ) -> Result<(), Box<dyn Error>> {
-        let output_bufwriter = &mut io::BufWriter::new(fs::File::create(filename).unwrap());
+        let output_bufwriter = &mut io::BufWriter::new(fs::File::create(filename).expect(format!("Cannot open {} to save regressor to", filename).as_str()));
         write_regressor_header(output_bufwriter)?;
         vwmap.save_to_buf(output_bufwriter)?;
         mi.save_to_buf(output_bufwriter)?;

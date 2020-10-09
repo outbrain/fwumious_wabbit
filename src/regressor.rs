@@ -190,7 +190,9 @@ L: std::clone::Clone
     }
 }
 
-
+/* We tested standard stable logistic function, but it gives slightly 
+worse logloss results than plain logistic on our data */
+/*
 #[inline(always)]
 pub fn stable_logistic(t: f32) -> f32 {
     if t > 0.0 {
@@ -200,6 +202,7 @@ pub fn stable_logistic(t: f32) -> f32 {
         return texp / (1.0 + texp);
     }
 }
+*/
 
 #[inline(always)]
 pub fn logistic(t: f32) -> f32 {
@@ -310,11 +313,11 @@ L: std::clone::Clone
         // vowpal compatibility
         if prediction.is_nan() {
             eprintln!("NAN prediction in example {}, forcing 0.0", example_num);
-            return stable_logistic(0.0);
+            return logistic(0.0);
         } else if prediction < -50.0 {
-            return stable_logistic(-50.0);
+            return logistic(-50.0);
         } else if prediction > 50.0 {
-            return stable_logistic(50.0);
+            return logistic(50.0);
         }
 
         let prediction_probability:f32 = logistic(prediction);
