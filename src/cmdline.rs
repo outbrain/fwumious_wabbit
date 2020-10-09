@@ -92,11 +92,6 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .value_name("")
                      .help("No intercept")
                      .takes_value(false))
-                    .arg(Arg::with_name("ffm_separate_vectors")
-                     .long("ffm_separate_vectors")
-                     .value_name("")
-                     .help("NOT USED")
-                     .takes_value(false))
                     .arg(Arg::with_name("link")
                      .long("link")
                      .value_name("logistic")
@@ -116,7 +111,7 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                     .arg(Arg::with_name("hash")
                      .long("hash")
                      .value_name("all")
-                     .help("We do not support trating strings as already hashed numbers, so you have to use --hash all")
+                     .help("We do not support treating strings as already hashed numbers, so you have to use --hash all")
                      .takes_value(true))
                      
                     // Regressor
@@ -137,9 +132,9 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .long("testonly")
                      .help("Ignore label information and just test")
                      .takes_value(false))
-                    .arg(Arg::with_name("fastmath")
-                     .long("fastmath")
-                     .help("Use approximate, but fast math and lookup tables")
+                    .arg(Arg::with_name("vwcompat")
+                     .long("vwcompat")
+                     .help("vowpal compatibility mode. Uses slow adagrad, emits warnings for non-compatible features")
                      .multiple(false)
                      .takes_value(false))
 
