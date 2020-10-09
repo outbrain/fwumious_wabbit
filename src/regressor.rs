@@ -47,7 +47,7 @@ pub struct Regressor<L:OptimizerTrait> {
     ffm_iw_weights_offset: u32,
     ffm_k_threshold: f32,
     optimizer_lr: L,
-    optimizer_ffm: L,
+    pub optimizer_ffm: L,
     local_data_lr: Vec<IndexAccgradientValue>,
     local_data_ffm: Vec<IndexAccgradientValue>,
 }
@@ -272,10 +272,10 @@ L: std::clone::Clone
                 for right_hash in fb.ffm_buffer.get_unchecked(i+1 ..).iter() {
                     right_local_index += fc;
                     
-                    /* 
+                     
                     // Regular FFM implementation would prevent intra-field interactions
                     // But for the use case we tested this is both faster and it decreases logloss
-                    if left_hash.contra_field_index == right_hash.contra_field_index {
+                    /*if left_hash.contra_field_index == right_hash.contra_field_index {
                         continue	// not combining within a field
                     }*/
                     
