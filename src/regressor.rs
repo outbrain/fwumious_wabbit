@@ -158,10 +158,10 @@ L: std::clone::Clone
 
         if mi.ffm_k > 0 {       
             if mi.ffm_init_width == 0.0 {
-                // Initialization, from ffm.pdf with added division by 10 and centered on zero (determined empirically)
-                rg.ffm_one_over_k_root = 1.0 / (rg.ffm_k as f32).sqrt() / 10.0;
+                // Initialization that has showed to work ok for us, like in ffm.pdf, but centered around zero and further divided by 50
+                rg.ffm_one_over_k_root = 1.0 / (rg.ffm_k as f32).sqrt() / 50.0;
                 for i in 0..rg.ffm_weights_len {
-                    rg.weights[(rg.ffm_weights_offset + i) as usize].weight = (0.2*merand48((rg.ffm_weights_offset+i) as u64)-0.1) * rg.ffm_one_over_k_root;
+                    rg.weights[(rg.ffm_weights_offset + i) as usize].weight = (1.0 * merand48((rg.ffm_weights_offset+i) as u64)-0.5) * rg.ffm_one_over_k_root;
                     rg.weights[(rg.ffm_weights_offset + i) as usize].optimizer_data = rg.optimizer_ffm.initial_data();
                 }
             } else {
@@ -271,10 +271,15 @@ L: std::clone::Clone
                 let mut right_local_index = left_hash.contra_field_index as usize + ifc;
                 for right_hash in fb.ffm_buffer.get_unchecked(i+1 ..).iter() {
                     right_local_index += fc;
+                    
+                    /* 
+                    // Regular FFM implementation would prevent intra-field interactions
+                    // But for the use case we tested this is both faster and it decreases logloss
                     if left_hash.contra_field_index == right_hash.contra_field_index {
                         continue	// not combining within a field
-                    }
-                    // FYI this is effectively what happens:
+                    }*/
+                    
+                    // FYI this is effectively what we calculate:
 //                    let left_local_index =  i*fc + right_hash.contra_field_index as usize;
 //                    let right_local_index = (i+1+j) * fc + left_hash.contra_field_index as usize;
                     let left_local_index = ifc + right_hash.contra_field_index as usize;
@@ -332,9 +337,6 @@ L: std::clone::Clone
             
             for i in 0..local_data_ffm_len {
                 let feature_value = local_data_ffm.get_unchecked(i).value;
-                if feature_value == 0.0 {
-                    continue; // this is basically diagonal of ffm - self combination
-                }
                 let feature_index = local_data_ffm.get_unchecked(i).index as usize;
                 let gradient = general_gradient * feature_value;
                 let update = self.optimizer_ffm.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
@@ -380,7 +382,7 @@ L: std::clone::Clone
             return Err(format!("Lenghts of weights array in regressor file differ: got {}, expected {}", len, self.weights_len))?;
         }
               
-        const BUF_LEN:usize = 256000;
+        const BUF_LEN:usize = 1024 * 1024;
         let mut in_weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_lr.initial_data()}; BUF_LEN as usize];
         let mut out_weights = Vec::<Weight>::new();
         
