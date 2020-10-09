@@ -2,9 +2,10 @@
 
 # Strict focus
 
-The biggest advantage that FW gets over VW is much narrower focus on what it
-does. Everything that would cause conditional jumps in inner loops is
-avoided or specialized using macros.
+The biggest advantage that FW gets over VW and other logistic regression 
+implementations is much narrower focus on what it does. Everything that 
+would cause conditional jumps in inner loops is avoided or specialized 
+using macros.
 
 FW does not implement regularization nor multipass. They could be added 
 without hurting performance in the fast path by using static traits.
@@ -48,18 +49,22 @@ avoid the need to initialize memory.
 
 Some frequent codepaths were unrolled manually.
 
+# Specialization
+- We have specialized inner loops (with macros) for --ffm_k of 2, 4 and 8.
+- Optimizer is specialized as part of the code, so inner-loop ifs are
+avoided
+
 # Algorithmic optimization
 
 We heavily relied on ideas from VW and built on top of them. VW's buffer
 management is fully replicated for logistic regression code.
 
-However FFM implementation in VW is not well tested and in our opinion it is 
-buggy. We created a novel approach to FFM calculation that allows for fields 
-that are filled from multiple features and those can be multi valued. 
-Traditional quadraple loop to handle such cases (which VW uses) was 
-replaced by double loop. Intra-field combinations were allowed due to better 
-prediction performance on our datasets and faster execution time (no
-conditional jumps in the inner loop).
+FFM implementation in VW is not well tested and in our opinion it is 
+buggy. We created a novel approach to FFM calculation. 
+Traditional quadraple loop (which VW uses) was replaced by double loop. 
+Intra-field combinations were allowed due to better prediction performance 
+on our datasets and faster execution time (no conditional jumps in the inner 
+loop).
 
 We sum all changes to each feature weight in all FFM combinations and do the
 final update of each feature weight only once per example. 
@@ -85,5 +90,30 @@ accumulated gradients into separate vectors. This created 50% slowdown. The
 theory is that we are doing lots of random memory accesses (to load weights)
 and additional latencies overshadow benefits of (possibly) better
 vectorization.
+
+# Ideas for future speed improvements
+- We know that using stack instead of heap for temporary buffer in learn() 
+gives us ~10% speedup on FFMs. However the specialization code is ugly and
+therefore it is not on the main branch.
+- Many more structures on stack. However it is hard to make it work without
+crashing in extreme cases.
+- On-demand specialization. This would requrie a compile-per-run, but could
+really bring additional improvements
+- Full unrolling of the double for loop for FFM would be possible. By 
+unrolling it into a single loop with constant offsets.
+- You can compile with RUSTFLAGS:
+export RUSTFLAGS="-C opt-level=3 -C target-cpu=skylake -C llvm-args=--force-vector-width=4"
+Generally vectorization helps less than one would hope for
+
+
+
+
+
+
+
+
+
+
+
 
 
