@@ -148,7 +148,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
                 };
             }
             example_num += 1;
-            fbt.translate_vowpal(buffer);
+            fbt.translate(buffer);
             let mut prediction: f32 = 0.0;
 
             if prediction_model_delay == 0 {

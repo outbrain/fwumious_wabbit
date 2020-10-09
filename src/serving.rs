@@ -81,7 +81,7 @@ impl WorkerThread {
             match reading_result {
                 Ok([]) => return ConnectionEnd::EndOfStream, // EOF
                 Ok(buffer2) => {
-                    self.fbt.translate_vowpal(buffer2);
+                    self.fbt.translate(buffer2);
                     let p = self.re_fixed.predict(&(self.fbt.feature_buffer), i);
                     let p_res = format!("{:.6}\n", p);
                     match writer.write_all(p_res.as_bytes()) {

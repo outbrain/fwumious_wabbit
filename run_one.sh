@@ -4,7 +4,7 @@ infile=$1
 #namespaces="--keep A"
 namespaces="--interactions 0GU --interactions 0K --interactions 0S --interactions 0b --interactions 0y --interactions BD --interactions BGO --interactions BTe --interactions BX --interactions Bn --interactions Bo --interactions Br --interactions CO --interactions Cu --interactions DG --interactions FG --interactions GHX --interactions Gt --interactions Gz --interactions KR --interactions KRt --interactions KTc --interactions MN --interactions UW --interactions Uf --interactions df --interactions tx --keep F --keep L --keep U --keep d --keep e --keep g --keep h --keep o --keep q --keep t --keep u --keep y --keep z --ffm_bit_precision 25 --ffm_field BGz --ffm_field CFL --ffm_field O --ffm_field UW --ffm_field cfnr --ffm_k 8"
 
-rest="--data $infile -l 0.025 -b 25 --adaptive --sgd --loss_function logistic --link logistic --power_t 0.38 --l2 0.00 --hash all --noconstant --vwcompat"
+rest="--data $infile -l 0.025 -b 25 --adaptive --sgd --loss_function logistic --link logistic --power_t 0.38 --l2 0.00 --hash all --noconstant"
 #vwonly="--lrqfa AB-64"
 #fwonly="--lrqfa AB-64"
 
