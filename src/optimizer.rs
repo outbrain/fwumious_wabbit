@@ -46,6 +46,9 @@ impl OptimizerTrait for OptimizerSGD {
 
 /******************* Adagrad with flexible power_t  **************************/
 /* Regular Adagrad always uses sqrt (power_t = 0.5)                          */
+/* For power_t = 0.5, this is slower than simply using sqrt                  */
+/* however we generally always use lookup table for adagrad, so this         */
+/* implementation is mainly used as a reference                              */
 #[derive(Clone)]
 pub struct OptimizerAdagradFlex {
     learning_rate: f32,   
@@ -88,6 +91,10 @@ impl OptimizerTrait for OptimizerAdagradFlex {
 
 
 /***************** Adagrad using Look Up Table ******************/
+// The intuition about low precision is : sqrt/powf is changing less and less as the parameter
+// grows. This means as parameter grows we can use lesser precision while keeping the error small.
+// Floating point encoding with separated exponent and mantissa is ideal for such optimization.
+
 pub const FASTMATH_LR_LUT_BITS:u8 = 11;
 pub const FASTMATH_LR_LUT_SIZE:usize = 1 <<  FASTMATH_LR_LUT_BITS;
 
@@ -114,8 +121,8 @@ impl OptimizerTrait for OptimizerAdagradLUT {
             // floating point: 1 bit of sign, 7 bits of signed expontent then floating point bits (mantissa)
             // we will take 7 bits of exponent + whatever most significant bits of mantissa remain
             // we take two consequtive such values, so we act as if had rounding
-            let float_x = (f32::from_bits((x as u32)  << (31-FASTMATH_LR_LUT_BITS))) + initial_acc_gradient + 1e-12;
-            let float_x_plus_one = (f32::from_bits(((x+1) as u32)  << (31-FASTMATH_LR_LUT_BITS))) + initial_acc_gradient + 1e-12;
+            let float_x = (f32::from_bits((x as u32)  << (31-FASTMATH_LR_LUT_BITS))) + initial_acc_gradient;
+            let float_x_plus_one = (f32::from_bits(((x+1) as u32)  << (31-FASTMATH_LR_LUT_BITS))) + initial_acc_gradient;
             let mut val = learning_rate * ((float_x).powf(minus_power_t) + (float_x_plus_one).powf(minus_power_t)) * 0.5;
             // Safety measure
             if val.is_nan() || val.is_infinite(){
@@ -140,6 +147,7 @@ impl OptimizerTrait for OptimizerAdagradLUT {
     }
 
     fn initial_data(&self) -> Self::PerWeightStore {
+        // We took it into account when calcualting lookup table, so look at init()
         0.0
     }
 
@@ -180,6 +188,12 @@ mod tests {
             assert_eq!(p, 0.09464361);
             assert_eq!(acc, 0.1*0.1);
             
+            acc = 0.0;
+            let p = l.calculate_update(0.0, &mut acc);
+            // Here we check that we get NaN back - this is not good, but it's correct
+            assert!(p.is_nan());
+            assert_eq!(acc, 0.0);
+
         }
     }
 
@@ -198,6 +212,12 @@ mod tests {
             let p = l.calculate_update(0.1, &mut acc);
             assert_eq!(p, 0.09375872);
             assert_eq!(acc, 0.1*0.1);
+
+            acc = 0.0;
+            let p = l.calculate_update(0.0, &mut acc);
+            // Here we check that we don't get Inf back
+            assert_eq!(p, 0.0);
+            assert_eq!(acc, 0.0);
             
         }
     }
