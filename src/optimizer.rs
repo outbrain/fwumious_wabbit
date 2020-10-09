@@ -114,8 +114,8 @@ impl OptimizerTrait for OptimizerAdagradLUT {
             // floating point: 1 bit of sign, 7 bits of signed expontent then floating point bits (mantissa)
             // we will take 7 bits of exponent + whatever most significant bits of mantissa remain
             // we take two consequtive such values, so we act as if had rounding
-            let float_x = (f32::from_bits((x as u32)  << (31-FASTMATH_LR_LUT_BITS))) + initial_acc_gradient + 1e-8;
-            let float_x_plus_one = (f32::from_bits(((x+1) as u32)  << (31-FASTMATH_LR_LUT_BITS))) + initial_acc_gradient + 1e-8;
+            let float_x = (f32::from_bits((x as u32)  << (31-FASTMATH_LR_LUT_BITS))) + initial_acc_gradient + 1e-12;
+            let float_x_plus_one = (f32::from_bits(((x+1) as u32)  << (31-FASTMATH_LR_LUT_BITS))) + initial_acc_gradient + 1e-12;
             let mut val = learning_rate * ((float_x).powf(minus_power_t) + (float_x_plus_one).powf(minus_power_t)) * 0.5;
             // Safety measure
             if val.is_nan() || val.is_infinite(){
@@ -156,7 +156,7 @@ mod tests {
     #[test]
     fn test_sgd() {
         let mut l = OptimizerSGD::new();
-        l.init(0.15, 0.4);
+        l.init(0.15, 0.4, 0.0);
         unsafe {
             let mut acc: PhantomData<u32> = std::marker::PhantomData{};
             let p = l.calculate_update(0.1, &mut acc);
@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn test_adagradflex() {
         let mut l = OptimizerAdagradFlex::new();
-        l.init(0.15, 0.4);
+        l.init(0.15, 0.4, 0.0);
         unsafe {
             let mut acc: f32;
             acc = 0.9;
@@ -186,7 +186,7 @@ mod tests {
     #[test]
     fn test_adagradlut() {
         let mut l = OptimizerAdagradLUT::new();
-        l.init(0.15, 0.4);
+        l.init(0.15, 0.4, 0.0);
         unsafe {
             let mut acc: f32;
             acc = 0.9;
@@ -209,8 +209,8 @@ mod tests {
         // Here we test that our implementation of LUT has small enough relative error
         let mut l_lut = OptimizerAdagradFlex::new();
         let mut l_flex = OptimizerAdagradLUT::new();
-        l_lut.init(0.15, 0.4);
-        l_flex.init(0.15, 0.4);
+        l_lut.init(0.15, 0.4, 0.0);
+        l_flex.init(0.15, 0.4, 0.0);
         let test_gradients = [-1.0, -0.9, -0.1, -0.00001, 0.0, 0.00001, 0.1, 0.5, 0.9, 1.0];
         let test_accumulations = [0.0000000001, 0.00001, 0.1, 0.5, 1.1, 2.0, 20.0, 200.0, 2000.0, 200000.0, 2000000.0];
 
@@ -228,8 +228,8 @@ mod tests {
                     } else {
                         relative_error = error; // happens when the update is 0.0
                     }
-//                    println!("Relative error {}", relative_error);
-//                    println!("Err: {} - p_flex: {}, p_lut: {}, gradient: {}, accumulation {}", error, p_flex, p_lut, *gradient, *accumulation);
+                    println!("Relative error {}", relative_error);
+                    println!("Err: {} - p_flex: {}, p_lut: {}, gradient: {}, accumulation {}", error, p_flex, p_lut, *gradient, *accumulation);
                     assert!(relative_error < 0.05); 
                 }
             }
