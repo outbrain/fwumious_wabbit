@@ -310,11 +310,11 @@ L: std::clone::Clone
         // vowpal compatibility
         if prediction.is_nan() {
             eprintln!("NAN prediction in example {}, forcing 0.0", example_num);
-            return logistic(0.0);
+            return stable_logistic(0.0);
         } else if prediction < -50.0 {
-            return logistic(-50.0);
+            return stable_logistic(-50.0);
         } else if prediction > 50.0 {
-            return logistic(50.0);
+            return stable_logistic(50.0);
         }
 
         let prediction_probability:f32 = logistic(prediction);
@@ -553,6 +553,7 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
+        mi.init_acc_gradient = 0.0;
         
         let mut re = Regressor::<optimizer::OptimizerAdagradFlex>::new(&mi);
         
@@ -568,6 +569,7 @@ mod tests {
         mi.power_t = 0.5;
         mi.fastmath = true;
         mi.optimizer = model_instance::Optimizer::Adagrad;
+        mi.init_acc_gradient = 0.0;
         
         let mut re = get_regressor(&mi);
         let mut p: f32;
@@ -590,6 +592,7 @@ mod tests {
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
         mi.bit_precision = 18;
+        mi.init_acc_gradient = 0.0;
         
         let mut re = Regressor::<optimizer::OptimizerAdagradFlex>::new(&mi);
         // Here we take twice two features and then once just one

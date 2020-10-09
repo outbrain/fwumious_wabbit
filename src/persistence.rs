@@ -176,9 +176,10 @@ B,featureB
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
-        mi.bit_precision = 18;        
+        mi.bit_precision = 18;
         mi.optimizer = model_instance::Optimizer::Adagrad;
         mi.fastmath = false;
+        mi.init_acc_gradient = 0.0;
         let mut re = regressor::get_regressor(&mi);
 
         let fbuf = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]);
