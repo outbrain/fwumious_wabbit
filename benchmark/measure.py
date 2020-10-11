@@ -6,14 +6,12 @@ import platform
 from timeit import default_timer as timer
 
 
-def memit(cmd, proc_name):
+def measure(cmd, proc_name):
     try:
         start = timer()
         cmdp = subprocess.Popen(f"{cmd}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-        psutil.wait_procs([psutil.Process(cmdp.pid)], timeout=0.4)
-        for proc in psutil.process_iter(['pid', 'name', 'username']):
-            if proc.name() == proc_name:
-                psp = psutil.Process(proc.pid)
+        psp = get_model_process(cmdp, proc_name)
+
         cpu = 0
         mem = 0
         time = 0
@@ -47,7 +45,19 @@ def memit(cmd, proc_name):
     return time, mem, cpu
 
 
+def get_model_process(cmdp, proc_name):
+    psp = None
+    while True:
+        psutil.wait_procs([psutil.Process(cmdp.pid)], timeout=0.05)
+        for proc in psutil.process_iter(['pid', 'name', 'username']):
+            if proc.name() == proc_name:
+                psp = psutil.Process(proc.pid)
+        if psp:
+            break
+    return psp
+
+
 if __name__ == "__main__":
     cmd = " ".join(sys.argv[1:])
-    time, mem, cpu = memit(cmd)
+    time, mem, cpu = measure(cmd)
     print(f"{time}, {mem}, {cpu}")
