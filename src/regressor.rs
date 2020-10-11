@@ -260,14 +260,16 @@ L: std::clone::Clone
         
         if self.ffm_k > 0 {
             let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
+            let mut ifc:usize = 0;
             for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
                 let base_weight_index = self.ffm_weights_offset + (left_hash.hash & self.ffm_hashmask);
                 for j in 0..fc as usize {
-                    let v = local_data_ffm.get_unchecked_mut((i * fc + j) as usize);
+                    let v = local_data_ffm.get_unchecked_mut(ifc + j);
                     v.index = base_weight_index + j as u32;
                     v.value = 0.0;
                     _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked(base_weight_index as usize + j).weight), _MM_HINT_T0);  // No benefit for now
-                }
+               }
+               ifc += fc;
             }
 
             specialize_k!(self.ffm_k, FFMK, {
@@ -332,7 +334,7 @@ L: std::clone::Clone
 //            println!("General gradient: {}", general_gradient);
 
             for i in 0..local_data_lr_len {
-//                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_lr.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now
+//A                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_lr.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now
                 let feature_value = local_data_lr.get_unchecked(i).value;
                 let feature_index = local_data_lr.get_unchecked(i).index as usize;
                 let gradient = general_gradient * feature_value;
