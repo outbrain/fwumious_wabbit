@@ -93,18 +93,23 @@ vectorization.
 
 # Ideas for future speed improvements
 - We know that using stack instead of heap for temporary buffer in learn() 
-gives us ~10% speedup on FFMs. However the specialization code is ugly and
-therefore it is not on the main branch.
+Gives us up to 10% speedup on FFMs. However the specialization code is ugly 
+and therefore it is not on the main branch.
 - Many more structures on stack. However it is hard to make it work without
 crashing in extreme cases.
 - On-demand specialization. This would requrie a compile-per-run, but could
 really bring additional improvements
-- Full unrolling of the double for loop for FFM would be possible. By 
-unrolling it into a single loop with constant offsets.
-- You can compile with RUSTFLAGS:
+- Full unrolling of the double for loop for FFM would be possible.
+- Compile for architecture of your chips, use vectorization.
+export RUSTFLAGS="-C opt-level=3 -C target-cpu=skylake"
+No measurable effect on laptop. Need to do further testing on server.
+- Use vectorization
 export RUSTFLAGS="-C opt-level=3 -C target-cpu=skylake -C llvm-args=--force-vector-width=4"
-Generally vectorization helps less than one would hope for
-
+No measurable effect on laptop. Need to do further testing on server.
+- Profile Guided Optimizations
+We tried using PGO. The difference was unmeasurable - at most 0.5% speed
+up, which is basically at the noise level. Given the complications of 
+doing PGO builds it is simply not worth it.
 
 
 
