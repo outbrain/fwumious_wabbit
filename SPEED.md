@@ -84,6 +84,11 @@ Similarly other data structures were carefully trimmed to avoid cache
 trashing.
 
 
+# Prefetching
+When sensible, we prefetch the weight ahead of the for-loop. Since weights
+basically cause  random memory access and modern machines are effectively
+NUMA, this helps a bit.
+
 # Things we have tried which did not work
 - Using data oriented programming approach. We've separated weights and 
 accumulated gradients into separate vectors. This created 50% slowdown. The
@@ -106,6 +111,10 @@ No measurable effect on laptop. Need to do further testing on server.
 - Use vectorization
 export RUSTFLAGS="-C opt-level=3 -C target-cpu=skylake -C llvm-args=--force-vector-width=4"
 No measurable effect on laptop. Need to do further testing on server.
+Looking at the dissasembler it is revealed that for now Rust/LLVM isn't
+capable of using AVX instructions to run multiplications in parallel. 
+Likely double-dereference is what's killing it - maybe it would work if 
+we manually implemented gatherer instructions via built-ins.
 - Profile Guided Optimizations
 We tried using PGO. The difference was unmeasurable - at most 0.5% speed
 up, which is basically at the noise level. Given the complications of 
