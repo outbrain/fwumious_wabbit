@@ -266,6 +266,7 @@ L: std::clone::Clone
                     let v = local_data_ffm.get_unchecked_mut((i * fc + j) as usize);
                     v.index = base_weight_index + j as u32;
                     v.value = 0.0;
+                    _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked(base_weight_index as usize + j).weight), _MM_HINT_T0);  // No benefit for now
                 }
             }
 
@@ -290,11 +291,9 @@ L: std::clone::Clone
                     let joint_value = left_hash.value * right_hash.value;
                     let lindex = local_data_ffm.get_unchecked(left_local_index).index as usize;
                     let rindex = local_data_ffm.get_unchecked(right_local_index).index as usize;
-          //          for (k, left_hash_weighta) in weights.get_unchecked(lindex..lindex+FFMK as usize).iter().enumerate() {
                     for k in 0..FFMK as usize {
                         let llik = (left_local_index as usize + k) as usize;
                         let rlik = (right_local_index as usize + k) as usize;
-                        //let left_hash_weight = left_hash_weighta.weight;
                         let left_hash_weight  = weights.get_unchecked((lindex+k) as usize).weight;
                         let right_hash_weight = weights.get_unchecked((rindex+k) as usize).weight;
                         
@@ -333,6 +332,7 @@ L: std::clone::Clone
 //            println!("General gradient: {}", general_gradient);
 
             for i in 0..local_data_lr_len {
+//                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_lr.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now
                 let feature_value = local_data_lr.get_unchecked(i).value;
                 let feature_index = local_data_lr.get_unchecked(i).index as usize;
                 let gradient = general_gradient * feature_value;
@@ -341,6 +341,7 @@ L: std::clone::Clone
             }
             
             for i in 0..local_data_ffm_len {
+//                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_ffm.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now
                 let feature_value = local_data_ffm.get_unchecked(i).value;
                 let feature_index = local_data_ffm.get_unchecked(i).index as usize;
                 let gradient = general_gradient * feature_value;
