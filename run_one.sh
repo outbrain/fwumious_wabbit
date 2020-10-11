@@ -13,7 +13,7 @@ rest="--data $infile -l 0.025 -b 25 --adaptive --sgd --loss_function logistic --
 #rm $1.cache $1.fwcache
 vw=/home/minmax/minmax_old/zgit/vowpal_wabbit/vowpalwabbit/vw
 #vw=/home/minmax/obgit/vw/vowpal_wabbit/vowpalwabbit/vw
-clear;
+#clear;
 #echo "build --release && target/release/fw $namespaces $rest -p f"
 #echo "cargo build --release && target/release/fw $namespaces $rest -c -p f $fwonly && time $vw $namespaces $rest -c -p v $vwonly"
 
