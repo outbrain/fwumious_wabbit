@@ -2,7 +2,7 @@ import math
 import os.path
 import sys
 
-import memit
+from measure import measure
 import psutil
 import platform
 import generate
@@ -36,22 +36,24 @@ def fw_clean_cache():
 
 
 def print_system_info():
-    print("=" * 40, "CPU Info", "=" * 40)
+    print("### CPU Info")
+    print("```")
     # number of cores
     print("Physical cores:", psutil.cpu_count(logical=False))
     print("Total cores:", psutil.cpu_count(logical=True))
     # CPU frequencies
     cpufreq = psutil.cpu_freq()
     print(f"Current Frequency: {cpufreq.current:.2f}Mhz")
-    # CPU usage
+    print("```")
 
-    print("=" * 40, "System Information", "=" * 40)
+    print("### System Information")
     uname = platform.uname()
+    print("```")
     print(f"System: {uname.system}")
-    print(f"Release: {uname.release}")
     print(f"Version: {uname.version}")
     print(f"Machine: {uname.machine}")
     print(f"Processor: {uname.processor}")
+    print("```")
 
 
 def gzip_file(f):
@@ -60,7 +62,7 @@ def gzip_file(f):
 
 
 def time_bash_cmd(cmd, proc_name):
-    return memit.memit(cmd, proc_name)
+    return measure(cmd, proc_name)
 
 
 def benchmark_cmd(cmd, proc_name, times, run_before=None):
@@ -89,8 +91,12 @@ def benchmark_cmd(cmd, proc_name, times, run_before=None):
     return benchmark_means, benchmark_stds
 
 
-def format_metrics(times, means, stds):
+def format_metricsformat_metrics(times, means, stds):
     return f"{means[0]:.2f} ± {stds[0]:.2f} seconds, {means[1]/1024.:.0f} ± {stds[1]/1024.:.2f} MB, {means[2]:.2f} ± {stds[2]:.2f}% CPU ({times} runs)"
+
+
+def format_metrics_row(action, means, stds):
+    return f"{action}|{means[0]:.2f} ± {stds[0]:.2f} | {means[1]/1024.:.0f} ± {stds[1]/1024.:.2f} | {means[2]:.2f} ± {stds[2]:.2f}"
 
 
 def cross_entropy(y_hat, y):
@@ -160,12 +166,14 @@ if __name__ == "__main__":
     action = sys.argv[2]
 
     with open("README.md", "w") as readme:
+        readme.write("")  # clear file
         sys.stdout = readme
+        print("## Setup\n")
 
         print_system_info()
 
-        vw_train_cmd = "vw --data train.vw.gz -l 0.1 -b 25 -c --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor vw_model --save_resume --interactions AB"
-        fw_train_cmd = "../target/release/fw --data train.vw.gz -l 0.1 -b 25 -c --adaptive --fastmath --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor fw_model --save_resume --interactions AB"
+        vw_train_cmd = "vw --data train.vw.gz -l 0.1 -p blah.out -b 25 -c --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor vw_model --save_resume --interactions AB"
+        fw_train_cmd = "../target/release/fw --data train.vw.gz -l 0.1 -p blah.out -b 25 -c --adaptive --fastmath --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor fw_model --save_resume --interactions AB"
 
         vw_predict_cmd = "vw --data easy.vw -t -p vw_preds.out --initial_regressor vw_model --hash all --interactions AB"
         fw_predict_cmd = "../target/release/fw --data easy.vw --sgd --adaptive -t -b 25 -p fw_preds.out --initial_regressor fw_model --link logistic --hash all --interactions AB"
@@ -174,11 +182,35 @@ if __name__ == "__main__":
             cleanup()
 
         if action == "generate" or action == "all":
-            print("generating dataset, this may take a while")
-            generate.generate(10000000, 10000000)
+            train_examples = 10000000
+            test_examples = 10000000
+
+            num_animals = 100000
+            num_foods = 100000
+
+            print("### Dataset details")
+            print(f"we generate a synthetic dataset with {train_examples} train records and {test_examples} test records.\n")
+            print("the task is 'Eat-Rate prediction' - each record describes the observed result of a single feeding experiment.\n")
+            print("each record is made of a type of animal, a type of food, and a label indicating whether the animal ate the food.\n")
+            print("the underlying model is simple - animals are either herbivores or carnivores - regardless of specific animal name,")
+            print("and food is either plant based or meat based regardless of it's identity.")
+            print("herbivores always eat plants (and only plants), and carnivores always eat meat (and only meat).\n")
+            print("for convenience reasons, we name the animals 'Herbivore-1234' and 'Carnivore-5678', and the food items 'Plant-678'")
+            print(" and 'Meat-234' so the expected outcome for a record is always clear.\n")
+            print(f"there are {num_animals} animal types, and {num_foods} food types.")
+            print("\n")
+
+            generate.generate(train_examples, test_examples)
+            with open("train.vw", "r") as dataset:
+                print("see for example the first 5 lines from the train dataset (after some pretty-printing):")
+                print("label|animal|food")
+                print("-----|------|----")
+                for _ in range(5):
+                    print(next(dataset).strip("\n"))
+                print("\n")
             gzip_file("train.vw")
 
-        times = 5
+        times = 10
         actions = []
         vw_time_values = []
         vw_mem_values = []
@@ -187,34 +219,42 @@ if __name__ == "__main__":
         fw_mem_values = []
         fw_cpu_values = []
 
+        print("## Results\n")
         if action == "train" or action == "train+predict" or action == "all":
+            print("we measure first 3 scenarios:")
+            print("1. train a new model from a gzipped dataset, generating a gzipped cache file for future runs, and an output model file - *this is a typical scenario in our AutoML system - we start by generating the cache file for the next runs.*")
+            print("1. train a new model over the dataset in the gzipped cache, and generate an output model - *this is also a typical scenario - we usually run many concurrent model evaluations as part of the model search*")
+            print("1. use a generated model to make predictions over a dataset read from a text file, and print them to an output predictions file - *this is to illustrate potential serving performance, we don't usually predict from file input as our offline flows always apply online learning. note that when running as daemon we use half as much memory since training gradients are not loaded - only model weights*")
+            print("\n")
+
             actions.append("train + \nbuild cache")
             actions.append("train\nfrom cache")
 
+            results_table = ["Scenario|Runtime (seconds)|Memory (MB)|CPU %", "----|----|----|----"]
             if benchmark_vw:
                 vw_train_no_cache_benchmark_means, vw_train_no_cache_benchmark_stds = benchmark_cmd(vw_train_cmd, "vw", times, vw_clean_cache)
-                print(f"vw train, no cache: {format_metrics(times, vw_train_no_cache_benchmark_means, vw_train_no_cache_benchmark_stds)}")
+                results_table.append(format_metrics_row("vw train, no cache", vw_train_no_cache_benchmark_means, vw_train_no_cache_benchmark_stds))
                 vw_time_values.append(vw_train_no_cache_benchmark_means[0])
                 vw_mem_values.append(vw_train_no_cache_benchmark_means[1] / 1024.)
                 vw_cpu_values.append(vw_train_no_cache_benchmark_means[2])
 
             if benchmark_fw:
                 fw_train_no_cache_benchmark_means, fw_train_no_cache_benchmark_stds = benchmark_cmd(fw_train_cmd, "fw", times, fw_clean_cache)
-                print(f"fw train, no cache: {format_metrics(times, fw_train_no_cache_benchmark_means, fw_train_no_cache_benchmark_stds)}")
+                results_table.append(format_metrics_row("fw train, no cache", fw_train_no_cache_benchmark_means, fw_train_no_cache_benchmark_stds))
                 fw_time_values.append(fw_train_no_cache_benchmark_means[0])
                 fw_mem_values.append(fw_train_no_cache_benchmark_means[1] / 1024.)
                 fw_cpu_values.append(fw_train_no_cache_benchmark_means[2])
 
             if benchmark_vw:
                 vw_train_with_cache_benchmark_means, vw_train_with_cache_benchmark_stds = benchmark_cmd(vw_train_cmd, "vw", times)
-                print(f"vw train, using cache: {format_metrics(times, vw_train_with_cache_benchmark_means, vw_train_with_cache_benchmark_stds)}")
+                results_table.append(format_metrics_row("vw train, using cache", vw_train_with_cache_benchmark_means, vw_train_with_cache_benchmark_stds))
                 vw_time_values.append(vw_train_with_cache_benchmark_means[0])
                 vw_mem_values.append(vw_train_with_cache_benchmark_means[1] / 1024.)
                 vw_cpu_values.append(vw_train_with_cache_benchmark_means[2])
 
             if benchmark_fw:
                 fw_train_with_cache_benchmark_means, fw_train_with_cache_benchmark_stds = benchmark_cmd(fw_train_cmd, "fw", times)
-                print(f"fw train, using cache: {format_metrics(times, fw_train_with_cache_benchmark_means, fw_train_with_cache_benchmark_stds)}")
+                results_table.append(format_metrics_row("fw train, using cache", fw_train_with_cache_benchmark_means, fw_train_with_cache_benchmark_stds))
                 fw_time_values.append(fw_train_with_cache_benchmark_means[0])
                 fw_mem_values.append(fw_train_with_cache_benchmark_means[1] / 1024.)
                 fw_cpu_values.append(fw_train_with_cache_benchmark_means[2])
@@ -224,7 +264,7 @@ if __name__ == "__main__":
             if benchmark_vw:
                 vw_predict_no_cache_benchmark_means, vw_predict_no_cache_benchmark_stds = benchmark_cmd(vw_predict_cmd, "vw", times)
                 vw_model_loss = calc_loss("vw_preds.out", "easy.vw")
-                print(f"vw predict, no cache: {format_metrics(times, vw_predict_no_cache_benchmark_means, vw_predict_no_cache_benchmark_stds)}")
+                results_table.append(format_metrics_row("vw predict, no cache", vw_predict_no_cache_benchmark_means, vw_predict_no_cache_benchmark_stds))
                 vw_time_values.append(vw_predict_no_cache_benchmark_means[0])
                 vw_mem_values.append(vw_predict_no_cache_benchmark_means[1] / 1024.)
                 vw_cpu_values.append(vw_predict_no_cache_benchmark_means[2])
@@ -232,17 +272,36 @@ if __name__ == "__main__":
             if benchmark_fw:
                 fw_predict_no_cache_benchmark_means, fw_predict_no_cache_benchmark_stds = benchmark_cmd(fw_predict_cmd, "fw", times)
                 fw_model_loss = calc_loss("fw_preds.out", "easy.vw")
-                print(f"fw predict, no cache: {format_metrics(times, fw_predict_no_cache_benchmark_means, fw_predict_no_cache_benchmark_stds)}")
+                results_table.append(format_metrics_row("fw predict, no cache", fw_predict_no_cache_benchmark_means, fw_predict_no_cache_benchmark_stds))
                 fw_time_values.append(fw_predict_no_cache_benchmark_means[0])
                 fw_mem_values.append(fw_predict_no_cache_benchmark_means[1] / 1024.)
                 fw_cpu_values.append(fw_predict_no_cache_benchmark_means[2])
 
-            if benchmark_vw:
-                print(f"vw predictions loss: {vw_model_loss}")
-
-            if benchmark_fw:
-                print(f"fw predictions loss: {fw_model_loss}")
+        print("### Summary")
+        print(f"here are the results for {times} runs for each scenario, taking mean and standard deviation values:\n")
 
         plot_file_name = plot_results(vw_mem_values, fw_mem_values, vw_cpu_values, fw_cpu_values)
         print(f"![benchmark results]({plot_file_name})")
+
+        print("### The numbers")
+        for line in results_table:
+            print(line)
+
+        print("\n")
+
+        print("### Model equivalence")
+        print("see here the loss value calculated over the test predictions for the tested models:")
+        if action == "predict" or action == "train+predict" or action == "all":
+            print("```")
+            if benchmark_vw:
+                print(f"Vowpal Wabbit predictions loss: {vw_model_loss}")
+
+            if benchmark_fw:
+                print(f"Fwumious Wabbit predictions loss: {fw_model_loss}")
+            print("```")
+
+        print("\n")
+
+        print("for more details on what makes Fwumious Wabbit so fast, see [here](https://github.com/outbrain/fwumious_wabbit/blob/benchmark/SPEED.md)")
+
 
