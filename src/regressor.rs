@@ -4,7 +4,7 @@ use std::mem::{self};
 use std::slice;
 //use fastapprox::fast::sigmoid; // surprisingly this doesn't work very well
 use std::sync::Arc;
-//use core::arch::x86_64::*;
+use core::arch::x86_64::*;
 use merand48::*;
 use std::io;
 use std::error::Error;
@@ -248,7 +248,8 @@ L: std::clone::Clone
 
         let mut wsum:f32 = 0.0;
         for (i, hashvalue) in fb.lr_buffer.iter().enumerate() {
-//            _mm_prefetch(mem::transmute::<&f32, &i8>(weights.get_unchecked((fbuf.get_unchecked(i+8).hash << 1) as usize)), _MM_HINT_T0);  // No benefit for now
+            // Prefetch couple of indexes from the future to prevent pipeline stalls due to memory latencies
+            _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((fb.lr_buffer.get_unchecked(i+8).hash) as usize).weight), _MM_HINT_T0);  // No benefit for now
             let feature_index     = hashvalue.hash;
             let feature_value:f32 = hashvalue.value;
             let feature_weight    = weights.get_unchecked(feature_index as usize).weight;
@@ -289,16 +290,17 @@ L: std::clone::Clone
                     let joint_value = left_hash.value * right_hash.value;
                     let lindex = local_data_ffm.get_unchecked(left_local_index).index as usize;
                     let rindex = local_data_ffm.get_unchecked(right_local_index).index as usize;
+          //          for (k, left_hash_weighta) in weights.get_unchecked(lindex..lindex+FFMK as usize).iter().enumerate() {
                     for k in 0..FFMK as usize {
                         let llik = (left_local_index as usize + k) as usize;
                         let rlik = (right_local_index as usize + k) as usize;
+                        //let left_hash_weight = left_hash_weighta.weight;
                         let left_hash_weight  = weights.get_unchecked((lindex+k) as usize).weight;
                         let right_hash_weight = weights.get_unchecked((rindex+k) as usize).weight;
                         
                         let right_side = right_hash_weight * joint_value;
                         local_data_ffm.get_unchecked_mut(llik).value += right_side; // first derivate
                         local_data_ffm.get_unchecked_mut(rlik).value += left_hash_weight  * joint_value; // first derivate
-                        
                         wsum += left_hash_weight * right_side;
                     }
                 }
