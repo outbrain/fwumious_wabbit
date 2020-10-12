@@ -17,7 +17,10 @@ def calc_loss(model_preds_file, input_file):
 
 
 def cross_entropy(y_hat, y):
-    return -math.log(y_hat) if y == 1 else -math.log(1 - y_hat)
+    try:
+        return -math.log(y_hat) if y == 1 else -math.log(1 - y_hat)
+    except ValueError:
+        return cross_entropy(1e-15, y)
 
 
 if __name__ == "__main__":
