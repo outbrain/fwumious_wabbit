@@ -55,7 +55,7 @@ pub fn save_regressor_to_filename(
                         vwmap: &vwmap::VwNamespaceMap,
                         re: Box<dyn regressor::RegressorTrait>,
                         ) -> Result<(), Box<dyn Error>> {
-        let output_bufwriter = &mut io::BufWriter::new(fs::File::create(filename).unwrap());
+        let output_bufwriter = &mut io::BufWriter::new(fs::File::create(filename).expect(format!("Cannot open {} to save regressor to", filename).as_str()));
         write_regressor_header(output_bufwriter)?;
         vwmap.save_to_buf(output_bufwriter)?;
         mi.save_to_buf(output_bufwriter)?;
@@ -176,9 +176,10 @@ B,featureB
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
-        mi.bit_precision = 18;        
+        mi.bit_precision = 18;
         mi.optimizer = model_instance::Optimizer::Adagrad;
         mi.fastmath = false;
+        mi.init_acc_gradient = 0.0;
         let mut re = regressor::get_regressor(&mi);
 
         let fbuf = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]);
@@ -215,7 +216,7 @@ B,featureB
     fn ffm_fixed_init<T:OptimizerTrait>(rg: &mut Regressor<T>) -> () {
         for i in rg.ffm_weights_offset as usize..rg.weights.len() {
             rg.weights[i].weight = 1.0;
-            rg.weights[i].optimizer_data = T::ffm_initial_data();
+            rg.weights[i].optimizer_data = rg.optimizer_ffm.initial_data();
         }
     }
 
