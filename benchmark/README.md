@@ -1,4 +1,18 @@
-## Setup
+## Prerequisites and running
+you should have Vowpal Wabbit installed, as the benchmark invokes it via the 'vw' command.
+additionally the rust compiler is required in order to build Fwumious Wabbit (using './target/release/fw') 
+in order to build and run the benchmark use one of these bash scripts:
+```
+./run_with_plots.sh
+```
+in order to run the benchmark and plot the results (requires matplotlib, last used with version 2.1.2)
+
+or, if you just want the numbers with less dependencies run:
+```
+./run_without_plots.sh
+```
+
+## Latest run setup
 
 ### CPU Info
 ```
@@ -14,30 +28,31 @@ Machine: x86_64
 Processor: i386
 ```
 ### Dataset details
-we generate a synthetic dataset with 10000000 train records ('train.vw'), and 10000000 test records ('easy.vw').
+we generate a synthetic dataset with 10,000,000 train records ('train.vw'), and 10,000,000 test records ('easy.vw').
 
 the task is 'Eat-Rate prediction' - each record describes the observed result of a single feeding experiment.
 
 each record is made of a type of animal, a type of food, and a label indicating whether the animal ate the food.
 
-the underlying model is simple - animals are either herbivores or carnivores - regardless of specific animal name,
-and food is either plant based or meat based regardless of it's identity.
+the underlying model is simple - animals are either herbivores or carnivores,
+and food is either plant based or meat based.
 herbivores always eat plants (and only plants), and carnivores always eat meat (and only meat).
 
-for convenience reasons, we name the animals 'Herbivore-1234' and 'Carnivore-5678', and the food items 'Plant-678'
- and 'Meat-234' so the expected outcome for a record is always clear.
+we name animals conveniently using the pattern 'diet-id', for example 'Herbivore-1234' and 'Carnivore-5678',
+and the food similarly as 'food_type-id' - for example 'Plant-678'
+ and 'Meat-234' so the expected label for a record is always obvious.
 
-there are 1000 animal types, and 1000 food types.
+there are 1,000 animal types, and 1,000 food types.
 
 
 see for example the first 5 lines from the train dataset (after some pretty-printing):
 label|animal|food
 -----|------|----
--1 |A Herbivore-448 |B Meat-159
--1 |A Carnivore-113 |B Plant-747
-1 |A Herbivore-848 |B Plant-14
--1 |A Carnivore-683 |B Plant-140
--1 |A Carnivore-797 |B Plant-135
+1 |A Herbivore-708 |B Plant-43
+1 |A Herbivore-588 |B Plant-107
+-1 |A Herbivore-134 |B Meat-33
+1 |A Carnivore-567 |B Meat-161
+1 |A Carnivore-206 |B Meat-607
 
 
 ## Results
@@ -64,19 +79,19 @@ here are the results for 1 runs for each scenario, taking mean values:
 ![benchmark results](benchmark_results.png)
 Scenario|Runtime (seconds)|Memory (MB)|CPU %
 ----|----|----|----
-vw train, no cache|67.59 | 618 | 159.10
-fw train, no cache|9.15 | 258 | 99.70
-vw train, using cache|67.30 | 618 | 151.90
-fw train, using cache|4.40 | 258 | 99.30
-vw predict, no cache|62.58 | 138 | 155.90
-fw predict, no cache|5.16 | 257 | 99.30
+vw train, no cache|67.35 | 618 | 159.70
+fw train, no cache|9.13 | 258 | 99.70
+vw train, using cache|65.98 | 618 | 152.40
+fw train, using cache|4.46 | 258 | 99.50
+vw predict, no cache|69.75 | 138 | 155.10
+fw predict, no cache|5.35 | 257 | 99.50
 
 
 ### Model equivalence
 see here the loss value calculated over the test predictions for the tested models:
 ```
-Vowpal Wabbit predictions loss: 0.5736677529629742
-Fwumious Wabbit predictions loss: 0.5637425141029745
+Vowpal Wabbit predictions loss: 0.5745
+Fwumious Wabbit predictions loss: 0.5646
 ```
 
 
@@ -95,10 +110,10 @@ with records which belong to {(A1 U A2, F1)} U {(A1, F1 U F2}).
 the test set we use here, 'hard.vw', is different: it contains exclusively records from {(A2, F2)} - combinations unseen in the train set.
 
 In order for a model to make correct predictions on this dataset after training on the train dataset, 
-it should capture some of the latent model - in the FFM case by generalizing from seen combinations to unseen ones.
+it must be able to generalize for unseen combinations.
 we skip the latency, memory and CPU comparison as for this synthetic dataset the difference is negligible.
 ### Loss on the test set
 ```
-Fwumious Wabbit Logistic Regression predictions loss: 0.6939029475279029
-Fwumious Wabbit FFM predictions loss: 0.20272637268160207
+Fwumious Wabbit Logistic Regression predictions loss: 0.6948
+Fwumious Wabbit FFM predictions loss: 0.2027
 ```

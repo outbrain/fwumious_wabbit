@@ -47,8 +47,15 @@ def measure(cmd, proc_name):
 
 def get_model_process(cmdp, proc_name):
     psp = None
+    tries = 20
     while True:
-        psutil.wait_procs([psutil.Process(cmdp.pid)], timeout=0.05)
+        if tries == 0:
+            raise Exception(f"can't proceed, the process '{proc_name}' was not found")
+        tries = tries - 1
+        try:
+            psutil.wait_procs([psutil.Process(cmdp.pid)], timeout=0.05)
+        except psutil.NoSuchProcess:
+            pass
         for proc in psutil.process_iter(['pid', 'name', 'username']):
             if proc.name() == proc_name:
                 psp = psutil.Process(proc.pid)
