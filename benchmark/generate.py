@@ -17,49 +17,45 @@ def render_example(a, b):
     return " ".join([str(score), u"|A", a[0] + u"-" + str(a[1]), u"|B", b[0] + u"-" + str(b[1])]) + "\n"
 
 
-def generate(train_examples=10000000, test_examples=10000000, num_animals=100000, num_foods=100000, block_beyond=50000):
+def generate(train_examples, test_examples, feature_variety):
     i = 0
     f = open("train.vw", "w")
+    block_beyond = int(feature_variety / 4.0)
     while i < train_examples:
-        animal_type = random.choices(['Herbivore', 'Carnivore'])[0]
-        food_type = random.choices(['Plant', 'Meat'])[0]
-        missone = random.randint(0, 1)
-        if missone:
-            animal = random.randint(0, num_animals)
-            food = random.randint(0, block_beyond)
-        else:
-            animal = random.randint(0, block_beyond)
-            food = random.randint(0, num_foods)
-        f.write(render_example((animal_type, animal), (food_type, food)))
+        add_dataset_record(f, block_beyond, feature_variety)
         i += 1
 
     i = 0
     # this has the same distribution as for train...
     f = open("easy.vw", "w")
     while i < test_examples:
-        animal_type = random.choices(['Herbivore', 'Carnivore'])[0]
-        food_type = random.choices(['Plant', 'Meat'])[0]
-        missone = random.randint(0, 1)
-        if missone:
-            person = random.randint(0, num_animals)
-            movie = random.randint(0, block_beyond)
-        else:
-            person = random.randint(0, block_beyond)
-            movie = random.randint(0, num_foods)
-        f.write(render_example((animal_type, person), (food_type, movie)))
+        add_dataset_record(f, block_beyond, feature_variety)
         i += 1
 
-        # now we will test for completely unseen combos
+    # now we will test for completely unseen combos
     f = open("hard.vw", "w")
     i = 0
     while i < test_examples:
         animal_type = random.choices(['Herbivore', 'Carnivore'])[0]
         food_type = random.choices(['Plant', 'Meat'])[0]
-        person = random.randint(block_beyond + 1, num_animals)
-        movie = random.randint(block_beyond + 1, num_foods)
+        animal_name = random.randint(block_beyond + 1, feature_variety)
+        food_name = random.randint(block_beyond + 1, feature_variety)
 
-        f.write(render_example((animal_type, person), (food_type, movie)))
+        f.write(render_example((animal_type, animal_name), (food_type, food_name)))
         i += 1
+
+
+def add_dataset_record(f, block_beyond, feature_variety):
+    animal_type = random.choices(['Herbivore', 'Carnivore'])[0]
+    food_type = random.choices(['Plant', 'Meat'])[0]
+    missone = random.randint(0, 1)
+    if missone:
+        animal_name = random.randint(0, feature_variety)
+        food_name = random.randint(0, block_beyond)
+    else:
+        animal_name = random.randint(0, block_beyond)
+        food_name = random.randint(0, feature_variety)
+    f.write(render_example((animal_type, animal_name), (food_type, food_name)))
 
 
 if __name__ == "__main__":
@@ -67,4 +63,4 @@ if __name__ == "__main__":
     if len(sys.argv) == 2:
         dataset_size = int(sys.argv[1])
 
-    generate(dataset_size)
+    generate(dataset_size, dataset_size, 1000)
