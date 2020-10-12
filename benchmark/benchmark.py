@@ -182,7 +182,19 @@ if __name__ == "__main__":
     with open("README.md", "w") as readme:
         readme.write("")  # clear file
         sys.stdout = readme
-        print("## Setup\n")
+        print("## Prerequisites and running")
+        print("you should have Vowpal Wabbit installed, as the benchmark invokes it via the 'vw' command.")
+        print("additionally the rust compiler is required in order to build Fwumious Wabbit (using './target/release/fw') ")
+        print("in order to build and run the benchmark use one of these bash scripts:")
+        print("```")
+        print("./run_with_plots.sh")
+        print("```")
+        print("in order to run the benchmark and plot the results (requires matplotlib, last used with version 2.1.2)")
+        print("\nor, if you just want the numbers with less dependencies run:")
+        print("```")
+        print("./run_without_plots.sh")
+        print("```\n")
+        print("## Latest run setup\n")
 
         print_system_info()
 
@@ -206,15 +218,16 @@ if __name__ == "__main__":
             feature_variety = 1000
 
             print("### Dataset details")
-            print(f"we generate a synthetic dataset with {train_examples} train records ('train.vw'), and {test_examples} test records ('easy.vw').\n")
+            print(f"we generate a synthetic dataset with {train_examples:,} train records ('train.vw'), and {test_examples:,} test records ('easy.vw').\n")
             print("the task is 'Eat-Rate prediction' - each record describes the observed result of a single feeding experiment.\n")
             print("each record is made of a type of animal, a type of food, and a label indicating whether the animal ate the food.\n")
-            print("the underlying model is simple - animals are either herbivores or carnivores - regardless of specific animal name,")
-            print("and food is either plant based or meat based regardless of it's identity.")
+            print("the underlying model is simple - animals are either herbivores or carnivores,")
+            print("and food is either plant based or meat based.")
             print("herbivores always eat plants (and only plants), and carnivores always eat meat (and only meat).\n")
-            print("for convenience reasons, we name the animals 'Herbivore-1234' and 'Carnivore-5678', and the food items 'Plant-678'")
-            print(" and 'Meat-234' so the expected outcome for a record is always clear.\n")
-            print(f"there are {feature_variety} animal types, and {feature_variety} food types.")
+            print("we name animals conveniently using the pattern 'diet-id', for example 'Herbivore-1234' and 'Carnivore-5678',")
+            print("and the food similarly as 'food_type-id' - for example 'Plant-678'")
+            print(" and 'Meat-234' so the expected label for a record is always obvious.\n")
+            print(f"there are {feature_variety:,} animal types, and {feature_variety:,} food types.")
             print("\n")
 
             generate.generate(train_examples, test_examples, feature_variety)
@@ -227,7 +240,7 @@ if __name__ == "__main__":
                 print("\n")
             gzip_file("train.vw")
 
-        times = 1
+        times = 3
         actions = []
         vw_time_values = []
         vw_mem_values = []
@@ -352,7 +365,7 @@ if __name__ == "__main__":
             print("with records which belong to {(A1 U A2, F1)} U {(A1, F1 U F2}).\n")
             print("the test set we use here, 'hard.vw', is different: it contains exclusively records from {(A2, F2)} - combinations unseen in the train set.\n")
             print("In order for a model to make correct predictions on this dataset after training on the train dataset, ")
-            print("it should capture some of the latent model - in the FFM case by generalizing from seen combinations to unseen ones.")
+            print("it must be able to generalize for unseen combinations.")
 
             fw_hard_ffm_time_values = []
             fw_hard_ffm_mem_values = []
@@ -387,7 +400,6 @@ if __name__ == "__main__":
 
             fw_model_loss = calc_loss("fw_hard_preds.out", "hard.vw")
             fw_ffm_model_loss = calc_loss("fw_ffm_hard_preds.out", "hard.vw")
-
 
             print("### Loss on the test set")
             print("```")

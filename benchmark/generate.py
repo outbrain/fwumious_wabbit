@@ -13,7 +13,6 @@ def get_score(a, b):
 
 def render_example(a, b):
     score = get_score(a, b)
-    #    print(a,b)
     return " ".join([str(score), u"|A", a[0] + u"-" + str(a[1]), u"|B", b[0] + u"-" + str(b[1])]) + "\n"
 
 
