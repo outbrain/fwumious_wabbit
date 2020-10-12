@@ -2,6 +2,10 @@ import random
 import sys
 
 
+# deterministic random seed
+random.seed(1)
+
+
 def get_score(a, b):
     if a[0] == "Herbivore" and b[0] == "Plant":
         return 1
