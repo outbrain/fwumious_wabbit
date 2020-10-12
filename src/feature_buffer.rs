@@ -5,9 +5,6 @@ const VOWPAL_FNV_PRIME:u32 = 16777619;	// vowpal magic number
 //const CONSTANT_NAMESPACE:usize = 128;
 const CONSTANT_HASH:u32 = 11650396;
 
-
-const LR_BUFFER_LEN:usize = 1024;    // this is highly unsafe...
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct HashAndValue {
     pub hash: u32,
@@ -77,7 +74,7 @@ impl FeatureBufferTranslator {
             ffm_buffer: Vec::new(),
             ffm_fields_count: 0,
         };
-        fb.lr_buffer.resize(LR_BUFFER_LEN, HashAndValue {hash:0, value:0.0});
+//        fb.lr_buffer.resize(LR_BUFFER_LEN, HashAndValue {hash:0, value:0.0});
         // avoid doing any allocations in translate
         let fbt = FeatureBufferTranslator{
                             model_instance: model_instance.clone(),
@@ -93,9 +90,10 @@ impl FeatureBufferTranslator {
     }
     
     
-    pub fn translate_vowpal(&mut self, record_buffer: &[u32]) -> () {
+    pub fn translate(&mut self, record_buffer: &[u32]) -> () {
         unsafe {
         let lr_buffer = &mut self.feature_buffer.lr_buffer;
+        lr_buffer.truncate(0);
         self.feature_buffer.label = record_buffer[parser::LABEL_OFFSET] as f32;  // copy label
         self.feature_buffer.example_importance = f32::from_bits(record_buffer[parser::EXAMPLE_IMPORTANCE_OFFSET]);    
         let mut output_len:usize = 0;
@@ -109,18 +107,17 @@ impl FeatureBufferTranslator {
             // We special case a single feature (common occurance)
             if num_namespaces == 1 {
                 feature_reader!(record_buffer, feature_index_offset, hash_data, hash_value, {
-                    lr_buffer.get_unchecked_mut(output_len).hash = hash_data & self.model_instance.hash_mask;
-                    lr_buffer.get_unchecked_mut(output_len).value = hash_value * feature_combo_weight;
-                    output_len += 1
+                    lr_buffer.push(HashAndValue {hash: hash_data & self.model_instance.hash_mask, 
+                                                 value: hash_value * feature_combo_weight});
                 });
                 continue
             }
             hashes_vec_in.truncate(0);
-            hashes_vec_out.truncate(0);
             feature_reader!(record_buffer, feature_index_offset, hash_data, hash_value, {
                     hashes_vec_in.push(HashAndValue {hash: hash_data, value:hash_value});
                 });
             for feature_index in feature_combo_desc.feature_indices.get_unchecked(1 as usize .. num_namespaces) {
+                hashes_vec_out.truncate(0);
                 for handv in &(*hashes_vec_in) {
                     let half_hash = handv.hash.overflowing_mul(VOWPAL_FNV_PRIME).0;
                     feature_reader!(record_buffer, feature_index, hash_data, hash_value, {
@@ -128,22 +125,18 @@ impl FeatureBufferTranslator {
                                                             value: handv.value * hash_value});
                     });
                 }
-                hashes_vec_in.truncate(0);
                 std::mem::swap(&mut hashes_vec_in, &mut hashes_vec_out);
             }
             for handv in &(*hashes_vec_in) {
-                lr_buffer.get_unchecked_mut(output_len).hash = handv.hash & self.model_instance.hash_mask;
-                lr_buffer.get_unchecked_mut(output_len).value = handv.value * feature_combo_weight;
-                output_len += 1;
+                lr_buffer.push(HashAndValue{hash: handv.hash & self.model_instance.hash_mask,
+                                            value: handv.value * feature_combo_weight});
             }
         }
         // add the constant
         if self.model_instance.add_constant_feature {
-                lr_buffer.get_unchecked_mut(output_len).hash = CONSTANT_HASH & self.model_instance.hash_mask;
-                lr_buffer.get_unchecked_mut(output_len).value = 1.0;
-                output_len += 1;
+                lr_buffer.push(HashAndValue{hash: CONSTANT_HASH & self.model_instance.hash_mask,
+                                            value: 1.0});
         }
-        lr_buffer.set_len(output_len);
 
         // FFM loops have not been optimized yet
         if self.model_instance.ffm_k > 0 { 
@@ -196,7 +189,7 @@ mod tests {
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::NULL]); // no feature
-        fbt.translate_vowpal(&rb);
+        fbt.translate(&rb);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:116060, value:1.0}]); // vw compatibility - no feature is no feature
     }
     
@@ -211,16 +204,16 @@ mod tests {
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::NULL]); // no feature
-        fbt.translate_vowpal(&rb);
+        fbt.translate(&rb);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]); // vw compatibility - no feature is no feature
         
 
         let rb = add_header(vec![0xfea]);
-        fbt.translate_vowpal(&rb);
+        fbt.translate(&rb);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}]);
 
         let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(4,8), 0xfea, 1.0f32.to_bits(), 0xfeb, 1.0f32.to_bits()]);
-        fbt.translate_vowpal(&rb);
+        fbt.translate(&rb);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}, HashAndValue {hash:0xfeb, value:1.0}]);
     }
 
@@ -238,15 +231,15 @@ mod tests {
         let mut fbt = FeatureBufferTranslator::new(&mi);
 
         let rb = add_header(vec![parser::NULL, parser::NULL]);
-        fbt.translate_vowpal(&rb);
+        fbt.translate(&rb);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]);
 
         let rb = add_header(vec![0xfea, parser::NULL]);
-        fbt.translate_vowpal(&rb);
+        fbt.translate(&rb);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}]);
 
         let rb = add_header(vec![0xfea, 0xfeb]);
-        fbt.translate_vowpal(&rb);
+        fbt.translate(&rb);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}, HashAndValue {hash:0xfeb, value:1.0}]);
 
     }
@@ -263,15 +256,15 @@ mod tests {
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::NULL]);
-        fbt.translate_vowpal(&rb);
+        fbt.translate(&rb);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]);
 
         let rb = add_header(vec![123456789, parser::NULL]);
-        fbt.translate_vowpal(&rb);
+        fbt.translate(&rb);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]);	// since the other feature is missing - VW compatibility says no feature is here
 
         let rb = add_header(vec![2988156968 & parser::MASK31, 2422381320 & parser::MASK31, parser::NULL]);
-        fbt.translate_vowpal(&rb);
+        fbt.translate(&rb);
 //        println!("out {}, out mod 2^24 {}", fbt.feature_buffer.lr_buffer[1], fbt.feature_buffer.lr_buffer[1] & ((1<<24)-1));
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash: 208368, value:1.0}]);
         
@@ -287,7 +280,7 @@ mod tests {
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![0xfea]);
-        fbt.translate_vowpal(&rb);
+        fbt.translate(&rb);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash: 0xfea, value:2.0}]);
     }
     
@@ -299,7 +292,7 @@ mod tests {
         mi.ffm_k = 1;
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![0xfea]);
-        fbt.translate_vowpal(&rb);
+        fbt.translate(&rb);
         assert_eq!(fbt.feature_buffer.ffm_buffer, vec![]);
     }
 
@@ -311,7 +304,7 @@ mod tests {
         mi.ffm_k = 1;
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![0xfea]);
-        fbt.translate_vowpal(&rb);
+        fbt.translate(&rb);
         assert_eq!(fbt.feature_buffer.ffm_buffer, vec![HashAndValueAndSeq{hash: 0xfea, value: 1.0, contra_field_index:0}]);
     }
 
@@ -324,7 +317,7 @@ mod tests {
         mi.ffm_k = 1;
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(5,9), 0xfec, 0xfea, 2.0f32.to_bits(), 0xfeb, 3.0f32.to_bits()]);
-        fbt.translate_vowpal(&rb);
+        fbt.translate(&rb);
         assert_eq!(fbt.feature_buffer.ffm_buffer, vec![     HashAndValueAndSeq{hash: 0xfea, value: 2.0, contra_field_index:0}, 
                                                             HashAndValueAndSeq{hash: 0xfeb, value: 3.0, contra_field_index:0},
                                                             HashAndValueAndSeq{hash: 0xfea, value: 2.0, contra_field_index:1}, 
@@ -342,7 +335,7 @@ mod tests {
         mi.ffm_k = 3;
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(5,9), 0xfec, 0xfea, 2.0f32.to_bits(), 0xfeb, 3.0f32.to_bits()]);
-        fbt.translate_vowpal(&rb);
+        fbt.translate(&rb);
         assert_eq!(fbt.feature_buffer.ffm_buffer, vec![ HashAndValueAndSeq{hash: 0xfea, value: 2.0, contra_field_index: 0}, 
                                                         HashAndValueAndSeq{hash: 0xfeb, value: 3.0, contra_field_index: 0},
                                                         HashAndValueAndSeq{hash: 0xfea, value: 2.0, contra_field_index: 3}, 
@@ -363,7 +356,7 @@ mod tests {
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::NULL]); // no feature
-        fbt.translate_vowpal(&rb);
+        fbt.translate(&rb);
         assert_eq!(fbt.feature_buffer.example_importance, 1.0); // Did example importance get parsed correctly
     }
 

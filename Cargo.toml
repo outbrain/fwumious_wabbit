@@ -33,5 +33,6 @@ mockstream = "0.0.3"
 
 [profile.release]
 debug = false
-#lto = true
+#lto = 'fat'
 #panic = 'abort'
+#codegen-units=1
