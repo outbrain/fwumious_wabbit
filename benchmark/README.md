@@ -1,6 +1,6 @@
 ## Prerequisites and running
 you should have Vowpal Wabbit installed, as the benchmark invokes it via the 'vw' command.
-additionally the rust compiler is required in order to build Fwumious Wabbit (using './target/release/fw') 
+additionally the rust compiler is required in order to build Fwumious Wabbit (the benchmark invokes '../target/release/fw) 
 in order to build and run the benchmark use one of these bash scripts:
 ```
 ./run_with_plots.sh

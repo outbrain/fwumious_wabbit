@@ -184,7 +184,7 @@ if __name__ == "__main__":
         sys.stdout = readme
         print("## Prerequisites and running")
         print("you should have Vowpal Wabbit installed, as the benchmark invokes it via the 'vw' command.")
-        print("additionally the rust compiler is required in order to build Fwumious Wabbit (using './target/release/fw') ")
+        print("additionally the rust compiler is required in order to build Fwumious Wabbit (the benchmark invokes '../target/release/fw') ")
         print("in order to build and run the benchmark use one of these bash scripts:")
         print("```")
         print("./run_with_plots.sh")
