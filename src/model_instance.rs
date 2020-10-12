@@ -40,7 +40,7 @@ pub struct ModelInstance {
     #[serde(default = "default_u32_zero")]
     pub ffm_bit_precision: u32,
     #[serde(default = "default_bool_false")]
-    pub ffm_separate_vectors: bool,
+    pub ffm_separate_vectors: bool, // NOT USED
     #[serde(default = "default_bool_false")]
     pub fastmath: bool,
 
@@ -52,6 +52,10 @@ pub struct ModelInstance {
     pub ffm_init_width: f32,
     #[serde(default = "default_f32_zero")]
     pub ffm_init_zero_band: f32,	// from 0.0 to 1.0, percentage of ffm_init_width
+    #[serde(default = "default_f32_zero")]
+    pub ffm_init_acc_gradient: f32,
+    #[serde(default = "default_f32_zero")]
+    pub init_acc_gradient: f32,
     // these are only used for learning, so it doesnt matter they got set to zero as default        
     #[serde(default = "default_f32_zero")]
     pub ffm_learning_rate: f32,    
@@ -115,11 +119,13 @@ impl ModelInstance {
             ffm_k: 0,
             ffm_bit_precision: 18,
             ffm_separate_vectors: false,
-            fastmath: false,
+            fastmath: true,
             ffm_k_threshold: 0.0,
             ffm_init_center: 0.0,
             ffm_init_width: 0.0,
             ffm_init_zero_band: 0.0,
+            ffm_init_acc_gradient: 0.0,
+            init_acc_gradient: 1.0,
             optimizer: Optimizer::SGD,
         };
         Ok(mi)
@@ -129,6 +135,32 @@ impl ModelInstance {
     
     pub fn new_from_cmdline<'a>(cl: &clap::ArgMatches<'a>, vw: &vwmap::VwNamespaceMap) -> Result<ModelInstance, Box<dyn Error>> {
         let mut mi = ModelInstance::new_empty()?;
+
+        let vwcompat: bool = cl.is_present("vwcompat");
+        
+        if vwcompat {
+            mi.fastmath = false;
+
+            mi.init_acc_gradient = 0.0;
+
+            if !cl.is_present("keep") {
+                return Err(Box::new(IOError::new(ErrorKind::Other, "--vwcompat requires at least one --keep parameter, we do not implicitly take all features available")))
+            }
+
+            // Vowpal supports a mode with "prehashed" features, where numeric strings are treated as
+            // numeric precomputed hashes. This is even default option.
+            // It is generally a bad idea except if you strings really are precomputed hashes... 
+            if !cl.is_present("hash") {
+                   return Err(Box::new(IOError::new(ErrorKind::Other, format!("You have to use --hash all "))))
+            } else
+            if let Some(val) = cl.value_of("hash") {
+                if val != "all" {
+                    return Err(Box::new(IOError::new(ErrorKind::Other, format!("Only --hash all supported"))))
+                }            
+            }
+            
+        
+        }
         
         if let Some(in_v) = cl.values_of("keep") {
             for value_str in in_v {
@@ -145,7 +177,7 @@ impl ModelInstance {
         if let Some(in_v) = cl.value_of("lrqfa") {
             let vsplit: Vec<&str> = in_v.split("-").collect(); // We use - as a delimiter instead of first numbers as vowpal does it
             if vsplit.len() != 2 {
-                return Err(Box::new(IOError::new(ErrorKind::Other, format!("--lrqfa takes namespaces-k, like ABC-12, your string was: \"{}\"", in_v))))
+                return Err(Box::new(IOError::new(ErrorKind::Other, format!("--lrqfa takes namespaces-k, example: \"ABC-12\", your string was: \"{}\"", in_v))))
             }
             let namespaces_str = vsplit[0];
             let k_str = vsplit[1];
@@ -162,22 +194,28 @@ impl ModelInstance {
 
         if let Some(val) = cl.value_of("ffm_k") {
             mi.ffm_k = val.parse()?;
-        }
-        
-        if let Some(val) = cl.value_of("ffm_k_threshold") {
-            mi.ffm_k_threshold = val.parse()?;
-        }
+        }        
+
         if let Some(val) = cl.value_of("ffm_init_center") {
             mi.ffm_init_center = val.parse()?;
         }
+
         if let Some(val) = cl.value_of("ffm_init_width") {
             mi.ffm_init_width = val.parse()?;
         }
 
-        if cl.is_present("ffm_separate_vectors") {
-            mi.ffm_separate_vectors = true;
+        if let Some(val) = cl.value_of("init_acc_gradient") {
+            if vwcompat {
+                return Err(Box::new(IOError::new(ErrorKind::Other, "Initial accumulated gradient is not supported in --vwcompat mode")))
+            }
+            mi.init_acc_gradient = val.parse()?;
         }
-
+        
+        if let Some(val) = cl.value_of("ffm_init_acc_gradient") {
+            mi.ffm_init_acc_gradient = val.parse()?;
+        } else {
+            mi.ffm_init_acc_gradient = mi.init_acc_gradient;
+        }
 
         if let Some(in_v) = cl.values_of("ffm_field") {
             for namespaces_str in in_v {          
@@ -204,6 +242,7 @@ impl ModelInstance {
             println!("Num weight bits = {}", mi.bit_precision); // vwcompat
             mi.hash_mask = (1 << mi.bit_precision) -1;
         }
+
         if let Some(val) = cl.value_of("learning_rate") {
             mi.learning_rate = val.parse()?;
         }
@@ -212,6 +251,9 @@ impl ModelInstance {
         } else {
             mi.ffm_learning_rate = mi.learning_rate;
         }
+
+
+
 
         if let Some(val) = cl.value_of("minimum_learning_rate") {
             mi.minimum_learning_rate = val.parse()?;
@@ -243,11 +285,6 @@ impl ModelInstance {
             }
         }
 
-        if cl.is_present("fastmath") {
-            mi.fastmath = true;
-        }
-        
-        
         if cl.is_present("noconstant") {
             mi.add_constant_feature = false;
         }
@@ -264,17 +301,7 @@ impl ModelInstance {
         }
 
         
-        // Vowpal supports a mode with "prehashed" features, where numeric strings are treated as
-        // numeric precomputed hashes. This is even default option.
-        // It is generally a bad idea except if you strings really are precomputed hashes... 
-        if !cl.is_present("hash") {
-               return Err(Box::new(IOError::new(ErrorKind::Other, format!("You have to use --hash all "))))
-        } else
-        if let Some(val) = cl.value_of("hash") {
-            if val != "all" {
-                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Only --hash all supported"))))
-            }            
-        }
+        
         Ok(mi)
     }
 

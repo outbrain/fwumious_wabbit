@@ -4,7 +4,7 @@ use std::mem::{self};
 use std::slice;
 //use fastapprox::fast::sigmoid; // surprisingly this doesn't work very well
 use std::sync::Arc;
-//use core::arch::x86_64::*;
+use core::arch::x86_64::*;
 use merand48::*;
 use std::io;
 use std::error::Error;
@@ -46,8 +46,8 @@ pub struct Regressor<L:OptimizerTrait> {
     ffm_one_over_k_root: f32,
     ffm_iw_weights_offset: u32,
     ffm_k_threshold: f32,
-    adagrad_lr: L,
-    adagrad_ffm: L,
+    optimizer_lr: L,
+    pub optimizer_ffm: L,
     local_data_lr: Vec<IndexAccgradientValue>,
     local_data_ffm: Vec<IndexAccgradientValue>,
 }
@@ -120,16 +120,16 @@ L: std::clone::Clone
                             ffm_k: 0, 
                             ffm_hashmask: 0, 
                             ffm_one_over_k_root: 0.0, 
-                            adagrad_lr: L::new(),
-                            adagrad_ffm: L::new(),
+                            optimizer_lr: L::new(),
+                            optimizer_ffm: L::new(),
                             ffm_iw_weights_offset: 0, ffm_k_threshold:
                             mi.ffm_k_threshold, 
                             local_data_lr: Vec::with_capacity(1024), 
                             local_data_ffm: Vec::with_capacity(1024),
                      };
 
-        rg.adagrad_lr.init(mi.learning_rate, mi.power_t);
-        rg.adagrad_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t);
+        rg.optimizer_lr.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
+        rg.optimizer_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
 
         if mi.ffm_k > 0 {
             
@@ -154,18 +154,15 @@ L: std::clone::Clone
     
     pub fn allocate_and_init_weights_(&mut self, mi: &model_instance::ModelInstance) {
         let rg = self;
-        rg.weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: L::empty_initial_data()}; rg.weights_len as usize];
+        rg.weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: rg.optimizer_lr.initial_data()}; rg.weights_len as usize];
 
         if mi.ffm_k > 0 {       
             if mi.ffm_init_width == 0.0 {
-                // Initialization, from ffm.pdf with added division by 10 and centered on zero (determined empirically)
-                rg.ffm_one_over_k_root = 1.0 / (rg.ffm_k as f32).sqrt() / 10.0;
+                // Initialization that has showed to work ok for us, like in ffm.pdf, but centered around zero and further divided by 50
+                rg.ffm_one_over_k_root = 1.0 / (rg.ffm_k as f32).sqrt() / 50.0;
                 for i in 0..rg.ffm_weights_len {
-                    rg.weights[(rg.ffm_weights_offset + i) as usize].weight
-                    = (0.2*merand48((rg.ffm_weights_offset+i) as u64)-0.1) *
-                    rg.ffm_one_over_k_root;
-                    rg.weights[(rg.ffm_weights_offset + i) as
-                    usize].optimizer_data = L::ffm_initial_data();
+                    rg.weights[(rg.ffm_weights_offset + i) as usize].weight = (1.0 * merand48((rg.ffm_weights_offset+i) as u64)-0.5) * rg.ffm_one_over_k_root;
+                    rg.weights[(rg.ffm_weights_offset + i) as usize].optimizer_data = rg.optimizer_ffm.initial_data();
                 }
             } else {
                 let zero_half_band_width = mi.ffm_init_width * mi.ffm_init_zero_band * 0.5;
@@ -179,7 +176,7 @@ L: std::clone::Clone
                     }
                     w += mi.ffm_init_center;
                     rg.weights[(rg.ffm_weights_offset + i) as usize].weight = w; 
-                    rg.weights[(rg.ffm_weights_offset + i) as usize].optimizer_data = L::ffm_initial_data();
+                    rg.weights[(rg.ffm_weights_offset + i) as usize].optimizer_data = rg.optimizer_ffm.initial_data();
                 }
 
             }
@@ -193,7 +190,9 @@ L: std::clone::Clone
     }
 }
 
-
+/* We tested standard stable logistic function, but it gives slightly 
+worse logloss results than plain logistic on our data */
+/*
 #[inline(always)]
 pub fn stable_logistic(t: f32) -> f32 {
     if t > 0.0 {
@@ -203,6 +202,7 @@ pub fn stable_logistic(t: f32) -> f32 {
         return texp / (1.0 + texp);
     }
 }
+*/
 
 #[inline(always)]
 pub fn logistic(t: f32) -> f32 {
@@ -248,7 +248,8 @@ L: std::clone::Clone
 
         let mut wsum:f32 = 0.0;
         for (i, hashvalue) in fb.lr_buffer.iter().enumerate() {
-//            _mm_prefetch(mem::transmute::<&f32, &i8>(weights.get_unchecked((fbuf.get_unchecked(i+8).hash << 1) as usize)), _MM_HINT_T0);  // No benefit for now
+            // Prefetch couple of indexes from the future to prevent pipeline stalls due to memory latencies
+            _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((fb.lr_buffer.get_unchecked(i+8).hash) as usize).weight), _MM_HINT_T0);  // No benefit for now
             let feature_index     = hashvalue.hash;
             let feature_value:f32 = hashvalue.value;
             let feature_weight    = weights.get_unchecked(feature_index as usize).weight;
@@ -259,13 +260,16 @@ L: std::clone::Clone
         
         if self.ffm_k > 0 {
             let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
+            let mut ifc:usize = 0;
             for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
                 let base_weight_index = self.ffm_weights_offset + (left_hash.hash & self.ffm_hashmask);
                 for j in 0..fc as usize {
-                    let v = local_data_ffm.get_unchecked_mut((i * fc + j) as usize);
+                    let v = local_data_ffm.get_unchecked_mut(ifc + j);
                     v.index = base_weight_index + j as u32;
                     v.value = 0.0;
-                }
+                    _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked(base_weight_index as usize + j).weight), _MM_HINT_T0);  // No benefit for now
+               }
+               ifc += fc;
             }
 
             specialize_k!(self.ffm_k, FFMK, {
@@ -274,10 +278,15 @@ L: std::clone::Clone
                 let mut right_local_index = left_hash.contra_field_index as usize + ifc;
                 for right_hash in fb.ffm_buffer.get_unchecked(i+1 ..).iter() {
                     right_local_index += fc;
-                    if left_hash.contra_field_index == right_hash.contra_field_index {
+                    
+                     
+                    // Regular FFM implementation would prevent intra-field interactions
+                    // But for the use case we tested this is both faster and it decreases logloss
+                    /*if left_hash.contra_field_index == right_hash.contra_field_index {
                         continue	// not combining within a field
-                    }
-                    // FYI this is effectively what happens:
+                    }*/
+                    
+                    // FYI this is effectively what we calculate:
 //                    let left_local_index =  i*fc + right_hash.contra_field_index as usize;
 //                    let right_local_index = (i+1+j) * fc + left_hash.contra_field_index as usize;
                     let left_local_index = ifc + right_hash.contra_field_index as usize;
@@ -293,7 +302,6 @@ L: std::clone::Clone
                         let right_side = right_hash_weight * joint_value;
                         local_data_ffm.get_unchecked_mut(llik).value += right_side; // first derivate
                         local_data_ffm.get_unchecked_mut(rlik).value += left_hash_weight  * joint_value; // first derivate
-                        
                         wsum += left_hash_weight * right_side;
                     }
                 }
@@ -326,21 +334,20 @@ L: std::clone::Clone
 //            println!("General gradient: {}", general_gradient);
 
             for i in 0..local_data_lr_len {
+//A                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_lr.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now
                 let feature_value = local_data_lr.get_unchecked(i).value;
                 let feature_index = local_data_lr.get_unchecked(i).index as usize;
                 let gradient = general_gradient * feature_value;
-                let update = self.adagrad_lr.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
+                let update = self.optimizer_lr.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
                 weights.get_unchecked_mut(feature_index).weight += update;
             }
             
             for i in 0..local_data_ffm_len {
+//                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_ffm.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now
                 let feature_value = local_data_ffm.get_unchecked(i).value;
-                if feature_value == 0.0 {
-                    continue; // this is basically diagonal of ffm - self combination
-                }
                 let feature_index = local_data_ffm.get_unchecked(i).index as usize;
                 let gradient = general_gradient * feature_value;
-                let update = self.adagrad_ffm.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
+                let update = self.optimizer_ffm.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
                 weights.get_unchecked_mut(feature_index).weight += update;
             }
         }
@@ -383,8 +390,8 @@ L: std::clone::Clone
             return Err(format!("Lenghts of weights array in regressor file differ: got {}, expected {}", len, self.weights_len))?;
         }
               
-        const BUF_LEN:usize = 256000;
-        let mut in_weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: L::empty_initial_data()}; BUF_LEN as usize];
+        const BUF_LEN:usize = 1024 * 1024;
+        let mut in_weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_lr.initial_data()}; BUF_LEN as usize];
         let mut out_weights = Vec::<Weight>::new();
         
         let mut remaining_weights = self.weights_len as usize;
@@ -444,9 +451,10 @@ impl ImmutableRegressor {
         if self.ffm_k > 0 {
             for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
                 for (_j, right_hash) in fb.ffm_buffer[i+1 ..].iter().enumerate() {
-                    if left_hash.contra_field_index == right_hash.contra_field_index {
-                        continue	// not combining within a field
-                    }
+               //     if left_hash.contra_field_index == right_hash.contra_field_index {
+               //         continue	// not combining within a field
+               //     }
+               // WRITE A UNIT TEST TO VERIFY COMPATIBILITY between immutable and regular regressor in the case above
                     let joint_value = left_hash.value * right_hash.value;
                     let lindex = (self.ffm_weights_offset as u32 + ((left_hash.hash & self.ffm_hashmask) + right_hash.contra_field_index)) as u32;
                     let rindex = (self.ffm_weights_offset as u32 + ((right_hash.hash & self.ffm_hashmask) + left_hash.contra_field_index)) as u32;
@@ -554,6 +562,7 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
+        mi.init_acc_gradient = 0.0;
         
         let mut re = Regressor::<optimizer::OptimizerAdagradFlex>::new(&mi);
         
@@ -569,6 +578,7 @@ mod tests {
         mi.power_t = 0.5;
         mi.fastmath = true;
         mi.optimizer = model_instance::Optimizer::Adagrad;
+        mi.init_acc_gradient = 0.0;
         
         let mut re = get_regressor(&mi);
         let mut p: f32;
@@ -591,6 +601,7 @@ mod tests {
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
         mi.bit_precision = 18;
+        mi.init_acc_gradient = 0.0;
         
         let mut re = Regressor::<optimizer::OptimizerAdagradFlex>::new(&mi);
         // Here we take twice two features and then once just one
@@ -628,7 +639,7 @@ mod tests {
         for i in rg.ffm_weights_offset as usize..rg.weights.len() {
             rg.weights[i].weight = 1.0;
 //            rg.weights[i].acc_grad = 1.0;
-            rg.weights[i].optimizer_data = T::ffm_initial_data();
+            rg.weights[i].optimizer_data = rg.optimizer_ffm.initial_data();
         }
     }
 

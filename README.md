@@ -26,7 +26,7 @@ Why is it faster?
 - tighter encoding format for examples cache
 - namespaces have to be declared up-front, so tight encoding is possible
 - using lz4 for examples cache compression instead of gz
-- using Look Up Tables for AdaGrad (--fastmath option)
+- using Look Up Tables for AdaGrad
 - inner loop is single purpose and super-optimized
 - it is written in Rust and it uses specialization tricks (via macros)
 - it cuts corners by preallocating buffers
