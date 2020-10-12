@@ -260,7 +260,7 @@ if __name__ == "__main__":
         print("goes for knowing the food type alone.\n")
         print("That's why we use an interaction between the animal type and food type.\n")
 
-        hard_results_table = ["Scenario|Runtime (seconds)|Memory (MB)|CPU %", "----|----|----|----"]
+        hard_results_table = ["Scenario|Runtime (seconds)|Memory (MB)|CPU %", "----|----:|----:|----:"]
 
         if action in ["train", "train+predict", "all"]:
             print("**we measure 3 scenarios:**")
@@ -354,7 +354,7 @@ if __name__ == "__main__":
 
         print("for more details on what makes Fwumious Wabbit so fast, see [here](https://github.com/outbrain/fwumious_wabbit/blob/benchmark/SPEED.md)")
 
-        if action in ["ffm", "all"]:
+        if action in ["ffm", "all"] and False:  # "soft" comment out until I move the output to a separate document
             print("## Field aware factorization machines")
             print("in this experiment we demonstrate how field aware factorization machines (FFMs) can better capture ")
             print("feature interactions, resulting in better model accuracy.\n")
