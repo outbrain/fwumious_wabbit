@@ -202,9 +202,9 @@ if __name__ == "__main__":
         if action in ["cleanup", "generate", "all"]:
             cleanup()
 
-        train_examples = 100000
-        test_examples = 100000
-        feature_variety = 100
+        train_examples = 10000000
+        test_examples = 10000000
+        feature_variety = 1000
 
         if action in ["generate", "all"]:
             generate.generate("work_dir", train_examples, test_examples, feature_variety)
@@ -296,7 +296,7 @@ if __name__ == "__main__":
 
         if use_plots and action in ["all", "train", "predict", "train+predict"]:
             plot_file_name = "benchmark_results.png"
-            plot_results(plot_file_name, 'Vowpal Wabbit', "Fwumious Wabbit", actions, vw_time_values, fw_time_values, vw_mem_values, fw_mem_values, vw_cpu_values, fw_cpu_values)
+            plot_results(f"work_dir/{plot_file_name}", 'Vowpal Wabbit', "Fwumious Wabbit", actions, vw_time_values, fw_time_values, vw_mem_values, fw_mem_values, vw_cpu_values, fw_cpu_values)
             print(f"![benchmark results]({plot_file_name})")
 
         if action in ["train", "predict", "train+predict", "all"]:
@@ -424,7 +424,3 @@ if __name__ == "__main__":
 
         if os.path.isfile("work_dir/benchmark_results.png"):
             shutil.copyfile("work_dir/benchmark_results.png", "../benchmark_results.png")
-
-
-
-
