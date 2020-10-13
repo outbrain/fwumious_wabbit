@@ -16,12 +16,12 @@ here are the results for 3 runs for each scenario, taking mean values:
 ![benchmark results](benchmark_results.png)
 Scenario|Runtime (seconds)|Memory (MB)|CPU %
 ----|----:|----:|----:
-vw train, no cache|67.72 | 562 | 172.87
-fw train, no cache|9.47 | 258 | 101.93
-vw train, using cache|52.76 | 554 | 177.30
-fw train, using cache|6.76 | 258 | 101.50
-vw predict, no cache|44.54 | 135 | 181.50
-fw predict, no cache|4.25 | 258 | 101.57
+vw train, no cache|66.82 | 556 | 174.33
+fw train, no cache|10.29 | 258 | 100.90
+vw train, using cache|53.37 | 558 | 174.70
+fw train, using cache|6.87 | 258 | 101.20
+vw predict, no cache|49.18 | 135 | 179.77
+fw predict, no cache|4.28 | 258 | 101.27
 
 
 ### Model equivalence
@@ -88,7 +88,7 @@ or, if you just want the numbers with less dependencies run:
 ```
 Physical cores: 28
 Total cores: 56
-Current Frequency: 1043.13Mhz
+Current Frequency: 1075.47Mhz
 ```
 ### System Information
 ```
