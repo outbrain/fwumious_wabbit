@@ -295,7 +295,7 @@ if __name__ == "__main__":
         print(f"here are the results for {times} runs for each scenario, taking mean values:\n")
 
         if use_plots and action in ["all", "train", "predict", "train+predict"]:
-            plot_file_name = "work_dir/benchmark_results.png"
+            plot_file_name = "benchmark_results.png"
             plot_results(plot_file_name, 'Vowpal Wabbit', "Fwumious Wabbit", actions, vw_time_values, fw_time_values, vw_mem_values, fw_mem_values, vw_cpu_values, fw_cpu_values)
             print(f"![benchmark results]({plot_file_name})")
 

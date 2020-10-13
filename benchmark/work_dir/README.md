@@ -13,7 +13,7 @@ using '--adaptive' flag for adaptive learning rates (AdaGrad variant).
 ### Results
 here are the results for 3 runs for each scenario, taking mean values:
 
-![benchmark results](work_dir/benchmark_results.png)
+![benchmark results](benchmark_results.png)
 Scenario|Runtime (seconds)|Memory (MB)|CPU %
 ----|----:|----:|----:
 vw train, no cache|67.72 | 562 | 172.87
