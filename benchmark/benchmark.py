@@ -202,9 +202,9 @@ if __name__ == "__main__":
         if action in ["cleanup", "generate", "all"]:
             cleanup()
 
-        train_examples = 10000000
-        test_examples = 10000000
-        feature_variety = 1000
+        train_examples = 100000
+        test_examples = 100000
+        feature_variety = 100
 
         if action in ["generate", "all"]:
             generate.generate("work_dir", train_examples, test_examples, feature_variety)
@@ -418,6 +418,13 @@ if __name__ == "__main__":
         print("## Latest run setup\n")
 
         print_system_info()
+
+        if os.path.isfile("work_dir/README.md"):
+            shutil.copyfile("work_dir/README.md", "../BENCHMARK.md")
+
+        if os.path.isfile("work_dir/benchmark_results.png"):
+            shutil.copyfile("work_dir/benchmark_results.png", "../benchmark_results.png")
+
 
 
 
