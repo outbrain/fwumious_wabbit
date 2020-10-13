@@ -182,25 +182,10 @@ if __name__ == "__main__":
     with open("README.md", "w") as readme:
         readme.write("")  # clear file
         sys.stdout = readme
-        print("## Prerequisites and running")
-        print("you should have Vowpal Wabbit installed, as the benchmark invokes it via the 'vw' command.")
-        print("additionally the rust compiler is required in order to build Fwumious Wabbit (the benchmark invokes '../target/release/fw') ")
-        print("in order to build and run the benchmark use one of these bash scripts:")
-        print("```")
-        print("./run_with_plots.sh")
-        print("```")
-        print("in order to run the benchmark and plot the results (requires matplotlib, last used with version 2.1.2)")
-        print("\nor, if you just want the numbers with less dependencies run:")
-        print("```")
-        print("./run_without_plots.sh")
-        print("```\n")
-        print("## Latest run setup\n")
-
-        print_system_info()
 
         vw_train_cmd = "vw --data train.vw.gz -l 0.1 -p blah.out -b 25 -c --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor vw_model --save_resume --interactions AB"
-        fw_train_cmd = "../target/release/fw --data train.vw.gz -l 0.1 -p blah.out -b 25 -c --adaptive --fastmath --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor fw_model --save_resume --interactions AB"
-        fw_ffm_train_cmd = "../target/release/fw --data train.vw.gz -l 0.1 -p blah.out -b 25 -c --adaptive --fastmath --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor fw_ffm_model --save_resume --keep A --keep B --ffm_k 10 --ffm_field A --ffm_field B"
+        fw_train_cmd = "../target/release/fw --data train.vw.gz -l 0.1 -p blah.out -b 25 -c --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor fw_model --save_resume --interactions AB"
+        fw_ffm_train_cmd = "../target/release/fw --data train.vw.gz -l 0.1 -p blah.out -b 25 -c --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor fw_ffm_model --save_resume --keep A --keep B --ffm_k 10 --ffm_field A --ffm_field B"
 
         vw_predict_cmd = "vw --data easy.vw -t -p vw_easy_preds.out --initial_regressor vw_model --hash all --interactions AB"
         fw_predict_cmd = "../target/release/fw --data easy.vw -t -b 25 -p fw_easy_preds.out --initial_regressor fw_model --hash all --interactions AB"
@@ -211,33 +196,12 @@ if __name__ == "__main__":
         if action in ["cleanup", "generate", "all"]:
             cleanup()
 
+        train_examples = 10000000
+        test_examples = 10000000
+        feature_variety = 1000
+
         if action in ["generate", "all"]:
-            train_examples = 10000000
-            test_examples = 10000000
-
-            feature_variety = 1000
-
-            print("### Dataset details")
-            print(f"we generate a synthetic dataset with {train_examples:,} train records ('train.vw'), and {test_examples:,} test records ('easy.vw').\n")
-            print("the task is 'Eat-Rate prediction' - each record describes the observed result of a single feeding experiment.\n")
-            print("each record is made of a type of animal, a type of food, and a label indicating whether the animal ate the food.\n")
-            print("the underlying model is simple - animals are either herbivores or carnivores,")
-            print("and food is either plant based or meat based.")
-            print("herbivores always eat plants (and only plants), and carnivores always eat meat (and only meat).\n")
-            print("we name animals conveniently using the pattern 'diet-id', for example 'Herbivore-1234' and 'Carnivore-5678',")
-            print("and the food similarly as 'food_type-id' - for example 'Plant-678'")
-            print(" and 'Meat-234' so the expected label for a record is always obvious.\n")
-            print(f"there are {feature_variety:,} animal types, and {feature_variety:,} food types.")
-            print("\n")
-
             generate.generate(train_examples, test_examples, feature_variety)
-            with open("train.vw", "r") as dataset:
-                print("see for example the first 5 lines from the train dataset (after some pretty-printing):")
-                print("label|animal|food")
-                print("-----|------|----")
-                for _ in range(5):
-                    print(next(dataset).strip("\n"))
-                print("\n")
             gzip_file("train.vw")
 
         times = 3
@@ -252,27 +216,20 @@ if __name__ == "__main__":
         fw_hard_mem_values = []
         fw_hard_cpu_values = []
 
-        print("## Results\n")
-        print("We train a logistic regression model, applying online learning one example at a time (no batches), \n")
-        print("using '--adaptive' learning rates (AdaGrad variant).\n")
-        print("if we train using separate 'animal type' and 'food type' features, the model won't learn well, ")
-        print("since knowing the animal identity alone isn't enough to predict if it will eat or not - and the same ")
-        print("goes for knowing the food type alone.\n")
-        print("That's why we use an interaction between the animal type and food type.\n")
-
         hard_results_table = ["Scenario|Runtime (seconds)|Memory (MB)|CPU %", "----|----:|----:|----:"]
 
-        if action in ["train", "train+predict", "all"]:
-            print("**we measure 3 scenarios:**")
+        if action in ["train", "predict", "train+predict", "all"]:
+            print("## Scenarios")
             print("1. train a new model from a gzipped dataset, generating a gzipped cache file for future runs, and an output model file - *this is a typical scenario in our AutoML system - we start by generating the cache file for the next runs.*")
             print("1. train a new model over the dataset in the gzipped cache, and generate an output model - *this is also a typical scenario - we usually run many concurrent model evaluations as part of the model search*")
             print("1. use a generated model to make predictions over a dataset read from a text file, and print them to an output predictions file - *this is to illustrate potential serving performance, we don't usually predict from file input as our offline flows always apply online learning. note that when running as daemon we use half as much memory since gradients are not loaded - only model weights.*")
             print("\n")
 
+        if action in ["train", "train+predict", "all"]:
             actions.append("train + \nbuild cache")
             actions.append("train\nfrom cache")
 
-            results_table = ["Scenario|Runtime (seconds)|Memory (MB)|CPU %", "----|----|----|----"]
+            results_table = ["Scenario|Runtime (seconds)|Memory (MB)|CPU %", "----|----:|----:|----:"]
 
             if benchmark_vw:
                 vw_train_no_cache_benchmark_means, vw_train_no_cache_benchmark_stds = benchmark_cmd(vw_train_cmd, "vw", times, vw_clean_cache)
@@ -324,7 +281,11 @@ if __name__ == "__main__":
                 fw_mem_values.append(fw_predict_no_cache_benchmark_means[1] / 1024.)
                 fw_cpu_values.append(fw_predict_no_cache_benchmark_means[2])
 
-        print("### Summary")
+
+        print("## Model\n")
+        print("We train a logistic regression model, applying online learning one example at a time (no batches), \n")
+        print("using '--adaptive' flag for adaptive learning rates (AdaGrad variant).\n")
+        print("### Results")
         print(f"here are the results for {times} runs for each scenario, taking mean values:\n")
 
         if use_plots and action in ["all", "train", "predict", "train+predict"]:
@@ -339,7 +300,7 @@ if __name__ == "__main__":
         print("\n")
 
         print("### Model equivalence")
-        print("see here the loss value calculated over the test predictions for the tested models:")
+        print("loss values for the test set:")
         if action in ["predict", "train+predict", "all"]:
             print("```")
             if benchmark_vw:
@@ -353,6 +314,35 @@ if __name__ == "__main__":
         print("\n")
 
         print("for more details on what makes Fwumious Wabbit so fast, see [here](https://github.com/outbrain/fwumious_wabbit/blob/benchmark/SPEED.md)")
+
+        if action in ["generate", "all"]:
+            print("### Dataset details")
+            print(f"we generate a synthetic dataset with {train_examples:,} train records ('train.vw'), and {test_examples:,} test records ('easy.vw').\n")
+            print("the task is 'Eat-Rate prediction' - each record describes the observed result of a single feeding experiment.\n")
+            print("each record is made of a type of animal, a type of food (in Vowpal Wabbit jargon these are our namespaces A and B respectively), and a label indicating whether the animal ate the food.\n")
+            print("the underlying model is simple - animals are either herbivores or carnivores,")
+            print("and food is either plant based or meat based.")
+            print("herbivores always eat plants (and only plants), and carnivores always eat meat (and only meat).\n")
+            print("we name animals conveniently using the pattern 'diet-id', for example 'Herbivore-1234' and 'Carnivore-5678',")
+            print("and the food similarly as 'food_type-id' - for example 'Plant-678'")
+            print(" and 'Meat-234' so the expected label for a record is always obvious.\n")
+            print(f"there are {feature_variety:,} animal types, and {feature_variety:,} food types.")
+            print("\n")
+
+            with open("train.vw", "r") as dataset:
+                print("see for example the first 5 lines from the train dataset (after some pretty-printing):")
+                print("label|animal|food")
+                print("----:|------|----")
+                for _ in range(5):
+                    print(next(dataset).strip("\n"))
+                print("\n")
+
+        if action in ["train", "predict", "train+predict", "all"]:
+            print("### Feature engineering")
+            print("if we train using separate 'animal type' and 'food type' features, the model won't learn well, ")
+            print("since knowing the animal identity alone isn't enough to predict if it will eat or not - and the same ")
+            print("goes for knowing the food type alone.\n")
+            print("so we apply an interaction between the animal type and food type fields.\n")
 
         if action in ["ffm", "all"] and False:  # "soft" comment out until I move the output to a separate document
             print("## Field aware factorization machines")
@@ -406,6 +396,22 @@ if __name__ == "__main__":
             print(f"Fwumious Wabbit Logistic Regression predictions loss: {fw_model_loss:.4f}")
             print(f"Fwumious Wabbit FFM predictions loss: {fw_ffm_model_loss:.4f}")
             print("```")
+
+        print("## Prerequisites and running")
+        print("you should have Vowpal Wabbit installed, as the benchmark invokes it via the 'vw' command.")
+        print("additionally the rust compiler is required in order to build Fwumious Wabbit (the benchmark invokes '../target/release/fw') ")
+        print("in order to build and run the benchmark use one of these bash scripts:")
+        print("```")
+        print("./run_with_plots.sh")
+        print("```")
+        print("in order to run the benchmark and plot the results (requires matplotlib, last used with version 2.1.2)")
+        print("\nor, if you just want the numbers with less dependencies run:")
+        print("```")
+        print("./run_without_plots.sh")
+        print("```\n")
+        print("## Latest run setup\n")
+
+        print_system_info()
 
 
 
