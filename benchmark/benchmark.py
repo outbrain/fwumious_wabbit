@@ -18,20 +18,20 @@ def rm_quietly(f):
 
 
 def cleanup():
-    rm_quietly("train.vw")
-    rm_quietly("train.vw.gz")
-    rm_quietly("train.vw.gz.cache")
-    rm_quietly("train.vw.gz.fwcache")
-    rm_quietly("easy.vw")
-    rm_quietly("hard.vw")
+    rm_quietly("work_dir/train.vw")
+    rm_quietly("work_dir/train.vw.gz")
+    rm_quietly("work_dir/train.vw.gz.cache")
+    rm_quietly("work_dir/train.vw.gz.fwcache")
+    rm_quietly("work_dir/easy.vw")
+    rm_quietly("work_dir/hard.vw")
 
 
 def vw_clean_cache():
-    rm_quietly("train.vw.gz.cache")
+    rm_quietly("work_dir/train.vw.gz.cache")
 
 
 def fw_clean_cache():
-    rm_quietly("train.vw.gz.fwcache")
+    rm_quietly("work_dir/train.vw.gz.fwcache")
 
 
 def print_system_info():
@@ -155,6 +155,12 @@ if __name__ == "__main__":
 
         exit()
 
+    if not os.path.isdir("work_dir"):
+        os.mkdir("work_dir")
+
+    if not os.path.isfile("work_dir/vw_namespace_map.csv"):
+        os.link("vw_namespace_map.csv", "work_dir/vw_namespace_map.csv")
+
     first_arg_options = ["fw", "vw", "all"]
     if sys.argv[1] not in first_arg_options:
         first_arg_options_str = "', '".join(first_arg_options)
@@ -179,19 +185,19 @@ if __name__ == "__main__":
 
     action = sys.argv[2]
 
-    with open("README.md", "w") as readme:
+    with open("work_dir/README.md", "w") as readme:
         readme.write("")  # clear file
         sys.stdout = readme
 
-        vw_train_cmd = "vw --data train.vw.gz -l 0.1 -p blah.out -b 25 -c --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor vw_model --save_resume --interactions AB"
-        fw_train_cmd = "../target/release/fw --data train.vw.gz -l 0.1 -p blah.out -b 25 -c --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor fw_model --save_resume --interactions AB"
-        fw_ffm_train_cmd = "../target/release/fw --data train.vw.gz -l 0.1 -p blah.out -b 25 -c --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor fw_ffm_model --save_resume --keep A --keep B --ffm_k 10 --ffm_field A --ffm_field B"
+        vw_train_cmd = "vw --data work_dir/train.vw.gz -l 0.1 -p work_dir/blah.out -b 25 -c --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor work_dir/vw_model --save_resume --interactions AB"
+        fw_train_cmd = "../target/release/fw --data work_dir/train.vw.gz -l 0.1 -p work_dir/blah.out -b 25 -c --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor work_dir/fw_model --save_resume --interactions AB"
+        fw_ffm_train_cmd = "../target/release/fw --data work_dir/train.vw.gz -l 0.1 -p work_dir/blah.out -b 25 -c --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor work_dir/fw_ffm_model --save_resume --keep A --keep B --ffm_k 10 --ffm_field A --ffm_field B"
 
-        vw_predict_cmd = "vw --data easy.vw -t -p vw_easy_preds.out --initial_regressor vw_model --hash all --interactions AB"
-        fw_predict_cmd = "../target/release/fw --data easy.vw -t -b 25 -p fw_easy_preds.out --initial_regressor fw_model --hash all --interactions AB"
+        vw_predict_cmd = "vw --data work_dir/easy.vw -t -p work_dir/vw_easy_preds.out --initial_regressor work_dir/vw_model --hash all --interactions AB"
+        fw_predict_cmd = "../target/release/fw --data work_dir/easy.vw -t -b 25 -p work_dir/fw_easy_preds.out --initial_regressor work_dir/fw_model --hash all --interactions AB"
 
-        fw_predict_hard_cmd = "../target/release/fw --data hard.vw -t -b 25 -p fw_hard_preds.out --initial_regressor fw_model --link logistic --hash all --interactions AB"
-        fw_ffm_predict_hard_cmd = "../target/release/fw --data hard.vw -t -b 25 -p fw_ffm_hard_preds.out --initial_regressor fw_ffm_model --hash all --keep A --keep B --ffm_k 10 --ffm_field A --ffm_field B"
+        fw_predict_hard_cmd = "../target/release/fw --data work_dir/hard.vw -t -b 25 -p work_dir/fw_hard_preds.out --initial_regressor work_dir/fw_model --link logistic --hash all --interactions AB"
+        fw_ffm_predict_hard_cmd = "../target/release/fw --data work_dir/hard.vw -t -b 25 -p work_dir/fw_ffm_hard_preds.out --initial_regressor work_dir/fw_ffm_model --hash all --keep A --keep B --ffm_k 10 --ffm_field A --ffm_field B"
 
         if action in ["cleanup", "generate", "all"]:
             cleanup()
@@ -201,8 +207,8 @@ if __name__ == "__main__":
         feature_variety = 1000
 
         if action in ["generate", "all"]:
-            generate.generate(train_examples, test_examples, feature_variety)
-            gzip_file("train.vw")
+            generate.generate("work_dir", train_examples, test_examples, feature_variety)
+            gzip_file("work_dir/train.vw")
 
         times = 3
         actions = []
@@ -267,7 +273,7 @@ if __name__ == "__main__":
             actions.append("predict,\nno cache")
             if benchmark_vw:
                 vw_predict_no_cache_benchmark_means, vw_predict_no_cache_benchmark_stds = benchmark_cmd(vw_predict_cmd, "vw", times)
-                vw_model_loss = calc_loss("vw_easy_preds.out", "easy.vw")
+                vw_model_loss = calc_loss("work_dir/vw_easy_preds.out", "work_dir/easy.vw")
                 results_table.append(format_metrics_row("vw predict, no cache", vw_predict_no_cache_benchmark_means, vw_predict_no_cache_benchmark_stds))
                 vw_time_values.append(vw_predict_no_cache_benchmark_means[0])
                 vw_mem_values.append(vw_predict_no_cache_benchmark_means[1] / 1024.)
@@ -275,7 +281,7 @@ if __name__ == "__main__":
 
             if benchmark_fw:
                 fw_predict_no_cache_benchmark_means, fw_predict_no_cache_benchmark_stds = benchmark_cmd(fw_predict_cmd, "fw", times)
-                fw_model_loss = calc_loss("fw_easy_preds.out", "easy.vw")
+                fw_model_loss = calc_loss("work_dir/fw_easy_preds.out", "work_dir/easy.vw")
                 results_table.append(format_metrics_row("fw predict, no cache", fw_predict_no_cache_benchmark_means, fw_predict_no_cache_benchmark_stds))
                 fw_time_values.append(fw_predict_no_cache_benchmark_means[0])
                 fw_mem_values.append(fw_predict_no_cache_benchmark_means[1] / 1024.)
@@ -289,7 +295,7 @@ if __name__ == "__main__":
         print(f"here are the results for {times} runs for each scenario, taking mean values:\n")
 
         if use_plots and action in ["all", "train", "predict", "train+predict"]:
-            plot_file_name = "benchmark_results.png"
+            plot_file_name = "work_dir/benchmark_results.png"
             plot_results(plot_file_name, 'Vowpal Wabbit', "Fwumious Wabbit", actions, vw_time_values, fw_time_values, vw_mem_values, fw_mem_values, vw_cpu_values, fw_cpu_values)
             print(f"![benchmark results]({plot_file_name})")
 
@@ -329,7 +335,7 @@ if __name__ == "__main__":
             print(f"there are {feature_variety:,} animal types, and {feature_variety:,} food types.")
             print("\n")
 
-            with open("train.vw", "r") as dataset:
+            with open("work_dir/train.vw", "r") as dataset:
                 print("see for example the first 5 lines from the train dataset (after some pretty-printing):")
                 print("label|animal|food")
                 print("----:|------|----")
@@ -388,8 +394,8 @@ if __name__ == "__main__":
             #     plot_results(ffm_plot_file_name, "Fwumious Wabbit LR", "Fwumious Wabbit FFM", ffm_actions, fw_hard_time_values, fw_hard_ffm_time_values, fw_hard_mem_values, fw_hard_ffm_mem_values, fw_hard_cpu_values, fw_hard_ffm_cpu_values)
             #     print(f"![FFM benchmark results]({ffm_plot_file_name})")
 
-            fw_model_loss = calc_loss("fw_hard_preds.out", "hard.vw")
-            fw_ffm_model_loss = calc_loss("fw_ffm_hard_preds.out", "hard.vw")
+            fw_model_loss = calc_loss("work_dir/fw_hard_preds.out", "hard.vw")
+            fw_ffm_model_loss = calc_loss("work_dir/fw_ffm_hard_preds.out", "hard.vw")
 
             print("### Loss on the test set")
             print("```")

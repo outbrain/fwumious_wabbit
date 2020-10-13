@@ -20,9 +20,9 @@ def render_example(a, b):
     return " ".join([str(score), u"|A", a[0] + u"-" + str(a[1]), u"|B", b[0] + u"-" + str(b[1])]) + "\n"
 
 
-def generate(train_examples, test_examples, feature_variety):
+def generate(output_dir, train_examples, test_examples, feature_variety):
     i = 0
-    f = open("train.vw", "w")
+    f = open(f"{output_dir}/train.vw", "w")
     block_beyond = int(feature_variety / 4.0)
     while i < train_examples:
         add_dataset_record(f, block_beyond, feature_variety)
@@ -30,13 +30,13 @@ def generate(train_examples, test_examples, feature_variety):
 
     i = 0
     # this has the same distribution as for train...
-    f = open("easy.vw", "w")
+    f = open(f"{output_dir}/easy.vw", "w")
     while i < test_examples:
         add_dataset_record(f, block_beyond, feature_variety)
         i += 1
 
     # now we will test for completely unseen combos
-    f = open("hard.vw", "w")
+    f = open(f"{output_dir}/hard.vw", "w")
     i = 0
     while i < test_examples:
         animal_type = random.choices(['Herbivore', 'Carnivore'])[0]
@@ -66,4 +66,4 @@ if __name__ == "__main__":
     if len(sys.argv) == 2:
         dataset_size = int(sys.argv[1])
 
-    generate(dataset_size, dataset_size, 1000)
+    generate("", dataset_size, dataset_size, 1000)

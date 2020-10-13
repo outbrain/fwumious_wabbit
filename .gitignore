@@ -1,3 +1,5 @@
 Cargo.lock
 .idea/
 target/
+.DS_Store
+__pycache__/
