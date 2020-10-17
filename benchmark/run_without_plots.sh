@@ -1,3 +1,3 @@
 #!/bin/bash
 cargo build --release
-python benchmark.py all all False
+python3 benchmark.py all all False
