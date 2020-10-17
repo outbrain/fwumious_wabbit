@@ -242,10 +242,10 @@ if __name__ == "__main__":
 
         if action in ["train", "predict", "train+predict", "all"]:
             rprint("""## Scenarios
-            1. train a new model from a dataset and an output model file - *typical scenario for one-off training on the dataset*
-            1. train a new model from a cached dataset, and generate an output model - *this is also a typical scenario - we usually run many concurrent model evaluations as part of the model search*
-            1. use a generated model to make predictions over a dataset read from a text file, and print them to an output predictions file - *this is to illustrate potential serving performance, we don't usually predict from file input as our offline flows always apply online learning. note that when running as daemon we use half as much memory since gradients are not loaded - only model weights.*
-            """)
+1. train a new model from a dataset and an output model file - *typical scenario for one-off training on the dataset*
+1. train a new model from a cached dataset, and generate an output model - *this is also a typical scenario - we usually run many concurrent model evaluations as part of the model search*
+1. use a generated model to make predictions over a dataset read from a text file, and print them to an output predictions file - *this is to illustrate potential serving performance, we don't usually predict from file input as our offline flows always apply online learning. note that when running as daemon we use half as much memory since gradients are not loaded - only model weights.*
+""")
 
         if action in ["train", "train+predict", "all"]:
             actions.append("train + \nbuild cache")
@@ -320,11 +320,13 @@ if __name__ == "__main__":
                 fw_cpu_values.append(fw_predict_no_cache_benchmark_means[2])
 
 
-        rprint("""## Model
-        We train a logistic regression model, applying online learning one example at a time (no batches), 
-        using '--adaptive' flag for adaptive learning rates (AdaGrad variant).
-        ### Results
-        here are the results for {times} runs for each scenario, taking mean values:""")
+        rprint("""
+## Model
+We train a logistic regression model, applying online learning one example at a time (no batches), 
+using '--adaptive' flag for adaptive learning rates (AdaGrad variant).
+
+## Results
+here are the results for {times} runs for each scenario, taking mean values:""")
 
         if use_plots and action in ["all", "train", "predict", "train+predict"]:
             plot_file_name = "benchmark_results.png"
@@ -356,17 +358,18 @@ if __name__ == "__main__":
         rprint("for more details on what makes Fwumious Wabbit so fast, see [here](https://github.com/outbrain/fwumious_wabbit/blob/benchmark/SPEED.md)")
 
         if action in ["generate", "all"]:
-            rprint(f"""### Dataset details")
-            we generate a synthetic dataset with {train_examples:,} train records ('train.vw'), and {test_examples:,} test records ('easy.vw').
-            the task is 'Eat-Rate prediction' - each record describes the observed result of a single feeding experiment.
-            each record is made of a type of animal, a type of food (in Vowpal Wabbit jargon these are our namespaces A and B respectively), and a label indicating whether the animal ate the food.
-            the underlying model is simple - animals are either herbivores or carnivores,
-            and food is either plant based or meat based.
-            herbivores always eat plants (and only plants), and carnivores always eat meat (and only meat).
-            we name animals conveniently using the pattern 'diet-id', for example 'Herbivore-1234' and 'Carnivore-5678'
-            and the food similarly as 'food_type-id' - for example 'Plant-678' and 'Meat-234' so the expected label for a record is always obvious.
-            there are {feature_variety:,} animal types, and {feature_variety:,} food types.
-            """)
+            rprint(f"""
+### Dataset details
+we generate a synthetic dataset with {train_examples:,} train records ('train.vw'), and {test_examples:,} test records ('easy.vw').
+the task is 'Eat-Rate prediction' - each record describes the observed result of a single feeding experiment.
+each record is made of a type of animal, a type of food (in Vowpal Wabbit jargon these are our namespaces A and B respectively), and a label indicating whether the animal ate the food.
+the underlying model is simple - animals are either herbivores or carnivores,
+and food is either plant based or meat based.
+herbivores always eat plants (and only plants), and carnivores always eat meat (and only meat).
+we name animals conveniently using the pattern 'diet-id', for example 'Herbivore-1234' and 'Carnivore-5678'
+and the food similarly as 'food_type-id' - for example 'Plant-678' and 'Meat-234' so the expected label for a record is always obvious.
+there are {feature_variety:,} animal types, and {feature_variety:,} food types.
+""")
 
             with open("work_dir/train.vw", "r") as dataset:
                 rprint("""see for example the first 5 lines from the train dataset (after some pretty-printing):
@@ -374,30 +377,31 @@ if __name__ == "__main__":
                 ----:|------|----
                 """)
                 for _ in range(5):
-                    rprint(next(dataset).strip("\n"))
+                    rprint(next(dataset))
                 rprint("\n")
 
         if action in ["train", "predict", "train+predict", "all"]:
             rprint("""### Feature engineering
-            if we train using separate 'animal type' and 'food type' features, the model won't learn well, 
-            since knowing the animal identity alone isn't enough to predict if it will eat or not - and the same 
-            goes for knowing the food type alone.
-            so we apply an interaction between the animal type and food type fields.
+if we train using separate 'animal type' and 'food type' features, the model won't learn well, 
+since knowing the animal identity alone isn't enough to predict if it will eat or not - and the same 
+goes for knowing the food type alone.
+so we apply an interaction between the animal type and food type fields.
             """)
 
         if action in ["ffm", "all"] and False:  # "soft" comment out until I move the output to a separate document
             rprint("""## Field aware factorization machines
-            in this experiment we demonstrate how field aware factorization machines (FFMs) can better capture 
-            feature interactions, resulting in better model accuracy.\n
-            ### Dataset
-            In the train set we generated, the animals and foods are each divided to two groups - we'll mark them A1 and A2 for the animals,
-            and F1 and F2 for the foods.\n
-            the train set and the test set named 'easy.vw' (used in the previous section) are both drawn from the same distribution, 
-            with records which belong to {(A1 U A2, F1)} U {(A1, F1 U F2}).\n
-            the test set we use here, 'hard.vw', is different: it contains exclusively records from {(A2, F2)} - combinations unseen in the train set.\n
-            In order for a model to make correct predictions on this dataset after training on the train dataset, 
-            it must be able to generalize for unseen combinations.
-            """)
+in this experiment we demonstrate how field aware factorization machines (FFMs) can better capture 
+feature interactions, resulting in better model accuracy.
+
+### Dataset
+In the train set we generated, the animals and foods are each divided to two groups - we'll mark them A1 and A2 for the animals,
+and F1 and F2 for the foods.
+the train set and the test set named 'easy.vw' (used in the previous section) are both drawn from the same distribution, 
+with records which belong to {(A1 U A2, F1)} U {(A1, F1 U F2}).
+the test set we use here, 'hard.vw', is different: it contains exclusively records from {(A2, F2)} - combinations unseen in the train set.
+In order for a model to make correct predictions on this dataset after training on the train dataset, 
+it must be able to generalize for unseen combinations.
+""")
 
             fw_hard_ffm_time_values = []
             fw_hard_ffm_mem_values = []
@@ -434,25 +438,26 @@ if __name__ == "__main__":
             fw_ffm_model_loss = calc_loss("work_dir/fw_ffm_hard_preds.out", "hard.vw")
 
             rprint("""### Loss on the test set")
-            ```
-            Fwumious Wabbit Logistic Regression predictions loss: {fw_model_loss:.4f}
-            Fwumious Wabbit FFM predictions loss: {fw_ffm_model_loss:.4f}
-            ```""")
+```
+Fwumious Wabbit Logistic Regression predictions loss: {fw_model_loss:.4f}
+Fwumious Wabbit FFM predictions loss: {fw_ffm_model_loss:.4f}
+```
+""")
 
         rprint("""## Prerequisites and running
-        you should have Vowpal Wabbit installed, as the benchmark invokes it via the 'vw' command.
-        additionally the rust compiler is required in order to build Fwumious Wabbit (the benchmark invokes '../target/release/fw') 
-        in order to build and run the benchmark use one of these bash scripts:
-        ```
-        ./run_with_plots.sh
-        ```
-        in order to run the benchmark and plot the results (requires matplotlib, last used with version 2.1.2)
-        \nor, if you just want the numbers with less dependencies run:
-        ```
-        ./run_without_plots.sh
-        ```\n
-        ## Latest run setup
-        """)
+you should have Vowpal Wabbit installed, as the benchmark invokes it via the 'vw' command.
+additionally the rust compiler is required in order to build Fwumious Wabbit (the benchmark invokes '../target/release/fw') 
+in order to build and run the benchmark use one of these bash scripts:
+```
+./run_with_plots.sh
+```
+in order to run the benchmark and plot the results (requires matplotlib, last used with version 2.1.2)
+or, if you just want the numbers with less dependencies run:
+```
+./run_without_plots.sh
+```
+## Latest run setup
+""")
 
         rprint(get_system_info())
 

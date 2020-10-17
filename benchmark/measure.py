@@ -32,7 +32,7 @@ def measure(cmd, proc_name):
                 except psutil.ZombieProcess:
                     pass
             try:
-                psp.wait(timeout=0.1)
+                psp.wait(timeout=0.5)
                 time = timer() - start
             except psutil.TimeoutExpired:        
                 continue
