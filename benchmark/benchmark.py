@@ -8,8 +8,14 @@ import gzip
 import shutil
 from measure import measure
 from calc_loss import calc_loss
+from pathlib import Path
 
 debug = False
+VW = "vw" 
+FW = "../target/release/fw"
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
 
 
 def rm_quietly(f):
@@ -20,18 +26,20 @@ def rm_quietly(f):
 def cleanup():
     rm_quietly("work_dir/train.vw")
     rm_quietly("work_dir/train.vw.gz")
-    rm_quietly("work_dir/train.vw.gz.cache")
-    rm_quietly("work_dir/train.vw.gz.fwcache")
     rm_quietly("work_dir/easy.vw")
     rm_quietly("work_dir/hard.vw")
+    vw_clean_cache()
+    fw_clean_cache()
 
 
 def vw_clean_cache():
     rm_quietly("work_dir/train.vw.gz.cache")
+    rm_quietly("work_dir/easy.vw.gz.cache")
 
 
 def fw_clean_cache():
     rm_quietly("work_dir/train.vw.gz.fwcache")
+    rm_quietly("work_dir/easy.vw.gz.fwcache")
 
 
 def print_system_info():
@@ -64,7 +72,7 @@ def time_bash_cmd(cmd, proc_name):
     return measure(cmd, proc_name)
 
 
-def benchmark_cmd(cmd, proc_name, times, run_before=None):
+def benchmark_cmd(cmd, proc_name, times = 1, run_before=None):
     benchmark_means = [0., 0., 0.]
     results = []
 
@@ -158,9 +166,6 @@ if __name__ == "__main__":
     if not os.path.isdir("work_dir"):
         os.mkdir("work_dir")
 
-    if not os.path.isfile("work_dir/vw_namespace_map.csv"):
-        os.link("vw_namespace_map.csv", "work_dir/vw_namespace_map.csv")
-
     first_arg_options = ["fw", "vw", "all"]
     if sys.argv[1] not in first_arg_options:
         first_arg_options_str = "', '".join(first_arg_options)
@@ -187,27 +192,29 @@ if __name__ == "__main__":
 
     with open("work_dir/README.md", "w") as readme:
         readme.write("")  # clear file
-        sys.stdout = readme
+#        sys.stdout = readme
+        def rprint(*args, **kwargs):
+            print(*args, file=readme, **kwargs)
 
-        vw_train_cmd = "vw --data work_dir/train.vw.gz -l 0.1 -p work_dir/vw_train_preds.out -b 25 -c --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor work_dir/vw_model --save_resume --interactions AB"
-        fw_train_cmd = "../target/release/fw --data work_dir/train.vw.gz -l 0.1 -p work_dir/fw_train_preds.out -b 25 -c --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor work_dir/fw_model --save_resume --interactions AB"
-        fw_ffm_train_cmd = "../target/release/fw --data work_dir/train.vw.gz -l 0.1 -p work_dir/fw_ffm_train_preds.out -b 25 -c --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --final_regressor work_dir/fw_ffm_model --save_resume --keep A --keep B --ffm_k 10 --ffm_field A --ffm_field B"
+        params = " -l 0.1 -b 26 --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all "
+        interactions = " --interactions AB --keep A --keep B --keep C --keep D --keep E --keep F "
 
-        vw_predict_cmd = "vw --data work_dir/easy.vw -t -p work_dir/vw_easy_preds.out --initial_regressor work_dir/vw_model --hash all --interactions AB"
-        fw_predict_cmd = "../target/release/fw --data work_dir/easy.vw -t -b 25 -p work_dir/fw_easy_preds.out --initial_regressor work_dir/fw_model --hash all --interactions AB"
+        vw_train_cmd = VW + " --data work_dir/train.vw -p work_dir/vw_train_preds.out --final_regressor work_dir/vw_model --save_resume " + params + interactions
+        fw_train_cmd = FW + " --data work_dir/train.vw -p work_dir/fw_train_preds.out --final_regressor work_dir/fw_model --save_resume " + params + interactions
 
-        fw_predict_hard_cmd = "../target/release/fw --data work_dir/hard.vw -t -b 25 -p work_dir/fw_hard_preds.out --initial_regressor work_dir/fw_model --link logistic --hash all --interactions AB"
-        fw_ffm_predict_hard_cmd = "../target/release/fw --data work_dir/hard.vw -t -b 25 -p work_dir/fw_ffm_hard_preds.out --initial_regressor work_dir/fw_ffm_model --hash all --keep A --keep B --ffm_k 10 --ffm_field A --ffm_field B"
+        vw_predict_cmd = VW + " -t --data work_dir/easy.vw -p work_dir/vw_easy_preds.out --initial_regressor work_dir/vw_model " + params + interactions
+        fw_predict_cmd = FW + " -t --data work_dir/easy.vw -p work_dir/fw_easy_preds.out --initial_regressor work_dir/fw_model " + params + interactions
 
         if action in ["cleanup", "generate", "all"]:
             cleanup()
 
-        train_examples = 10000000
-        test_examples = 10000000
+        train_examples = 1000000
+        test_examples = 1000000
         feature_variety = 1000
 
         if action in ["generate", "all"]:
-            generate.generate("work_dir", train_examples, test_examples, feature_variety)
+            eprint(f"Generating test data, training examples: {train_examples}, test examples: {test_examples}")
+            generate.generate(Path("work_dir"), train_examples, test_examples, feature_variety)
             gzip_file("work_dir/train.vw")
 
         times = 3
@@ -225,11 +232,11 @@ if __name__ == "__main__":
         hard_results_table = ["Scenario|Runtime (seconds)|Memory (MB)|CPU %", "----|----:|----:|----:"]
 
         if action in ["train", "predict", "train+predict", "all"]:
-            print("## Scenarios")
-            print("1. train a new model from a gzipped dataset, generating a gzipped cache file for future runs, and an output model file - *this is a typical scenario in our AutoML system - we start by generating the cache file for the next runs.*")
-            print("1. train a new model over the dataset in the gzipped cache, and generate an output model - *this is also a typical scenario - we usually run many concurrent model evaluations as part of the model search*")
-            print("1. use a generated model to make predictions over a dataset read from a text file, and print them to an output predictions file - *this is to illustrate potential serving performance, we don't usually predict from file input as our offline flows always apply online learning. note that when running as daemon we use half as much memory since gradients are not loaded - only model weights.*")
-            print("\n")
+            rprint(readme, """"## Scenarios
+            1. train a new model from a gzipped dataset, generating a gzipped cache file for future runs, and an output model file - *this is a typical scenario in our AutoML system - we start by generating the cache file for the next runs.*
+            1. train a new model over the dataset in the gzipped cache, and generate an output model - *this is also a typical scenario - we usually run many concurrent model evaluations as part of the model search*
+            1. use a generated model to make predictions over a dataset read from a text file, and print them to an output predictions file - *this is to illustrate potential serving performance, we don't usually predict from file input as our offline flows always apply online learning. note that when running as daemon we use half as much memory since gradients are not loaded - only model weights.*
+            """)
 
         if action in ["train", "train+predict", "all"]:
             actions.append("train + \nbuild cache")
@@ -238,6 +245,7 @@ if __name__ == "__main__":
             results_table = ["Scenario|Runtime (seconds)|Memory (MB)|CPU %", "----|----:|----:|----:"]
 
             if benchmark_vw:
+                eprint("Measuring vw training without cache nor creating cache") 
                 vw_train_no_cache_benchmark_means, vw_train_no_cache_benchmark_stds = benchmark_cmd(vw_train_cmd, "vw", times, vw_clean_cache)
                 results_table.append(format_metrics_row("vw train, no cache", vw_train_no_cache_benchmark_means, vw_train_no_cache_benchmark_stds))
                 vw_time_values.append(vw_train_no_cache_benchmark_means[0])
@@ -245,6 +253,7 @@ if __name__ == "__main__":
                 vw_cpu_values.append(vw_train_no_cache_benchmark_means[2])
 
             if benchmark_fw:
+                eprint("Measuring fw training without cache nor creating cache") 
                 fw_train_no_cache_benchmark_means, fw_train_no_cache_benchmark_stds = benchmark_cmd(fw_train_cmd, "fw", times, fw_clean_cache)
                 results_table.append(format_metrics_row("fw train, no cache", fw_train_no_cache_benchmark_means, fw_train_no_cache_benchmark_stds))
                 fw_time_values.append(fw_train_no_cache_benchmark_means[0])
@@ -252,14 +261,26 @@ if __name__ == "__main__":
                 fw_cpu_values.append(fw_train_no_cache_benchmark_means[2])
 
             if benchmark_vw:
-                vw_train_with_cache_benchmark_means, vw_train_with_cache_benchmark_stds = benchmark_cmd(vw_train_cmd, "vw", times)
+                eprint("Creating cache for vw training") 
+                # first create cache
+                vw_train_cache_cmd = vw_train_cmd + " -c"
+                benchmark_cmd(vw_train_cache_cmd, "vw")
+                # then benchmark
+                eprint("Measuring vw training from cache")
+                vw_train_with_cache_benchmark_means, vw_train_with_cache_benchmark_stds = benchmark_cmd(vw_train_cache_cmd, "vw", times)
                 results_table.append(format_metrics_row("vw train, using cache", vw_train_with_cache_benchmark_means, vw_train_with_cache_benchmark_stds))
                 vw_time_values.append(vw_train_with_cache_benchmark_means[0])
                 vw_mem_values.append(vw_train_with_cache_benchmark_means[1] / 1024.)
                 vw_cpu_values.append(vw_train_with_cache_benchmark_means[2])
 
             if benchmark_fw:
-                fw_train_with_cache_benchmark_means, fw_train_with_cache_benchmark_stds = benchmark_cmd(fw_train_cmd, "fw", times)
+                eprint("Creating cache for fw training") 
+                # first create cache
+                fw_train_cache_cmd = fw_train_cmd + " -c"
+                benchmark_cmd(fw_train_cache_cmd, "fw")
+                # then train
+                eprint("Measuring fw training from cache")
+                fw_train_with_cache_benchmark_means, fw_train_with_cache_benchmark_stds = benchmark_cmd(fw_train_cache_cmd, "fw", times)
                 results_table.append(format_metrics_row("fw train, using cache", fw_train_with_cache_benchmark_means, fw_train_with_cache_benchmark_stds))
                 hard_results_table.append(format_metrics_row("fw train, using cache", fw_train_with_cache_benchmark_means, fw_train_with_cache_benchmark_stds))
                 fw_time_values.append(fw_train_with_cache_benchmark_means[0])
@@ -272,6 +293,7 @@ if __name__ == "__main__":
         if action in ["predict", "train+predict", "all"]:
             actions.append("predict,\nno cache")
             if benchmark_vw:
+                eprint("Measuring vw prediction, no caches used or created")
                 vw_predict_no_cache_benchmark_means, vw_predict_no_cache_benchmark_stds = benchmark_cmd(vw_predict_cmd, "vw", times)
                 vw_model_loss = calc_loss("work_dir/vw_easy_preds.out", "work_dir/easy.vw")
                 results_table.append(format_metrics_row("vw predict, no cache", vw_predict_no_cache_benchmark_means, vw_predict_no_cache_benchmark_stds))
@@ -280,6 +302,7 @@ if __name__ == "__main__":
                 vw_cpu_values.append(vw_predict_no_cache_benchmark_means[2])
 
             if benchmark_fw:
+                eprint("Measuring fw prediction only, no caches used or created")
                 fw_predict_no_cache_benchmark_means, fw_predict_no_cache_benchmark_stds = benchmark_cmd(fw_predict_cmd, "fw", times)
                 fw_model_loss = calc_loss("work_dir/fw_easy_preds.out", "work_dir/easy.vw")
                 results_table.append(format_metrics_row("fw predict, no cache", fw_predict_no_cache_benchmark_means, fw_predict_no_cache_benchmark_stds))
@@ -288,25 +311,24 @@ if __name__ == "__main__":
                 fw_cpu_values.append(fw_predict_no_cache_benchmark_means[2])
 
 
-        print("## Model\n")
-        print("We train a logistic regression model, applying online learning one example at a time (no batches), \n")
-        print("using '--adaptive' flag for adaptive learning rates (AdaGrad variant).\n")
-        print("### Results")
-        print(f"here are the results for {times} runs for each scenario, taking mean values:\n")
+        rprint(readme, """## Model
+        We train a logistic regression model, applying online learning one example at a time (no batches), 
+        using '--adaptive' flag for adaptive learning rates (AdaGrad variant).
+        ### Results
+        here are the results for {times} runs for each scenario, taking mean values:""")
 
         if use_plots and action in ["all", "train", "predict", "train+predict"]:
             plot_file_name = "benchmark_results.png"
             plot_results(f"work_dir/{plot_file_name}", 'Vowpal Wabbit', "Fwumious Wabbit", actions, vw_time_values, fw_time_values, vw_mem_values, fw_mem_values, vw_cpu_values, fw_cpu_values)
-            print(f"![benchmark results]({plot_file_name})")
+            rprint(readme, f"![benchmark results]({plot_file_name})")
 
         if action in ["train", "predict", "train+predict", "all"]:
             for line in results_table:
                 print(line)
 
-        print("\n")
-
-        print("### Model equivalence")
-        print("loss values for the test set:")
+        rprint(readme, """
+        ### Model equivalence
+        loss values for the test set:""")
         if action in ["predict", "train+predict", "all"]:
             print("```")
             if benchmark_vw:
@@ -322,18 +344,17 @@ if __name__ == "__main__":
         print("for more details on what makes Fwumious Wabbit so fast, see [here](https://github.com/outbrain/fwumious_wabbit/blob/benchmark/SPEED.md)")
 
         if action in ["generate", "all"]:
-            print("### Dataset details")
-            print(f"we generate a synthetic dataset with {train_examples:,} train records ('train.vw'), and {test_examples:,} test records ('easy.vw').\n")
-            print("the task is 'Eat-Rate prediction' - each record describes the observed result of a single feeding experiment.\n")
-            print("each record is made of a type of animal, a type of food (in Vowpal Wabbit jargon these are our namespaces A and B respectively), and a label indicating whether the animal ate the food.\n")
-            print("the underlying model is simple - animals are either herbivores or carnivores,")
-            print("and food is either plant based or meat based.")
-            print("herbivores always eat plants (and only plants), and carnivores always eat meat (and only meat).\n")
-            print("we name animals conveniently using the pattern 'diet-id', for example 'Herbivore-1234' and 'Carnivore-5678',")
-            print("and the food similarly as 'food_type-id' - for example 'Plant-678'")
-            print(" and 'Meat-234' so the expected label for a record is always obvious.\n")
-            print(f"there are {feature_variety:,} animal types, and {feature_variety:,} food types.")
-            print("\n")
+            rprint(f"""### Dataset details")
+            we generate a synthetic dataset with {train_examples:,} train records ('train.vw'), and {test_examples:,} test records ('easy.vw').
+            the task is 'Eat-Rate prediction' - each record describes the observed result of a single feeding experiment.
+            each record is made of a type of animal, a type of food (in Vowpal Wabbit jargon these are our namespaces A and B respectively), and a label indicating whether the animal ate the food.
+            the underlying model is simple - animals are either herbivores or carnivores,
+            and food is either plant based or meat based.
+            herbivores always eat plants (and only plants), and carnivores always eat meat (and only meat).
+            we name animals conveniently using the pattern 'diet-id', for example 'Herbivore-1234' and 'Carnivore-5678'
+            and the food similarly as 'food_type-id' - for example 'Plant-678' and 'Meat-234' so the expected label for a record is always obvious.
+            there are {feature_variety:,} animal types, and {feature_variety:,} food types.
+            """)
 
             with open("work_dir/train.vw", "r") as dataset:
                 print("see for example the first 5 lines from the train dataset (after some pretty-printing):")
