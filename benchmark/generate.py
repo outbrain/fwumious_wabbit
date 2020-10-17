@@ -27,7 +27,7 @@ def get_score(a, b):
 NUM_RANDOM_FEATURES = 10
 
 def random_features():
-    l = [" "]
+    l = [""]
     for x in range(NUM_RANDOM_FEATURES):
         namespace = chr(ord('C') + x)
         l.append("|" + namespace + " " + namespace + str(random.randint(0, 10000)))
