@@ -339,16 +339,17 @@ here are the results for {times} runs for each scenario, taking mean values:""")
                 print(line)
         print("\n")
         rprint("""
-        ### Model equivalence
-        loss values for the test set:""")
+### Model equivalence
+loss values for the test set:
+""")
         if action in ["predict", "train+predict", "all"]:
             rprint("```")
             if benchmark_vw:
-                rprint(f"Vowpal Wabbit predictions loss: {vw_model_loss:.4f}")
+                rprint(f"Vowpal Wabbit predictions loss: {vw_model_loss:.4f}\n")
                 print(f"Vowpal Wabbit predictions loss: {vw_model_loss:.4f}")
 
             if benchmark_fw:
-                rprint(f"Fwumious Wabbit predictions loss: {fw_model_loss:.4f}")
+                rprint(f"Fwumious Wabbit predictions loss: {fw_model_loss:.4f}\n")
                 print(f"Fwumious Wabbit predictions loss: {fw_model_loss:.4f}")
 
             rprint("```")
@@ -361,20 +362,20 @@ here are the results for {times} runs for each scenario, taking mean values:""")
             rprint(f"""
 ### Dataset details
 we generate a synthetic dataset with {train_examples:,} train records ('train.vw'), and {test_examples:,} test records ('easy.vw').
-the task is 'Eat-Rate prediction' - each record describes the observed result of a single feeding experiment.
+\nthe task is 'Eat-Rate prediction' - each record describes the observed result of a single feeding experiment.
 each record is made of a type of animal, a type of food (in Vowpal Wabbit jargon these are our namespaces A and B respectively), and a label indicating whether the animal ate the food.
 the underlying model is simple - animals are either herbivores or carnivores,
-and food is either plant based or meat based.
-herbivores always eat plants (and only plants), and carnivores always eat meat (and only meat).
+and food is either plant based or meat based.\n
+herbivores always eat plants (and only plants), and carnivores always eat meat (and only meat).\n
 we name animals conveniently using the pattern 'diet-id', for example 'Herbivore-1234' and 'Carnivore-5678'
 and the food similarly as 'food_type-id' - for example 'Plant-678' and 'Meat-234' so the expected label for a record is always obvious.
 there are {feature_variety:,} animal types, and {feature_variety:,} food types.
 """)
 
             with open("work_dir/train.vw", "r") as dataset:
-                rprint("""see for example the first 5 lines from the train dataset (after some pretty-printing):
-                label|animal|food
-                ----:|------|----
+                rprint("""see for example the first 5 lines from the train dataset (after some pretty-printing):\n
+label|animal|food
+----:|------|----
                 """)
                 for _ in range(5):
                     rprint(next(dataset))
