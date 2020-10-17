@@ -46,25 +46,27 @@ def fw_clean_cache():
     rm_quietly("work_dir/easy.vw.fwcache")
 
 
-def print_system_info(file = sys.stdout):
-    print("### CPU Info", file=file)
-    print( "```", file=file)
+def get_system_info():
+    l = []
+    l.append("### CPU Info")
+    l.append("```")
     # number of cores
-    print( "Physical cores:", psutil.cpu_count(logical=False), file=file)
-    print( "Total cores:", psutil.cpu_count(logical=True), file=file)
+    l.append("Physical cores: %i" % psutil.cpu_count(logical=False))
+    l.append("Total cores: %i" % psutil.cpu_count(logical=True))
     # CPU frequencies
     cpufreq = psutil.cpu_freq()
-    print( f"Current Frequency: {cpufreq.current:.2f}Mhz", file=file)
-    print( "```", file=file)
+    l.append(f"Current Frequency: {cpufreq.current:.2f}Mhz")
+    l.append("```")
 
-    print( "### System Information", file=file)
+    l.append("### System Information")
     uname = platform.uname()
-    print( "```", file=file)
-    print( f"System: {uname.system}", file=file)
-    print( f"Version: {uname.version}", file=file)
-    print( f"Machine: {uname.machine}", file=file)
-    print( f"Processor: {uname.processor}", file=file)
-    print( "```", file=file)
+    l.append("```")
+    l.append(f"System: {uname.system}")
+    l.append(f"Version: {uname.version}")
+    l.append(f"Machine: {uname.machine}")
+    l.append(f"Processor: {uname.processor}")
+    l.append("```")
+    return "\n".join(l)
 
 
 def gzip_file(f):
@@ -193,12 +195,14 @@ if __name__ == "__main__":
     use_plots = sys.argv[3] == "True"
 
     action = sys.argv[2]
+    
+    
+    BENCHMARK_MD_FILEPATH = "work_dir/BENCHMARK.new.md"
 
-    with open("work_dir/README.md", "w") as readme:
-        readme.write("")  # clear file
-#        sys.stdout = readme
+    with open(BENCHMARK_MD_FILEPATH, "w") as readme:
         def rprint(*args, **kwargs):
             print(*args, file=readme, **kwargs)
+        rprint("") # Clear file
 
         params = " -l 0.1 -b 25 --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all "
         interactions = " --interactions AB --keep A --keep B --keep C --keep D --keep E --keep F --keep G --keep H --keep I --keep J --keep K --keep L"
@@ -219,7 +223,8 @@ if __name__ == "__main__":
         if action in ["generate", "all"]:
             eprint(f"Generating test data, training examples: {train_examples}, test examples: {test_examples}")
             generate.generate(Path("work_dir"), train_examples, test_examples, feature_variety)
-            gzip_file("work_dir/train.vw")
+            # Currently we don't benchmark over gzip files as it's just one more layer of complication
+            #gzip_file("work_dir/train.vw")
 
         times = 3
         actions = []
@@ -237,8 +242,8 @@ if __name__ == "__main__":
 
         if action in ["train", "predict", "train+predict", "all"]:
             rprint("""## Scenarios
-            1. train a new model from a gzipped dataset, generating a gzipped cache file for future runs, and an output model file - *this is a typical scenario in our AutoML system - we start by generating the cache file for the next runs.*
-            1. train a new model over the dataset in the gzipped cache, and generate an output model - *this is also a typical scenario - we usually run many concurrent model evaluations as part of the model search*
+            1. train a new model from a dataset and an output model file - *typical scenario for one-off training on the dataset*
+            1. train a new model from a cached dataset, and generate an output model - *this is also a typical scenario - we usually run many concurrent model evaluations as part of the model search*
             1. use a generated model to make predictions over a dataset read from a text file, and print them to an output predictions file - *this is to illustrate potential serving performance, we don't usually predict from file input as our offline flows always apply online learning. note that when running as daemon we use half as much memory since gradients are not loaded - only model weights.*
             """)
 
@@ -449,10 +454,10 @@ if __name__ == "__main__":
         ## Latest run setup
         """)
 
-        print_system_info(readme)
+        rprint(get_system_info())
 
-        if os.path.isfile("work_dir/README.md"):
-            shutil.copyfile("work_dir/README.md", "../BENCHMARK.md")
+    if os.path.isfile(BENCHMARK_MD_FILEPATH):
+        shutil.copyfile(BENCHMARK_MD_FILEPATH, "../BENCHMARK.md")
 
-        if os.path.isfile("work_dir/benchmark_results.png"):
-            shutil.copyfile("work_dir/benchmark_results.png", "../benchmark_results.png")
+    if os.path.isfile("work_dir/benchmark_results.png"):
+        shutil.copyfile("work_dir/benchmark_results.png", "../benchmark_results.png")
