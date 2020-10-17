@@ -320,7 +320,7 @@ if __name__ == "__main__":
                 fw_cpu_values.append(fw_predict_no_cache_benchmark_means[2])
 
 
-        rprint("""
+        rprint(f"""
 ## Model
 We train a logistic regression model, applying online learning one example at a time (no batches), 
 using '--adaptive' flag for adaptive learning rates (AdaGrad variant).
@@ -345,11 +345,11 @@ loss values for the test set:
         if action in ["predict", "train+predict", "all"]:
             rprint("```")
             if benchmark_vw:
-                rprint(f"Vowpal Wabbit predictions loss: {vw_model_loss:.4f}\n")
+                rprint(f"Vowpal Wabbit predictions loss: {vw_model_loss:.4f}")
                 print(f"Vowpal Wabbit predictions loss: {vw_model_loss:.4f}")
 
             if benchmark_fw:
-                rprint(f"Fwumious Wabbit predictions loss: {fw_model_loss:.4f}\n")
+                rprint(f"Fwumious Wabbit predictions loss: {fw_model_loss:.4f}")
                 print(f"Fwumious Wabbit predictions loss: {fw_model_loss:.4f}")
 
             rprint("```")
@@ -376,9 +376,9 @@ there are {feature_variety:,} animal types, and {feature_variety:,} food types.
                 rprint("""see for example the first 5 lines from the train dataset (after some pretty-printing):\n
 label|animal|food
 ----:|------|----
-                """)
+""")
                 for _ in range(5):
-                    rprint(next(dataset))
+                    rprint(next(dataset).strip("\n"))
                 rprint("\n")
 
         if action in ["train", "predict", "train+predict", "all"]:
