@@ -35,32 +35,36 @@ def cleanup():
 def vw_clean_cache():
     rm_quietly("work_dir/train.vw.gz.cache")
     rm_quietly("work_dir/easy.vw.gz.cache")
+    rm_quietly("work_dir/train.vw.cache")
+    rm_quietly("work_dir/easy.vw.cache")
 
 
 def fw_clean_cache():
     rm_quietly("work_dir/train.vw.gz.fwcache")
     rm_quietly("work_dir/easy.vw.gz.fwcache")
+    rm_quietly("work_dir/train.vw.fwcache")
+    rm_quietly("work_dir/easy.vw.fwcache")
 
 
-def print_system_info():
-    print("### CPU Info")
-    print("```")
+def print_system_info(file = sys.stdout):
+    print("### CPU Info", file=file)
+    print( "```", file=file)
     # number of cores
-    print("Physical cores:", psutil.cpu_count(logical=False))
-    print("Total cores:", psutil.cpu_count(logical=True))
+    print( "Physical cores:", psutil.cpu_count(logical=False), file=file)
+    print( "Total cores:", psutil.cpu_count(logical=True), file=file)
     # CPU frequencies
     cpufreq = psutil.cpu_freq()
-    print(f"Current Frequency: {cpufreq.current:.2f}Mhz")
-    print("```")
+    print( f"Current Frequency: {cpufreq.current:.2f}Mhz", file=file)
+    print( "```", file=file)
 
-    print("### System Information")
+    print( "### System Information", file=file)
     uname = platform.uname()
-    print("```")
-    print(f"System: {uname.system}")
-    print(f"Version: {uname.version}")
-    print(f"Machine: {uname.machine}")
-    print(f"Processor: {uname.processor}")
-    print("```")
+    print( "```", file=file)
+    print( f"System: {uname.system}", file=file)
+    print( f"Version: {uname.version}", file=file)
+    print( f"Machine: {uname.machine}", file=file)
+    print( f"Processor: {uname.processor}", file=file)
+    print( "```", file=file)
 
 
 def gzip_file(f):
@@ -196,8 +200,8 @@ if __name__ == "__main__":
         def rprint(*args, **kwargs):
             print(*args, file=readme, **kwargs)
 
-        params = " -l 0.1 -b 26 --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all "
-        interactions = " --interactions AB --keep A --keep B --keep C --keep D --keep E --keep F "
+        params = " -l 0.1 -b 25 --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all "
+        interactions = " --interactions AB --keep A --keep B --keep C --keep D --keep E --keep F --keep G --keep H --keep I --keep J --keep K --keep L"
 
         vw_train_cmd = VW + " --data work_dir/train.vw -p work_dir/vw_train_preds.out --final_regressor work_dir/vw_model --save_resume " + params + interactions
         fw_train_cmd = FW + " --data work_dir/train.vw -p work_dir/fw_train_preds.out --final_regressor work_dir/fw_model --save_resume " + params + interactions
@@ -232,7 +236,7 @@ if __name__ == "__main__":
         hard_results_table = ["Scenario|Runtime (seconds)|Memory (MB)|CPU %", "----|----:|----:|----:"]
 
         if action in ["train", "predict", "train+predict", "all"]:
-            rprint(readme, """"## Scenarios
+            rprint("""## Scenarios
             1. train a new model from a gzipped dataset, generating a gzipped cache file for future runs, and an output model file - *this is a typical scenario in our AutoML system - we start by generating the cache file for the next runs.*
             1. train a new model over the dataset in the gzipped cache, and generate an output model - *this is also a typical scenario - we usually run many concurrent model evaluations as part of the model search*
             1. use a generated model to make predictions over a dataset read from a text file, and print them to an output predictions file - *this is to illustrate potential serving performance, we don't usually predict from file input as our offline flows always apply online learning. note that when running as daemon we use half as much memory since gradients are not loaded - only model weights.*
@@ -311,7 +315,7 @@ if __name__ == "__main__":
                 fw_cpu_values.append(fw_predict_no_cache_benchmark_means[2])
 
 
-        rprint(readme, """## Model
+        rprint("""## Model
         We train a logistic regression model, applying online learning one example at a time (no batches), 
         using '--adaptive' flag for adaptive learning rates (AdaGrad variant).
         ### Results
@@ -320,28 +324,31 @@ if __name__ == "__main__":
         if use_plots and action in ["all", "train", "predict", "train+predict"]:
             plot_file_name = "benchmark_results.png"
             plot_results(f"work_dir/{plot_file_name}", 'Vowpal Wabbit', "Fwumious Wabbit", actions, vw_time_values, fw_time_values, vw_mem_values, fw_mem_values, vw_cpu_values, fw_cpu_values)
-            rprint(readme, f"![benchmark results]({plot_file_name})")
+            rprint(f"![benchmark results]({plot_file_name})")
 
         if action in ["train", "predict", "train+predict", "all"]:
             for line in results_table:
+                rprint(line)
                 print(line)
-
-        rprint(readme, """
+        print("\n")
+        rprint("""
         ### Model equivalence
         loss values for the test set:""")
         if action in ["predict", "train+predict", "all"]:
-            print("```")
+            rprint("```")
             if benchmark_vw:
+                rprint(f"Vowpal Wabbit predictions loss: {vw_model_loss:.4f}")
                 print(f"Vowpal Wabbit predictions loss: {vw_model_loss:.4f}")
 
             if benchmark_fw:
+                rprint(f"Fwumious Wabbit predictions loss: {fw_model_loss:.4f}")
                 print(f"Fwumious Wabbit predictions loss: {fw_model_loss:.4f}")
 
-            print("```")
+            rprint("```")
 
-        print("\n")
+        rprint("\n")
 
-        print("for more details on what makes Fwumious Wabbit so fast, see [here](https://github.com/outbrain/fwumious_wabbit/blob/benchmark/SPEED.md)")
+        rprint("for more details on what makes Fwumious Wabbit so fast, see [here](https://github.com/outbrain/fwumious_wabbit/blob/benchmark/SPEED.md)")
 
         if action in ["generate", "all"]:
             rprint(f"""### Dataset details")
@@ -357,32 +364,35 @@ if __name__ == "__main__":
             """)
 
             with open("work_dir/train.vw", "r") as dataset:
-                print("see for example the first 5 lines from the train dataset (after some pretty-printing):")
-                print("label|animal|food")
-                print("----:|------|----")
+                rprint("""see for example the first 5 lines from the train dataset (after some pretty-printing):
+                label|animal|food
+                ----:|------|----
+                """)
                 for _ in range(5):
-                    print(next(dataset).strip("\n"))
-                print("\n")
+                    rprint(next(dataset).strip("\n"))
+                rprint("\n")
 
         if action in ["train", "predict", "train+predict", "all"]:
-            print("### Feature engineering")
-            print("if we train using separate 'animal type' and 'food type' features, the model won't learn well, ")
-            print("since knowing the animal identity alone isn't enough to predict if it will eat or not - and the same ")
-            print("goes for knowing the food type alone.\n")
-            print("so we apply an interaction between the animal type and food type fields.\n")
+            rprint("""### Feature engineering
+            if we train using separate 'animal type' and 'food type' features, the model won't learn well, 
+            since knowing the animal identity alone isn't enough to predict if it will eat or not - and the same 
+            goes for knowing the food type alone.
+            so we apply an interaction between the animal type and food type fields.
+            """)
 
         if action in ["ffm", "all"] and False:  # "soft" comment out until I move the output to a separate document
-            print("## Field aware factorization machines")
-            print("in this experiment we demonstrate how field aware factorization machines (FFMs) can better capture ")
-            print("feature interactions, resulting in better model accuracy.\n")
-            print("### Dataset")
-            print("In the train set we generated, the animals and foods are each divided to two groups - we'll mark them A1 and A2 for the animals,")
-            print("and F1 and F2 for the foods.\n")
-            print("the train set and the test set named 'easy.vw' (used in the previous section) are both drawn from the same distribution, ")
-            print("with records which belong to {(A1 U A2, F1)} U {(A1, F1 U F2}).\n")
-            print("the test set we use here, 'hard.vw', is different: it contains exclusively records from {(A2, F2)} - combinations unseen in the train set.\n")
-            print("In order for a model to make correct predictions on this dataset after training on the train dataset, ")
-            print("it must be able to generalize for unseen combinations.")
+            rprint("""## Field aware factorization machines
+            in this experiment we demonstrate how field aware factorization machines (FFMs) can better capture 
+            feature interactions, resulting in better model accuracy.\n
+            ### Dataset
+            In the train set we generated, the animals and foods are each divided to two groups - we'll mark them A1 and A2 for the animals,
+            and F1 and F2 for the foods.\n
+            the train set and the test set named 'easy.vw' (used in the previous section) are both drawn from the same distribution, 
+            with records which belong to {(A1 U A2, F1)} U {(A1, F1 U F2}).\n
+            the test set we use here, 'hard.vw', is different: it contains exclusively records from {(A2, F2)} - combinations unseen in the train set.\n
+            In order for a model to make correct predictions on this dataset after training on the train dataset, 
+            it must be able to generalize for unseen combinations.
+            """)
 
             fw_hard_ffm_time_values = []
             fw_hard_ffm_mem_values = []
@@ -408,7 +418,7 @@ if __name__ == "__main__":
             fw_hard_ffm_mem_values.append(fw_ffm_predict_no_cache_benchmark_means[1] / 1024.)
             fw_hard_ffm_cpu_values.append(fw_ffm_predict_no_cache_benchmark_means[2])
 
-            print("we skip the latency, memory and CPU comparison as for this synthetic dataset the difference is negligible.")
+            rprint("we skip the latency, memory and CPU comparison as for this synthetic dataset the difference is negligible.")
 
             # if use_plots:
             #     ffm_plot_file_name = "ffm_benchmark_results.png"
@@ -418,27 +428,28 @@ if __name__ == "__main__":
             fw_model_loss = calc_loss("work_dir/fw_hard_preds.out", "hard.vw")
             fw_ffm_model_loss = calc_loss("work_dir/fw_ffm_hard_preds.out", "hard.vw")
 
-            print("### Loss on the test set")
-            print("```")
-            print(f"Fwumious Wabbit Logistic Regression predictions loss: {fw_model_loss:.4f}")
-            print(f"Fwumious Wabbit FFM predictions loss: {fw_ffm_model_loss:.4f}")
-            print("```")
+            rprint("""### Loss on the test set")
+            ```
+            Fwumious Wabbit Logistic Regression predictions loss: {fw_model_loss:.4f}
+            Fwumious Wabbit FFM predictions loss: {fw_ffm_model_loss:.4f}
+            ```""")
 
-        print("## Prerequisites and running")
-        print("you should have Vowpal Wabbit installed, as the benchmark invokes it via the 'vw' command.")
-        print("additionally the rust compiler is required in order to build Fwumious Wabbit (the benchmark invokes '../target/release/fw') ")
-        print("in order to build and run the benchmark use one of these bash scripts:")
-        print("```")
-        print("./run_with_plots.sh")
-        print("```")
-        print("in order to run the benchmark and plot the results (requires matplotlib, last used with version 2.1.2)")
-        print("\nor, if you just want the numbers with less dependencies run:")
-        print("```")
-        print("./run_without_plots.sh")
-        print("```\n")
-        print("## Latest run setup\n")
+        rprint("""## Prerequisites and running
+        you should have Vowpal Wabbit installed, as the benchmark invokes it via the 'vw' command.
+        additionally the rust compiler is required in order to build Fwumious Wabbit (the benchmark invokes '../target/release/fw') 
+        in order to build and run the benchmark use one of these bash scripts:
+        ```
+        ./run_with_plots.sh
+        ```
+        in order to run the benchmark and plot the results (requires matplotlib, last used with version 2.1.2)
+        \nor, if you just want the numbers with less dependencies run:
+        ```
+        ./run_without_plots.sh
+        ```\n
+        ## Latest run setup
+        """)
 
-        print_system_info()
+        print_system_info(readme)
 
         if os.path.isfile("work_dir/README.md"):
             shutil.copyfile("work_dir/README.md", "../BENCHMARK.md")

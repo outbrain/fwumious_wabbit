@@ -5,6 +5,8 @@ import psutil
 import platform
 from timeit import default_timer as timer
 
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
 
 def measure(cmd, proc_name):
     try:
@@ -15,10 +17,6 @@ def measure(cmd, proc_name):
         cpu = 0
         mem = 0
         time = 0
-
-        def on_process_termination():
-            nonlocal time
-            time = timer() - start
 
         while True:
             with psp.oneshot():
@@ -35,17 +33,20 @@ def measure(cmd, proc_name):
                     pass
             try:
                 psp.wait(timeout=0.1)
-                on_process_termination()
+                time = timer() - start
             except psutil.TimeoutExpired:        
                 continue
             else:
                 break
-            
+        return_code = cmdp.poll()
+
+#        eprint(f"\nERROR_CODE: {return_code}\n" + str(b"\n".join(cmdp.stdout.readlines())))        
     except CalledProcessError as e:
         output = e.output.decode()
         print(output)
         return None
 
+    
     return time, mem, cpu
 
 
