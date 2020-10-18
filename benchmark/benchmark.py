@@ -14,6 +14,7 @@ debug = False
 VW = "vw" 
 FW = "../target/release/fw"
 
+
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
@@ -155,17 +156,19 @@ def plot_results(filename, left_label, right_label, actions, vw_time_values, fw_
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
-        print("syntax: benchmark fw|vw|all cleanup|generate|train|predict|train+predict|all True|False")
-        print("first argument: evaluate fwumious wabbit, vowpal wabbit or both")
-        print("second argument - step to run:")
-        print("   cleanup - delete intermediate files")
-        print("   generate - generate synthetic dataset")
-        print("   train - train a model with and without cache")
-        print("   predict - use the trained model from the train step to make predictions")
-        print("   train+predict - run both steps")
-        print("   ffm - compare fwumious wabbit field aware factorization machine vs. fwumious wabbit logistic regression")
-        print("   all - run all steps")
-        print("\nthird argument - plot results using matplotlib (True|False)")
+        print("""syntax: benchmark fw|vw|all cleanup|generate|train|predict|train+predict|all True|False
+    first argument: evaluate fwumious wabbit, vowpal wabbit or both
+    second argument - step to run:
+        cleanup - delete intermediate files
+        generate - generate synthetic dataset
+        train - train a model with and without cache
+        predict - use the trained model from the train step to make predictions
+        train+predict - run both steps
+        all - run all steps
+    third argument - plot results using matplotlib (True|False)
+    """)
+#        ffm - compare fwumious wabbit field aware factorization machine vs. fwumious wabbit logistic regression
+
 
         exit()
 
@@ -195,8 +198,7 @@ if __name__ == "__main__":
     use_plots = sys.argv[3] == "True"
 
     action = sys.argv[2]
-    
-    
+
     BENCHMARK_MD_FILEPATH = "work_dir/BENCHMARK.new.md"
 
     with open(BENCHMARK_MD_FILEPATH, "w") as readme:
@@ -204,14 +206,14 @@ if __name__ == "__main__":
             print(*args, file=readme, **kwargs)
         rprint("") # Clear file
 
-        params = " -l 0.1 -b 25 --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all "
-        interactions = " --interactions AB --keep A --keep B --keep C --keep D --keep E --keep F --keep G --keep H --keep I --keep J --keep K --keep L"
+        params = "-l 0.1 -b 25 --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all"
+        interactions = "--interactions AB --keep A --keep B --keep C --keep D --keep E --keep F --keep G --keep H --keep I --keep J --keep K --keep L"
 
-        vw_train_cmd = VW + " --data work_dir/train.vw -p work_dir/vw_train_preds.out --final_regressor work_dir/vw_model --save_resume " + params + interactions
-        fw_train_cmd = FW + " --data work_dir/train.vw -p work_dir/fw_train_preds.out --final_regressor work_dir/fw_model --save_resume " + params + interactions
+        vw_train_cmd = f"{VW} --data work_dir/train.vw -p work_dir/vw_train_preds.out --final_regressor work_dir/vw_model --save_resume {params} {interactions}"
+        fw_train_cmd = f"{FW} --data work_dir/train.vw -p work_dir/fw_train_preds.out --final_regressor work_dir/fw_model --save_resume {params} {interactions}"
 
-        vw_predict_cmd = VW + " -t --data work_dir/easy.vw -p work_dir/vw_easy_preds.out --initial_regressor work_dir/vw_model " + params + interactions
-        fw_predict_cmd = FW + " -t --data work_dir/easy.vw -p work_dir/fw_easy_preds.out --initial_regressor work_dir/fw_model " + params + interactions
+        vw_predict_cmd = f"{VW} -t --data work_dir/easy.vw -p work_dir/vw_easy_preds.out --initial_regressor work_dir/vw_model {params} {interactions}"
+        fw_predict_cmd = f"{FW} -t --data work_dir/easy.vw -p work_dir/fw_easy_preds.out --initial_regressor work_dir/fw_model {params} {interactions}"
 
         if action in ["cleanup", "generate", "all"]:
             cleanup()
@@ -219,10 +221,11 @@ if __name__ == "__main__":
         train_examples = 10000000
         test_examples = 10000000
         feature_variety = 1000
+        num_random_features = 10
 
         if action in ["generate", "all"]:
             eprint(f"Generating test data, training examples: {train_examples}, test examples: {test_examples}")
-            generate.generate(Path("work_dir"), train_examples, test_examples, feature_variety)
+            generate.generate(Path("work_dir"), train_examples, test_examples, feature_variety, num_random_features)
             # Currently we don't benchmark over gzip files as it's just one more layer of complication
             #gzip_file("work_dir/train.vw")
 
@@ -248,7 +251,7 @@ if __name__ == "__main__":
 """)
 
         if action in ["train", "train+predict", "all"]:
-            actions.append("train + \nbuild cache")
+            actions.append("train,\nno cache")
             actions.append("train\nfrom cache")
 
             results_table = ["Scenario|Runtime (seconds)|Memory (MB)|CPU %", "----|----:|----:|----:"]
@@ -369,16 +372,30 @@ and food is either plant based or meat based.\n
 herbivores always eat plants (and only plants), and carnivores always eat meat (and only meat).\n
 we name animals conveniently using the pattern 'diet-id', for example 'Herbivore-1234' and 'Carnivore-5678'
 and the food similarly as 'food_type-id' - for example 'Plant-678' and 'Meat-234' so the expected label for a record is always obvious.
-there are {feature_variety:,} animal types, and {feature_variety:,} food types.
+there are {feature_variety:,} animal types, and {feature_variety:,} food types. we generate additional {num_random_features} random features,
+to make the dataset dimensions a bit more realistic.
 """)
 
             with open("work_dir/train.vw", "r") as dataset:
-                rprint("""see for example the first 5 lines from the train dataset (after some pretty-printing):\n
-label|animal|food
-----:|------|----
-""")
+                random_features_titles = ""
+                random_features_header = ""
+                for i in range(min(num_random_features, 6)):
+                    random_features_titles = f"{random_features_titles}|feat_{i+2}"
+                    random_features_header = f"{random_features_header}|----"
+
+                header_suffix = ""
+                if num_random_features > 6:
+                    random_features_titles = f"{random_features_titles}|..."
+                    random_features_header = f"{random_features_header}|----"
+                    header_suffix = "|..."
+
+                rprint(f"""see for example the first 5 lines from the train dataset (after some pretty-printing):
+
+label|animal|food{random_features_titles}
+----:|------|----{random_features_header}""")
                 for _ in range(5):
-                    rprint(next(dataset).strip("\n"))
+                    rprint("|".join(next(dataset).strip("\n").split("|")[0:9]) + header_suffix)
+
                 rprint("\n")
 
         if action in ["train", "predict", "train+predict", "all"]:
@@ -408,7 +425,7 @@ it must be able to generalize for unseen combinations.
             fw_hard_ffm_mem_values = []
             fw_hard_ffm_cpu_values = []
 
-            ffm_actions = ["train\nfrom cache", "predict,\nno cache"]
+            ffm_actions = ["train,\nno cache", "predict,\nno cache"]
 
             fw_ffm_train_with_cache_benchmark_means, fw_ffm_train_with_cache_benchmark_stds = benchmark_cmd(fw_train_cmd, "fw", times)
             hard_results_table.append(format_metrics_row("fw FFM train, using cache", fw_ffm_train_with_cache_benchmark_means, fw_train_with_cache_benchmark_stds))
