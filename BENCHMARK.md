@@ -14,18 +14,18 @@ here are the results for 3 runs for each scenario, taking mean values:
 ![benchmark results](benchmark_results.png)
 Scenario|Runtime (seconds)|Memory (MB)|CPU %
 ----|----:|----:|----:
-vw train, no cache|55.21 | 558 | 186.27
-fw train, no cache|10.58 | 258 | 101.57
-vw train, using cache|58.04 | 562 | 178.77
-fw train, using cache|7.90 | 258 | 100.73
-vw predict, no cache|0.01 | 1 | 0.00
-fw predict, no cache|7.63 | 258 | 101.90
+vw train, no cache|70.87 | 618 | 160.27
+fw train, no cache|10.35 | 257 | 99.93
+vw train, using cache|72.21 | 618 | 153.70
+fw train, using cache|6.16 | 258 | 99.73
+vw predict, no cache|64.39 | 138 | 162.23
+fw predict, no cache|9.32 | 258 | 99.90
 
 ### Model equivalence
 loss values for the test set:
 
 ```
-Vowpal Wabbit predictions loss: 0.7167
+Vowpal Wabbit predictions loss: 0.6370
 Fwumious Wabbit predictions loss: 0.6370
 ```
 
@@ -77,17 +77,22 @@ or, if you just want the numbers with less dependencies run:
 ./run_without_plots.sh
 ```
 ## Latest run setup
+'''
+benchmarked version:
+vowpal wabbit 8.8.1 (git commit: 5ff219e)
+fwumious wabbit 1.0 (git commit: 2da506a)
+'''
 
 ### CPU Info
 ```
-Physical cores: 28
-Total cores: 56
-Current Frequency: 1047.28Mhz
+Physical cores: 4
+Total cores: 8
+Current Frequency: 2900.00Mhz
 ```
 ### System Information
 ```
-System: Linux
-Version: #102-Ubuntu SMP Mon May 11 10:07:26 UTC 2020
+System: Darwin
+Version: Darwin Kernel Version 19.6.0: Mon Aug 31 22:12:52 PDT 2020; root:xnu-6153.141.2~1/RELEASE_X86_64
 Machine: x86_64
-Processor: x86_64
+Processor: i386
 ```
