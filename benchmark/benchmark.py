@@ -1,5 +1,6 @@
 import math
 import os.path
+import subprocess
 import sys
 import psutil
 import platform
@@ -462,7 +463,11 @@ Fwumious Wabbit FFM predictions loss: {fw_ffm_model_loss:.4f}
 ```
 """)
 
-        rprint("""## Prerequisites and running
+        vowpal_wabbit_version = subprocess.check_output(f"{VW} --version", shell=True).decode('utf-8').strip("\n")
+        fwumious_wabbit_version = subprocess.check_output(f"{FW} --version", shell=True).decode('utf-8').strip("\n")
+        fwumious_wabbit_revision = subprocess.check_output("git log | head -n 1", shell=True).decode('utf-8').split(" ")[1][0:7]
+
+        rprint(f"""## Prerequisites and running
 you should have Vowpal Wabbit installed, as the benchmark invokes it via the 'vw' command.
 additionally the rust compiler is required in order to build Fwumious Wabbit (the benchmark invokes '../target/release/fw') 
 in order to build and run the benchmark use one of these bash scripts:
@@ -475,6 +480,11 @@ or, if you just want the numbers with less dependencies run:
 ./run_without_plots.sh
 ```
 ## Latest run setup
+'''
+benchmarked version:
+vowpal wabbit {vowpal_wabbit_version}
+{fwumious_wabbit_version} (git commit: {fwumious_wabbit_revision})
+'''
 """)
 
         rprint(get_system_info())
