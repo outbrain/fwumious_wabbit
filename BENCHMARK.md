@@ -14,26 +14,26 @@ here are the results for 3 runs for each scenario, taking mean values:
 ![benchmark results](benchmark_results.png)
 Scenario|Runtime (seconds)|Memory (MB)|CPU %
 ----|----:|----:|----:
-vw train, no cache|6.14 | 538 | 165.20
-fw train, no cache|1.16 | 258 | 98.03
-vw train, using cache|6.11 | 537 | 159.50
-fw train, using cache|1.03 | 258 | 90.50
-vw predict, no cache|4.45 | 139 | 170.53
-fw predict, no cache|0.88 | 258 | 97.33
+vw train, no cache|49.61 | 555 | 167.17
+fw train, no cache|7.33 | 257 | 102.70
+vw train, using cache|49.06 | 556 | 160.30
+fw train, using cache|5.08 | 258 | 101.33
+vw predict, no cache|42.60 | 139 | 172.70
+fw predict, no cache|6.79 | 257 | 100.80
 
 ### Model equivalence
 loss values for the test set:
 
 ```
-Vowpal Wabbit predictions loss: 0.7804
-Fwumious Wabbit predictions loss: 0.7804
+Vowpal Wabbit predictions loss: 0.6370
+Fwumious Wabbit predictions loss: 0.6370
 ```
 
 
 for more details on what makes Fwumious Wabbit so fast, see [here](https://github.com/outbrain/fwumious_wabbit/blob/benchmark/SPEED.md)
 
 ### Dataset details
-we generate a synthetic dataset with 1,000,000 train records ('train.vw'), and 1,000,000 test records ('easy.vw').
+we generate a synthetic dataset with 10,000,000 train records ('train.vw'), and 10,000,000 test records ('easy.vw').
 
 the task is 'Eat-Rate prediction' - each record describes the observed result of a single feeding experiment.
 each record is made of a type of animal, a type of food (in Vowpal Wabbit jargon these are our namespaces A and B respectively), and a label indicating whether the animal ate the food.
@@ -82,7 +82,7 @@ or, if you just want the numbers with less dependencies run:
 ```
 Physical cores: 4
 Total cores: 8
-Current Frequency: 4119.00Mhz
+Current Frequency: 4051.73Mhz
 ```
 ### System Information
 ```
