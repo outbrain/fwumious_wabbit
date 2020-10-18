@@ -14,18 +14,18 @@ here are the results for 3 runs for each scenario, taking mean values:
 ![benchmark results](benchmark_results.png)
 Scenario|Runtime (seconds)|Memory (MB)|CPU %
 ----|----:|----:|----:
-vw train, no cache|49.61 | 555 | 167.17
-fw train, no cache|7.33 | 257 | 102.70
-vw train, using cache|49.06 | 556 | 160.30
-fw train, using cache|5.08 | 258 | 101.33
-vw predict, no cache|42.60 | 139 | 172.70
-fw predict, no cache|6.79 | 257 | 100.80
+vw train, no cache|55.21 | 558 | 186.27
+fw train, no cache|10.58 | 258 | 101.57
+vw train, using cache|58.04 | 562 | 178.77
+fw train, using cache|7.90 | 258 | 100.73
+vw predict, no cache|0.01 | 1 | 0.00
+fw predict, no cache|7.63 | 258 | 101.90
 
 ### Model equivalence
 loss values for the test set:
 
 ```
-Vowpal Wabbit predictions loss: 0.6370
+Vowpal Wabbit predictions loss: 0.7167
 Fwumious Wabbit predictions loss: 0.6370
 ```
 
@@ -44,18 +44,18 @@ herbivores always eat plants (and only plants), and carnivores always eat meat (
 
 we name animals conveniently using the pattern 'diet-id', for example 'Herbivore-1234' and 'Carnivore-5678'
 and the food similarly as 'food_type-id' - for example 'Plant-678' and 'Meat-234' so the expected label for a record is always obvious.
-there are 1,000 animal types, and 1,000 food types.
+there are 1,000 animal types, and 1,000 food types. we generate additional 10 random features,
+to make the dataset dimensions a bit more realistic.
 
 see for example the first 5 lines from the train dataset (after some pretty-printing):
 
-label|animal|food
-----:|------|----
-
--1 |A Herbivore-65 |B Meat-120 |C C8117 |D D7364 |E E7737 |F F6219 |G G3439 |H H1537 |I I7993 |J J464 |K K6386 |L L7090
-1 |A Carnivore-272 |B Meat-184 |C C3748 |D D9685 |E E1674 |F F5200 |G G501 |H H365 |I I416 |J J8870 |K K150 |L L6245
-1 |A Carnivore-135 |B Meat-227 |C C7174 |D D8123 |E E9058 |F F3818 |G G5663 |H H3782 |I I3584 |J J7530 |K K4747 |L L352
--1 |A Herbivore-47 |B Meat-644 |C C4856 |D D1980 |E E5450 |F F8205 |G G6915 |H H8318 |I I3110 |J J4970 |K K4655 |L L9626
--1 |A Carnivore-603 |B Plant-218 |C C565 |D D7868 |E E3977 |F F6623 |G G6788 |H H2834 |I I6014 |J J8991 |K K6139 |L L1416
+label|animal|food|feat_2|feat_3|feat_4|feat_5|feat_6|feat_7|...
+----:|------|----|----|----|----|----|----|----|----
+-1 |A Herbivore-65 |B Meat-120 |C C8117 |D D7364 |E E7737 |F F6219 |G G3439 |H H1537 |...
+1 |A Carnivore-272 |B Meat-184 |C C3748 |D D9685 |E E1674 |F F5200 |G G501 |H H365 |...
+1 |A Carnivore-135 |B Meat-227 |C C7174 |D D8123 |E E9058 |F F3818 |G G5663 |H H3782 |...
+-1 |A Herbivore-47 |B Meat-644 |C C4856 |D D1980 |E E5450 |F F8205 |G G6915 |H H8318 |...
+-1 |A Carnivore-603 |B Plant-218 |C C565 |D D7868 |E E3977 |F F6623 |G G6788 |H H2834 |...
 
 
 ### Feature engineering
@@ -80,14 +80,14 @@ or, if you just want the numbers with less dependencies run:
 
 ### CPU Info
 ```
-Physical cores: 4
-Total cores: 8
-Current Frequency: 4051.73Mhz
+Physical cores: 28
+Total cores: 56
+Current Frequency: 1047.28Mhz
 ```
 ### System Information
 ```
 System: Linux
-Version: #52-Ubuntu SMP Thu Sep 10 10:58:49 UTC 2020
+Version: #102-Ubuntu SMP Mon May 11 10:07:26 UTC 2020
 Machine: x86_64
 Processor: x86_64
 ```
