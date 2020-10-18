@@ -100,6 +100,8 @@ impl VowpalParser {
             unsafe {
                 let p = self.tmp_read_buf.as_ptr();
                 let buf = self.output_buffer.as_mut_ptr();
+                let mut i_start:usize;
+                let mut i_end:usize = 0;
 
                 // first token is a label or "flush" command
                 match *p.add(0) {
@@ -115,18 +117,17 @@ impl VowpalParser {
                         }
                     }
                 };
-                let mut current_char_index:usize = HEADER_LEN;
-                let mut i_start:usize;
-                let mut i_end:usize = 0;
                 
+                let rowlen = rowlen1 - 1; // ignore last newline byte
                 if self.output_buffer[LABEL_OFFSET] != NO_LABEL {
                         // if we have a label, let's check if we also have label weight
-                        while *p.add(i_end) != 0x20 { i_end += 1;}; // find space
+                        while *p.add(i_end) != 0x20 && i_end < rowlen {i_end += 1;}; // find space
+                        while *p.add(i_end) == 0x20 && i_end < rowlen {i_end += 1;}; // find first non-space
                         //if next character is not "|", we assume it's a example importance
-                        i_end +=1;
+                        //i_end +=1;
                         if *p.add(i_end) != 0x7c { // this token does not start with "|", so it has to be example improtance floating point
                                 i_start = i_end;
-                                while *p.add(i_end) != 0x20 { i_end += 1;}; // find end of token (space)
+                                while *p.add(i_end) != 0x20 && i_end < rowlen {i_end += 1;}; // find end of token (space)
                                 let importance = self.parse_float_or_error(i_start, i_end, "Failed parsing example importance")?;
                                 if importance < 0.0  {
                                     return Err(Box::new(IOError::new(ErrorKind::Other, format!("Example importance cannot be negative: {:?}! ", importance))));
@@ -139,22 +140,22 @@ impl VowpalParser {
                         self.output_buffer[EXAMPLE_IMPORTANCE_OFFSET] = FLOAT32_ONE;
                 }                
                 // Then we look for first namespace
-                while *p.add(i_end) != 0x7c { i_end += 1;};
-                i_start = i_end;
-                let rowlen = rowlen1 - 1; // ignore last newline byte
+                while *p.add(i_end) != 0x7c && i_end < rowlen { i_end += 1;};
                 
                 let mut current_char:usize = 0;
+                let mut current_char_index:usize = HEADER_LEN;
                 let mut bufpos_namespace_start = 0;
                 let mut current_namespace_weight:f32 = 1.0;
+//                print!("AAAAAAAA\n");
                 while i_end < rowlen {
                     // <letter>[:<weight>]
-                    while i_end < rowlen && *p.add(i_end) != 0x20 && *p.add(i_end) != 0x3a  {
-                        i_end += 1;
-                    }
+                    
+                    // First skip spaces
+                    while *p.add(i_end) == 0x20 && i_end < rowlen {i_end += 1;}
+                    i_start = i_end;
+                    while *p.add(i_end) != 0x20 && *p.add(i_end) != 0x3a && i_end < rowlen {i_end += 1;}
                     let i_end_first_part = i_end;
-                    while i_end < rowlen && *p.add(i_end) != 0x20 {
-                         i_end += 1;
-                    }
+                    while *p.add(i_end) != 0x20 && i_end < rowlen {i_end += 1; }
                     
                     //println!("item out {:?}", std::str::from_utf8(&rr.tmp_read_buf[i_start..i_end]));
                     if *p.add(i_start) == 0x7c { // "|"
@@ -169,6 +170,7 @@ impl VowpalParser {
                         } else {
                             current_namespace_weight = 1.0;
                         }
+                     //   print!("Only single letter namespaces are allowed, however namespace string is: {:?}\n", String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end_first_part]));
                         current_char = *p.add(i_start) as usize;
                         current_char_index = self.vw_map.lookup_char_to_index[current_char] * NAMESPACE_DESC_LEN + HEADER_LEN;
                         current_char_num_of_features = 0;
@@ -176,6 +178,7 @@ impl VowpalParser {
                     } else { 
                         // We have a feature! Let's hash it and write it to the buffer
                         // println!("item out {:?}", std::str::from_utf8(&rr.tmp_read_buf[i_start..i_end]));
+                     //   print!("F {:?}\n", String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end_first_part]));
                         let h = murmur3::hash32_with_seed(&self.tmp_read_buf[i_start..i_end_first_part], 
                                                           *self.namespace_hash_seeds.get_unchecked(current_char)) & MASK31;  
 
@@ -204,7 +207,7 @@ impl VowpalParser {
                         current_char_num_of_features += 1;
                     }
                     i_end += 1;
-                    i_start = i_end;
+                    
                 }
             }
             
@@ -250,6 +253,33 @@ C,featureC
                                                         2988156968 & MASK31, 
                                                         NULL, 
                                                         NULL]);
+ 
+        // we test a single record, single namespace, space at the end
+        let mut buf = str_to_cursor("1 |A a \n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6,  1, FLOAT32_ONE,  
+                                                        2988156968 & MASK31, 
+                                                        NULL, 
+                                                        NULL]);
+                                                        
+
+        // we test a single record, single namespace, space after label
+        let mut buf = str_to_cursor("1  |A a\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6,  1, FLOAT32_ONE,  
+                                                        2988156968 & MASK31, 
+                                                        NULL, 
+                                                        NULL]);
+                                                        
+        // we test a single record, single namespace, space between namespace and label
+        let mut buf = str_to_cursor("1 |A  a\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6,  1, FLOAT32_ONE,  
+                                                        2988156968 & MASK31, 
+                                                        NULL, 
+                                                        NULL]);
+                                                        
+                                                        
+                                                        
+                                                         
+                                                        
         let mut buf = str_to_cursor("-1 |B b\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 0, FLOAT32_ONE,
                                                         NULL, 
@@ -265,6 +295,13 @@ C,featureC
                                                         3529656005 & MASK31, FLOAT32_ONE]); // |A b
         // two namespaces
         let mut buf = str_to_cursor("-1 |A a |B b\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 0, FLOAT32_ONE,
+                                                        2988156968 & MASK31, 
+                                                        2422381320 & MASK31, 
+                                                        NULL]);
+
+        // two namespaces, double space
+        let mut buf = str_to_cursor("-1 |A a  |B b\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 0, FLOAT32_ONE,
                                                         2988156968 & MASK31, 
                                                         2422381320 & MASK31, 
@@ -358,6 +395,14 @@ C,featureC
                                                         2988156968 & MASK31, 
                                                         NULL, 
                                                         NULL]);
+
+        /* Should we support this ? 
+        let mut buf = str_to_cursor(" |A a\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, NO_LABEL, FLOAT32_ONE,
+                                                        2988156968 & MASK31, 
+                                                        NULL, 
+                                                        NULL]);
+        */
                 
         //println!("{:?}", rr.output_buffer);
         // now we test if end-of-stream works correctly
@@ -388,6 +433,13 @@ C,featureC
         
         // Example importance
         let mut buf = str_to_cursor("1 0.1 |A a\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 1, 0.1f32.to_bits(),
+                                                        2988156968 & MASK31, 
+                                                        NULL, 
+                                                        NULL]);
+
+        // Example importance with bunch of spaces
+        let mut buf = str_to_cursor("1  0.1  |A  a \n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 1, 0.1f32.to_bits(),
                                                         2988156968 & MASK31, 
                                                         NULL, 
