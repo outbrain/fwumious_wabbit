@@ -77,11 +77,11 @@ or, if you just want the numbers with less dependencies run:
 ./run_without_plots.sh
 ```
 ## Latest run setup
-'''
-benchmarked version:
+```
+benchmarked versions:
 vowpal wabbit 8.8.1 (git commit: 5ff219e)
 fwumious wabbit 1.0 (git commit: 2da506a)
-'''
+```
 
 ### CPU Info
 ```
