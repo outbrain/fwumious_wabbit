@@ -480,11 +480,11 @@ or, if you just want the numbers with less dependencies run:
 ./run_without_plots.sh
 ```
 ## Latest run setup
-'''
-benchmarked version:
+```
+benchmarked versions:
 vowpal wabbit {vowpal_wabbit_version}
 {fwumious_wabbit_version} (git commit: {fwumious_wabbit_revision})
-'''
+```
 """)
 
         rprint(get_system_info())
