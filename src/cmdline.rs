@@ -1,10 +1,11 @@
 use clap::{App, Arg,  AppSettings};
+use crate::version;
 
 pub fn parse<'a>() -> clap::ArgMatches<'a> {
     
     
   let matches = App::new("fwumious wabbit")
-                    .version("1.0")
+                    .version(version::LATEST)
                     .author("Andraz Tori <atori@outbrain.com>")
                     .about("Superfast Logistic Regression & Field Aware Factorization Machines")
                     .setting(AppSettings::DeriveDisplayOrder)
