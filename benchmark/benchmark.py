@@ -49,6 +49,8 @@ def fw_clean_cache():
 
 
 def get_system_info():
+    uname = platform.uname()
+
     l = []
     l.append("### CPU Info")
     l.append("```")
@@ -58,15 +60,15 @@ def get_system_info():
     # CPU frequencies
     cpufreq = psutil.cpu_freq()
     l.append(f"Current Frequency: {cpufreq.current:.2f}Mhz")
+    l.append(f"Machine: {uname.machine}")
+    l.append(f"Processor: {uname.processor}")
     l.append("```")
 
-    l.append("### System Information")
-    uname = platform.uname()
+    l.append("### Operating System")
     l.append("```")
     l.append(f"System: {uname.system}")
     l.append(f"Version: {uname.version}")
-    l.append(f"Machine: {uname.machine}")
-    l.append(f"Processor: {uname.processor}")
+
     l.append("```")
     return "\n".join(l)
 
