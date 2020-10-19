@@ -14,12 +14,12 @@ here are the results for 3 runs for each scenario, taking mean values:
 ![benchmark results](benchmark_results.png)
 Scenario|Runtime (seconds)|Memory (MB)|CPU %
 ----|----:|----:|----:
-vw train, no cache|70.87 | 618 | 160.27
-fw train, no cache|10.35 | 257 | 99.93
-vw train, using cache|72.21 | 618 | 153.70
-fw train, using cache|6.16 | 258 | 99.73
-vw predict, no cache|64.39 | 138 | 162.23
-fw predict, no cache|9.32 | 258 | 99.90
+vw train, no cache|70.33 | 618 | 160.83
+fw train, no cache|9.27 | 258 | 100.00
+vw train, using cache|69.58 | 618 | 155.13
+fw train, using cache|5.77 | 258 | 99.67
+vw predict, no cache|63.58 | 138 | 162.00
+fw predict, no cache|8.28 | 258 | 100.00
 
 ### Model equivalence
 loss values for the test set:
@@ -80,7 +80,7 @@ or, if you just want the numbers with less dependencies run:
 ```
 benchmarked versions:
 vowpal wabbit 8.8.1 (git commit: 5ff219e)
-fwumious wabbit 1.0 (git commit: 2da506a)
+fwumious wabbit 1.0 (git commit: 8bda30c)
 ```
 
 ### CPU Info
@@ -88,11 +88,11 @@ fwumious wabbit 1.0 (git commit: 2da506a)
 Physical cores: 4
 Total cores: 8
 Current Frequency: 2900.00Mhz
+Machine: x86_64
+Processor: i386
 ```
-### System Information
+### Operating System
 ```
 System: Darwin
 Version: Darwin Kernel Version 19.6.0: Mon Aug 31 22:12:52 PDT 2020; root:xnu-6153.141.2~1/RELEASE_X86_64
-Machine: x86_64
-Processor: i386
 ```
