@@ -55,9 +55,9 @@ def print_system_info():
     # number of cores
     # "Physical cores: %i" % psutil.cpu_count(logical=False)
     # "Total cores: %i" % psutil.cpu_count(logical=True)
+    uname = platform.uname()
 
     if sys_platform == "darwin":
-        uname = platform.uname()
         rprint(f"""```
 Current Frequency: {psutil.cpu_freq().current:.2f}Mhz
 Machine: {uname.machine}
