@@ -10,6 +10,7 @@ import shutil
 from measure import measure
 from calc_loss import calc_loss
 from pathlib import Path
+from sys import platform as sys_platform
 
 debug = False
 VW = "vw" 
@@ -48,29 +49,34 @@ def fw_clean_cache():
     rm_quietly("work_dir/easy.vw.fwcache")
 
 
-def get_system_info():
-    uname = platform.uname()
+def print_system_info():
+    rprint("### CPU Info")
 
-    l = []
-    l.append("### CPU Info")
-    l.append("```")
     # number of cores
-    l.append("Physical cores: %i" % psutil.cpu_count(logical=False))
-    l.append("Total cores: %i" % psutil.cpu_count(logical=True))
-    # CPU frequencies
-    cpufreq = psutil.cpu_freq()
-    l.append(f"Current Frequency: {cpufreq.current:.2f}Mhz")
-    l.append(f"Machine: {uname.machine}")
-    l.append(f"Processor: {uname.processor}")
-    l.append("```")
+    # "Physical cores: %i" % psutil.cpu_count(logical=False)
+    # "Total cores: %i" % psutil.cpu_count(logical=True)
 
-    l.append("### Operating System")
-    l.append("```")
-    l.append(f"System: {uname.system}")
-    l.append(f"Version: {uname.version}")
+    if sys_platform == "darwin":
+        uname = platform.uname()
+        rprint(f"""```
+Current Frequency: {psutil.cpu_freq().current:.2f}Mhz
+Machine: {uname.machine}
+Machine: {uname.machine}
+Processor: {uname.processor}'''
+""")
+    else:
+        cpu_info_cmd = "cat /proc/cpuinfo  | grep \"model name\" | awk -F\": \" '{print $2}' | head -n 1"
+        cpu_info = subprocess.check_output(cpu_info_cmd, shell=True).decode('utf-8').strip("\n")
 
-    l.append("```")
-    return "\n".join(l)
+        rprint(f"""'''
+        {cpu_info}'''
+""")
+
+    rprint(f"""### Operating System
+```
+System: {uname.system}
+Version: {uname.version}```
+""")
 
 
 def gzip_file(f):
@@ -157,6 +163,29 @@ def plot_results(filename, left_label, right_label, actions, vw_time_values, fw_
     plt.savefig(filename)
 
 
+def print_prerequisites_and_running():
+    rprint(f"""## Prerequisites and running
+you should have Vowpal Wabbit installed, as the benchmark invokes it via the 'vw' command.
+additionally the rust compiler is required in order to build Fwumious Wabbit (the benchmark invokes '../target/release/fw') 
+in order to build and run the benchmark use one of these bash scripts:
+```
+./run_with_plots.sh
+```
+in order to run the benchmark and plot the results (requires matplotlib, last used with version 2.1.2)
+or, if you just want the numbers with less dependencies run:
+```
+./run_without_plots.sh
+```
+## Latest run setup
+
+### versions:
+```
+vowpal wabbit {vowpal_wabbit_version}
+{fwumious_wabbit_version} (git commit: {fwumious_wabbit_revision})
+```
+""")
+
+
 if __name__ == "__main__":
     if len(sys.argv) != 4:
         print("""syntax: benchmark fw|vw|all cleanup|generate|train|predict|train+predict|all True|False
@@ -207,7 +236,7 @@ if __name__ == "__main__":
     with open(BENCHMARK_MD_FILEPATH, "w") as readme:
         def rprint(*args, **kwargs):
             print(*args, file=readme, **kwargs)
-        rprint("") # Clear file
+        rprint("")  # Clear file
 
         params = "-l 0.1 -b 25 --adaptive --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all"
         interactions = "--interactions AB --keep A --keep B --keep C --keep D --keep E --keep F --keep G --keep H --keep I --keep J --keep K --keep L"
@@ -458,38 +487,19 @@ it must be able to generalize for unseen combinations.
             fw_model_loss = calc_loss("work_dir/fw_hard_preds.out", "hard.vw")
             fw_ffm_model_loss = calc_loss("work_dir/fw_ffm_hard_preds.out", "hard.vw")
 
-            rprint("""### Loss on the test set")
+            rprint(f"""### Loss on the test set")
 ```
 Fwumious Wabbit Logistic Regression predictions loss: {fw_model_loss:.4f}
 Fwumious Wabbit FFM predictions loss: {fw_ffm_model_loss:.4f}
 ```
 """)
-
         vowpal_wabbit_version = subprocess.check_output(f"{VW} --version", shell=True).decode('utf-8').strip("\n")
         fwumious_wabbit_version = subprocess.check_output(f"{FW} --version", shell=True).decode('utf-8').strip("\n")
         fwumious_wabbit_revision = subprocess.check_output("git log | head -n 1", shell=True).decode('utf-8').split(" ")[1][0:7]
 
-        rprint(f"""## Prerequisites and running
-you should have Vowpal Wabbit installed, as the benchmark invokes it via the 'vw' command.
-additionally the rust compiler is required in order to build Fwumious Wabbit (the benchmark invokes '../target/release/fw') 
-in order to build and run the benchmark use one of these bash scripts:
-```
-./run_with_plots.sh
-```
-in order to run the benchmark and plot the results (requires matplotlib, last used with version 2.1.2)
-or, if you just want the numbers with less dependencies run:
-```
-./run_without_plots.sh
-```
-## Latest run setup
-```
-benchmarked versions:
-vowpal wabbit {vowpal_wabbit_version}
-{fwumious_wabbit_version} (git commit: {fwumious_wabbit_revision})
-```
-""")
+        print_prerequisites_and_running()
 
-        rprint(get_system_info())
+        print_system_info()
 
     if os.path.isfile(BENCHMARK_MD_FILEPATH):
         shutil.copyfile(BENCHMARK_MD_FILEPATH, "../BENCHMARK.md")
