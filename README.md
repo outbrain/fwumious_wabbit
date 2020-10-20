@@ -28,3 +28,4 @@ check out our [benchmark](BENCHMARK.md), here's a teaser:
 - it is written in Rust and it uses specialization tricks (via macros)
 - it cuts corners by preallocating buffers
 - a lot of profiling and optimizing the bottlenecks
+
