@@ -1,1 +1,1 @@
-pub static LATEST: &str = "${TAG}";
+pub static LATEST: &str = "0.2";
