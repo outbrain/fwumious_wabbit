@@ -14,12 +14,12 @@ here are the results for 3 runs for each scenario, taking mean values:
 ![benchmark results](benchmark_results.png)
 Scenario|Runtime (seconds)|Memory (MB)|CPU %
 ----|----:|----:|----:
-vw train, no cache|70.33 | 618 | 160.83
-fw train, no cache|9.27 | 258 | 100.00
-vw train, using cache|69.58 | 618 | 155.13
-fw train, using cache|5.77 | 258 | 99.67
-vw predict, no cache|63.58 | 138 | 162.00
-fw predict, no cache|8.28 | 258 | 100.00
+vw train, no cache|94.54 | 565 | 167.77
+fw train, no cache|13.50 | 258 | 102.70
+vw train, using cache|93.67 | 559 | 159.87
+fw train, using cache|11.94 | 258 | 101.20
+vw predict, no cache|80.27 | 141 | 172.23
+fw predict, no cache|11.31 | 258 | 102.10
 
 ### Model equivalence
 loss values for the test set:
@@ -66,7 +66,8 @@ so we apply an interaction between the animal type and food type fields.
             
 ## Prerequisites and running
 you should have Vowpal Wabbit installed, as the benchmark invokes it via the 'vw' command.
-additionally the rust compiler is required in order to build Fwumious Wabbit (the benchmark invokes '../target/release/fw') 
+
+additionally the rust toolchain (particularly cargo and rustc) is required in order to build Fwumious Wabbit (the benchmark invokes '../target/release/fw') 
 in order to build and run the benchmark use one of these bash scripts:
 ```
 ./run_with_plots.sh
@@ -77,22 +78,19 @@ or, if you just want the numbers with less dependencies run:
 ./run_without_plots.sh
 ```
 ## Latest run setup
+
+### versions:
 ```
-benchmarked versions:
-vowpal wabbit 8.8.1 (git commit: 5ff219e)
-fwumious wabbit 1.0 (git commit: 8bda30c)
+vowpal wabbit 8.8.1 (git commit: 9a4028bb4)
+fwumious wabbit 0.1 (git commit: af298dd)
 ```
 
 ### CPU Info
-```
-Physical cores: 4
-Total cores: 8
-Current Frequency: 2900.00Mhz
-Machine: x86_64
-Processor: i386
-```
+'''
+        Intel(R) Xeon(R) CPU E5-2630 v2 @ 2.60GHz'''
+
 ### Operating System
 ```
-System: Darwin
-Version: Darwin Kernel Version 19.6.0: Mon Aug 31 22:12:52 PDT 2020; root:xnu-6153.141.2~1/RELEASE_X86_64
-```
+System: Linux
+Version: #174~14.04.1-Ubuntu SMP Thu May 9 08:17:37 UTC 2019```
+
