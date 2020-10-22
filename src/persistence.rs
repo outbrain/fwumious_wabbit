@@ -256,12 +256,13 @@ B,featureB
         ffm_fixed_init(&mut re);
         let fbuf = &ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
+                                  HashAndValueAndSeq{hash:2, value: 1.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: 1}
                                   ], 2);
         p = re.learn(fbuf, true, 0);
-        assert_eq!(p, 0.880797); 
+        assert_eq!(p, 0.9933072); 
         p = re.learn(fbuf, false, 0);
-        let CONST_RESULT = 0.79534113;
+        let CONST_RESULT = 0.92014676;
         assert_eq!(p, CONST_RESULT);
 
         // Now we test conversion to fixed regressor 
