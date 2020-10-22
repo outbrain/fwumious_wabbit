@@ -62,14 +62,14 @@ def print_system_info():
 Current Frequency: {psutil.cpu_freq().current:.2f}Mhz
 Machine: {uname.machine}
 Machine: {uname.machine}
-Processor: {uname.processor}'''
+Processor: {uname.processor}```
 """)
     else:
         cpu_info_cmd = "cat /proc/cpuinfo  | grep \"model name\" | awk -F\": \" '{print $2}' | head -n 1"
         cpu_info = subprocess.check_output(cpu_info_cmd, shell=True).decode('utf-8').strip("\n")
 
-        rprint(f"""'''
-        {cpu_info}'''
+        rprint(f"""```
+        {cpu_info}```
 """)
 
     rprint(f"""### Operating System
