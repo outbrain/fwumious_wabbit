@@ -47,7 +47,6 @@ pub struct Regressor<L:OptimizerTrait> {
     pub ffm_weights_len: u32, 
     pub ffm_weights_offset: u32, 
     ffm_k: u32,
-    ffm_hashmask: u32,
     ffm_one_over_k_root: f32,
     ffm_iw_weights_offset: u32,
     ffm_k_threshold: f32,
@@ -62,7 +61,6 @@ pub struct ImmutableRegressor {
     pub weights: Arc<Vec<Weight>>,
     ffm_weights_offset: u32, 
     ffm_k: u32,
-    ffm_hashmask: u32,
 }
 
 
@@ -114,8 +112,7 @@ where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
 L: std::clone::Clone
 {
     pub fn new_without_weights(mi: &model_instance::ModelInstance) -> Regressor<L> {
-        let hash_mask = (1 << mi.bit_precision) -1;
-        let lr_weights_len = hash_mask + 1;
+        let lr_weights_len = 1 << mi.bit_precision;
         let mut rg = Regressor::<L>{
                             //minimum_optimizer: mi.minimum_optimizer,
                             weights: Vec::new(),
@@ -123,7 +120,6 @@ L: std::clone::Clone
                             ffm_weights_offset: 0,
                             ffm_weights_len: 0,
                             ffm_k: 0, 
-                            ffm_hashmask: 0, 
                             ffm_one_over_k_root: 0.0, 
                             optimizer_lr: L::new(),
                             optimizer_ffm: L::new(),
@@ -142,13 +138,6 @@ L: std::clone::Clone
             rg.ffm_k = mi.ffm_k;
             // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
             rg.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * rg.ffm_k);
-            let mut ffm_bits_for_dimensions = 0;
-            while rg.ffm_k > (1 << (ffm_bits_for_dimensions)) {
-                ffm_bits_for_dimensions += 1;
-            }
-            let dimensions_mask = (1 << ffm_bits_for_dimensions) - 1;
-            // in ffm we will simply mask the lower bits, so we spare them for k
-            rg.ffm_hashmask = ((1 << mi.ffm_bit_precision) -1) ^ dimensions_mask;
         }
         // Now allocate weights
         let iw_weights_len = 0;
@@ -261,7 +250,7 @@ L: std::clone::Clone
                     let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
                     let mut ifc:usize = 0;
                     for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                        let base_weight_index = self.ffm_weights_offset + (left_hash.hash & self.ffm_hashmask);
+                        let base_weight_index = self.ffm_weights_offset + left_hash.hash;
                         for j in 0..fc as usize {
                             let v = local_data_ffm.get_unchecked_mut(ifc + j);
                             v.index = base_weight_index + j as u32;
@@ -433,7 +422,6 @@ L: std::clone::Clone
                         weights: Arc::new(out_weights), 
                         ffm_weights_offset: self.ffm_weights_offset,
                         ffm_k: self.ffm_k,
-                        ffm_hashmask: self.ffm_hashmask,
         };
         Ok(fr)
     }
@@ -449,7 +437,6 @@ L: std::clone::Clone
                         weights: Arc::new(weights), 
                         ffm_weights_offset: self.ffm_weights_offset,
                         ffm_k: self.ffm_k,
-                        ffm_hashmask: self.ffm_hashmask,
         };
         Ok(fr)
     }
@@ -471,17 +458,18 @@ impl ImmutableRegressor {
         }
 
         if self.ffm_k > 0 {
+            let ffm_weights = &self.weights[self.ffm_weights_offset as usize..];
             for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
                 for right_hash in fb.ffm_buffer.get_unchecked(i+1 ..).iter() {
                //     if left_hash.contra_field_index == right_hash.contra_field_index {
                //         continue	// not combining within a field
                //     }
                     let joint_value = left_hash.value * right_hash.value;
-                    let lindex = (self.ffm_weights_offset as u32 + ((left_hash.hash & self.ffm_hashmask) + right_hash.contra_field_index)) as u32;
-                    let rindex = (self.ffm_weights_offset as u32 + ((right_hash.hash & self.ffm_hashmask) + left_hash.contra_field_index)) as u32;
+                    let lindex = (left_hash.hash + right_hash.contra_field_index) as u32;
+                    let rindex = (right_hash.hash + left_hash.contra_field_index) as u32;
                     for k in 0..self.ffm_k {
-                        let left_hash_weight  = self.weights.get_unchecked((lindex+k) as usize).weight;
-                        let right_hash_weight = self.weights.get_unchecked((rindex+k) as usize).weight;
+                        let left_hash_weight  = ffm_weights.get_unchecked((lindex+k) as usize).weight;
+                        let right_hash_weight = ffm_weights.get_unchecked((rindex+k) as usize).weight;
                         let right_side = right_hash_weight * joint_value;
                         wsum += left_hash_weight * right_side;
                     }
