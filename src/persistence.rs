@@ -84,27 +84,33 @@ fn load_regressor_without_weights(input_bufreader: &mut io::BufReader::<File>)
 }
 
 
-pub fn new_regressor_from_filename(filename: &str) 
+pub fn new_regressor_from_filename(filename: &str, immutable: bool) 
                         -> Result<(model_instance::ModelInstance,
                                    vwmap::VwNamespaceMap,
                                    Box<dyn regressor::RegressorTrait>), 
                                   Box<dyn Error>> {
-    let mut input_bufreader = io::BufReader::new(fs::File::open(filename).unwrap());
-    let (mi, vw, mut re) = load_regressor_without_weights(&mut input_bufreader)?;
-    re.allocate_and_init_weights(&mi);
-    re.overwrite_weights_from_buf(&mut input_bufreader)?;
-    Ok((mi, vw, re))
+    if !immutable {
+        let mut input_bufreader = io::BufReader::new(fs::File::open(filename).unwrap());
+        let (mi, vw, mut re) = load_regressor_without_weights(&mut input_bufreader)?;
+        re.allocate_and_init_weights(&mi);
+        re.overwrite_weights_from_buf(&mut input_bufreader)?;
+        Ok((mi, vw, re))
+    } else {
+        let (mi, vw, immutable_re) =  new_immutable_regressor_from_filename(filename).unwrap();
+        let re = Box::new(immutable_re);
+        Ok((mi, vw, re))
+    }
 }
 
-pub fn new_fixed_regressor_from_filename(filename: &str) 
+pub fn new_immutable_regressor_from_filename(filename: &str) 
                         -> Result<(model_instance::ModelInstance,
                                    vwmap::VwNamespaceMap,
                                    regressor::ImmutableRegressor), 
                                   Box<dyn Error>> {
     let mut input_bufreader = io::BufReader::new(fs::File::open(filename).unwrap());
     let (mi, vw, mut re) = load_regressor_without_weights(&mut input_bufreader)?;
-    let fixed_re = re.immutable_regressor_from_buf(&mut input_bufreader)?;
-    Ok((mi, vw, fixed_re))
+    let immutable_re = re.immutable_regressor_from_buf(&mut input_bufreader)?;
+    Ok((mi, vw, immutable_re))
 }
 
 
@@ -203,11 +209,15 @@ B,featureB
             save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, re).unwrap();
 
             // a) load as regular regressor
-            let (_mi2, _vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
+            let (_mi2, _vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap(), false).unwrap();
             assert_eq!(re2.learn(fbuf, false, 0), CONST_RESULT);
 
-            // b) load as fixed regressor
-            let (_mi2, _vw2, re_fixed) = new_fixed_regressor_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
+            // a) load as regular regressor, immutable
+            let (_mi2, _vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap(), true).unwrap();
+            assert_eq!(re2.learn(fbuf, false, 0), CONST_RESULT);
+
+            // c) load as fixed regressor direclty
+            let (_mi2, _vw2, re_fixed) = new_immutable_regressor_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
             assert_eq!(re_fixed.predict(fbuf, 0), CONST_RESULT);
         }
 
@@ -278,11 +288,17 @@ B,featureB
             save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, Box::new(re)).unwrap();
 
             // a) load as regular regressor
-            let (_mi2, _vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
+            let (_mi2, _vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap(), false).unwrap();
+            assert_eq!(re2.get_name(), "Regressor with optimizer \"AdagradFlex\"");
             assert_eq!(re2.learn(fbuf, false, 0), CONST_RESULT);
 
-            // b) load as fixed regressor
-            let (_mi2, _vw2, re_fixed) = new_fixed_regressor_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
+            // b) load as regular regressor, immutable
+            let (_mi2, _vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap(), true).unwrap();
+            assert_eq!(re2.get_name(), "ImmutableRegressor");
+            assert_eq!(re2.learn(fbuf, false, 0), CONST_RESULT);
+
+            // c) load as fixed regressor
+            let (_mi2, _vw2, re_fixed) = new_immutable_regressor_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
             assert_eq!(re_fixed.predict(fbuf, 0), CONST_RESULT);
         }
 
