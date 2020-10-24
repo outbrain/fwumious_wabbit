@@ -77,6 +77,20 @@ macro_rules! specialize_k {
     };
 }
 
+macro_rules! specialize_1f32 {
+    ( $input_expr:expr, 
+      $output_const:ident,
+      $code_block:block  ) => {
+          if $input_expr == 1.0 {	
+              const $output_const:f32 = 1.0; 
+              $code_block
+          } else {
+              let $output_const:f32 = $input_expr; 
+              $code_block
+          }
+      };
+}
+
 pub trait RegressorTrait {
     fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32;
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>>;
@@ -276,17 +290,22 @@ L: std::clone::Clone
                             let joint_value = left_hash.value * right_hash.value;
                             let lindex = local_data_ffm.get_unchecked(left_local_index).index as usize;
                             let rindex = local_data_ffm.get_unchecked(right_local_index).index as usize;
-                            for k in 0..FFMK as usize {
-                                let llik = (left_local_index as usize + k) as usize;
-                                let rlik = (right_local_index as usize + k) as usize;
-                                let left_hash_weight  = weights.get_unchecked((lindex+k) as usize).weight;
-                                let right_hash_weight = weights.get_unchecked((rindex+k) as usize).weight;
-                                
-                                let right_side = right_hash_weight * joint_value;
-                                local_data_ffm.get_unchecked_mut(llik).value += right_side; // first derivate
-                                local_data_ffm.get_unchecked_mut(rlik).value += left_hash_weight  * joint_value; // first derivate
-                                wsum += left_hash_weight * right_side;
-                            }
+//                            _mm_prefetch(mem::transmute::<&f32, &i8>(&local_data_ffm.get_unchecked(left_local_index).value), _MM_HINT_T0);  // No benefit for now
+//                            _mm_prefetch(mem::transmute::<&f32, &i8>(&local_data_ffm.get_unchecked(right_local_index).value), _MM_HINT_T0);  // No benefit for now
+                            specialize_1f32!(joint_value, JOINT_VALUE, {
+                                for k in 0..FFMK as usize {
+                                    let llik = (left_local_index as usize + k) as usize;
+                                    let rlik = (right_local_index as usize + k) as usize;
+                                    let left_hash_weight  = weights.get_unchecked((lindex+k) as usize).weight;
+                                    let right_hash_weight = weights.get_unchecked((rindex+k) as usize).weight;
+                                    
+                                    let right_side = right_hash_weight * JOINT_VALUE;
+                                    local_data_ffm.get_unchecked_mut(llik).value += right_side; // first derivate
+                                    local_data_ffm.get_unchecked_mut(rlik).value += left_hash_weight  * JOINT_VALUE; // first derivate
+                                    wsum += left_hash_weight * right_side;
+                                }
+                            });
+                            
                         }
                         ifc += fc;
                         
