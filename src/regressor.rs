@@ -242,10 +242,11 @@ L: std::clone::Clone
             ($local_data_ffm:ident) => {
              
                 let mut local_data_ffm = $local_data_ffm;
-                let weights = &self.weights;
-
-
                 let mut wsum:f32 = 0.0;
+
+                {let weights = &self.weights;
+
+
                 for (i, hashvalue) in fb.lr_buffer.iter().enumerate() {
                     // Prefetch couple of indexes from the future to prevent pipeline stalls due to memory latencies
                     _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((fb.lr_buffer.get_unchecked(i+8).hash) as usize).weight), _MM_HINT_T0);  // No benefit for now
@@ -253,18 +254,19 @@ L: std::clone::Clone
                     let feature_value:f32 = hashvalue.value;
                     let feature_weight    = weights.get_unchecked(feature_index as usize).weight;
                     wsum += feature_weight * feature_value;
-                }
-                
+                }}
+                {
+                let ffm_weights = &self.weights[self.ffm_weights_offset as usize..];
                 if self.ffm_k > 0 {
                     let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
                     let mut ifc:usize = 0;
                     for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                        let base_weight_index = self.ffm_weights_offset + left_hash.hash;
+                        let base_weight_index = left_hash.hash;
                         for j in 0..fc as usize {
                             let v = local_data_ffm.get_unchecked_mut(ifc + j);
                             v.index = base_weight_index + j as u32;
                             v.value = 0.0;
-                            _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked(base_weight_index as usize + j).weight), _MM_HINT_T0);  // No benefit for now
+                            _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(base_weight_index as usize + j).weight), _MM_HINT_T0);  // No benefit for now
                        }
                        ifc += fc;
                     }
@@ -296,8 +298,8 @@ L: std::clone::Clone
                                 for k in 0..FFMK as usize {
                                     let llik = (left_local_index as usize + k) as usize;
                                     let rlik = (right_local_index as usize + k) as usize;
-                                    let left_hash_weight  = weights.get_unchecked((lindex+k) as usize).weight;
-                                    let right_hash_weight = weights.get_unchecked((rindex+k) as usize).weight;
+                                    let left_hash_weight  = ffm_weights.get_unchecked((lindex+k) as usize).weight;
+                                    let right_hash_weight = ffm_weights.get_unchecked((rindex+k) as usize).weight;
                                     
                                     let right_side = right_hash_weight * JOINT_VALUE;
                                     local_data_ffm.get_unchecked_mut(llik).value += right_side; // first derivate
@@ -313,6 +315,7 @@ L: std::clone::Clone
                 
                     });
                 }
+                }
                 // Trick: instead of multiply in the updates with learning rate, multiply the result
                 // vowpal compatibility
                 if wsum.is_nan() {
@@ -327,12 +330,14 @@ L: std::clone::Clone
                 prediction_probability = logistic(wsum);
 
                 // Weights are now writable, but local_data is read only
-                let weights = &mut self.weights;
-
+                
 
                 if update && fb.example_importance != 0.0 {
                     let general_gradient = (y - prediction_probability) * fb.example_importance;
         //            println!("General gradient: {}", general_gradient);
+
+                    {
+                    let weights = &mut self.weights;
 
                     for hashvalue in fb.lr_buffer.iter() {
         //A                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_lr.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now
@@ -345,14 +350,18 @@ L: std::clone::Clone
                         let update = self.optimizer_lr.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
                         weights.get_unchecked_mut(feature_index).weight += update;
                     }
+                    }
+                    {                let ffm_weights = &mut self.weights[self.ffm_weights_offset as usize..];
+
                     
                     for i in 0..local_data_ffm_len {
         //                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_ffm.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now
                         let feature_value = local_data_ffm.get_unchecked(i).value;
                         let feature_index = local_data_ffm.get_unchecked(i).index as usize;
                         let gradient = general_gradient * feature_value;
-                        let update = self.optimizer_ffm.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
-                        weights.get_unchecked_mut(feature_index).weight += update;
+                        let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
+                        ffm_weights.get_unchecked_mut(feature_index).weight += update;
+                    }
                     }
                 }
         
