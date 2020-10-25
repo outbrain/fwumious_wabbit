@@ -74,7 +74,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         let filename = cl.value_of("initial_regressor").expect("Daemon mode only supports serving from --initial regressor");
         println!("initial_regressor = {}", filename);
         println!("WARNING: Command line model parameters will be ignored");
-        let (mi2, vw2, re_fixed) = persistence::new_fixed_regressor_from_filename(filename)?;
+        let (mi2, vw2, re_fixed) = persistence::new_immutable_regressor_from_filename(filename)?;
         mi = mi2; vw = vw2;
         let mut se = serving::Serving::new(&cl, &vw, re_fixed, &mi)?;
         se.serve()?;
@@ -82,7 +82,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         if let Some(filename) = cl.value_of("initial_regressor") {
             println!("initial_regressor = {}", filename);
             println!("WARNING: Command line model parameters will be ignored");
-            let (mi2, vw2, re2) = persistence::new_regressor_from_filename(filename)?;
+            let (mi2, vw2, re2) = persistence::new_regressor_from_filename(filename, testonly)?;
             mi = mi2; vw = vw2; re = re2;
         } else {
             // We load vw_namespace_map.csv just so we know all the namespaces ahead of time

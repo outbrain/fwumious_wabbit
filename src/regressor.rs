@@ -83,10 +83,10 @@ pub trait RegressorTrait {
     fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32;
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>>;
     fn overwrite_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>; 
-    fn get_name(&self) -> &'static str;
+    fn get_name(&self) -> String;
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance);
     fn immutable_regressor_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<ImmutableRegressor, Box<dyn Error>>; 
-    fn immutable_regressor(&mut self) -> Result<ImmutableRegressor, Box<dyn Error>>; 
+    fn immutable_regressor(&mut self) -> Result<ImmutableRegressor, Box<dyn Error>>;
 }
 
 
@@ -220,8 +220,8 @@ where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
 L: std::clone::Clone
 {
 
-    fn get_name(&self) -> &'static str {
-        L::get_name()
+    fn get_name(&self) -> String {
+        format!("Regressor with optimizer {:?}", L::get_name())
     }
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
@@ -385,6 +385,7 @@ L: std::clone::Clone
         
         Ok(())
     }
+    
 
     fn overwrite_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
         let len = input_bufreader.read_u64::<LittleEndian>()?;
@@ -437,11 +438,13 @@ L: std::clone::Clone
         Ok(fr)
     }
 
+    // Create immutable regressor from current regressor
     fn immutable_regressor(&mut self) -> Result<ImmutableRegressor, Box<dyn Error>> {
         let mut weights = Vec::<Weight>::new();
         for w in &self.weights {
             weights.push(Weight{weight:w.weight});
         }
+
         let fr = ImmutableRegressor {
                         weights: Arc::new(weights), 
                         ffm_weights_offset: self.ffm_weights_offset,
@@ -505,7 +508,35 @@ impl ImmutableRegressor {
     }
 } 
 
+impl RegressorTrait for ImmutableRegressor {
+    fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32{
+        if update == true {
+            panic!("You cannot call immutable regressor with update=true");
+        }
+        return self.predict(fb, example_num)
+    }
 
+    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
+        panic!("Immutable regressor cannot be saved to a file, since optimizer weights get lost");
+    }
+
+    fn overwrite_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
+        panic!("Not implemented");
+    }
+    fn get_name(&self) -> String {
+        format!("ImmutableRegressor")
+    }
+    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
+        panic!("Not implemented!");
+    }
+    fn immutable_regressor_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<ImmutableRegressor, Box<dyn Error>> {
+        panic!("Not implemented!");
+    }
+    fn immutable_regressor(&mut self) -> Result<ImmutableRegressor, Box<dyn Error>> {
+        panic!("Not implemented!");
+    }
+
+}
 
 
 mod tests {
