@@ -30,8 +30,7 @@ pub struct ModelInstance {
     pub minimum_learning_rate: f32,
     pub power_t: f32,
     pub bit_precision: u8,
-    // This should have been called "lr_hash_mask"
-    pub hash_mask: u32,
+    pub hash_mask: u32,		// DEPRECATED, UNUSED -- this is recalculated in feature_buffer.rs
     pub add_constant_feature: bool,
     pub feature_combo_descs: Vec<FeatureComboDesc>,
     pub ffm_fields: Vec<Vec<usize>>,
@@ -40,7 +39,7 @@ pub struct ModelInstance {
     #[serde(default = "default_u32_zero")]
     pub ffm_bit_precision: u32,
     #[serde(default = "default_bool_false")]
-    pub ffm_separate_vectors: bool, // NOT USED
+    pub ffm_separate_vectors: bool, // DEPRECATED, UNUSED
     #[serde(default = "default_bool_false")]
     pub fastmath: bool,
 
@@ -110,7 +109,7 @@ impl ModelInstance {
             ffm_learning_rate: 0.5, // vw default
             minimum_learning_rate: 0.0, 
             bit_precision: 18,      // vw default
-            hash_mask: (1 << 18) -1,
+            hash_mask: 0, // DEPRECATED, UNUSED
             power_t: 0.5,
             ffm_power_t: 0.5,
             add_constant_feature: true,
@@ -118,7 +117,7 @@ impl ModelInstance {
             ffm_fields: Vec::new(),
             ffm_k: 0,
             ffm_bit_precision: 18,
-            ffm_separate_vectors: false,
+            ffm_separate_vectors: false, // DEPRECATED, UNUSED
             fastmath: true,
             ffm_k_threshold: 0.0,
             ffm_init_center: 0.0,
@@ -151,12 +150,18 @@ impl ModelInstance {
             // numeric precomputed hashes. This is even default option.
             // It is generally a bad idea except if you strings really are precomputed hashes... 
             if !cl.is_present("hash") {
-                   return Err(Box::new(IOError::new(ErrorKind::Other, format!("You have to use --hash all "))))
+                   return Err(Box::new(IOError::new(ErrorKind::Other, format!("--vwcompat requires use of --hash all"))))
             } else
+
             if let Some(val) = cl.value_of("hash") {
                 if val != "all" {
-                    return Err(Box::new(IOError::new(ErrorKind::Other, format!("Only --hash all supported"))))
+                    return Err(Box::new(IOError::new(ErrorKind::Other, format!("--vwcompat requires use of --hash all"))))
                 }            
+            }
+
+            // --sgd will turn off adaptive, invariant and normalization in vowpal. You can turn adaptive back on in vw and fw with --adaptive
+            if !cl.is_present("sgd") {
+                return Err(Box::new(IOError::new(ErrorKind::Other, format!("--vwcompat requires use of --sgd"))))
             }
             
         
@@ -240,7 +245,6 @@ impl ModelInstance {
         if let Some(val) = cl.value_of("bit_precision") {
             mi.bit_precision = val.parse()?;
             println!("Num weight bits = {}", mi.bit_precision); // vwcompat
-            mi.hash_mask = (1 << mi.bit_precision) -1;
         }
 
         if let Some(val) = cl.value_of("learning_rate") {
@@ -291,13 +295,11 @@ impl ModelInstance {
 
         // We currently only support SGD + adaptive, which means both options have to be specified
         if cl.is_present("sgd") {
-            //   return Err(Box::new(IOError::new(ErrorKind::Other, format!("You must use --sgd"))))
             mi.optimizer = Optimizer::SGD;
         }
 
         if cl.is_present("adaptive") {
             mi.optimizer = Optimizer::Adagrad;
-            //       return Err(Box::new(IOError::new(ErrorKind::Other, format!("You must use --adaptive"))))
         }
 
         

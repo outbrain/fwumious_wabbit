@@ -36,6 +36,8 @@ pub struct FeatureBufferTranslator {
     hashes_vec_in: Vec<HashAndValue>,
     hashes_vec_out: Vec<HashAndValue>,
     pub feature_buffer: FeatureBuffer,
+    pub lr_hash_mask: u32,
+    pub ffm_hash_mask: u32,
 }
 
 // A macro that takes care of decoding the individual feature - which can have two different encodings
@@ -66,7 +68,20 @@ macro_rules! feature_reader {
 
 
 impl FeatureBufferTranslator {
-    pub fn new(model_instance: &model_instance::ModelInstance) -> FeatureBufferTranslator {
+    pub fn new(mi: &model_instance::ModelInstance) -> FeatureBufferTranslator {
+
+        // Calculate lr_hash_mask
+        let lr_hash_mask = (1 << mi.bit_precision) -1;
+        // Calculate ffm_hash_mask
+        let mut ffm_bits_for_dimensions = 0;
+        while mi.ffm_k > (1 << (ffm_bits_for_dimensions)) {
+            ffm_bits_for_dimensions += 1;
+        }
+        let dimensions_mask = (1 << ffm_bits_for_dimensions) - 1;
+        // in ffm we will simply mask the lower bits, so we spare them for k
+        let ffm_hash_mask = ((1 << mi.ffm_bit_precision) -1) ^ dimensions_mask;
+
+
         let mut fb = FeatureBuffer {
             label: 0.0,
             example_importance: 1.0,
@@ -74,13 +89,15 @@ impl FeatureBufferTranslator {
             ffm_buffer: Vec::new(),
             ffm_fields_count: 0,
         };
-//        fb.lr_buffer.resize(LR_BUFFER_LEN, HashAndValue {hash:0, value:0.0});
+
         // avoid doing any allocations in translate
         let fbt = FeatureBufferTranslator{
-                            model_instance: model_instance.clone(),
+                            model_instance: mi.clone(),
                             hashes_vec_in : Vec::with_capacity(100),
                             hashes_vec_out : Vec::with_capacity(100),
                             feature_buffer: fb,
+                            lr_hash_mask: lr_hash_mask,
+                            ffm_hash_mask: ffm_hash_mask, 
         };
         fbt
     }
@@ -107,7 +124,7 @@ impl FeatureBufferTranslator {
             // We special case a single feature (common occurance)
             if num_namespaces == 1 {
                 feature_reader!(record_buffer, feature_index_offset, hash_data, hash_value, {
-                    lr_buffer.push(HashAndValue {hash: hash_data & self.model_instance.hash_mask, 
+                    lr_buffer.push(HashAndValue {hash: hash_data & self.lr_hash_mask, 
                                                  value: hash_value * feature_combo_weight});
                 });
                 continue
@@ -128,13 +145,13 @@ impl FeatureBufferTranslator {
                 std::mem::swap(&mut hashes_vec_in, &mut hashes_vec_out);
             }
             for handv in &(*hashes_vec_in) {
-                lr_buffer.push(HashAndValue{hash: handv.hash & self.model_instance.hash_mask,
+                lr_buffer.push(HashAndValue{hash: handv.hash & self.lr_hash_mask,
                                             value: handv.value * feature_combo_weight});
             }
         }
         // add the constant
         if self.model_instance.add_constant_feature {
-                lr_buffer.push(HashAndValue{hash: CONSTANT_HASH & self.model_instance.hash_mask,
+                lr_buffer.push(HashAndValue{hash: CONSTANT_HASH & self.lr_hash_mask,
                                             value: 1.0});
         }
 
@@ -150,7 +167,7 @@ impl FeatureBufferTranslator {
             for (contra_field_index, ffm_field) in self.model_instance.ffm_fields.iter().enumerate() {
                 for feature_index in ffm_field {
                     feature_reader!(record_buffer, feature_index, hash_data, hash_value, {
-                            ffm_buffer.push(HashAndValueAndSeq {hash: hash_data,
+                            ffm_buffer.push(HashAndValueAndSeq {hash: hash_data & self.ffm_hash_mask,
                                                                     value: hash_value,
                                                                     contra_field_index: contra_field_index as u32 * self.model_instance.ffm_k as u32});
                     });
@@ -332,16 +349,29 @@ mod tests {
         mi.ffm_fields.push(vec![0]);   //  single namespace in a field        0xfea, 0xfeb
         mi.ffm_fields.push(vec![0,1]);   // two namespaces in a field	      0xfea, 0xfeb, 0xfec
         mi.ffm_fields.push(vec![1]);   // single namespace in a field	      0xfec
+        mi.ffm_k = 1;
+        let mut fbt = FeatureBufferTranslator::new(&mi);
+        let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(5,9), 0x1, 0xfff, 2.0f32.to_bits(), 0xfeb, 3.0f32.to_bits()]);
+        fbt.translate(&rb);
+        // Hashes get changed, because k = 3 means we'll be aligning hashes
+        assert_eq!(fbt.feature_buffer.ffm_buffer, vec![ HashAndValueAndSeq{hash: 0xfff, value: 2.0, contra_field_index: 0}, 
+                                                        HashAndValueAndSeq{hash: 0xfeb, value: 3.0, contra_field_index: 0},
+                                                        HashAndValueAndSeq{hash: 0xfff, value: 2.0, contra_field_index: 1}, 
+                                                        HashAndValueAndSeq{hash: 0xfeb, value: 3.0, contra_field_index: 1}, 
+                                                        HashAndValueAndSeq{hash: 0x1, value: 1.0, contra_field_index: 1},
+                                                        HashAndValueAndSeq{hash: 0x1, value: 1.0, contra_field_index: 2},
+                                                     ]);
+        // Now hashes get changed, because k = 3 means we'll be aligning hashes
         mi.ffm_k = 3;
         let mut fbt = FeatureBufferTranslator::new(&mi);
-        let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(5,9), 0xfec, 0xfea, 2.0f32.to_bits(), 0xfeb, 3.0f32.to_bits()]);
+        let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(5,9), 0x1, 0xfff, 2.0f32.to_bits(), 0xfeb, 3.0f32.to_bits()]);
         fbt.translate(&rb);
-        assert_eq!(fbt.feature_buffer.ffm_buffer, vec![ HashAndValueAndSeq{hash: 0xfea, value: 2.0, contra_field_index: 0}, 
-                                                        HashAndValueAndSeq{hash: 0xfeb, value: 3.0, contra_field_index: 0},
-                                                        HashAndValueAndSeq{hash: 0xfea, value: 2.0, contra_field_index: 3}, 
-                                                        HashAndValueAndSeq{hash: 0xfeb, value: 3.0, contra_field_index: 3}, 
-                                                        HashAndValueAndSeq{hash: 0xfec, value: 1.0, contra_field_index: 3},
-                                                        HashAndValueAndSeq{hash: 0xfec, value: 1.0, contra_field_index: 6},
+        assert_eq!(fbt.feature_buffer.ffm_buffer, vec![ HashAndValueAndSeq{hash: 0xffc, value: 2.0, contra_field_index: 0}, 
+                                                        HashAndValueAndSeq{hash: 0xfe8, value: 3.0, contra_field_index: 0},
+                                                        HashAndValueAndSeq{hash: 0xffc, value: 2.0, contra_field_index: 3}, 
+                                                        HashAndValueAndSeq{hash: 0xfe8, value: 3.0, contra_field_index: 3}, 
+                                                        HashAndValueAndSeq{hash: 0x0, value: 1.0, contra_field_index: 3},
+                                                        HashAndValueAndSeq{hash: 0x0, value: 1.0, contra_field_index: 6},
                                                      ]);
         // one more which we dont test
     }

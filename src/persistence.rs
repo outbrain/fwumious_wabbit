@@ -266,13 +266,13 @@ B,featureB
         ffm_fixed_init(&mut re);
         let fbuf = &ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
-                                  HashAndValueAndSeq{hash:2, value: 1.0, contra_field_index: 0},
+                                  HashAndValueAndSeq{hash:3 * 1000, value: 1.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: 1}
                                   ], 2);
         p = re.learn(fbuf, true, 0);
         assert_eq!(p, 0.9933072); 
         p = re.learn(fbuf, false, 0);
-        let CONST_RESULT = 0.92014676;
+        let CONST_RESULT = 0.9395168;
         assert_eq!(p, CONST_RESULT);
 
         // Now we test conversion to fixed regressor 
@@ -300,7 +300,9 @@ B,featureB
             // c) load as fixed regressor
             let (_mi2, _vw2, re_fixed) = new_immutable_regressor_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
             assert_eq!(re_fixed.predict(fbuf, 0), CONST_RESULT);
+        
         }
+        
 
     }    
 
