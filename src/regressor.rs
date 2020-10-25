@@ -380,6 +380,8 @@ L: std::clone::Clone
             // Slow-path - using heap data structures
             if local_data_ffm_len > self.local_data_ffm_indices.len() {
                 self.local_data_ffm_indices.reserve(local_data_ffm_len - self.local_data_ffm_indices.len() + 1024);
+            }
+            if local_data_ffm_len > self.local_data_ffm_values.len() {
                 self.local_data_ffm_values.reserve(local_data_ffm_len - self.local_data_ffm_values.len() + 1024);
             }
             let local_data_ffm_indices = &mut self.local_data_ffm_indices;
