@@ -9,7 +9,8 @@ using macros.
 
 FW does not implement regularization nor multipass. They could be added 
 without hurting performance in the fast path by using static traits.
-Multipass can be simulated by saving final model and doing another run.
+Multipass can be done by external tool by saving final model and then
+doing another pass with that as a start model.
 
 Compared to VW we also do not track prediction performance during the run - 
 we do not continously compute logloss. Also we are interested in the 
@@ -25,9 +26,9 @@ over the same input data and it is worthwhile to parse it and save it in a
 "cache". FW packs that cache format even more tightly than VW.
 
 Generally FW supports a subset of VW's input format with more rigidness 
-around namespace names. Namespaces can only be single letters and all of them 
-used in an input file have to be listed ahead of time in a separate file 
-(called vw_namespaces_map.csv).
+around namespace names. Namespaces can only be single letters and those
+that are used in an input file have to be listed ahead of time in a 
+separate file (called vw_namespaces_map.csv).
 
 # Carefully chosen external libraries
 
@@ -53,6 +54,9 @@ Some frequent codepaths were unrolled manually.
 - We have specialized inner loops (with macros) for --ffm_k of 2, 4 and 8.
 - Optimizer is specialized as part of the code, so inner-loop ifs are
 avoided
+- In FFM we optimize situations where feature values (not weights) are 1.0.
+Three different multiplications by 1.0 within loop that iterates ffm_k times
+are avoided with; 4% speedup.
 
 # Algorithmic optimization
 
@@ -89,12 +93,22 @@ When sensible, we prefetch the weight ahead of the for-loop. Since weights
 basically cause  random memory access and modern machines are effectively
 NUMA, this helps a bit.
 
-# Things we have tried which did not work
+# Compiling for your architecture
+We are compiling our code with 
+export RUSTFLAGS="-C opt-level=3 -C target-cpu=skylake"
+There is about 5% speed improvement coming from that.
+
+# Things we have tried
 - Using data oriented programming approach. We've separated weights and 
 accumulated gradients into separate vectors. This created 50% slowdown. The
 theory is that we are doing lots of random memory accesses (to load weights)
 and additional latencies overshadow benefits of (possibly) better
 vectorization.
+- Manulally rolled-out AVX2 code for LR. While on paper instructions take 
+less time to execute than LLVM code, in practice there is no difference due
+to the floating point operations not being the bottleneck - it looks like
+bottleneck is delivering values from memory.
+
 
 # Ideas for future speed improvements
 - We know that using stack instead of heap for temporary buffer in learn() 
@@ -102,19 +116,12 @@ Gives us up to 10% speedup on FFMs. However the specialization code is ugly
 and therefore it is not on the main branch.
 - Many more structures on stack. However it is hard to make it work without
 crashing in extreme cases.
-- On-demand specialization. This would requrie a compile-per-run, but could
-really bring additional improvements
+- On-demand specialization. This would requrie a compile-per-run, however
+by everything we have learned this would bring additional speed boost.
 - Full unrolling of the double for loop for FFM would be possible.
-- Compile for architecture of your chips, use vectorization.
-export RUSTFLAGS="-C opt-level=3 -C target-cpu=skylake"
-No measurable effect on laptop. Need to do further testing on server.
 - Use vectorization
 export RUSTFLAGS="-C opt-level=3 -C target-cpu=skylake -C llvm-args=--force-vector-width=4"
 No measurable effect on laptop. Need to do further testing on server.
-Looking at the dissasembler it is revealed that for now Rust/LLVM isn't
-capable of using AVX instructions to run multiplications in parallel. 
-Likely double-dereference is what's killing it - maybe it would work if 
-we manually implemented gatherer instructions via built-ins.
 - Profile Guided Optimizations
 We tried using PGO. The difference was unmeasurable - at most 0.5% speed
 up, which is basically at the noise level. Given the complications of 
