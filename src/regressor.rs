@@ -222,14 +222,11 @@ L: std::clone::Clone
         unsafe {
         let y = fb.label; // 0.0 or 1.0
 
-        let local_data_lr_len = fb.lr_buffer.len();
         let local_data_ffm_len = fb.ffm_buffer.len() * (self.ffm_k * fb.ffm_fields_count) as usize;
         
         macro_rules! core_macro {
-            ($local_data_lr:ident,
-             $local_data_ffm:ident) => {
-            
-                let mut local_data_lr = $local_data_lr;
+            ($local_data_ffm:ident) => {
+             
                 let mut local_data_ffm = $local_data_ffm;
                 let weights = &self.weights;
 
@@ -242,8 +239,6 @@ L: std::clone::Clone
                     let feature_value:f32 = hashvalue.value;
                     let feature_weight    = weights.get_unchecked(feature_index as usize).weight;
                     wsum += feature_weight * feature_value;
-                    local_data_lr.get_unchecked_mut(i).index       = feature_index;
-                    local_data_lr.get_unchecked_mut(i).value       = feature_value;
                 }
                 
                 if self.ffm_k > 0 {
@@ -320,10 +315,13 @@ L: std::clone::Clone
                     let general_gradient = (y - prediction_probability) * fb.example_importance;
         //            println!("General gradient: {}", general_gradient);
 
-                    for i in 0..local_data_lr_len {
+                    for hashvalue in fb.lr_buffer.iter() {
         //A                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_lr.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now
-                        let feature_value = local_data_lr.get_unchecked(i).value;
-                        let feature_index = local_data_lr.get_unchecked(i).index as usize;
+                        //let feature_value = local_data_lr.get_unchecked(i).value;
+                        //let feature_index = local_data_lr.get_unchecked(i).index as usize;
+                        let feature_index     = hashvalue.hash as usize;
+                        let feature_value:f32 = hashvalue.value;
+                        
                         let gradient = general_gradient * feature_value;
                         let update = self.optimizer_lr.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
                         weights.get_unchecked_mut(feature_index).weight += update;
@@ -342,22 +340,17 @@ L: std::clone::Clone
             };
         };
 
-        if local_data_lr_len < LR_STACK_BUF_LEN && local_data_ffm_len < FFM_STACK_BUF_LEN {
+        if local_data_ffm_len < FFM_STACK_BUF_LEN {
             // Fast-path - using on-stack data structures
-            let mut local_data_lr: [IndexAccgradientValue; LR_STACK_BUF_LEN as usize] = MaybeUninit::uninit().assume_init();
             let mut local_data_ffm: [IndexAccgradientValue; FFM_STACK_BUF_LEN as usize] = MaybeUninit::uninit().assume_init();
-            core_macro!(local_data_lr, local_data_ffm);
+            core_macro!(local_data_ffm);
         } else {
             // Slow-path - using heap data structures
-            if local_data_lr_len > self.local_data_lr.len() {
-                self.local_data_lr.reserve(local_data_lr_len - self.local_data_lr.len() + 1024);
-            }
             if local_data_ffm_len > self.local_data_ffm.len() {
                 self.local_data_ffm.reserve(local_data_ffm_len - self.local_data_ffm.len() + 1024);
             }
-            let local_data_lr = &mut self.local_data_lr;
             let local_data_ffm = &mut self.local_data_ffm;
-            core_macro!(local_data_lr, local_data_ffm);
+            core_macro!(local_data_ffm);
         }
         return prediction_probability
         } // end of unsafe
