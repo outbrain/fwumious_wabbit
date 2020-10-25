@@ -473,7 +473,6 @@ impl ImmutableRegressor {
                //     if left_hash.contra_field_index == right_hash.contra_field_index {
                //         continue	// not combining within a field
                //     }
-               // WRITE A UNIT TEST TO VERIFY COMPATIBILITY between immutable and regular regressor in the case above
                     let joint_value = left_hash.value * right_hash.value;
                     let lindex = (self.ffm_weights_offset as u32 + ((left_hash.hash & self.ffm_hashmask) + right_hash.contra_field_index)) as u32;
                     let rindex = (self.ffm_weights_offset as u32 + ((right_hash.hash & self.ffm_hashmask) + left_hash.contra_field_index)) as u32;
@@ -504,8 +503,6 @@ impl ImmutableRegressor {
         prediction_probability
         }
     }
-    
-
 } 
 
 
