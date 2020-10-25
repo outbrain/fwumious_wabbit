@@ -52,8 +52,8 @@ pub struct Regressor<L:OptimizerTrait> {
     ffm_k_threshold: f32,
     optimizer_lr: L,
     pub optimizer_ffm: L,
-    local_data_lr: Vec<IndexAccgradientValue>,
-    local_data_ffm: Vec<IndexAccgradientValue>,
+    local_data_ffm_indices: Vec<u32>,
+    local_data_ffm_values: Vec<f32>,
 }
 
 #[derive(Clone)]
@@ -75,6 +75,20 @@ macro_rules! specialize_k {
                 val => {let $output_const:u32 = val; $code_block},
             }
     };
+}
+
+macro_rules! specialize_1f32 {
+    ( $input_expr:expr, 
+      $output_const:ident,
+      $code_block:block  ) => {
+          if $input_expr == 1.0 {	
+              const $output_const:f32 = 1.0; 
+              $code_block
+          } else {
+              let $output_const:f32 = $input_expr; 
+              $code_block
+          }
+      };
 }
 
 pub trait RegressorTrait {
@@ -125,8 +139,8 @@ L: std::clone::Clone
                             optimizer_ffm: L::new(),
                             ffm_iw_weights_offset: 0, ffm_k_threshold:
                             mi.ffm_k_threshold, 
-                            local_data_lr: Vec::with_capacity(1024), 
-                            local_data_ffm: Vec::with_capacity(1024),
+                            local_data_ffm_indices: Vec::with_capacity(1024),
+                            local_data_ffm_values: Vec::with_capacity(1024),
                      };
 
         rg.optimizer_lr.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
@@ -225,32 +239,37 @@ L: std::clone::Clone
         let local_data_ffm_len = fb.ffm_buffer.len() * (self.ffm_k * fb.ffm_fields_count) as usize;
         
         macro_rules! core_macro {
-            ($local_data_ffm:ident) => {
+            (
+            $local_data_ffm_indices:ident,
+            $local_data_ffm_values:ident
+            ) => {
              
-                let mut local_data_ffm = $local_data_ffm;
-                let weights = &self.weights;
-
-
+                let mut local_data_ffm_indices = $local_data_ffm_indices;
+                let mut local_data_ffm_values = $local_data_ffm_values;
                 let mut wsum:f32 = 0.0;
-                for (i, hashvalue) in fb.lr_buffer.iter().enumerate() {
-                    // Prefetch couple of indexes from the future to prevent pipeline stalls due to memory latencies
-                    _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((fb.lr_buffer.get_unchecked(i+8).hash) as usize).weight), _MM_HINT_T0);  // No benefit for now
-                    let feature_index     = hashvalue.hash;
-                    let feature_value:f32 = hashvalue.value;
-                    let feature_weight    = weights.get_unchecked(feature_index as usize).weight;
-                    wsum += feature_weight * feature_value;
+
+                {
+                    let weights = &self.weights;
+                    for (i, hashvalue) in fb.lr_buffer.iter().enumerate() {
+                        // Prefetch couple of indexes from the future to prevent pipeline stalls due to memory latencies
+                        _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((fb.lr_buffer.get_unchecked(i+8).hash) as usize).weight), _MM_HINT_T0);  // No benefit for now
+                        let feature_index     = hashvalue.hash;
+                        let feature_value:f32 = hashvalue.value;
+                        let feature_weight    = weights.get_unchecked(feature_index as usize).weight;
+                        wsum += feature_weight * feature_value;
+                    }
                 }
-                
                 if self.ffm_k > 0 {
+                    let ffm_weights = &self.weights[self.ffm_weights_offset as usize..];
                     let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
                     let mut ifc:usize = 0;
                     for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                        let base_weight_index = self.ffm_weights_offset + left_hash.hash;
+                        let base_weight_index = left_hash.hash;
                         for j in 0..fc as usize {
-                            let v = local_data_ffm.get_unchecked_mut(ifc + j);
-                            v.index = base_weight_index + j as u32;
-                            v.value = 0.0;
-                            _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked(base_weight_index as usize + j).weight), _MM_HINT_T0);  // No benefit for now
+                            let addr = base_weight_index + j as u32;
+                            *local_data_ffm_indices.get_unchecked_mut(ifc + j) = addr;
+                            *local_data_ffm_values.get_unchecked_mut(ifc + j) = 0.0;
+                            _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(addr as usize).weight), _MM_HINT_T0);  // No benefit for now
                        }
                        ifc += fc;
                     }
@@ -274,19 +293,24 @@ L: std::clone::Clone
         //                    let right_local_index = (i+1+j) * fc + left_hash.contra_field_index as usize;
                             let left_local_index = ifc + right_hash.contra_field_index as usize;
                             let joint_value = left_hash.value * right_hash.value;
-                            let lindex = local_data_ffm.get_unchecked(left_local_index).index as usize;
-                            let rindex = local_data_ffm.get_unchecked(right_local_index).index as usize;
-                            for k in 0..FFMK as usize {
-                                let llik = (left_local_index as usize + k) as usize;
-                                let rlik = (right_local_index as usize + k) as usize;
-                                let left_hash_weight  = weights.get_unchecked((lindex+k) as usize).weight;
-                                let right_hash_weight = weights.get_unchecked((rindex+k) as usize).weight;
-                                
-                                let right_side = right_hash_weight * joint_value;
-                                local_data_ffm.get_unchecked_mut(llik).value += right_side; // first derivate
-                                local_data_ffm.get_unchecked_mut(rlik).value += left_hash_weight  * joint_value; // first derivate
-                                wsum += left_hash_weight * right_side;
-                            }
+                            let lindex = *local_data_ffm_indices.get_unchecked(left_local_index) as usize;
+                            let rindex = *local_data_ffm_indices.get_unchecked(right_local_index) as usize;
+//                            _mm_prefetch(mem::transmute::<&f32, &i8>(&local_data_ffm.get_unchecked(left_local_index).value), _MM_HINT_T0);  // No benefit for now
+//                            _mm_prefetch(mem::transmute::<&f32, &i8>(&local_data_ffm.get_unchecked(right_local_index).value), _MM_HINT_T0);  // No benefit for now
+                            specialize_1f32!(joint_value, JOINT_VALUE, {
+                                for k in 0..FFMK as usize {
+                                    let llik = (left_local_index as usize + k) as usize;
+                                    let rlik = (right_local_index as usize + k) as usize;
+                                    let left_hash_weight  = ffm_weights.get_unchecked((lindex+k) as usize).weight;
+                                    let right_hash_weight = ffm_weights.get_unchecked((rindex+k) as usize).weight;
+                                    
+                                    let right_side = right_hash_weight * JOINT_VALUE;
+                                    *local_data_ffm_values.get_unchecked_mut(llik) += right_side; // first derivate
+                                    *local_data_ffm_values.get_unchecked_mut(rlik) += left_hash_weight  * JOINT_VALUE; // first derivate
+                                    wsum += left_hash_weight * right_side;
+                                }
+                            });
+                            
                         }
                         ifc += fc;
                         
@@ -308,32 +332,36 @@ L: std::clone::Clone
                 prediction_probability = logistic(wsum);
 
                 // Weights are now writable, but local_data is read only
-                let weights = &mut self.weights;
-
+                
 
                 if update && fb.example_importance != 0.0 {
                     let general_gradient = (y - prediction_probability) * fb.example_importance;
         //            println!("General gradient: {}", general_gradient);
 
-                    for hashvalue in fb.lr_buffer.iter() {
-        //A                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_lr.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now
-                        //let feature_value = local_data_lr.get_unchecked(i).value;
-                        //let feature_index = local_data_lr.get_unchecked(i).index as usize;
-                        let feature_index     = hashvalue.hash as usize;
-                        let feature_value:f32 = hashvalue.value;
-                        
-                        let gradient = general_gradient * feature_value;
-                        let update = self.optimizer_lr.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
-                        weights.get_unchecked_mut(feature_index).weight += update;
+                    {
+                        let weights = &mut self.weights;
+                        for hashvalue in fb.lr_buffer.iter() {
+            //A                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_lr.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now
+                            //let feature_value = local_data_lr.get_unchecked(i).value;
+                            //let feature_index = local_data_lr.get_unchecked(i).index as usize;
+                            let feature_index     = hashvalue.hash as usize;
+                            let feature_value:f32 = hashvalue.value;
+                            
+                            let gradient = general_gradient * feature_value;
+                            let update = self.optimizer_lr.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
+                            weights.get_unchecked_mut(feature_index).weight += update;
+                        }
                     }
-                    
-                    for i in 0..local_data_ffm_len {
-        //                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_ffm.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now
-                        let feature_value = local_data_ffm.get_unchecked(i).value;
-                        let feature_index = local_data_ffm.get_unchecked(i).index as usize;
-                        let gradient = general_gradient * feature_value;
-                        let update = self.optimizer_ffm.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
-                        weights.get_unchecked_mut(feature_index).weight += update;
+                    {                
+                        let ffm_weights = &mut self.weights[self.ffm_weights_offset as usize..];
+                        for i in 0..local_data_ffm_len {
+            //                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_ffm.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now
+                            let feature_value = *local_data_ffm_values.get_unchecked(i);
+                            let feature_index = *local_data_ffm_indices.get_unchecked(i) as usize;
+                            let gradient = general_gradient * feature_value;
+                            let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
+                            ffm_weights.get_unchecked_mut(feature_index).weight += update;
+                        }
                     }
                 }
         
@@ -342,15 +370,23 @@ L: std::clone::Clone
 
         if local_data_ffm_len < FFM_STACK_BUF_LEN {
             // Fast-path - using on-stack data structures
-            let mut local_data_ffm: [IndexAccgradientValue; FFM_STACK_BUF_LEN as usize] = MaybeUninit::uninit().assume_init();
-            core_macro!(local_data_ffm);
+            //let mut local_data_ffm: [IndexAccgradientValue; FFM_STACK_BUF_LEN as usize] = MaybeUninit::uninit().assume_init();
+            let mut local_data_ffm_indices: [u32; FFM_STACK_BUF_LEN as usize] = MaybeUninit::uninit().assume_init();
+           // let mut local_data_ffm_indices = [0u32; FFM_STACK_BUF_LEN as usize] = MaybeUninit::uninit().assume_init();
+            let mut local_data_ffm_values: [f32; FFM_STACK_BUF_LEN as usize] = MaybeUninit::uninit().assume_init();//[0.0; FFM_STACK_BUF_LEN as usize];
+                        
+            core_macro!(local_data_ffm_indices, local_data_ffm_values);
         } else {
             // Slow-path - using heap data structures
-            if local_data_ffm_len > self.local_data_ffm.len() {
-                self.local_data_ffm.reserve(local_data_ffm_len - self.local_data_ffm.len() + 1024);
+            if local_data_ffm_len > self.local_data_ffm_indices.len() {
+                self.local_data_ffm_indices.reserve(local_data_ffm_len - self.local_data_ffm_indices.len() + 1024);
             }
-            let local_data_ffm = &mut self.local_data_ffm;
-            core_macro!(local_data_ffm);
+            if local_data_ffm_len > self.local_data_ffm_values.len() {
+                self.local_data_ffm_values.reserve(local_data_ffm_len - self.local_data_ffm_values.len() + 1024);
+            }
+            let local_data_ffm_indices = &mut self.local_data_ffm_indices;
+            let local_data_ffm_values = &mut self.local_data_ffm_values;
+            core_macro!(local_data_ffm_indices, local_data_ffm_values);
         }
         return prediction_probability
         } // end of unsafe
