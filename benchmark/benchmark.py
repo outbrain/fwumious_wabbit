@@ -69,14 +69,14 @@ Processor: {uname.processor}```
         cpu_info = subprocess.check_output(cpu_info_cmd, shell=True).decode('utf-8').strip("\n")
 
         rprint(f"""```
-        {cpu_info}```
-""")
+{cpu_info}
+```""")
 
     rprint(f"""### Operating System
 ```
 System: {uname.system}
-Version: {uname.version}```
-""")
+Version: {uname.version}
+```""")
 
 
 def gzip_file(f):
