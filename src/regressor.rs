@@ -712,7 +712,7 @@ mod tests {
         mi.power_t = 0.0;
         mi.ffm_power_t = 0.0;
         mi.bit_precision = 18;
-        mi.ffm_k = 1;
+        mi.ffm_k = 4;
         mi.ffm_bit_precision = 18;
         mi.ffm_fields = vec![vec![], vec![]]; // This isn't really used
         
@@ -734,8 +734,8 @@ mod tests {
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: 1}
                                   ], 2);
-        assert_eq!(re.learn(&ffm_buf, true, 0), 0.7310586); 
-        assert_eq!(re.learn(&ffm_buf, true, 0), 0.7024794);
+        assert_eq!(re.learn(&ffm_buf, true, 0), 0.98201376); 
+        assert_eq!(re.learn(&ffm_buf, true, 0), 0.96277946);
 
         // Two fields, use values
         let mut re = Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
@@ -744,8 +744,8 @@ mod tests {
                                   HashAndValueAndSeq{hash:1, value: 2.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: 1}
                                   ], 2);
-        assert_eq!(re.learn(&ffm_buf, true, 0), 0.98201376);
-        assert_eq!(re.learn(&ffm_buf, true, 0), 0.81377685);
+        assert_eq!(re.learn(&ffm_buf, true, 0), 0.9999999);
+        assert_eq!(re.learn(&ffm_buf, true, 0), 0.99685884);
 
 
     }
