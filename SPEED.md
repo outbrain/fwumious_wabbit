@@ -95,7 +95,9 @@ NUMA, this helps a bit.
 
 # Compiling for your architecture
 We are compiling our code with 
+```
 export RUSTFLAGS="-C opt-level=3 -C target-cpu=skylake"
+```
 There is about 5% speed improvement coming from that.
 
 # Things we have tried
