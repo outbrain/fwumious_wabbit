@@ -247,9 +247,9 @@ L: std::clone::Clone
                 let mut local_data_ffm_indices = $local_data_ffm_indices;
                 let mut local_data_ffm_values = $local_data_ffm_values;
                 let mut wsum:f32 = 0.0;
-
+                // Rust doesn't let us to simply take two mutable subslices... this tells rust they don't overlap
+                let (weights, ffm_weights) = &mut self.weights.split_at_mut(self.ffm_weights_offset as usize);
                 {
-                    let weights = &self.weights;
                     for (i, hashvalue) in fb.lr_buffer.iter().enumerate() {
                         // Prefetch couple of indexes from the future to prevent pipeline stalls due to memory latencies
                         _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((fb.lr_buffer.get_unchecked(i+8).hash) as usize).weight), _MM_HINT_T0);  // No benefit for now
@@ -260,7 +260,6 @@ L: std::clone::Clone
                     }
                 }
                 if self.ffm_k > 0 {
-                    let ffm_weights = &self.weights[self.ffm_weights_offset as usize..];
                     let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
                     let mut ifc:usize = 0;
                     for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
@@ -338,30 +337,24 @@ L: std::clone::Clone
                     let general_gradient = (y - prediction_probability) * fb.example_importance;
         //            println!("General gradient: {}", general_gradient);
 
-                    {
-                        let weights = &mut self.weights;
-                        for hashvalue in fb.lr_buffer.iter() {
-            //A                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_lr.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now
-                            //let feature_value = local_data_lr.get_unchecked(i).value;
-                            //let feature_index = local_data_lr.get_unchecked(i).index as usize;
-                            let feature_index     = hashvalue.hash as usize;
-                            let feature_value:f32 = hashvalue.value;
-                            
-                            let gradient = general_gradient * feature_value;
-                            let update = self.optimizer_lr.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
-                            weights.get_unchecked_mut(feature_index).weight += update;
-                        }
+                    for hashvalue in fb.lr_buffer.iter() {
+        //A                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_lr.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now
+                        //let feature_value = local_data_lr.get_unchecked(i).value;
+                        //let feature_index = local_data_lr.get_unchecked(i).index as usize;
+                        let feature_index     = hashvalue.hash as usize;
+                        let feature_value:f32 = hashvalue.value;
+                        
+                        let gradient = general_gradient * feature_value;
+                        let update = self.optimizer_lr.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
+                        weights.get_unchecked_mut(feature_index).weight += update;
                     }
-                    {                
-                        let ffm_weights = &mut self.weights[self.ffm_weights_offset as usize..];
-                        for i in 0..local_data_ffm_len {
-            //                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_ffm.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now
-                            let feature_value = *local_data_ffm_values.get_unchecked(i);
-                            let feature_index = *local_data_ffm_indices.get_unchecked(i) as usize;
-                            let gradient = general_gradient * feature_value;
-                            let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
-                            ffm_weights.get_unchecked_mut(feature_index).weight += update;
-                        }
+                    for i in 0..local_data_ffm_len {
+        //                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_ffm.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now
+                        let feature_value = *local_data_ffm_values.get_unchecked(i);
+                        let feature_index = *local_data_ffm_indices.get_unchecked(i) as usize;
+                        let gradient = general_gradient * feature_value;
+                        let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
+                        ffm_weights.get_unchecked_mut(feature_index).weight += update;
                     }
                 }
         
@@ -719,7 +712,7 @@ mod tests {
         mi.power_t = 0.0;
         mi.ffm_power_t = 0.0;
         mi.bit_precision = 18;
-        mi.ffm_k = 1;
+        mi.ffm_k = 4;
         mi.ffm_bit_precision = 18;
         mi.ffm_fields = vec![vec![], vec![]]; // This isn't really used
         
@@ -741,8 +734,8 @@ mod tests {
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: 1}
                                   ], 2);
-        assert_eq!(re.learn(&ffm_buf, true, 0), 0.7310586); 
-        assert_eq!(re.learn(&ffm_buf, true, 0), 0.7024794);
+        assert_eq!(re.learn(&ffm_buf, true, 0), 0.98201376); 
+        assert_eq!(re.learn(&ffm_buf, true, 0), 0.96277946);
 
         // Two fields, use values
         let mut re = Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
@@ -751,8 +744,8 @@ mod tests {
                                   HashAndValueAndSeq{hash:1, value: 2.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: 1}
                                   ], 2);
-        assert_eq!(re.learn(&ffm_buf, true, 0), 0.98201376);
-        assert_eq!(re.learn(&ffm_buf, true, 0), 0.81377685);
+        assert_eq!(re.learn(&ffm_buf, true, 0), 0.9999999);
+        assert_eq!(re.learn(&ffm_buf, true, 0), 0.99685884);
 
 
     }
