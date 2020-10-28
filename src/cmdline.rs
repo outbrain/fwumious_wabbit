@@ -2,8 +2,8 @@ use clap::{App, Arg,  AppSettings};
 use crate::version;
 
 pub fn parse<'a>() -> clap::ArgMatches<'a> {
-    
-    
+
+
   let matches = App::new("fwumious wabbit")
                     .version(version::LATEST)
                     .author("Andraz Tori <atori@outbrain.com>")
@@ -228,7 +228,12 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .value_name("arg (=0)")
                      .help("After how many examples start printing predictions")
                      .takes_value(true))
-                                        
+                    .arg(Arg::with_name("holdout_after")
+                     .long("holdout_after")
+                     .value_name("arg (=4,294,967,295)")
+                     .help("After how many examples stop updating weights")
+                     .takes_value(true))
+
                     .get_matches();
 
 matches

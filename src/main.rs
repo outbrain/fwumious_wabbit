@@ -55,7 +55,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
     match final_regressor_filename {
         Some(filename) => {
             if !cl.is_present("save_resume") {
-                return Err("You need to use --save_resume if you are using --final_regressor, so there is compatility with vowpal")?;
+                return Err("You need to use --save_resume with --final_regressor, for vowpal wabbit compatibility")?;
             }
             println!("final_regressor = {}", filename);
         },
@@ -101,6 +101,12 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             Some(examples) => examples.parse()?,
             None => 0
         };
+
+        let holdout_after:u32 = match cl.value_of("holdout_after") {
+            Some(examples) => examples.parse()?,
+            None => u32::MAX
+        };
+
         let prediction_model_delay:u32 = match cl.value_of("prediction_model_delay") {
             Some(delay) => delay.parse()?,
             None => 0
@@ -108,6 +114,16 @@ fn main2() -> Result<(), Box<dyn Error>>  {
 
         if prediction_model_delay != 0 && testonly {
             println!("--prediction_model_delay cannot be used with --testonly");
+            return Err("Error")?
+        }
+
+        if holdout_after != 0 && testonly {
+            println!("--holdout_after cannot be used with --testonly");
+            return Err("Error")?
+        }
+
+        if prediction_model_delay != 0 && holdout_after != 0 {
+            println!("--prediction_model_delay cannot be used with --holdout_after");
             return Err("Error")?
         }
         
@@ -153,7 +169,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             let mut prediction: f32 = 0.0;
 
             if prediction_model_delay == 0 {
-                prediction = re.learn(&fbt.feature_buffer, !testonly, example_num);
+                prediction = re.learn(&fbt.feature_buffer, !testonly && example_num < holdout_after, example_num);
             } else {
                 if example_num > predictions_after {
                     prediction = re.learn(&fbt.feature_buffer, false, example_num);
