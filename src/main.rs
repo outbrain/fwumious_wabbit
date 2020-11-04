@@ -102,6 +102,8 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             None => 0
         };
 
+        let holdout_after_supplied = cl.value_of("holdout_after").is_some();
+
         let holdout_after:u32 = match cl.value_of("holdout_after") {
             Some(examples) => examples.parse()?,
             None => u32::MAX
@@ -111,21 +113,6 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             Some(delay) => delay.parse()?,
             None => 0
         };
-
-        if prediction_model_delay != 0 && testonly {
-            println!("--prediction_model_delay cannot be used with --testonly");
-            return Err("Error")?
-        }
-
-        if holdout_after != 0 && testonly {
-            println!("--holdout_after cannot be used with --testonly");
-            return Err("Error")?
-        }
-
-        if prediction_model_delay != 0 && holdout_after != 0 {
-            println!("--prediction_model_delay cannot be used with --holdout_after");
-            return Err("Error")?
-        }
         
         let mut delayed_learning_fbs: VecDeque<feature_buffer::FeatureBuffer> = VecDeque::with_capacity(prediction_model_delay as usize);
 
@@ -169,7 +156,8 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             let mut prediction: f32 = 0.0;
 
             if prediction_model_delay == 0 {
-                prediction = re.learn(&fbt.feature_buffer, !testonly && example_num < holdout_after, example_num);
+                let update = !testonly && (!holdout_after_supplied || example_num < holdout_after);
+                prediction = re.learn(&fbt.feature_buffer, update, example_num);
             } else {
                 if example_num > predictions_after {
                     prediction = re.learn(&fbt.feature_buffer, false, example_num);
