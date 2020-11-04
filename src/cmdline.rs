@@ -2,8 +2,6 @@ use clap::{App, Arg,  AppSettings};
 use crate::version;
 
 pub fn parse<'a>() -> clap::ArgMatches<'a> {
-    
-    
   let matches = App::new("fwumious wabbit")
                     .version(version::LATEST)
                     .author("Andraz Tori <atori@outbrain.com>")
@@ -217,18 +215,25 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .long("foreground")
                      .help("in daemon mode, do not fork and run and run fw process in the foreground")
                      .takes_value(false))
-                     
                     .arg(Arg::with_name("prediction_model_delay")
+                     .conflicts_with("test_only")
                      .long("prediction_model_delay")
                      .value_name("examples (0)")
                      .help("Output predictions with a model that is delayed by a number of examples")
                      .takes_value(true))
                     .arg(Arg::with_name("predictions_after")
                      .long("predictions_after")
-                     .value_name("arg (=0)")
+                     .value_name("examples (=0)")
                      .help("After how many examples start printing predictions")
                      .takes_value(true))
-                                        
+                    .arg(Arg::with_name("holdout_after")
+                     .conflicts_with("predictions_after")
+                     .conflicts_with("testonly")
+                     .required(false)
+                     .long("holdout_after")
+                     .value_name("examples")
+                     .help("After how many examples stop updating weights")
+                     .takes_value(true))
                     .get_matches();
 
 matches

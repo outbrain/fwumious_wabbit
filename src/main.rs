@@ -55,7 +55,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
     match final_regressor_filename {
         Some(filename) => {
             if !cl.is_present("save_resume") {
-                return Err("You need to use --save_resume if you are using --final_regressor, so there is compatility with vowpal")?;
+                return Err("You need to use --save_resume with --final_regressor, for vowpal wabbit compatibility")?;
             }
             println!("final_regressor = {}", filename);
         },
@@ -101,15 +101,13 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             Some(examples) => examples.parse()?,
             None => 0
         };
+
+        let holdout_after_option : Option<u32> = cl.value_of("holdout_after").map(|s| s.parse().unwrap());
+
         let prediction_model_delay:u32 = match cl.value_of("prediction_model_delay") {
             Some(delay) => delay.parse()?,
             None => 0
         };
-
-        if prediction_model_delay != 0 && testonly {
-            println!("--prediction_model_delay cannot be used with --testonly");
-            return Err("Error")?
-        }
         
         let mut delayed_learning_fbs: VecDeque<feature_buffer::FeatureBuffer> = VecDeque::with_capacity(prediction_model_delay as usize);
 
@@ -153,7 +151,11 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             let mut prediction: f32 = 0.0;
 
             if prediction_model_delay == 0 {
-                prediction = re.learn(&fbt.feature_buffer, !testonly, example_num);
+                let update = match holdout_after_option {
+                    Some(holdout_after) => !testonly && example_num < holdout_after,
+                    None => !testonly
+                };
+                prediction = re.learn(&fbt.feature_buffer, update, example_num);
             } else {
                 if example_num > predictions_after {
                     prediction = re.learn(&fbt.feature_buffer, false, example_num);
