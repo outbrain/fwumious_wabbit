@@ -223,7 +223,7 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .takes_value(true))
                     .arg(Arg::with_name("predictions_after")
                      .long("predictions_after")
-                     .value_name("lines (=0)")
+                     .value_name("examples (=0)")
                      .help("After how many examples start printing predictions")
                      .takes_value(true))
                     .arg(Arg::with_name("holdout_after")
@@ -231,7 +231,7 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .conflicts_with("testonly")
                      .required(false)
                      .long("holdout_after")
-                     .value_name("lines")
+                     .value_name("examples")
                      .help("After how many examples stop updating weights")
                      .takes_value(true))
                     .get_matches();
