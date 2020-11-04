@@ -102,12 +102,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             None => 0
         };
 
-        let holdout_after_supplied = cl.value_of("holdout_after").is_some();
-
-        let holdout_after:u32 = match cl.value_of("holdout_after") {
-            Some(examples) => examples.parse()?,
-            None => u32::MAX
-        };
+        let holdout_after : Option<u32> = cl.value_of("holdout_after").map(|s| s.parse().unwrap());
 
         let prediction_model_delay:u32 = match cl.value_of("prediction_model_delay") {
             Some(delay) => delay.parse()?,
@@ -156,7 +151,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             let mut prediction: f32 = 0.0;
 
             if prediction_model_delay == 0 {
-                let update = !testonly && (!holdout_after_supplied || example_num < holdout_after);
+                let update = !testonly && (holdout_after.is_none() || example_num < holdout_after.unwrap());
                 prediction = re.learn(&fbt.feature_buffer, update, example_num);
             } else {
                 if example_num > predictions_after {
