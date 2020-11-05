@@ -19,7 +19,7 @@ fastest Tensorflow implementation of Logistic Regression and FFMs that we could
 come up with. 
 It is an order of magnitude faster than Vowpal Wabbit for some specific use-cases.
 
-check out our [benchmark](BENCHMARK.md), here's a teaser:
+Check out our [benchmark](BENCHMARK.md), here's a teaser:
 
 ![benchmark results](benchmark_results.png)
 
