@@ -25,12 +25,9 @@ Check out our [benchmark](BENCHMARK.md), here's a teaser:
 
 
 **Why is it faster?** (see [here](SPEED.md) for more details)
-- tighter encoding format for examples cache
-- namespaces have to be declared up-front, so tight encoding is possible
-- using lz4 for examples cache compression instead of gz
-- using Look Up Tables for AdaGrad
-- inner loop is single purpose and super-optimized
-- it is written in Rust and it uses specialization tricks (via macros)
-- it cuts corners by preallocating buffers
-- a lot of profiling and optimizing the bottlenecks
+- Only implements Logistic Regression and Field-aware Factorization Machines
+- Uses hashing trick, lookup table for AdaGrad and tight encoding format for "input cache"
+- Features' namespaces have to be declared up-front
+- Prefetching of weights from memory (avoiding pipeline stalls)
+- Written in Rust with heavy use of code specialization (via macros and traits)
 
