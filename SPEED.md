@@ -100,6 +100,15 @@ export RUSTFLAGS="-C opt-level=3 -C target-cpu=skylake"
 ```
 There is about 5% speed improvement coming from that.
 
+# Using stack for temporary buffer
+- For FFM temporary buffer we use fixed size stack and when buffer is bigger
+than fixed sized stack, we use heap-allocated buffer. Code is entirely 
+specialized on each codepath.
+Surprisingly saw 5%+ speedup when using stack. The belief is that there
+are more optimization opportunities if we make all memory addresses static
+however that is really hard to achieve without per-run recompilation of
+rust code.
+
 # Things we have tried
 - Using data oriented programming approach. We've separated weights and 
 accumulated gradients into separate vectors. This created 50% slowdown. The
@@ -113,14 +122,8 @@ bottleneck is delivering values from memory.
 
 
 # Ideas for future speed improvements
-- We know that using stack instead of heap for temporary buffer in learn() 
-Gives us up to 10% speedup on FFMs. However the specialization code is ugly 
-and therefore it is not on the main branch.
-- Many more structures on stack. However it is hard to make it work without
-crashing in extreme cases.
 - On-demand specialization. This would requrie a compile-per-run, however
 by everything we have learned this would bring additional speed boost.
-- Full unrolling of the double for loop for FFM would be possible.
 - Use vectorization
 export RUSTFLAGS="-C opt-level=3 -C target-cpu=skylake -C llvm-args=--force-vector-width=4"
 No measurable effect on laptop. Need to do further testing on server.
