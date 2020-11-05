@@ -104,7 +104,7 @@ There is about 5% speed improvement coming from that.
 - For FFM temporary buffer we use fixed size stack and when buffer is bigger
 than fixed sized stack, we use heap-allocated buffer. Code is entirely 
 specialized on each codepath.
-Surprisingly saw 5%+ speedup when using stack. The belief is that there
+Surprisingly we saw 5%+ speedup when using stack. The belief is that there
 are more optimization opportunities if we make all memory addresses static
 however that is really hard to achieve without per-run recompilation of
 rust code.
