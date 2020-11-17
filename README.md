@@ -7,9 +7,9 @@ Fwumious Wabbit is
 ![Rust](https://github.com/outbrain/fwumious_wabbit/workflows/Rust/badge.svg?branch=main)
 [![Gitter](https://badges.gitter.im/FwumiousWabbit/community.svg)](https://gitter.im/FwumiousWabbit/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
-Fwumious Wabbit is actively used in Outbrain for off-line research, as well as for some production flows. It 
+Fwumious Wabbit is actively used in Outbrain for offline research, as well as for some production flows. It 
 enables "high bandwidth research" when doing feature engineering, feature 
-selection, hyper-parameter tuning and the like. 
+selection, hyper-parameter tuning, and the like. 
 
 Data scientists can train hundreds of models over hundreds of millions of examples in 
 a matter of hours on a single machine.
@@ -26,7 +26,7 @@ Check out our [benchmark](BENCHMARK.md), here's a teaser:
 
 **Why is it faster?** (see [here](SPEED.md) for more details)
 - Only implements Logistic Regression and Field-aware Factorization Machines
-- Uses hashing trick, lookup table for AdaGrad and tight encoding format for "input cache"
+- Uses hashing trick, lookup table for AdaGrad and a tight encoding format for the "input cache"
 - Features' namespaces have to be declared up-front
 - Prefetching of weights from memory (avoiding pipeline stalls)
 - Written in Rust with heavy use of code specialization (via macros and traits)
