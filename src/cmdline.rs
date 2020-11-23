@@ -1,7 +1,11 @@
 use clap::{App, Arg,  AppSettings};
 use crate::version;
+use std::ffi::OsString;
 
-pub fn parse<'a>() -> clap::ArgMatches<'a> {
+pub fn parse<'a, I, T>(itr:I) -> clap::ArgMatches<'a>
+where I: IntoIterator<Item=T>, T: AsRef<str> + std::clone::Clone + Into<OsString>
+
+{
   let matches = App::new("fwumious wabbit")
                     .version(version::LATEST)
                     .author("Andraz Tori <atori@outbrain.com>")
@@ -234,7 +238,7 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .value_name("examples")
                      .help("After how many examples stop updating weights")
                      .takes_value(true))
-                    .get_matches();
+                    .get_matches_from(itr);
 
 matches
 }

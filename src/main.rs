@@ -14,14 +14,7 @@ use std::f32;
 use std::collections::VecDeque;
 use std::time::Instant;
 use flate2::read::MultiGzDecoder;
-
-// src/lib.rs
-//mod java_glue;
-//pub use crate::java_glue::*;
-
-// src/cpp_glue.rs
-//include!(concat!(env!("OUT_DIR"), "/java_glue.rs"));
-
+use std::env::args;
 
 mod vwmap;
 mod parser;
@@ -35,8 +28,10 @@ mod serving;
 mod optimizer;
 mod version;
 
-//use crate::regressor::RegressorTrait;
-
+mod session;
+//use fw::{FWSession,session_from_cl};
+//use fw::{FWSession, session_from_cl};
+//mod lib;
 
 fn main() {
     match main2() {
@@ -47,62 +42,40 @@ fn main() {
 
 fn main2() -> Result<(), Box<dyn Error>>  {
     // We'll parse once the command line into cl and then different objects will examine it
-    let cl = cmdline::parse();
-
-    // Where will we be putting perdictions (if at all)
-    let mut predictions_file = match cl.value_of("predictions") {
-        Some(filename) => Some(BufWriter::new(File::create(filename)?)),
-        None => None      
-    };
-
-    let testonly = cl.is_present("testonly");
-
-
-    let final_regressor_filename = cl.value_of("final_regressor");
-    match final_regressor_filename {
-        Some(filename) => {
-            if !cl.is_present("save_resume") {
-                return Err("You need to use --save_resume with --final_regressor, for vowpal wabbit compatibility")?;
-            }
-            println!("final_regressor = {}", filename);
-        },
-        None => {}
-    };
-    
-    
-    /* setting up the pipeline, either from command line or from existing regressor */
-    // we want heal-allocated objects here
-    let vw: vwmap::VwNamespaceMap;
-    let mut re: Box<dyn regressor::RegressorTrait>;
-    let mi: model_instance::ModelInstance;
-
+    let cl = cmdline::parse(args());
 
     if cl.is_present("daemon") {
         let filename = cl.value_of("initial_regressor").expect("Daemon mode only supports serving from --initial regressor");
         println!("initial_regressor = {}", filename);
         println!("WARNING: Command line model parameters will be ignored");
         let (mi2, vw2, re_fixed) = persistence::new_immutable_regressor_from_filename(filename)?;
-        mi = mi2; vw = vw2;
-        let mut se = serving::Serving::new(&cl, &vw, re_fixed, &mi)?;
+        let mut se = serving::Serving::new(&cl, &vw2, re_fixed, &mi2)?;
         se.serve()?;
     } else {
-        if let Some(filename) = cl.value_of("initial_regressor") {
-            println!("initial_regressor = {}", filename);
-            println!("WARNING: Command line model parameters will be ignored");
-            let (mi2, vw2, re2) = persistence::new_regressor_from_filename(filename, testonly)?;
-            mi = mi2; vw = vw2; re = re2;
-        } else {
-            // We load vw_namespace_map.csv just so we know all the namespaces ahead of time
-            // This is one of the major differences from vowpal
-            let input_filename = cl.value_of("data").expect("--data expected");
-            let vw_namespace_map_filepath = Path::new(input_filename).parent().expect("Couldn't access path given by --data").join("vw_namespace_map.csv");
-            vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
-            mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
-            re = regressor::get_regressor(&mi);
-        };
+        // Where will we be putting perdictions (if at all)
+        let mut predictions_file = match cl.value_of("predictions") {
+            Some(filename) => Some(BufWriter::new(File::create(filename)?)),
+            None => None      
+        };    
+        
+        let testonly = cl.is_present("testonly");
+        let mut fws = session::session_from_cl(&cl)?;
         let input_filename = cl.value_of("data").expect("--data expected");
-        let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"), &vw);
-        let mut fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
+        let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"), &fws.vw);
+        let mut fbt = feature_buffer::FeatureBufferTranslator::new(&fws.mi);
+
+        let final_regressor_filename = cl.value_of("final_regressor");
+        match final_regressor_filename {
+            Some(filename) => {
+                if !cl.is_present("save_resume") {
+                    return Err("You need to use --save_resume with --final_regressor, for vowpal wabbit compatibility")?;
+                }
+                println!("final_regressor = {}", filename);
+            },
+            None => {}
+        };
+
+
 
         let predictions_after:u32 = match cl.value_of("predictions_after") {
             Some(examples) => examples.parse()?,
@@ -127,7 +100,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             false => { bb = io::BufReader::new(input); &mut bb}
         };
 
-        let mut pa = parser::VowpalParser::new(&vw);
+        let mut pa = parser::VowpalParser::new(&fws.vw);
 
         let now = Instant::now();
         let mut example_num = 0;
@@ -162,15 +135,15 @@ fn main2() -> Result<(), Box<dyn Error>>  {
                     Some(holdout_after) => !testonly && example_num < holdout_after,
                     None => !testonly
                 };
-                prediction = re.learn(&fbt.feature_buffer, update, example_num);
+                prediction = fws.re.learn(&fbt.feature_buffer, update, example_num);
             } else {
                 if example_num > predictions_after {
-                    prediction = re.learn(&fbt.feature_buffer, false, example_num);
+                    prediction = fws.re.learn(&fbt.feature_buffer, false, example_num);
                 }
                 delayed_learning_fbs.push_back(fbt.feature_buffer.clone());
                 if (prediction_model_delay as usize) < delayed_learning_fbs.len() {
                     let delayed_buffer = delayed_learning_fbs.pop_front().unwrap();
-                    re.learn(&delayed_buffer, !testonly, example_num);
+                    fws.re.learn(&delayed_buffer, !testonly, example_num);
                 }
             } 
             
@@ -184,7 +157,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         }
         cache.write_finish()?;
         match final_regressor_filename {
-            Some(filename) => persistence::save_regressor_to_filename(filename, &mi, &vw, re).unwrap(),
+            Some(filename) => persistence::save_regressor_to_filename(filename, &fws.mi, &fws.vw, fws.re).unwrap(),
             None => {}
         }
     

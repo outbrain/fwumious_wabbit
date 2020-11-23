@@ -1,8 +1,31 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(unused_mut)]
+#![allow(non_snake_case)]
 
  
 mod java_glue;
 mod jni_c_header;
 pub use crate::java_glue::*;
+
+
+use std::path::Path;
+use std::error::Error;
+mod vwmap;
+mod parser;
+mod model_instance;
+mod feature_buffer;
+mod regressor;
+mod cmdline;
+mod cache;
+mod persistence;
+mod serving;
+mod optimizer;
+mod version;
+mod session;
+
+
 
 // src/lib.rs
 struct Session {
@@ -11,14 +34,6 @@ struct Session {
 
 impl Session {
     pub fn new() -> Session {
-        #[cfg(target_os = "android")]
-        android_logger::init_once(
-            android_logger::Config::default()
-                .with_min_level(log::Level::Debug)
-                .with_tag("Hello"),
-        );
-//        log_panics::init(); // log panics rather than printing them
-//        info!("init log system - done");
         Session { a: 2 }
     }
 
@@ -31,3 +46,5 @@ impl Session {
         format!("Hello {} ✋\nIt's a pleasure to meet you!", to)
     }
 }
+
+
