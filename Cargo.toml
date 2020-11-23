@@ -40,6 +40,6 @@ debug = false
 #panic = 'abort'
 #codegen-units=1
 
-#[lib]
-#crate_type = ["cdylib"]
-#name = "fw"
+[lib]
+crate_type = ["cdylib"]
+name = "fw"

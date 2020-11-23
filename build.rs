@@ -13,10 +13,10 @@ fn main() {
         JavaConfig::new(
             Path::new("java")
                 .join("src")
-                .join("main")
-                .join("java")
+                .join("com")
+                .join("outbrain")
                 .join("fw"),
-            "net.outbrain.fw".into(),
+            "com.outbrain.fw".into(),
         ),
 //        .use_null_annotation_from_package("android.support.annotation".into()),
     ))
