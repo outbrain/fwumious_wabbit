@@ -1,12 +1,18 @@
 
-use crate::Session;
+use crate::ASession;
+use crate::session::FWSession;
 //use jni_sys::*;
 
 use crate::jni_c_header::*;
 
-foreign_class!(class Session {
-    self_type Session;
-    constructor Session::new() -> Session;
-    fn Session::add_and1(&self, val: i32) -> i32;
-    fn Session::greet(to: &str) -> String;
+foreign_class!(class ASession {
+    self_type ASession;
+    constructor ASession::new() -> ASession;
+    fn ASession::add_and1(&self, val: i32) -> i32;
+    fn ASession::greet(to: &str) -> String;
+});
+
+foreign_class!(class FWSession {
+    self_type FWSession;
+    constructor FWSession::new(cl_string: &str) -> FWSession;
 });

@@ -21,6 +21,7 @@ merand48 = "0.1.0"
 daemonize = "0.4.1"
 lz4 = "1.23.2"
 log = "0.4.6"
+shell-words = "1.0.0"
 
 
 # We'll use cloudflare's zlib as it is the fastest game in town
@@ -45,3 +46,5 @@ debug = false
 [lib]
 crate_type = ["cdylib"]
 name = "fw"
+
+

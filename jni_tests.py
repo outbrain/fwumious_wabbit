@@ -78,9 +78,9 @@ def run_jni_tests(use_shell: bool, test_cfg: Set[str]):
     sys.stdout.flush()
     for cfg in test_cfg:
         if cfg == DEBUG:
-            subprocess.check_call(["cargo", "build"], shell=False)
+            subprocess.check_call(["cargo", "build", "--lib"], shell=False)
         elif cfg == RELEASE:
-            subprocess.check_call(["cargo", "build", "--release"], shell=False)
+            subprocess.check_call(["cargo", "build", "--release", "--lib"], shell=False)
         else:
             raise Exception("Fatal Error: Unknown cfg %s" % cfg)
 

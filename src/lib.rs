@@ -10,8 +10,6 @@ mod jni_c_header;
 pub use crate::java_glue::*;
 
 
-use std::path::Path;
-use std::error::Error;
 mod vwmap;
 mod parser;
 mod model_instance;
@@ -28,13 +26,13 @@ mod session;
 
 
 // src/lib.rs
-struct Session {
+struct ASession {
     a: i32,
 }
 
-impl Session {
-    pub fn new() -> Session {
-        Session { a: 2 }
+impl ASession {
+    pub fn new() -> ASession {
+        ASession { a: 2 }
     }
 
     pub fn add_and1(&self, val: i32) -> i32 {

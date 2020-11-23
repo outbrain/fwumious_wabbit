@@ -5,6 +5,10 @@ use crate::vwmap;
 use crate::regressor;
 use crate::model_instance;
 use crate::persistence;
+use crate::cmdline;
+extern crate shell_words;
+
+
 
 pub struct FWSession {
     pub vw: vwmap::VwNamespaceMap,
@@ -36,4 +40,26 @@ pub fn session_from_cl(cl: &clap::ArgMatches) -> Result<FWSession, Box<dyn Error
                 mi: mi,
                 re: re})
 }
+
+pub fn session_from_cl_string(cl_string: &str) -> Result<FWSession, Box<dyn Error>> {
+    let mut args = vec!["fw".to_string()];
+    let mut parsed_shell = shell_words::split(cl_string).expect("failed to parse passed command line");
+    args.append(&mut parsed_shell);
+    let cl = cmdline::parse(args);
+    session_from_cl(&cl)
+}
+
+impl FWSession {
+    pub fn new(cl_string: &str) -> FWSession {
+        let session = session_from_cl_string(cl_string).expect("failed to parse session")        ;
+        println!("Session done");
+        session
+    }
+}
+
+
+
+
+
+
 

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::path::PathBuf;
 use std::io::prelude::*;
+use std::env::current_dir;
 use std::fs;
 use serde::{Serialize,Deserialize};//, Deserialize};
 
@@ -58,7 +59,7 @@ impl VwNamespaceMap {
     }
 
     pub fn new_from_csv_filepath(path: PathBuf) -> Result<VwNamespaceMap, Box<dyn Error>> {
-        let mut input_bufreader = fs::File::open(&path).expect("Could not find vw_namespace_map.csv in input dataset directory");
+        let mut input_bufreader = fs::File::open(&path).expect(format!("Could not find vw_namespace_map.csv: {:?} within {:?}", path, current_dir()).as_str());
         let mut s = String::new();
         input_bufreader.read_to_string(&mut s)?;
         VwNamespaceMap::new(&s)   

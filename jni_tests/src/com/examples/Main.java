@@ -1,6 +1,7 @@
 package com.examples;
 
-import com.outbrain.fw.Session;
+import com.outbrain.fw.ASession;
+import com.outbrain.fw.FWSession;
 
 class Main {
     public static void main(String[] args) {
@@ -11,8 +12,9 @@ class Main {
             throw e;
         }
         System.out.println("WAAAAAAAAT");
-        Session a = new Session();
+        ASession a = new ASession();
         System.out.println(a.greet("CRAZY"));
+        FWSession b = new FWSession("--data ../../examples/basic/datasets/train.vw --keep A --keep B");
         System.out.println("BAAAAAAAAT");
     }
     
