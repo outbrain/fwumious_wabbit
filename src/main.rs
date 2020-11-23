@@ -15,6 +15,13 @@ use std::collections::VecDeque;
 use std::time::Instant;
 use flate2::read::MultiGzDecoder;
 
+// src/lib.rs
+//mod java_glue;
+//pub use crate::java_glue::*;
+
+// src/cpp_glue.rs
+//include!(concat!(env!("OUT_DIR"), "/java_glue.rs"));
+
 
 mod vwmap;
 mod parser;
