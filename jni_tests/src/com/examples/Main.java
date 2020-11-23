@@ -12,6 +12,8 @@ class Main {
         }
         System.out.println("WAAAAAAAAT");
         Session a = new Session();
+        System.out.println(a.greet("CRAZY"));
+        System.out.println("BAAAAAAAAT");
     }
     
 }

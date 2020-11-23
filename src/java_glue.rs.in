@@ -1,0 +1,12 @@
+
+use crate::Session;
+//use jni_sys::*;
+
+use crate::jni_c_header::*;
+
+foreign_class!(class Session {
+    self_type Session;
+    constructor Session::new() -> Session;
+    fn Session::add_and1(&self, val: i32) -> i32;
+    fn Session::greet(to: &str) -> String;
+});

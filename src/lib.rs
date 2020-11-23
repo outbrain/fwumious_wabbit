@@ -1,3 +1,9 @@
+
+ 
+mod java_glue;
+mod jni_c_header;
+pub use crate::java_glue::*;
+
 // src/lib.rs
 struct Session {
     a: i32,
