@@ -6,6 +6,8 @@ use crate::regressor;
 use crate::model_instance;
 use crate::persistence;
 use crate::cmdline;
+use crate::feature_buffer;
+use crate::parser;
 extern crate shell_words;
 
 
@@ -49,6 +51,7 @@ pub fn session_from_cl_string(cl_string: &str) -> Result<FWSession, Box<dyn Erro
     session_from_cl(&cl)
 }
 
+// Used for Java bindings
 impl FWSession {
     pub fn new(cl_string: &str) -> FWSession {
         let session = session_from_cl_string(cl_string).expect("failed to parse session")        ;
@@ -57,9 +60,21 @@ impl FWSession {
     }
 }
 
+struct FWPort {
+    pub fbt:feature_buffer::FeatureBufferTranslator,
+    pub pa: parser::VowpalParser,
+}
 
 
-
+// Stateful "port" that does predictions - needs to be used one at a time
+impl FWPort {
+    pub fn new(fws: &FWSession) -> FWPort {
+        let mut fbt = feature_buffer::FeatureBufferTranslator::new(&fws.mi);
+        let mut pa = parser::VowpalParser::new(&fws.vw);
+        FWPort {fbt: fbt, pa: pa}
+    }
+    
+}
 
 
 
