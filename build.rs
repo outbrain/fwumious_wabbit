@@ -49,12 +49,14 @@ fn gen_jni_bindings(jni_c_headers_rs: &Path) {
         "linux"
     });
 
-    let include_dirs = [java_include_dir, java_sys_include_dir, Path::new("/home/minmax/obgit/flapigen-rs/h").to_path_buf()];
+    let include_dirs = [java_include_dir, java_sys_include_dir];
     println!("jni include dirs {:?}", include_dirs);
 
+
     let jni_h_path =
-        search_file_in_directory(&include_dirs[..], "jni.h").expect("Can not find jni.h");
+        search_file_in_directory(&include_dirs[..], "jni.h").expect("Can not find jni.h - make sure your $JAVA_HOME/include has jni.h\n Under Ubuntu, install openjdk-11-jdk-headless");
     println!("cargo:rerun-if-changed={}", jni_h_path.display());
+    println!("cargo:rerun-if-env-changed={}", "JAVA_HOME");
 
     gen_binding(&include_dirs[..], &jni_h_path, jni_c_headers_rs).expect("gen_binding failed");
 }

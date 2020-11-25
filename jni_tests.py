@@ -49,10 +49,9 @@ def build_jar(java_dir: str, java_native_dir: str, use_shell: bool) -> str:
                           cwd=java_dir, shell=use_shell)
 
     jar_dir = str(os.path.join(os.getcwd(), "jni_tests", "src"))
+    jni_interface_dir = str(os.path.join(os.getcwd(), "java", "src"))
     purge(java_dir, ".*\.jar$")
-#    print (jar_dir, "YYYYYYYYY")
-#    print("SDD", ["jar", "cfv", "Test.jar", "src", "/home/minmax/obgit/fwumious_wabbit/jni_tests", jar_dir])
-    subprocess.check_call(["jar", "cfv", "Test.jar", "com/examples", "-C", "/home/minmax/obgit/fwumious_wabbit/java/src", "com/outbrain"], cwd=jar_dir, shell=use_shell)
+    subprocess.check_call(["jar", "cfv", "Test.jar", "com/examples", "-C", jni_interface_dir, "com/outbrain"], cwd=jar_dir, shell=use_shell)
     return jar_dir
 
 def find_path_to_cargo_artifacts(path_to_crate: str, cfg: str) -> str:
