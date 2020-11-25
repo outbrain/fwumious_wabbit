@@ -236,6 +236,9 @@ L: std::clone::Clone
         unsafe {
         let y = fb.label; // 0.0 or 1.0
 
+        if y == feature_buffer::NO_LABEL as f32 {
+            panic!("Trying to learn from an example that has no label");
+        }
         let local_data_ffm_len = fb.ffm_buffer.len() * (self.ffm_k * fb.ffm_fields_count) as usize;
         
         macro_rules! core_macro {
@@ -335,7 +338,7 @@ L: std::clone::Clone
 
                 if update && fb.example_importance != 0.0 {
                     let general_gradient = (y - prediction_probability) * fb.example_importance;
-        //            println!("General gradient: {}", general_gradient);
+                    //println!("General gradient: {}", general_gradient);
 
                     for hashvalue in fb.lr_buffer.iter() {
         //A                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_lr.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now

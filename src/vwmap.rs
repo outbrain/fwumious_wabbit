@@ -3,6 +3,7 @@ use std::error::Error;
 use std::path::PathBuf;
 use std::io::prelude::*;
 use std::env::current_dir;
+use std::string::String;
 use std::fs;
 use serde::{Serialize,Deserialize};//, Deserialize};
 
@@ -78,6 +79,24 @@ impl VwNamespaceMap {
                 panic!("Can't decode {:?}", record);
             }
             let char = char_str.chars().next().unwrap();
+            
+            vw_source.entries.push(VwNamespaceMapEntry {
+                namespace_char: char,
+                namespace_name: name_str.to_string(),
+                namespace_index: i,
+            });
+//            println!("Char: {}, name: {}, index: {}", char, name_str, i);
+        }
+        VwNamespaceMap::new_from_source(vw_source)
+    }
+
+    pub fn new_from_cl_string(string: &str) -> Result<VwNamespaceMap, Box<dyn Error>> {
+        let mut vw_source = VwNamespaceMapSource { entries: vec![]};
+        for (i, namespace_char) in string.chars().enumerate() {
+            let mut char_str = String::from("");
+            char_str.push(namespace_char);
+            let name_str = char_str;
+            let char = namespace_char;
             
             vw_source.entries.push(VwNamespaceMapEntry {
                 namespace_char: char,

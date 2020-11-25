@@ -1,6 +1,7 @@
 
 use std::path::Path;
 use std::error::Error;
+use std::io::Cursor;
 use crate::vwmap;
 use crate::regressor;
 use crate::model_instance;
@@ -32,9 +33,14 @@ pub fn session_from_cl(cl: &clap::ArgMatches) -> Result<FWSession, Box<dyn Error
     } else {
         // We load vw_namespace_map.csv just so we know all the namespaces ahead of time
         // This is one of the major differences from vowpal
-        let input_filename = cl.value_of("data").expect("--data expected");
-        let vw_namespace_map_filepath = Path::new(input_filename).parent().expect("Couldn't access path given by --data").join("vw_namespace_map.csv");
-        vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
+        if cl.is_present("data") {
+            let input_filename = cl.value_of("data").unwrap();
+            let vw_namespace_map_filepath = Path::new(input_filename).parent().expect("Couldn't access path given by --data").join("vw_namespace_map.csv");
+            vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
+        } else {
+            let namespaces_string = cl.value_of("namespaces").expect("either --initial_regressor, --data or --namespaces have to be declared, so list of namesapces is known");
+            vw = vwmap::VwNamespaceMap::new_from_cl_string(namespaces_string)?;
+        }
         mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
         re = regressor::get_regressor(&mi);
     };
@@ -60,19 +66,43 @@ impl FWSession {
     }
 }
 
-struct FWPort {
+pub struct FWPort {
     pub fbt:feature_buffer::FeatureBufferTranslator,
     pub pa: parser::VowpalParser,
 }
 
 
-// Stateful "port" that does predictions - needs to be used one at a time
+// Stateful "port" that does predictions - needs to be used one at a time, NOT thread safe
 impl FWPort {
     pub fn new(fws: &FWSession) -> FWPort {
         let mut fbt = feature_buffer::FeatureBufferTranslator::new(&fws.mi);
         let mut pa = parser::VowpalParser::new(&fws.vw);
         FWPort {fbt: fbt, pa: pa}
     }
+
+    // Function returns -1.0 if parsing is not successful, as this is an impossible result, caller can consider it an error
+    pub fn learn_internal(&mut self, fws: &mut FWSession, input_buffer: &str, update: bool) -> f32 {
+        let mut buffered_input = Cursor::new(input_buffer);
+        let reading_result = self.pa.next_vowpal(&mut buffered_input);
+        let buffer = match reading_result {
+                Ok([]) => return -1.0, // EOF
+                Ok(buffer2) => buffer2,
+                Err(_e) => return -1.0
+       };
+
+       self.fbt.translate(buffer);
+       //println!("FB: {:?}", self.fbt.feature_buffer);
+       return fws.re.learn(&self.fbt.feature_buffer, update, 0 )
+    }    
+    
+    pub fn learn(&mut self, fws: &mut FWSession, input_buffer: &str) -> f32 {
+        self.learn_internal(fws, input_buffer, true)
+    }
+    pub fn predict(&mut self, fws: &mut FWSession, input_buffer: &str) -> f32 {
+        self.learn_internal(fws, input_buffer, false)
+    }
+    
+    
     
 }
 

@@ -5,6 +5,8 @@ const VOWPAL_FNV_PRIME:u32 = 16777619;	// vowpal magic number
 //const CONSTANT_NAMESPACE:usize = 128;
 const CONSTANT_HASH:u32 = 11650396;
 
+pub const NO_LABEL:u32 = parser::NO_LABEL;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct HashAndValue {
     pub hash: u32,
