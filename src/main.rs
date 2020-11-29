@@ -29,9 +29,6 @@ mod optimizer;
 mod version;
 
 mod session;
-//use fw::{FWSession,session_from_cl};
-//use fw::{FWSession, session_from_cl};
-//mod lib;
 
 fn main() {
     match main2() {
