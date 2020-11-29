@@ -27,7 +27,7 @@ mod persistence;
 mod serving;
 mod optimizer;
 mod version;
-
+mod consts;
 //use crate::regressor::RegressorTrait;
 
 

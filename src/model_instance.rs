@@ -8,7 +8,7 @@ use serde::{Serialize,Deserialize};//, Deserialize};
 use serde_json::{Value};
 
 use crate::vwmap;
-
+use crate::consts;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct FeatureComboDesc {
@@ -195,10 +195,16 @@ impl ModelInstance {
                 mi.ffm_fields.push(vec![index]);
             }
             mi.ffm_k = k_str.parse().expect("Number expected");
+            if mi.ffm_k > consts::FFM_MAX_K as u32{
+                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Maximum ffm_k is: {}, passed: {}", consts::FFM_MAX_K, mi.ffm_k))))
+            }
         }
 
         if let Some(val) = cl.value_of("ffm_k") {
             mi.ffm_k = val.parse()?;
+            if mi.ffm_k > consts::FFM_MAX_K as u32{
+                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Maximum ffm_k is: {}, passed: {}", consts::FFM_MAX_K, mi.ffm_k))))
+            }
         }        
 
         if let Some(val) = cl.value_of("ffm_init_center") {

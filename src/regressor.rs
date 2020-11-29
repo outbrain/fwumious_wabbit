@@ -238,9 +238,6 @@ L: std::clone::Clone
         unsafe {
         let y = fb.label; // 0.0 or 1.0
 
-        if y == feature_buffer::NO_LABEL as f32 {
-            panic!("Trying to learn from an example that has no label");
-        }
         let local_data_ffm_len = fb.ffm_buffer.len() * (self.ffm_k * fb.ffm_fields_count) as usize;
         
         macro_rules! core_macro {
