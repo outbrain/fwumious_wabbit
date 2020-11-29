@@ -19,8 +19,11 @@ vw=/home/minmax/minmax_old/zgit/vowpal_wabbit/vowpalwabbit/vw
 
 echo "target/release/fw $namespaces $rest -c -p f $fwonly "
 
-cargo build --release && \
-target/release/fw $namespaces $rest -c -p f $fwonly 
+cargo build --release --target x86_64-unknown-linux-musl --bin fw && \
+target/x86_64-unknown-linux-musl/release/fw $namespaces $rest -c -p f $fwonly 
+#cargo build --release --bin fw && \
+#target/release/fw $namespaces $rest -c -p f $fwonly 
+
 #&& time $vw $namespaces $rest -c -p v $vwonly 
 #clear; cargo build && target/debug/fw $namespaces $rest -p f && time vw $namespaces $rest -p v
 

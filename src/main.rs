@@ -27,6 +27,7 @@ mod persistence;
 mod serving;
 mod optimizer;
 mod version;
+mod consts;
 
 mod session;
 

@@ -16,6 +16,7 @@ use crate::feature_buffer;
 use crate::feature_buffer::HashAndValue;
 use crate::feature_buffer::HashAndValueAndSeq;
 use crate::optimizer;
+use crate::consts;
 use optimizer::OptimizerTrait;
 
 
@@ -65,14 +66,15 @@ pub struct ImmutableRegressor {
 
 
 macro_rules! specialize_k {
-    ( $input_expr:expr, 
-      $output_const:ident,
-      $code_block:block  ) => {
+    ( $input_expr: expr, 
+      $output_const: ident,
+      $wsumbuf: ident,
+      $code_block: block  ) => {
          match $input_expr {
-                2 => {const $output_const:u32 = 2; $code_block},
-                4 => {const $output_const:u32 = 4; $code_block},
-                8 => {const $output_const:u32 = 8; $code_block},
-                val => {let $output_const:u32 = val; $code_block},
+                2 => {const $output_const:u32 = 2;   let mut $wsumbuf: [f32;$output_const as usize] = [0.0;$output_const as usize]; $code_block},
+                4 => {const $output_const:u32 = 4;   let mut $wsumbuf: [f32;$output_const as usize] = [0.0;$output_const as usize]; $code_block},
+                8 => {const $output_const:u32 = 8;   let mut $wsumbuf: [f32;$output_const as usize] = [0.0;$output_const as usize]; $code_block},
+                val => {let $output_const:u32 = val; let mut $wsumbuf: [f32;consts::FFM_MAX_K] = [0.0;consts::FFM_MAX_K];      $code_block},
             }
     };
 }
@@ -276,8 +278,9 @@ L: std::clone::Clone
                        ifc += fc;
                     }
 
-                    specialize_k!(self.ffm_k, FFMK, {
+                    specialize_k!(self.ffm_k, FFMK, wsumbuf, {
                     let mut ifc:usize = 0;
+                    //let mut wsumbuf: [f32;8] = [0.0;8];
                     for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
                         let mut right_local_index = left_hash.contra_field_index as usize + ifc;
                         for right_hash in fb.ffm_buffer.get_unchecked(i+1 ..).iter() {
@@ -309,7 +312,10 @@ L: std::clone::Clone
                                     let right_side = right_hash_weight * JOINT_VALUE;
                                     *local_data_ffm_values.get_unchecked_mut(llik) += right_side; // first derivate
                                     *local_data_ffm_values.get_unchecked_mut(rlik) += left_hash_weight  * JOINT_VALUE; // first derivate
-                                    wsum += left_hash_weight * right_side;
+                    //                wsum += left_hash_weight * right_side;
+                                    // We do this, so in theory Rust/LLVM could vectorize whole loop
+                                    // Unfortunately it does not happen in practice, but we will get there
+                                    *wsumbuf.get_unchecked_mut(k) += left_hash_weight * right_side;
                                 }
                             });
                             
@@ -317,8 +323,11 @@ L: std::clone::Clone
                         ifc += fc;
                         
                     }
-                
+                    for k in 0..FFMK as usize {
+                        wsum += wsumbuf[k];
+                    }
                     });
+                    
                 }
                 // Trick: instead of multiply in the updates with learning rate, multiply the result
                 // vowpal compatibility
@@ -341,9 +350,7 @@ L: std::clone::Clone
                     //println!("General gradient: {}", general_gradient);
 
                     for hashvalue in fb.lr_buffer.iter() {
-        //A                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_lr.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now
-                        //let feature_value = local_data_lr.get_unchecked(i).value;
-                        //let feature_index = local_data_lr.get_unchecked(i).index as usize;
+        //                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_lr.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now
                         let feature_index     = hashvalue.hash as usize;
                         let feature_value:f32 = hashvalue.value;
                         
