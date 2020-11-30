@@ -236,7 +236,6 @@ L: std::clone::Clone
     fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32 {
         let mut prediction_probability:f32;
         unsafe {
-        let y = fb.label; // 0.0 or 1.0
 
         let local_data_ffm_len = fb.ffm_buffer.len() * (self.ffm_k * fb.ffm_fields_count) as usize;
         
@@ -324,26 +323,29 @@ L: std::clone::Clone
                     });
                     
                 }
-                // Trick: instead of multiply in the updates with learning rate, multiply the result
-                // vowpal compatibility
-                if wsum.is_nan() {
-                    eprintln!("NAN prediction in example {}, forcing 0.0", example_num);
-                    return logistic(0.0);
-                } else if wsum < -50.0 {
-                    return logistic(-50.0);
-                } else if wsum > 50.0 {
-                    return logistic(50.0);
-                }
-
-                prediction_probability = logistic(wsum);
-
-                // Weights are now writable, but local_data is read only
                 
+                #[inline(always)]
+                fn wsum_to_prediction(wsum: f32, example_num: u32, fb: &feature_buffer::FeatureBuffer) -> (f32, f32) {
+                    // Trick: instead of multiply in the updates with learning rate, multiply the result
+                    // vowpal compatibility
+                    if wsum.is_nan() {
+                        eprintln!("NAN prediction in example {}, forcing 0.0", example_num);
+                        return (logistic(0.0), 0.0);
+                    } else if wsum < -50.0 {
+                        return (logistic(-50.0), 0.0);
+                    } else if wsum > 50.0 {
+                        return (logistic(50.0), 0.0);
+                    }
+
+                    let prediction_probability = logistic(wsum);
+                    let general_gradient = (fb.label - prediction_probability) * fb.example_importance;
+                    //println!("General gradient: {}", general_gradient);
+                    (prediction_probability, general_gradient)
+                }
+                let (prediction_probability_o, general_gradient) = wsum_to_prediction(wsum, example_num, fb);
+                prediction_probability = prediction_probability_o;
 
                 if update && fb.example_importance != 0.0 {
-                    let general_gradient = (y - prediction_probability) * fb.example_importance;
-                    //println!("General gradient: {}", general_gradient);
-
                     for hashvalue in fb.lr_buffer.iter() {
         //                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_lr.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now
                         let feature_index     = hashvalue.hash as usize;
@@ -484,6 +486,7 @@ impl ImmutableRegressor {
             wsum += self.weights.get_unchecked(hash).weight * feature_value;    
         }
 
+
         if self.ffm_k > 0 {
             let ffm_weights = &self.weights[self.ffm_weights_offset as usize..];
             specialize_k!(self.ffm_k, FFMK, wsumbuf, {                        
@@ -503,8 +506,7 @@ impl ImmutableRegressor {
                             // We do this, so in theory Rust/LLVM could vectorize whole loop
                             // Unfortunately it does not happen in practice, but we will get there
                             // Original: wsum += left_hash_weight * right_side;
-                            *wsumbuf.get_unchecked_mut(k as usize) += left_hash_weight * right_side;
-                        
+                            *wsumbuf.get_unchecked_mut(k as usize) += left_hash_weight * right_side;                        
                         }
                     }
                 
