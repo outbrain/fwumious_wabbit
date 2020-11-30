@@ -297,8 +297,6 @@ L: std::clone::Clone
                             let joint_value = left_hash.value * right_hash.value;
                             let lindex = *local_data_ffm_indices.get_unchecked(left_local_index) as usize;
                             let rindex = *local_data_ffm_indices.get_unchecked(right_local_index) as usize;
-//                            _mm_prefetch(mem::transmute::<&f32, &i8>(&local_data_ffm.get_unchecked(left_local_index).value), _MM_HINT_T0);  // No benefit for now
-//                            _mm_prefetch(mem::transmute::<&f32, &i8>(&local_data_ffm.get_unchecked(right_local_index).value), _MM_HINT_T0);  // No benefit for now
                             specialize_1f32!(joint_value, JOINT_VALUE, {
                                 for k in 0..FFMK as usize {
                                     let llik = (left_local_index as usize + k) as usize;
@@ -309,9 +307,9 @@ L: std::clone::Clone
                                     let right_side = right_hash_weight * JOINT_VALUE;
                                     *local_data_ffm_values.get_unchecked_mut(llik) += right_side; // first derivate
                                     *local_data_ffm_values.get_unchecked_mut(rlik) += left_hash_weight  * JOINT_VALUE; // first derivate
-                    //                wsum += left_hash_weight * right_side;
                                     // We do this, so in theory Rust/LLVM could vectorize whole loop
                                     // Unfortunately it does not happen in practice, but we will get there
+                                    // Original: wsum += left_hash_weight * right_side;
                                     *wsumbuf.get_unchecked_mut(k) += left_hash_weight * right_side;
                                 }
                             });
@@ -488,23 +486,34 @@ impl ImmutableRegressor {
 
         if self.ffm_k > 0 {
             let ffm_weights = &self.weights[self.ffm_weights_offset as usize..];
-            for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                for right_hash in fb.ffm_buffer.get_unchecked(i+1 ..).iter() {
-               //     if left_hash.contra_field_index == right_hash.contra_field_index {
-               //         continue	// not combining within a field
-               //     }
-                    let joint_value = left_hash.value * right_hash.value;
-                    let lindex = (left_hash.hash + right_hash.contra_field_index) as u32;
-                    let rindex = (right_hash.hash + left_hash.contra_field_index) as u32;
-                    for k in 0..self.ffm_k {
-                        let left_hash_weight  = ffm_weights.get_unchecked((lindex+k) as usize).weight;
-                        let right_hash_weight = ffm_weights.get_unchecked((rindex+k) as usize).weight;
-                        let right_side = right_hash_weight * joint_value;
-                        wsum += left_hash_weight * right_side;
+            specialize_k!(self.ffm_k, FFMK, wsumbuf, {                        
+                for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
+                    for right_hash in fb.ffm_buffer.get_unchecked(i+1 ..).iter() {
+                        //if left_hash.contra_field_index == right_hash.contra_field_index {
+                        //    continue	// not combining within a field
+                        //}
+                        let joint_value = left_hash.value * right_hash.value;
+                        let lindex = (left_hash.hash + right_hash.contra_field_index) as u32;
+                        let rindex = (right_hash.hash + left_hash.contra_field_index) as u32;
+                        for k in 0..FFMK {
+                            let left_hash_weight  = ffm_weights.get_unchecked((lindex+k) as usize).weight;
+                            let right_hash_weight = ffm_weights.get_unchecked((rindex+k) as usize).weight;
+                            let right_side = right_hash_weight * joint_value;
+                            //wsum += left_hash_weight * right_side;
+                            // We do this, so in theory Rust/LLVM could vectorize whole loop
+                            // Unfortunately it does not happen in practice, but we will get there
+                            // Original: wsum += left_hash_weight * right_side;
+                            *wsumbuf.get_unchecked_mut(k as usize) += left_hash_weight * right_side;
+                        
+                        }
                     }
+                
                 }
-            
-            }
+                for k in 0..FFMK as usize {
+                    wsum += wsumbuf[k];
+                }
+
+            });
 
             
         }
