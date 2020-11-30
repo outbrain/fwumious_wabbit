@@ -235,6 +235,7 @@ L: std::clone::Clone
 
     fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32 {
         let mut prediction_probability:f32;
+        let update:bool = update && (fb.example_importance != 0.0);
         unsafe {
 
         let local_data_ffm_len = fb.ffm_buffer.len() * (self.ffm_k * fb.ffm_fields_count) as usize;
@@ -253,13 +254,15 @@ L: std::clone::Clone
                 {
                     for (i, hashvalue) in fb.lr_buffer.iter().enumerate() {
                         // Prefetch couple of indexes from the future to prevent pipeline stalls due to memory latencies
-                        _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((fb.lr_buffer.get_unchecked(i+8).hash) as usize).weight), _MM_HINT_T0);  // No benefit for now
+                        // _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((fb.lr_buffer.get_unchecked(i+8).hash) as usize).weight), _MM_HINT_T0);  // No benefit for now
                         let feature_index     = hashvalue.hash;
                         let feature_value:f32 = hashvalue.value;
                         let feature_weight    = weights.get_unchecked(feature_index as usize).weight;
                         wsum += feature_weight * feature_value;
                     }
                 }
+                
+                
                 if self.ffm_k > 0 {
                     let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
                     let mut ifc:usize = 0;
@@ -280,8 +283,7 @@ L: std::clone::Clone
                     for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
                         let mut right_local_index = left_hash.contra_field_index as usize + ifc;
                         for right_hash in fb.ffm_buffer.get_unchecked(i+1 ..).iter() {
-                            right_local_index += fc;
-                            
+                            right_local_index += fc;       
                              
                             // Regular FFM implementation would prevent intra-field interactions
                             // But for the use case we tested this is both faster and it decreases logloss
@@ -307,7 +309,6 @@ L: std::clone::Clone
                                     *local_data_ffm_values.get_unchecked_mut(llik) += right_side; // first derivate
                                     *local_data_ffm_values.get_unchecked_mut(rlik) += left_hash_weight  * JOINT_VALUE; // first derivate
                                     // We do this, so in theory Rust/LLVM could vectorize whole loop
-                                    // Unfortunately it does not happen in practice, but we will get there
                                     // Original: wsum += left_hash_weight * right_side;
                                     *wsumbuf.get_unchecked_mut(k) += left_hash_weight * right_side;
                                 }
@@ -345,18 +346,20 @@ L: std::clone::Clone
                 let (prediction_probability_o, general_gradient) = wsum_to_prediction(wsum, example_num, fb);
                 prediction_probability = prediction_probability_o;
 
-                if update && fb.example_importance != 0.0 {
+                if update {
                     for hashvalue in fb.lr_buffer.iter() {
-        //                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_lr.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now
                         let feature_index     = hashvalue.hash as usize;
-                        let feature_value:f32 = hashvalue.value;
-                        
+                        let feature_value:f32 = hashvalue.value;                        
                         let gradient = general_gradient * feature_value;
                         let update = self.optimizer_lr.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
                         weights.get_unchecked_mut(feature_index).weight += update;
                     }
+                }
+                
+                
+                
+                if update {
                     for i in 0..local_data_ffm_len {
-        //                _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((local_data_ffm.get_unchecked(i+8)).index as usize).weight), _MM_HINT_T0);  // No benefit for now
                         let feature_value = *local_data_ffm_values.get_unchecked(i);
                         let feature_index = *local_data_ffm_indices.get_unchecked(i) as usize;
                         let gradient = general_gradient * feature_value;
