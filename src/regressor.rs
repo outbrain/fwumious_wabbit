@@ -42,19 +42,22 @@ pub struct WeightAndOptimizerData<L:OptimizerTrait> {
     pub optimizer_data: L::PerWeightStore,
 }
 
+pub struct RegFFM<L:OptimizerTrait> {
+    pub optimizer_ffm: L,
+    local_data_ffm_indices: Vec<u32>,
+    local_data_ffm_values: Vec<f32>,
+    ffm_k: u32,
+    ffm_one_over_k_root: f32,
+}
+
 pub struct Regressor<L:OptimizerTrait> {
     pub weights: Vec<WeightAndOptimizerData<L>>,       // all weights and gradients (has sub-spaces)
     pub weights_len: u32,
     pub ffm_weights_len: u32, 
     pub ffm_weights_offset: u32, 
-    ffm_k: u32,
-    ffm_one_over_k_root: f32,
     ffm_iw_weights_offset: u32,
-    ffm_k_threshold: f32,
     optimizer_lr: L,
-    pub optimizer_ffm: L,
-    local_data_ffm_indices: Vec<u32>,
-    local_data_ffm_values: Vec<f32>,
+    reg_ffm: RegFFM<L>,
 }
 
 #[derive(Clone)]
@@ -129,31 +132,34 @@ L: std::clone::Clone
 {
     pub fn new_without_weights(mi: &model_instance::ModelInstance) -> Regressor<L> {
         let lr_weights_len = 1 << mi.bit_precision;
+        let mut reg_ffm = RegFFM::<L>{
+            optimizer_ffm: L::new(),
+            local_data_ffm_indices: Vec::with_capacity(1024),
+            local_data_ffm_values: Vec::with_capacity(1024),
+            ffm_k: 0, 
+            ffm_one_over_k_root: 0.0, 
+        };
+        
         let mut rg = Regressor::<L>{
                             //minimum_optimizer: mi.minimum_optimizer,
                             weights: Vec::new(),
                             weights_len: 0, 
                             ffm_weights_offset: 0,
                             ffm_weights_len: 0,
-                            ffm_k: 0, 
-                            ffm_one_over_k_root: 0.0, 
                             optimizer_lr: L::new(),
-                            optimizer_ffm: L::new(),
-                            ffm_iw_weights_offset: 0, ffm_k_threshold:
-                            mi.ffm_k_threshold, 
-                            local_data_ffm_indices: Vec::with_capacity(1024),
-                            local_data_ffm_values: Vec::with_capacity(1024),
+                            ffm_iw_weights_offset: 0,
+                            reg_ffm: reg_ffm,
                      };
 
         rg.optimizer_lr.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
-        rg.optimizer_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
+        rg.reg_ffm.optimizer_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
 
         if mi.ffm_k > 0 {
             
             rg.ffm_weights_offset = lr_weights_len;            // Since we will align our dimensions, we need to know the number of bits for them
-            rg.ffm_k = mi.ffm_k;
+            rg.reg_ffm.ffm_k = mi.ffm_k;
             // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
-            rg.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * rg.ffm_k);
+            rg.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * rg.reg_ffm.ffm_k);
         }
         // Now allocate weights
         let iw_weights_len = 0;
@@ -169,10 +175,10 @@ L: std::clone::Clone
         if mi.ffm_k > 0 {       
             if mi.ffm_init_width == 0.0 {
                 // Initialization that has showed to work ok for us, like in ffm.pdf, but centered around zero and further divided by 50
-                rg.ffm_one_over_k_root = 1.0 / (rg.ffm_k as f32).sqrt() / 50.0;
+                rg.reg_ffm.ffm_one_over_k_root = 1.0 / (rg.reg_ffm.ffm_k as f32).sqrt() / 50.0;
                 for i in 0..rg.ffm_weights_len {
-                    rg.weights[(rg.ffm_weights_offset + i) as usize].weight = (1.0 * merand48((rg.ffm_weights_offset+i) as u64)-0.5) * rg.ffm_one_over_k_root;
-                    rg.weights[(rg.ffm_weights_offset + i) as usize].optimizer_data = rg.optimizer_ffm.initial_data();
+                    rg.weights[(rg.ffm_weights_offset + i) as usize].weight = (1.0 * merand48((rg.ffm_weights_offset+i) as u64)-0.5) * rg.reg_ffm.ffm_one_over_k_root;
+                    rg.weights[(rg.ffm_weights_offset + i) as usize].optimizer_data = rg.reg_ffm.optimizer_ffm.initial_data();
                 }
             } else {
                 let zero_half_band_width = mi.ffm_init_width * mi.ffm_init_zero_band * 0.5;
@@ -186,7 +192,7 @@ L: std::clone::Clone
                     }
                     w += mi.ffm_init_center;
                     rg.weights[(rg.ffm_weights_offset + i) as usize].weight = w; 
-                    rg.weights[(rg.ffm_weights_offset + i) as usize].optimizer_data = rg.optimizer_ffm.initial_data();
+                    rg.weights[(rg.ffm_weights_offset + i) as usize].optimizer_data = rg.reg_ffm.optimizer_ffm.initial_data();
                 }
 
             }
@@ -275,7 +281,8 @@ L: std::clone::Clone
                 
 
 
-                fn ffm_subrutine<T: OptimizerTrait>(mut selfx: &mut Regressor<T>, ffm_weights: &mut [WeightAndOptimizerData<T>], wsum: f32, example_num: u32, fb: &feature_buffer::FeatureBuffer, update:bool) -> (f32, f32) {
+                #[inline(always)]
+                fn ffm_subrutine<T: OptimizerTrait>(mut selfx: &mut RegFFM<T>, ffm_weights: &mut [WeightAndOptimizerData<T>], wsum: f32, example_num: u32, fb: &feature_buffer::FeatureBuffer, update:bool) -> (f32, f32) {
                 unsafe {
                     let mut prediction_probability:f32;
                     let mut general_gradient:f32;
@@ -395,7 +402,7 @@ L: std::clone::Clone
                 } // unsafe end
                 }
                 
-                let (prediction_probability_o, general_gradient) = ffm_subrutine::<L>(self, ffm_weights, wsum, example_num, fb, update);
+                let (prediction_probability_o, general_gradient) = ffm_subrutine::<L>(&mut self.reg_ffm, ffm_weights, wsum, example_num, fb, update);
                 prediction_probability = prediction_probability_o;
                 if update {
                     for hashvalue in fb.lr_buffer.iter() {
@@ -471,7 +478,7 @@ L: std::clone::Clone
         let fr = ImmutableRegressor {
                         weights: Arc::new(out_weights), 
                         ffm_weights_offset: self.ffm_weights_offset,
-                        ffm_k: self.ffm_k,
+                        ffm_k: self.reg_ffm.ffm_k,
         };
         Ok(fr)
     }
@@ -486,7 +493,7 @@ L: std::clone::Clone
         let fr = ImmutableRegressor {
                         weights: Arc::new(weights), 
                         ffm_weights_offset: self.ffm_weights_offset,
-                        ffm_k: self.ffm_k,
+                        ffm_k: self.reg_ffm.ffm_k,
         };
         Ok(fr)
     }
@@ -738,7 +745,7 @@ mod tests {
         for i in rg.ffm_weights_offset as usize..rg.weights.len() {
             rg.weights[i].weight = 1.0;
 //            rg.weights[i].acc_grad = 1.0;
-            rg.weights[i].optimizer_data = rg.optimizer_ffm.initial_data();
+            rg.weights[i].optimizer_data = rg.reg_ffm.optimizer_ffm.initial_data();
         }
     }
 
