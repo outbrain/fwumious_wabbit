@@ -128,7 +128,7 @@ pub fn get_regressor(mi: &model_instance::ModelInstance) -> Box<dyn RegressorTra
 }
 
 
-impl <L:OptimizerTrait>Regressor<L> 
+impl <L:OptimizerTrait + 'static>Regressor<L> 
 where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
 L: std::clone::Clone
 {
@@ -244,133 +244,194 @@ fn wsum_to_prediction(wsum: f32, example_num: u32, fb: &feature_buffer::FeatureB
     (prediction_probability, general_gradient)
 }
 
+pub trait RegressorAlgoTrait {
+    fn forward_backwards(&mut self, 
+                         further_regressors: &mut [Box<&mut dyn RegressorAlgoTrait>], 
+                         wsum: f32, 
+                         example_num: u32, 
+                         fb: &feature_buffer::FeatureBuffer,
+                         update:bool) -> (f32, f32);
 
-#[inline(always)]
-fn ffm_subrutine<T: OptimizerTrait>(mut selfx: &mut RegFFM<T>, wsum: f32, example_num: u32, fb: &feature_buffer::FeatureBuffer, update:bool) -> (f32, f32) {
-unsafe {
-    let mut prediction_probability:f32;
-    let mut general_gradient:f32;
-    let mut wsum = wsum;
-    let local_data_ffm_len = fb.ffm_buffer.len() * (selfx.ffm_k * fb.ffm_fields_count) as usize;
+}
 
-    macro_rules! core_macro {
-        (
-        $local_data_ffm_indices:ident,
-        $local_data_ffm_values:ident
-        ) => {
-         
-            let mut local_data_ffm_indices = $local_data_ffm_indices;
-            let mut local_data_ffm_values = $local_data_ffm_values;
-                
-            let ffm_weights = &mut selfx.weights;
-            if selfx.ffm_k > 0 {
-                let fc = (fb.ffm_fields_count  * selfx.ffm_k) as usize;
-                let mut ifc:usize = 0;
-                for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                    let base_weight_index = left_hash.hash;
-                    for j in 0..fc as usize {
-                        let addr = base_weight_index + j as u32;
-                        *local_data_ffm_indices.get_unchecked_mut(ifc + j) = addr;
-                        *local_data_ffm_values.get_unchecked_mut(ifc + j) = 0.0;
-                        _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(addr as usize).weight), _MM_HINT_T0);  // No benefit for now
-                   }
-                   ifc += fc;
-                }
+impl <L:OptimizerTrait> RegressorAlgoTrait for RegFFM<L> {
+    #[inline(always)]
+    fn forward_backwards(&mut self, 
+                                        further_regressors: &mut [Box<&mut dyn RegressorAlgoTrait>], 
+                                        wsum: f32, 
+                                        example_num: u32, 
+                                        fb: &feature_buffer::FeatureBuffer, 
+                                        update:bool) -> (f32, f32) {
+        let mut prediction_probability:f32;
+        let mut general_gradient:f32;
+        let mut wsum = wsum;
+        let local_data_ffm_len = fb.ffm_buffer.len() * (self.ffm_k * fb.ffm_fields_count) as usize;
 
-                specialize_k!(selfx.ffm_k, FFMK, wsumbuf, {
-                let mut ifc:usize = 0;
-                //let mut wsumbuf: [f32;8] = [0.0;8];
-                for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                    let mut right_local_index = left_hash.contra_field_index as usize + ifc;
-                    for right_hash in fb.ffm_buffer.get_unchecked(i+1 ..).iter() {
-                        right_local_index += fc;       
-                         
-                        // Regular FFM implementation would prevent intra-field interactions
-                        // But for the use case we tested this is both faster and it decreases logloss
-                        /*if left_hash.contra_field_index == right_hash.contra_field_index {
-                            continue	// not combining within a field
-                        }*/
+        unsafe {
+            macro_rules! core_macro {
+                (
+                $local_data_ffm_indices:ident,
+                $local_data_ffm_values:ident
+                ) => {
+                 
+                    let mut local_data_ffm_indices = $local_data_ffm_indices;
+                    let mut local_data_ffm_values = $local_data_ffm_values;
                         
-                        // FYI this is effectively what we calculate:
-    //                    let left_local_index =  i*fc + right_hash.contra_field_index as usize;
-    //                    let right_local_index = (i+1+j) * fc + left_hash.contra_field_index as usize;
-                        let left_local_index = ifc + right_hash.contra_field_index as usize;
-                        let joint_value = left_hash.value * right_hash.value;
-                        let lindex = *local_data_ffm_indices.get_unchecked(left_local_index) as usize;
-                        let rindex = *local_data_ffm_indices.get_unchecked(right_local_index) as usize;
-                        specialize_1f32!(joint_value, JOINT_VALUE, {
-                            for k in 0..FFMK as usize {
-                                let llik = (left_local_index as usize + k) as usize;
-                                let rlik = (right_local_index as usize + k) as usize;
-                                let left_hash_weight  = ffm_weights.get_unchecked((lindex+k) as usize).weight;
-                                let right_hash_weight = ffm_weights.get_unchecked((rindex+k) as usize).weight;
+                    let ffm_weights = &mut self.weights;
+                    if self.ffm_k > 0 {
+                        let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
+                        let mut ifc:usize = 0;
+                        for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
+                            let base_weight_index = left_hash.hash;
+                            for j in 0..fc as usize {
+                                let addr = base_weight_index + j as u32;
+                                *local_data_ffm_indices.get_unchecked_mut(ifc + j) = addr;
+                                *local_data_ffm_values.get_unchecked_mut(ifc + j) = 0.0;
+                                _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(addr as usize).weight), _MM_HINT_T0);  // No benefit for now
+                           }
+                           ifc += fc;
+                        }
+
+                        specialize_k!(self.ffm_k, FFMK, wsumbuf, {
+                        let mut ifc:usize = 0;
+                        //let mut wsumbuf: [f32;8] = [0.0;8];
+                        for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
+                            let mut right_local_index = left_hash.contra_field_index as usize + ifc;
+                            for right_hash in fb.ffm_buffer.get_unchecked(i+1 ..).iter() {
+                                right_local_index += fc;       
+                                 
+                                // Regular FFM implementation would prevent intra-field interactions
+                                // But for the use case we tested this is both faster and it decreases logloss
+                                /*if left_hash.contra_field_index == right_hash.contra_field_index {
+                                    continue	// not combining within a field
+                                }*/
                                 
-                                let right_side = right_hash_weight * JOINT_VALUE;
-                                *local_data_ffm_values.get_unchecked_mut(llik) += right_side; // first derivate
-                                *local_data_ffm_values.get_unchecked_mut(rlik) += left_hash_weight  * JOINT_VALUE; // first derivate
-                                // We do this, so in theory Rust/LLVM could vectorize whole loop
-                                // Original: wsum += left_hash_weight * right_side;
-                                *wsumbuf.get_unchecked_mut(k) += left_hash_weight * right_side;
+                                // FYI this is effectively what we calculate:
+            //                    let left_local_index =  i*fc + right_hash.contra_field_index as usize;
+            //                    let right_local_index = (i+1+j) * fc + left_hash.contra_field_index as usize;
+                                let left_local_index = ifc + right_hash.contra_field_index as usize;
+                                let joint_value = left_hash.value * right_hash.value;
+                                let lindex = *local_data_ffm_indices.get_unchecked(left_local_index) as usize;
+                                let rindex = *local_data_ffm_indices.get_unchecked(right_local_index) as usize;
+                                specialize_1f32!(joint_value, JOINT_VALUE, {
+                                    for k in 0..FFMK as usize {
+                                        let llik = (left_local_index as usize + k) as usize;
+                                        let rlik = (right_local_index as usize + k) as usize;
+                                        let left_hash_weight  = ffm_weights.get_unchecked((lindex+k) as usize).weight;
+                                        let right_hash_weight = ffm_weights.get_unchecked((rindex+k) as usize).weight;
+                                        
+                                        let right_side = right_hash_weight * JOINT_VALUE;
+                                        *local_data_ffm_values.get_unchecked_mut(llik) += right_side; // first derivate
+                                        *local_data_ffm_values.get_unchecked_mut(rlik) += left_hash_weight  * JOINT_VALUE; // first derivate
+                                        // We do this, so in theory Rust/LLVM could vectorize whole loop
+                                        // Original: wsum += left_hash_weight * right_side;
+                                        *wsumbuf.get_unchecked_mut(k) += left_hash_weight * right_side;
+                                    }
+                                });
+                                
                             }
+                            ifc += fc;
+                            
+                        }
+                        for k in 0..FFMK as usize {
+                            wsum += wsumbuf[k];
+                        }
                         });
                         
                     }
-                    ifc += fc;
                     
-                }
-                for k in 0..FFMK as usize {
-                    wsum += wsumbuf[k];
-                }
-                });
-                
-            }
+                    let (prediction_probability_o, general_gradient_o) = wsum_to_prediction(wsum, example_num, fb);
+                    prediction_probability = prediction_probability_o;
+                    general_gradient = general_gradient_o;
+
+                    if update {
+                        for i in 0..local_data_ffm_len {
+                            let feature_value = *local_data_ffm_values.get_unchecked(i);
+                            let feature_index = *local_data_ffm_indices.get_unchecked(i) as usize;
+                            let gradient = general_gradient * feature_value;
+                            let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
+                            ffm_weights.get_unchecked_mut(feature_index).weight += update;
+                        }
+                    }
+
+            //        (prediction_probability_o, general_gradient);
+                }; 
+            }; // End of macro
             
-            let (prediction_probability_o, general_gradient_o) = wsum_to_prediction(wsum, example_num, fb);
-            prediction_probability = prediction_probability_o;
-            general_gradient = general_gradient_o;
 
-            if update {
-                for i in 0..local_data_ffm_len {
-                    let feature_value = *local_data_ffm_values.get_unchecked(i);
-                    let feature_index = *local_data_ffm_indices.get_unchecked(i) as usize;
-                    let gradient = general_gradient * feature_value;
-                    let update = selfx.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
-                    ffm_weights.get_unchecked_mut(feature_index).weight += update;
+            if local_data_ffm_len < FFM_STACK_BUF_LEN {
+                // Fast-path - using on-stack data structures
+                let mut local_data_ffm_indices: [u32; FFM_STACK_BUF_LEN as usize] = MaybeUninit::uninit().assume_init();
+                let mut local_data_ffm_values: [f32; FFM_STACK_BUF_LEN as usize] = MaybeUninit::uninit().assume_init();//[0.0; FFM_STACK_BUF_LEN as usize];
+                            
+                core_macro!(local_data_ffm_indices, local_data_ffm_values);
+            } else {
+                // Slow-path - using heap data structures
+                if local_data_ffm_len > self.local_data_ffm_indices.len() {
+                    self.local_data_ffm_indices.reserve(local_data_ffm_len - self.local_data_ffm_indices.len() + 1024);
                 }
+                if local_data_ffm_len > self.local_data_ffm_values.len() {
+                    self.local_data_ffm_values.reserve(local_data_ffm_len - self.local_data_ffm_values.len() + 1024);
+                }
+                let local_data_ffm_indices = &mut self.local_data_ffm_indices;
+                let local_data_ffm_values = &mut self.local_data_ffm_values;
+                core_macro!(local_data_ffm_indices, local_data_ffm_values);
             }
-
-    //        (prediction_probability_o, general_gradient);
-        }; 
-    }; // End of macro
-    
-
-    if local_data_ffm_len < FFM_STACK_BUF_LEN {
-        // Fast-path - using on-stack data structures
-        let mut local_data_ffm_indices: [u32; FFM_STACK_BUF_LEN as usize] = MaybeUninit::uninit().assume_init();
-        let mut local_data_ffm_values: [f32; FFM_STACK_BUF_LEN as usize] = MaybeUninit::uninit().assume_init();//[0.0; FFM_STACK_BUF_LEN as usize];
-                    
-        core_macro!(local_data_ffm_indices, local_data_ffm_values);
-    } else {
-        // Slow-path - using heap data structures
-        if local_data_ffm_len > selfx.local_data_ffm_indices.len() {
-            selfx.local_data_ffm_indices.reserve(local_data_ffm_len - selfx.local_data_ffm_indices.len() + 1024);
-        }
-        if local_data_ffm_len > selfx.local_data_ffm_values.len() {
-            selfx.local_data_ffm_values.reserve(local_data_ffm_len - selfx.local_data_ffm_values.len() + 1024);
-        }
-        let local_data_ffm_indices = &mut selfx.local_data_ffm_indices;
-        let local_data_ffm_values = &mut selfx.local_data_ffm_values;
-        core_macro!(local_data_ffm_indices, local_data_ffm_values);
+            (prediction_probability, general_gradient)
+             
+        } // unsafe end
     }
-    (prediction_probability, general_gradient)
-     
-} // unsafe end
+
 }
 
 
+impl <L:OptimizerTrait> RegressorAlgoTrait for RegLR<L> {
+    #[inline(always)]
+    fn forward_backwards(&mut self, 
+                                        further_regressors: &mut [Box<&mut dyn RegressorAlgoTrait>], 
+                                        wsum: f32, 
+                                        example_num: u32, 
+                                        fb: &feature_buffer::FeatureBuffer, 
+                                        update:bool) -> (f32, f32) {
+        let mut prediction_probability:f32;
+        let mut general_gradient:f32;
+        let mut wsum = wsum;
+        
+        unsafe {
+            // Rust doesn't let us to simply take two mutable subslices... this tells rust they don't overlap
+            let weights = &mut self.weights;
+            {
+                for (i, hashvalue) in fb.lr_buffer.iter().enumerate() {
+                    // Prefetch couple of indexes from the future to prevent pipeline stalls due to memory latencies
+                    // _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((fb.lr_buffer.get_unchecked(i+8).hash) as usize).weight), _MM_HINT_T0);  // No benefit for now
+                    let feature_index     = hashvalue.hash;
+                    let feature_value:f32 = hashvalue.value;
+                    let feature_weight    = weights.get_unchecked(feature_index as usize).weight;
+                    wsum += feature_weight * feature_value;
+                }
+            }
+
+            let (next_regressor, further_regressors) = further_regressors.split_at_mut(1);
+            let (prediction_probability_o, general_gradient_o) = next_regressor[0].forward_backwards(further_regressors, wsum, example_num, fb, update);
+            prediction_probability = prediction_probability_o;
+            general_gradient = general_gradient_o;
+            if update {
+                for hashvalue in fb.lr_buffer.iter() {
+                    let feature_index     = hashvalue.hash as usize;
+                    let feature_value:f32 = hashvalue.value;                        
+                    let gradient = general_gradient * feature_value;
+                    let update = self.optimizer_lr.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
+                    weights.get_unchecked_mut(feature_index).weight += update;
+                }
+            }
+        } // end of unsafe
+        (prediction_probability, general_gradient)
+        
+    }
+}
 
     
-impl <L:OptimizerTrait>RegressorTrait for Regressor<L> 
+impl <L:OptimizerTrait + 'static> RegressorTrait for Regressor<L> 
 where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
 L: std::clone::Clone
 {
@@ -384,35 +445,15 @@ L: std::clone::Clone
     }
 
     fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32 {
-        let mut prediction_probability:f32;
         let update:bool = update && (fb.example_importance != 0.0);
-        unsafe {
-            let mut wsum:f32 = 0.0;
-            // Rust doesn't let us to simply take two mutable subslices... this tells rust they don't overlap
-            let weights = &mut self.reg_lr.weights;
-            {
-                for (i, hashvalue) in fb.lr_buffer.iter().enumerate() {
-                    // Prefetch couple of indexes from the future to prevent pipeline stalls due to memory latencies
-                    // _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((fb.lr_buffer.get_unchecked(i+8).hash) as usize).weight), _MM_HINT_T0);  // No benefit for now
-                    let feature_index     = hashvalue.hash;
-                    let feature_value:f32 = hashvalue.value;
-                    let feature_weight    = weights.get_unchecked(feature_index as usize).weight;
-                    wsum += feature_weight * feature_value;
-                }
-            }
-
-            let (prediction_probability_o, general_gradient) = ffm_subrutine::<L>(&mut self.reg_ffm, wsum, example_num, fb, update);
-            prediction_probability = prediction_probability_o;
-            if update {
-                for hashvalue in fb.lr_buffer.iter() {
-                    let feature_index     = hashvalue.hash as usize;
-                    let feature_value:f32 = hashvalue.value;                        
-                    let gradient = general_gradient * feature_value;
-                    let update = self.reg_lr.optimizer_lr.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
-                    weights.get_unchecked_mut(feature_index).weight += update;
-                }
-            }
-        } // end of unsafe
+        let further_regressors: &mut [Box<&mut dyn RegressorAlgoTrait>];
+//        let b1:Box<&mut dyn RegressorAlgoTrait> = Box::new(&mut self.reg_lr);
+        let mut b2:Box<&mut dyn RegressorAlgoTrait> = Box::new(&mut self.reg_ffm);
+        let mut v = [b2];
+        further_regressors = &mut v;
+        
+        let (prediction_probability, general_gradient) = self.reg_lr.forward_backwards(further_regressors, 0.0, example_num, fb, update);
+    
         return prediction_probability
     }
     
