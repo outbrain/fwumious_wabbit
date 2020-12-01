@@ -20,7 +20,6 @@ use crate::consts;
 use optimizer::OptimizerTrait;
 
 
-const LR_STACK_BUF_LEN:usize= 256;
 const FFM_STACK_BUF_LEN:usize= 16384;
 
 
@@ -48,16 +47,19 @@ pub struct RegFFM<L:OptimizerTrait> {
     local_data_ffm_values: Vec<f32>,
     ffm_k: u32,
     ffm_one_over_k_root: f32,
+    pub ffm_weights_len: u32, 
+    pub weights: Vec<WeightAndOptimizerData<L>>,
+}
+
+pub struct RegLR<L:OptimizerTrait> {
+    pub weights: Vec<WeightAndOptimizerData<L>>,
+    pub weights_len: u32,
+    optimizer_lr: L,
 }
 
 pub struct Regressor<L:OptimizerTrait> {
-    pub weights: Vec<WeightAndOptimizerData<L>>,       // all weights and gradients (has sub-spaces)
-    pub weights_len: u32,
-    pub ffm_weights_len: u32, 
-    pub ffm_weights_offset: u32, 
-    ffm_iw_weights_offset: u32,
-    optimizer_lr: L,
     pub reg_ffm: RegFFM<L>,
+    pub reg_lr: RegLR<L>,
 }
 
 #[derive(Clone)]
@@ -131,59 +133,56 @@ where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
 L: std::clone::Clone
 {
     pub fn new_without_weights(mi: &model_instance::ModelInstance) -> Regressor<L> {
-        let lr_weights_len = 1 << mi.bit_precision;
-        let mut reg_ffm = RegFFM::<L>{
-            optimizer_ffm: L::new(),
+        let mut reg_lr = RegLR::<L> {
+            weights: Vec::new(),
+            weights_len: 0, 
+            optimizer_lr: L::new(),
+        };
+        reg_lr.optimizer_lr.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
+        reg_lr.weights_len = 1 << mi.bit_precision;
+
+
+        let mut reg_ffm = RegFFM::<L> {
+            weights: Vec::new(),
+            ffm_weights_len: 0, 
             local_data_ffm_indices: Vec::with_capacity(1024),
             local_data_ffm_values: Vec::with_capacity(1024),
             ffm_k: 0, 
             ffm_one_over_k_root: 0.0, 
+            optimizer_ffm: L::new(),
         };
-        
-        let mut rg = Regressor::<L>{
-                            //minimum_optimizer: mi.minimum_optimizer,
-                            weights: Vec::new(),
-                            weights_len: 0, 
-                            ffm_weights_offset: 0,
-                            ffm_weights_len: 0,
-                            optimizer_lr: L::new(),
-                            ffm_iw_weights_offset: 0,
-                            reg_ffm: reg_ffm,
-                     };
-
-        rg.optimizer_lr.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
-        rg.reg_ffm.optimizer_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
-
         if mi.ffm_k > 0 {
-            
-            rg.ffm_weights_offset = lr_weights_len;            // Since we will align our dimensions, we need to know the number of bits for them
-            rg.reg_ffm.ffm_k = mi.ffm_k;
+            reg_ffm.optimizer_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
+            reg_ffm.ffm_k = mi.ffm_k;
             // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
-            rg.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * rg.reg_ffm.ffm_k);
+            reg_ffm.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * reg_ffm.ffm_k);
         }
-        // Now allocate weights
-        let iw_weights_len = 0;
-        rg.ffm_iw_weights_offset = lr_weights_len + rg.ffm_weights_len;        
-        rg.weights_len = lr_weights_len + rg.ffm_weights_len + iw_weights_len;
+
+        let mut rg = Regressor::<L>{
+            reg_lr: reg_lr,
+            reg_ffm: reg_ffm,
+        };
+
         rg
     }
     
     pub fn allocate_and_init_weights_(&mut self, mi: &model_instance::ModelInstance) {
         let rg = self;
-        rg.weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: rg.optimizer_lr.initial_data()}; rg.weights_len as usize];
+        rg.reg_lr.weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: rg.reg_lr.optimizer_lr.initial_data()}; rg.reg_lr.weights_len as usize];
+        rg.reg_ffm.weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: rg.reg_ffm.optimizer_ffm.initial_data()}; rg.reg_ffm.ffm_weights_len as usize];
 
         if mi.ffm_k > 0 {       
             if mi.ffm_init_width == 0.0 {
                 // Initialization that has showed to work ok for us, like in ffm.pdf, but centered around zero and further divided by 50
                 rg.reg_ffm.ffm_one_over_k_root = 1.0 / (rg.reg_ffm.ffm_k as f32).sqrt() / 50.0;
-                for i in 0..rg.ffm_weights_len {
-                    rg.weights[(rg.ffm_weights_offset + i) as usize].weight = (1.0 * merand48((rg.ffm_weights_offset+i) as u64)-0.5) * rg.reg_ffm.ffm_one_over_k_root;
-                    rg.weights[(rg.ffm_weights_offset + i) as usize].optimizer_data = rg.reg_ffm.optimizer_ffm.initial_data();
+                for i in 0..rg.reg_ffm.ffm_weights_len {
+                    rg.reg_ffm.weights[i as usize].weight = (1.0 * merand48((rg.reg_lr.weights.len() + i as usize) as u64)-0.5) * rg.reg_ffm.ffm_one_over_k_root;
+                    rg.reg_ffm.weights[i as usize].optimizer_data = rg.reg_ffm.optimizer_ffm.initial_data();
                 }
             } else {
                 let zero_half_band_width = mi.ffm_init_width * mi.ffm_init_zero_band * 0.5;
                 let band_width = mi.ffm_init_width * (1.0 - mi.ffm_init_zero_band);
-                for i in 0..rg.ffm_weights_len {
+                for i in 0..rg.reg_ffm.ffm_weights_len {
                     let mut w = merand48(i as u64) * band_width - band_width * 0.5;
                     if w > 0.0 { 
                         w += zero_half_band_width ;
@@ -191,8 +190,8 @@ L: std::clone::Clone
                         w -= zero_half_band_width;
                     }
                     w += mi.ffm_init_center;
-                    rg.weights[(rg.ffm_weights_offset + i) as usize].weight = w; 
-                    rg.weights[(rg.ffm_weights_offset + i) as usize].optimizer_data = rg.reg_ffm.optimizer_ffm.initial_data();
+                    rg.reg_ffm.weights[i as usize].weight = w; 
+                    rg.reg_ffm.weights[i as usize].optimizer_data = rg.reg_ffm.optimizer_ffm.initial_data();
                 }
 
             }
@@ -247,7 +246,7 @@ fn wsum_to_prediction(wsum: f32, example_num: u32, fb: &feature_buffer::FeatureB
 
 
 #[inline(always)]
-fn ffm_subrutine<T: OptimizerTrait>(mut selfx: &mut RegFFM<T>, ffm_weights: &mut [WeightAndOptimizerData<T>], wsum: f32, example_num: u32, fb: &feature_buffer::FeatureBuffer, update:bool) -> (f32, f32) {
+fn ffm_subrutine<T: OptimizerTrait>(mut selfx: &mut RegFFM<T>, wsum: f32, example_num: u32, fb: &feature_buffer::FeatureBuffer, update:bool) -> (f32, f32) {
 unsafe {
     let mut prediction_probability:f32;
     let mut general_gradient:f32;
@@ -263,6 +262,7 @@ unsafe {
             let mut local_data_ffm_indices = $local_data_ffm_indices;
             let mut local_data_ffm_values = $local_data_ffm_values;
                 
+            let ffm_weights = &mut selfx.weights;
             if selfx.ffm_k > 0 {
                 let fc = (fb.ffm_fields_count  * selfx.ffm_k) as usize;
                 let mut ifc:usize = 0;
@@ -384,14 +384,12 @@ L: std::clone::Clone
     }
 
     fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32 {
-
-
         let mut prediction_probability:f32;
         let update:bool = update && (fb.example_importance != 0.0);
         unsafe {
             let mut wsum:f32 = 0.0;
             // Rust doesn't let us to simply take two mutable subslices... this tells rust they don't overlap
-            let (weights, ffm_weights) = &mut self.weights.split_at_mut(self.ffm_weights_offset as usize);
+            let weights = &mut self.reg_lr.weights;
             {
                 for (i, hashvalue) in fb.lr_buffer.iter().enumerate() {
                     // Prefetch couple of indexes from the future to prevent pipeline stalls due to memory latencies
@@ -402,17 +400,15 @@ L: std::clone::Clone
                     wsum += feature_weight * feature_value;
                 }
             }
-            
 
-
-            let (prediction_probability_o, general_gradient) = ffm_subrutine::<L>(&mut self.reg_ffm, ffm_weights, wsum, example_num, fb, update);
+            let (prediction_probability_o, general_gradient) = ffm_subrutine::<L>(&mut self.reg_ffm, wsum, example_num, fb, update);
             prediction_probability = prediction_probability_o;
             if update {
                 for hashvalue in fb.lr_buffer.iter() {
                     let feature_index     = hashvalue.hash as usize;
                     let feature_value:f32 = hashvalue.value;                        
                     let gradient = general_gradient * feature_value;
-                    let update = self.optimizer_lr.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
+                    let update = self.reg_lr.optimizer_lr.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
                     weights.get_unchecked_mut(feature_index).weight += update;
                 }
             }
@@ -420,27 +416,38 @@ L: std::clone::Clone
         return prediction_probability
     }
     
+    // Yeah, this is weird. I just didn't want to break the format compatibility at this point
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
         // It's OK! I am a limo driver!
-        output_bufwriter.write_u64::<LittleEndian>(self.weights.len() as u64)?;
+        output_bufwriter.write_u64::<LittleEndian>((self.reg_lr.weights.len() + self.reg_ffm.weights.len()) as u64)?;
         unsafe {
-             let buf_view:&[u8] = slice::from_raw_parts(self.weights.as_ptr() as *const u8, 
-                                              self.weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
+             let buf_view:&[u8] = slice::from_raw_parts(self.reg_lr.weights.as_ptr() as *const u8, 
+                                              self.reg_lr.weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
              output_bufwriter.write(buf_view)?;
         }
-        
+        unsafe {
+             let buf_view:&[u8] = slice::from_raw_parts(self.reg_ffm.weights.as_ptr() as *const u8, 
+                                              self.reg_ffm.weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
+             output_bufwriter.write(buf_view)?;
+        }        
         Ok(())
     }
     
 
     fn overwrite_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
         let len = input_bufreader.read_u64::<LittleEndian>()?;
-        if len != self.weights.len() as u64 {
-            return Err(format!("Lenghts of weights array in regressor file differ: got {}, expected {}", len, self.weights.len()))?;
+        let expected_length = (self.reg_lr.weights.len() + self.reg_ffm.weights.len()) as u64;
+        if len != expected_length {
+            return Err(format!("Lenghts of weights array in regressor file differ: got {}, expected {}", len, expected_length))?;
         }
         unsafe {
-            let mut buf_view:&mut [u8] = slice::from_raw_parts_mut(self.weights.as_mut_ptr() as *mut u8, 
-                                             self.weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
+            let mut buf_view:&mut [u8] = slice::from_raw_parts_mut(self.reg_lr.weights.as_mut_ptr() as *mut u8, 
+                                             self.reg_lr.weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
+            input_bufreader.read_exact(&mut buf_view)?;
+        }
+        unsafe {
+            let mut buf_view:&mut [u8] = slice::from_raw_parts_mut(self.reg_ffm.weights.as_mut_ptr() as *mut u8, 
+                                             self.reg_ffm.weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
             input_bufreader.read_exact(&mut buf_view)?;
         }
 
@@ -451,15 +458,15 @@ L: std::clone::Clone
     // Creates immutable regressor from current setup and weights from buffer
     fn immutable_regressor_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<ImmutableRegressor, Box<dyn Error>> {
         let len = input_bufreader.read_u64::<LittleEndian>()?;
-        if len != self.weights_len as u64 {
-            return Err(format!("Lenghts of weights array in regressor file differ: got {}, expected {}", len, self.weights_len))?;
+        let expected_length = (self.reg_lr.weights_len + self.reg_ffm.ffm_weights_len) as u64;
+        if len != expected_length {
+            return Err(format!("Lenghts of weights array in regressor file differ: got {}, expected {}", len, expected_length))?;
         }
-              
         const BUF_LEN:usize = 1024 * 1024;
-        let mut in_weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_lr.initial_data()}; BUF_LEN as usize];
+        let mut in_weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.reg_lr.optimizer_lr.initial_data()}; BUF_LEN as usize];
         let mut out_weights = Vec::<Weight>::new();
         
-        let mut remaining_weights = self.weights_len as usize;
+        let mut remaining_weights = (self.reg_lr.weights_len + self.reg_ffm.ffm_weights_len) as usize;
         unsafe {
             while remaining_weights > 0 {
                 let chunk_size = min(remaining_weights, BUF_LEN);
@@ -477,7 +484,7 @@ L: std::clone::Clone
 
         let fr = ImmutableRegressor {
                         weights: Arc::new(out_weights), 
-                        ffm_weights_offset: self.ffm_weights_offset,
+                        ffm_weights_offset: self.reg_lr.weights_len as u32,
                         ffm_k: self.reg_ffm.ffm_k,
         };
         Ok(fr)
@@ -486,13 +493,15 @@ L: std::clone::Clone
     // Create immutable regressor from current regressor
     fn immutable_regressor(&mut self) -> Result<ImmutableRegressor, Box<dyn Error>> {
         let mut weights = Vec::<Weight>::new();
-        for w in &self.weights {
+        for w in &self.reg_lr.weights {
             weights.push(Weight{weight:w.weight});
         }
-
+        for w in &self.reg_ffm.weights {
+            weights.push(Weight{weight:w.weight});
+        }
         let fr = ImmutableRegressor {
                         weights: Arc::new(weights), 
-                        ffm_weights_offset: self.ffm_weights_offset,
+                        ffm_weights_offset: self.reg_lr.weights_len as u32,
                         ffm_k: self.reg_ffm.ffm_k,
         };
         Ok(fr)
@@ -742,10 +751,10 @@ mod tests {
     }
 
     fn ffm_init<T:OptimizerTrait>(rg: &mut Regressor<T>) -> () {
-        for i in rg.ffm_weights_offset as usize..rg.weights.len() {
-            rg.weights[i].weight = 1.0;
+        for i in 0..rg.reg_ffm.weights.len() {
+            rg.reg_ffm.weights[i].weight = 1.0;
 //            rg.weights[i].acc_grad = 1.0;
-            rg.weights[i].optimizer_data = rg.reg_ffm.optimizer_ffm.initial_data();
+            rg.reg_ffm.weights[i].optimizer_data = rg.reg_ffm.optimizer_ffm.initial_data();
         }
     }
 

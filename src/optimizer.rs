@@ -248,8 +248,8 @@ mod tests {
                     } else {
                         relative_error = error; // happens when the update is 0.0
                     }
-                    println!("Relative error {}", relative_error);
-                    println!("Err: {} - p_flex: {}, p_lut: {}, gradient: {}, accumulation {}", error, p_flex, p_lut, *gradient, *accumulation);
+                    //println!("Relative error {}", relative_error);
+                    //println!("Err: {} - p_flex: {}, p_lut: {}, gradient: {}, accumulation {}", error, p_flex, p_lut, *gradient, *accumulation);
                     assert!(relative_error < 0.05); 
                 }
             }

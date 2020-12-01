@@ -42,8 +42,8 @@ debug = false
 [profile.dev]
 opt-level = 3
 debug = true
-debug-assertions = false
-overflow-checks = false
+debug-assertions = true
+overflow-checks = true
 lto = false
 panic = 'unwind'
 incremental = false
