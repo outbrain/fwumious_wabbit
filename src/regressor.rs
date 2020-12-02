@@ -60,6 +60,8 @@ pub struct RegLR<L:OptimizerTrait> {
 pub struct Regressor<L:OptimizerTrait> {
     pub reg_ffm: RegFFM<L>,
     pub reg_lr: RegLR<L>,
+//    pub vv: Vec<&mut dyn RegressorAlgoTrait>,
+
 }
 
 #[derive(Clone)]
@@ -161,6 +163,7 @@ L: std::clone::Clone
         let mut rg = Regressor::<L>{
             reg_lr: reg_lr,
             reg_ffm: reg_ffm,
+//            vv: vec![&mut reg_ffm],
         };
 
         rg
@@ -246,7 +249,7 @@ fn wsum_to_prediction(wsum: f32, example_num: u32, fb: &feature_buffer::FeatureB
 
 pub trait RegressorAlgoTrait {
     fn forward_backwards(&mut self, 
-                         further_regressors: &mut [Box<&mut dyn RegressorAlgoTrait>], 
+                         further_regressors: &mut [&mut dyn RegressorAlgoTrait], 
                          wsum: f32, 
                          example_num: u32, 
                          fb: &feature_buffer::FeatureBuffer,
@@ -257,7 +260,7 @@ pub trait RegressorAlgoTrait {
 impl <L:OptimizerTrait> RegressorAlgoTrait for RegFFM<L> {
     #[inline(always)]
     fn forward_backwards(&mut self, 
-                                        further_regressors: &mut [Box<&mut dyn RegressorAlgoTrait>], 
+                                        further_regressors: &mut [&mut dyn RegressorAlgoTrait], 
                                         wsum: f32, 
                                         example_num: u32, 
                                         fb: &feature_buffer::FeatureBuffer, 
@@ -388,7 +391,7 @@ impl <L:OptimizerTrait> RegressorAlgoTrait for RegFFM<L> {
 impl <L:OptimizerTrait> RegressorAlgoTrait for RegLR<L> {
     #[inline(always)]
     fn forward_backwards(&mut self, 
-                                        further_regressors: &mut [Box<&mut dyn RegressorAlgoTrait>], 
+                                        further_regressors: &mut [&mut dyn RegressorAlgoTrait], 
                                         wsum: f32, 
                                         example_num: u32, 
                                         fb: &feature_buffer::FeatureBuffer, 
@@ -446,14 +449,14 @@ L: std::clone::Clone
 
     fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32 {
         let update:bool = update && (fb.example_importance != 0.0);
-        let further_regressors: &mut [Box<&mut dyn RegressorAlgoTrait>];
-//        let b1:Box<&mut dyn RegressorAlgoTrait> = Box::new(&mut self.reg_lr);
-        let mut b2:Box<&mut dyn RegressorAlgoTrait> = Box::new(&mut self.reg_ffm);
-        let mut v = [b2];
-        further_regressors = &mut v;
+        let mut v: Vec<&mut dyn RegressorAlgoTrait>;
+        let further_regressors: &mut [&mut dyn RegressorAlgoTrait];
+        v = vec![&mut self.reg_ffm];
+        further_regressors = &mut v[..];
         
         let (prediction_probability, general_gradient) = self.reg_lr.forward_backwards(further_regressors, 0.0, example_num, fb, update);
     
+//        println!("A {}", bb.ffm_weights_len);
         return prediction_probability
     }
     
