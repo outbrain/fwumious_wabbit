@@ -47,21 +47,24 @@ pub struct RegFFM<L:OptimizerTrait> {
     local_data_ffm_values: Vec<f32>,
     ffm_k: u32,
     ffm_one_over_k_root: f32,
-    pub ffm_weights_len: u32, 
+    ffm_weights_len: u32, 
     pub weights: Vec<WeightAndOptimizerData<L>>,
 }
 
 pub struct RegLR<L:OptimizerTrait> {
     pub weights: Vec<WeightAndOptimizerData<L>>,
-    pub weights_len: u32,
+    weights_len: u32,
     optimizer_lr: L,
 }
 
-pub struct Regressor<L:OptimizerTrait> {
-    pub reg_ffm: RegFFM<L>,
-    pub reg_lr: RegLR<L>,
-//    pub vv: Vec<&mut dyn RegressorAlgoTrait>,
+pub struct RegSigmoid {
+}
 
+pub struct Regressor<'a, L:OptimizerTrait> {
+    pub reg_ffm: Box<RegFFM<L>>,
+    pub reg_lr: Box<RegLR<L>>,
+    pub reg_sig: Box<RegSigmoid>, 
+    pub vv: Vec<&'a mut dyn RegressorAlgoTrait>,
 }
 
 #[derive(Clone)]
@@ -130,11 +133,11 @@ pub fn get_regressor(mi: &model_instance::ModelInstance) -> Box<dyn RegressorTra
 }
 
 
-impl <L:OptimizerTrait + 'static>Regressor<L> 
+impl <'a, L:OptimizerTrait + 'static>Regressor<'a, L> 
 where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
 L: std::clone::Clone
 {
-    pub fn new_without_weights(mi: &model_instance::ModelInstance) -> Regressor<L> {
+    pub fn new_without_weights(mi: &model_instance::ModelInstance) -> Regressor<'a, L> {
         let mut reg_lr = RegLR::<L> {
             weights: Vec::new(),
             weights_len: 0, 
@@ -159,49 +162,44 @@ L: std::clone::Clone
             // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
             reg_ffm.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * reg_ffm.ffm_k);
         }
+        
+        let reg_sigmoid = RegSigmoid {};
 
         let mut rg = Regressor::<L>{
-            reg_lr: reg_lr,
-            reg_ffm: reg_ffm,
-//            vv: vec![&mut reg_ffm],
+            reg_lr: Box::new(reg_lr),
+            reg_ffm: Box::new(reg_ffm),
+            reg_sig: Box::new(reg_sigmoid),
+            vv: Vec::new(),
         };
+
+        unsafe {
+            // A bit more elaborate than necessary. Let's really make it clear what's happening
+            let r1: &mut RegLR<L> = rg.reg_lr.as_mut();
+            let r2: &mut RegLR<L> = mem::transmute(&mut *r1);
+            rg.vv.push(r2 as &mut dyn RegressorAlgoTrait);
+            
+            if mi.ffm_k > 0 {
+                let r1: &mut RegFFM<L> = rg.reg_ffm.as_mut();
+                let r2: &mut RegFFM<L> = mem::transmute(&mut *r1);
+                rg.vv.push(r2 as &mut dyn RegressorAlgoTrait);
+            }
+            
+            let r1: &mut RegSigmoid = rg.reg_sig.as_mut();
+            let r2: &mut RegSigmoid = mem::transmute(&mut *r1);
+            rg.vv.push(r2 as &mut dyn RegressorAlgoTrait);
+        }
 
         rg
     }
     
     pub fn allocate_and_init_weights_(&mut self, mi: &model_instance::ModelInstance) {
-        let rg = self;
-        rg.reg_lr.weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: rg.reg_lr.optimizer_lr.initial_data()}; rg.reg_lr.weights_len as usize];
-        rg.reg_ffm.weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: rg.reg_ffm.optimizer_ffm.initial_data()}; rg.reg_ffm.ffm_weights_len as usize];
-
-        if mi.ffm_k > 0 {       
-            if mi.ffm_init_width == 0.0 {
-                // Initialization that has showed to work ok for us, like in ffm.pdf, but centered around zero and further divided by 50
-                rg.reg_ffm.ffm_one_over_k_root = 1.0 / (rg.reg_ffm.ffm_k as f32).sqrt() / 50.0;
-                for i in 0..rg.reg_ffm.ffm_weights_len {
-                    rg.reg_ffm.weights[i as usize].weight = (1.0 * merand48((rg.reg_lr.weights.len() + i as usize) as u64)-0.5) * rg.reg_ffm.ffm_one_over_k_root;
-                    rg.reg_ffm.weights[i as usize].optimizer_data = rg.reg_ffm.optimizer_ffm.initial_data();
-                }
-            } else {
-                let zero_half_band_width = mi.ffm_init_width * mi.ffm_init_zero_band * 0.5;
-                let band_width = mi.ffm_init_width * (1.0 - mi.ffm_init_zero_band);
-                for i in 0..rg.reg_ffm.ffm_weights_len {
-                    let mut w = merand48(i as u64) * band_width - band_width * 0.5;
-                    if w > 0.0 { 
-                        w += zero_half_band_width ;
-                    } else {
-                        w -= zero_half_band_width;
-                    }
-                    w += mi.ffm_init_center;
-                    rg.reg_ffm.weights[i as usize].weight = w; 
-                    rg.reg_ffm.weights[i as usize].optimizer_data = rg.reg_ffm.optimizer_ffm.initial_data();
-                }
-
-            }
+        for rr in &mut self.vv {
+            rr.allocate_and_init_weights(mi);
         }
     }
+    
 
-    pub fn new(mi: &model_instance::ModelInstance) -> Regressor<L> {
+    pub fn new(mi: &model_instance::ModelInstance) -> Regressor<'a, L> {
         let mut rg = Regressor::<L>::new_without_weights(mi);
         rg.allocate_and_init_weights(mi);
         rg
@@ -222,30 +220,6 @@ pub fn stable_logistic(t: f32) -> f32 {
 }
 */
 
-#[inline(always)]
-pub fn logistic(t: f32) -> f32 {
-    return (1.0+(-t).exp()).recip();
-}
-
-
-#[inline(always)]
-fn wsum_to_prediction(wsum: f32, example_num: u32, fb: &feature_buffer::FeatureBuffer) -> (f32, f32) {
-    // Trick: instead of multiply in the updates with learning rate, multiply the result
-    // vowpal compatibility
-    if wsum.is_nan() {
-        eprintln!("NAN prediction in example {}, forcing 0.0", example_num);
-        return (logistic(0.0), 0.0);
-    } else if wsum < -50.0 {
-        return (logistic(-50.0), 0.0);
-    } else if wsum > 50.0 {
-        return (logistic(50.0), 0.0);
-    }
-
-    let prediction_probability = logistic(wsum);
-    let general_gradient = (fb.label - prediction_probability) * fb.example_importance;
-    //println!("General gradient: {}", general_gradient);
-    (prediction_probability, general_gradient)
-}
 
 pub trait RegressorAlgoTrait {
     fn forward_backwards(&mut self, 
@@ -255,18 +229,103 @@ pub trait RegressorAlgoTrait {
                          fb: &feature_buffer::FeatureBuffer,
                          update:bool) -> (f32, f32);
 
+    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance);
+    fn get_weights_len(&self) -> usize;
 }
 
-impl <L:OptimizerTrait> RegressorAlgoTrait for RegFFM<L> {
+
+
+
+
+impl RegressorAlgoTrait for RegSigmoid {
     #[inline(always)]
     fn forward_backwards(&mut self, 
-                                        further_regressors: &mut [&mut dyn RegressorAlgoTrait], 
-                                        wsum: f32, 
-                                        example_num: u32, 
-                                        fb: &feature_buffer::FeatureBuffer, 
-                                        update:bool) -> (f32, f32) {
-        let mut prediction_probability:f32;
-        let mut general_gradient:f32;
+                    further_regressors: &mut [&mut dyn RegressorAlgoTrait], 
+                    wsum: f32, 
+                    example_num: u32, 
+                    fb: &feature_buffer::FeatureBuffer, 
+                    update:bool) -> (f32, f32) {
+//    fn wsum_to_prediction(wsum: f32, example_num: u32, fb: &feature_buffer::FeatureBuffer) -> (f32, f32) {
+
+        if further_regressors.len() != 0 {
+            panic!("RegSigmoid can only be at the end of the chain!");
+        }
+        
+        #[inline(always)]
+        pub fn logistic(t: f32) -> f32 {
+            return (1.0+(-t).exp()).recip();
+        }
+
+        
+        // vowpal compatibility
+        if wsum.is_nan() {
+            eprintln!("NAN prediction in example {}, forcing 0.0", example_num);
+            return (logistic(0.0), 0.0);
+        } else if wsum < -50.0 {
+            return (logistic(-50.0), 0.0);
+        } else if wsum > 50.0 {
+            return (logistic(50.0), 0.0);
+        }        
+
+        let prediction_probability = logistic(wsum);
+        let general_gradient = (fb.label - prediction_probability) * fb.example_importance;
+        //println!("General gradient: {}", general_gradient);
+        (prediction_probability, general_gradient)
+    }
+    
+    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
+        // empty
+    }
+    fn get_weights_len(&self) -> usize {
+        return 0
+    }
+
+}
+
+
+
+impl <L:OptimizerTrait> RegressorAlgoTrait for RegFFM<L>
+where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
+L: std::clone::Clone
+
+ {
+    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
+        self.weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_ffm.initial_data()}; self.ffm_weights_len as usize];
+        if mi.ffm_k > 0 {       
+            if mi.ffm_init_width == 0.0 {
+                // Initialization that has showed to work ok for us, like in ffm.pdf, but centered around zero and further divided by 50
+                self.ffm_one_over_k_root = 1.0 / (self.ffm_k as f32).sqrt() / 50.0;
+                for i in 0..self.ffm_weights_len {
+                    self.weights[i as usize].weight = (1.0 * merand48((self.ffm_weights_len as usize+ i as usize) as u64)-0.5) * self.ffm_one_over_k_root;
+                    self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
+                }
+            } else {
+                let zero_half_band_width = mi.ffm_init_width * mi.ffm_init_zero_band * 0.5;
+                let band_width = mi.ffm_init_width * (1.0 - mi.ffm_init_zero_band);
+                for i in 0..self.ffm_weights_len {
+                    let mut w = merand48(i as u64) * band_width - band_width * 0.5;
+                    if w > 0.0 { 
+                        w += zero_half_band_width ;
+                    } else {
+                        w -= zero_half_band_width;
+                    }
+                    w += mi.ffm_init_center;
+                    self.weights[i as usize].weight = w; 
+                    self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
+                }
+
+            }
+        }
+    }
+
+
+    #[inline(always)]
+    fn forward_backwards(&mut self, 
+                        further_regressors: &mut [&mut dyn RegressorAlgoTrait], 
+                        wsum: f32, 
+                        example_num: u32, 
+                        fb: &feature_buffer::FeatureBuffer, 
+                        update:bool) -> (f32, f32) {
         let mut wsum = wsum;
         let local_data_ffm_len = fb.ffm_buffer.len() * (self.ffm_k * fb.ffm_fields_count) as usize;
 
@@ -277,27 +336,25 @@ impl <L:OptimizerTrait> RegressorAlgoTrait for RegFFM<L> {
                 $local_data_ffm_values:ident
                 ) => {
                  
-                    let mut local_data_ffm_indices = $local_data_ffm_indices;
-                    let mut local_data_ffm_values = $local_data_ffm_values;
+                    let mut local_data_ffm_indices = &mut $local_data_ffm_indices;
+                    let mut local_data_ffm_values = &mut $local_data_ffm_values;
                         
                     let ffm_weights = &mut self.weights;
-                    if self.ffm_k > 0 {
-                        let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
-                        let mut ifc:usize = 0;
-                        for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                            let base_weight_index = left_hash.hash;
-                            for j in 0..fc as usize {
-                                let addr = base_weight_index + j as u32;
-                                *local_data_ffm_indices.get_unchecked_mut(ifc + j) = addr;
-                                *local_data_ffm_values.get_unchecked_mut(ifc + j) = 0.0;
-                                _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(addr as usize).weight), _MM_HINT_T0);  // No benefit for now
-                           }
-                           ifc += fc;
-                        }
+                    let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
+                    let mut ifc:usize = 0;
+                    for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
+                        let base_weight_index = left_hash.hash;
+                        for j in 0..fc as usize {
+                            let addr = base_weight_index + j as u32;
+                            *local_data_ffm_indices.get_unchecked_mut(ifc + j) = addr;
+                            *local_data_ffm_values.get_unchecked_mut(ifc + j) = 0.0;
+                            _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(addr as usize).weight), _MM_HINT_T0);  // No benefit for now
+                       }
+                       ifc += fc;
+                    }
 
-                        specialize_k!(self.ffm_k, FFMK, wsumbuf, {
+                    specialize_k!(self.ffm_k, FFMK, wsumbuf, {
                         let mut ifc:usize = 0;
-                        //let mut wsumbuf: [f32;8] = [0.0;8];
                         for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
                             let mut right_local_index = left_hash.contra_field_index as usize + ifc;
                             for right_hash in fb.ffm_buffer.get_unchecked(i+1 ..).iter() {
@@ -339,16 +396,13 @@ impl <L:OptimizerTrait> RegressorAlgoTrait for RegFFM<L> {
                         for k in 0..FFMK as usize {
                             wsum += wsumbuf[k];
                         }
-                        });
-                        
-                    }
+                    });                     
                     
-                    let (prediction_probability_o, general_gradient_o) = wsum_to_prediction(wsum, example_num, fb);
-                    prediction_probability = prediction_probability_o;
-                    general_gradient = general_gradient_o;
-
+                    let (next_regressor, further_regressors) = further_regressors.split_at_mut(1);
+                    let (prediction_probability, general_gradient) = next_regressor[0].forward_backwards(further_regressors, wsum, example_num, fb, update);
+                    
                     if update {
-                        for i in 0..local_data_ffm_len {
+                       for i in 0..local_data_ffm_len {
                             let feature_value = *local_data_ffm_values.get_unchecked(i);
                             let feature_index = *local_data_ffm_indices.get_unchecked(i) as usize;
                             let gradient = general_gradient * feature_value;
@@ -356,8 +410,8 @@ impl <L:OptimizerTrait> RegressorAlgoTrait for RegFFM<L> {
                             ffm_weights.get_unchecked_mut(feature_index).weight += update;
                         }
                     }
-
-            //        (prediction_probability_o, general_gradient);
+                    // The only exit point
+                    return (prediction_probability, general_gradient)
                 }; 
             }; // End of macro
             
@@ -376,30 +430,43 @@ impl <L:OptimizerTrait> RegressorAlgoTrait for RegFFM<L> {
                 if local_data_ffm_len > self.local_data_ffm_values.len() {
                     self.local_data_ffm_values.reserve(local_data_ffm_len - self.local_data_ffm_values.len() + 1024);
                 }
-                let local_data_ffm_indices = &mut self.local_data_ffm_indices;
-                let local_data_ffm_values = &mut self.local_data_ffm_values;
+                let mut local_data_ffm_indices = &mut self.local_data_ffm_indices;
+                let mut local_data_ffm_values = &mut self.local_data_ffm_values;
+            
                 core_macro!(local_data_ffm_indices, local_data_ffm_values);
             }
-            (prediction_probability, general_gradient)
              
         } // unsafe end
     }
+    
+    fn get_weights_len(&self) -> usize {
+        return self.ffm_weights_len as usize;
+    }
+
 
 }
 
 
-impl <L:OptimizerTrait> RegressorAlgoTrait for RegLR<L> {
+impl <L:OptimizerTrait> RegressorAlgoTrait for RegLR<L> 
+where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
+L: std::clone::Clone
+{
+    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
+        self.weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_lr.initial_data()}; self.weights_len as usize];
+        
+    }
+
+
     #[inline(always)]
     fn forward_backwards(&mut self, 
-                                        further_regressors: &mut [&mut dyn RegressorAlgoTrait], 
-                                        wsum: f32, 
-                                        example_num: u32, 
-                                        fb: &feature_buffer::FeatureBuffer, 
-                                        update:bool) -> (f32, f32) {
+                            further_regressors: &mut [&mut dyn RegressorAlgoTrait], 
+                            wsum: f32, 
+                            example_num: u32, 
+                            fb: &feature_buffer::FeatureBuffer, 
+                            update:bool) -> (f32, f32) {
         let mut prediction_probability:f32;
         let mut general_gradient:f32;
         let mut wsum = wsum;
-        
         unsafe {
             // Rust doesn't let us to simply take two mutable subslices... this tells rust they don't overlap
             let weights = &mut self.weights;
@@ -431,10 +498,15 @@ impl <L:OptimizerTrait> RegressorAlgoTrait for RegLR<L> {
         (prediction_probability, general_gradient)
         
     }
+    
+    fn get_weights_len(&self) -> usize {
+        return self.weights_len as usize;
+    }
+
 }
 
     
-impl <L:OptimizerTrait + 'static> RegressorTrait for Regressor<L> 
+impl <L:OptimizerTrait + 'static> RegressorTrait for Regressor<'_, L> 
 where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
 L: std::clone::Clone
 {
@@ -449,14 +521,10 @@ L: std::clone::Clone
 
     fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32 {
         let update:bool = update && (fb.example_importance != 0.0);
-        let mut v: Vec<&mut dyn RegressorAlgoTrait>;
-        let further_regressors: &mut [&mut dyn RegressorAlgoTrait];
-        v = vec![&mut self.reg_ffm];
-        further_regressors = &mut v[..];
-        
-        let (prediction_probability, general_gradient) = self.reg_lr.forward_backwards(further_regressors, 0.0, example_num, fb, update);
+
+        let (current, further_regressors) = &mut self.vv.split_at_mut(1);
+        let (prediction_probability, general_gradient) = current[0].forward_backwards(further_regressors, 0.0, example_num, fb, update);
     
-//        println!("A {}", bb.ffm_weights_len);
         return prediction_probability
     }
     
