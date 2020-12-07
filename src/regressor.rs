@@ -18,9 +18,9 @@ use crate::feature_buffer::HashAndValueAndSeq;
 use crate::optimizer;
 use crate::consts;
 use optimizer::OptimizerTrait;
+use crate::reg_ffm::RegFFM;
+use crate::reg_lr::RegLR;
 
-
-const FFM_STACK_BUF_LEN:usize= 16384;
 
 
 #[derive(Clone, Debug)]
@@ -41,21 +41,23 @@ pub struct WeightAndOptimizerData<L:OptimizerTrait> {
     pub optimizer_data: L::PerWeightStore,
 }
 
-pub struct RegFFM<L:OptimizerTrait> {
-    pub optimizer_ffm: L,
-    local_data_ffm_indices: Vec<u32>,
-    local_data_ffm_values: Vec<f32>,
-    ffm_k: u32,
-    ffm_one_over_k_root: f32,
-    ffm_weights_len: u32, 
-    pub weights: Vec<WeightAndOptimizerData<L>>,
+
+
+
+pub trait RegressorAlgoTrait {
+    fn forward_backwards(&mut self, 
+                         further_regressors: &mut [&mut dyn RegressorAlgoTrait], 
+                         wsum: f32, 
+                         example_num: u32, 
+                         fb: &feature_buffer::FeatureBuffer,
+                         update:bool) -> (f32, f32);
+
+    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance);
+    fn get_weights_len(&self) -> usize;
+    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>>;
+    fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>;
 }
 
-pub struct RegLR<L:OptimizerTrait> {
-    pub weights: Vec<WeightAndOptimizerData<L>>,
-    weights_len: u32,
-    optimizer_lr: L,
-}
 
 pub struct RegSigmoid {
 }
@@ -75,33 +77,7 @@ pub struct ImmutableRegressor {
 }
 
 
-macro_rules! specialize_k {
-    ( $input_expr: expr, 
-      $output_const: ident,
-      $wsumbuf: ident,
-      $code_block: block  ) => {
-         match $input_expr {
-                2 => {const $output_const:u32 = 2;   let mut $wsumbuf: [f32;$output_const as usize] = [0.0;$output_const as usize]; $code_block},
-                4 => {const $output_const:u32 = 4;   let mut $wsumbuf: [f32;$output_const as usize] = [0.0;$output_const as usize]; $code_block},
-                8 => {const $output_const:u32 = 8;   let mut $wsumbuf: [f32;$output_const as usize] = [0.0;$output_const as usize]; $code_block},
-                val => {let $output_const:u32 = val; let mut $wsumbuf: [f32;consts::FFM_MAX_K] = [0.0;consts::FFM_MAX_K];      $code_block},
-            }
-    };
-}
 
-macro_rules! specialize_1f32 {
-    ( $input_expr:expr, 
-      $output_const:ident,
-      $code_block:block  ) => {
-          if $input_expr == 1.0 {	
-              const $output_const:f32 = 1.0; 
-              $code_block
-          } else {
-              let $output_const:f32 = $input_expr; 
-              $code_block
-          }
-      };
-}
 
 pub trait RegressorTrait {
     fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32;
@@ -152,13 +128,13 @@ L: std::clone::Clone
             ffm_weights_len: 0, 
             local_data_ffm_indices: Vec::with_capacity(1024),
             local_data_ffm_values: Vec::with_capacity(1024),
-            ffm_k: 0, 
+            ffm_k: mi.ffm_k, 
             ffm_one_over_k_root: 0.0, 
             optimizer_ffm: L::new(),
         };
+
         if mi.ffm_k > 0 {
             reg_ffm.optimizer_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
-            reg_ffm.ffm_k = mi.ffm_k;
             // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
             reg_ffm.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * reg_ffm.ffm_k);
         }
@@ -177,12 +153,13 @@ L: std::clone::Clone
             let r1: &mut RegLR<L> = rg.reg_lr.as_mut();
             let r2: &mut RegLR<L> = mem::transmute(&mut *r1);
             rg.vv.push(r2 as &mut dyn RegressorAlgoTrait);
-            
+
             if mi.ffm_k > 0 {
                 let r1: &mut RegFFM<L> = rg.reg_ffm.as_mut();
                 let r2: &mut RegFFM<L> = mem::transmute(&mut *r1);
                 rg.vv.push(r2 as &mut dyn RegressorAlgoTrait);
             }
+            
             
             let r1: &mut RegSigmoid = rg.reg_sig.as_mut();
             let r2: &mut RegSigmoid = mem::transmute(&mut *r1);
@@ -220,18 +197,6 @@ pub fn stable_logistic(t: f32) -> f32 {
 }
 */
 
-
-pub trait RegressorAlgoTrait {
-    fn forward_backwards(&mut self, 
-                         further_regressors: &mut [&mut dyn RegressorAlgoTrait], 
-                         wsum: f32, 
-                         example_num: u32, 
-                         fb: &feature_buffer::FeatureBuffer,
-                         update:bool) -> (f32, f32);
-
-    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance);
-    fn get_weights_len(&self) -> usize;
-}
 
 
 
@@ -280,230 +245,19 @@ impl RegressorAlgoTrait for RegSigmoid {
         return 0
     }
 
+    fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+
+    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
 }
 
 
 
-impl <L:OptimizerTrait> RegressorAlgoTrait for RegFFM<L>
-where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
-L: std::clone::Clone
-
- {
-    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
-        self.weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_ffm.initial_data()}; self.ffm_weights_len as usize];
-        if mi.ffm_k > 0 {       
-            if mi.ffm_init_width == 0.0 {
-                // Initialization that has showed to work ok for us, like in ffm.pdf, but centered around zero and further divided by 50
-                self.ffm_one_over_k_root = 1.0 / (self.ffm_k as f32).sqrt() / 50.0;
-                for i in 0..self.ffm_weights_len {
-                    self.weights[i as usize].weight = (1.0 * merand48((self.ffm_weights_len as usize+ i as usize) as u64)-0.5) * self.ffm_one_over_k_root;
-                    self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
-                }
-            } else {
-                let zero_half_band_width = mi.ffm_init_width * mi.ffm_init_zero_band * 0.5;
-                let band_width = mi.ffm_init_width * (1.0 - mi.ffm_init_zero_band);
-                for i in 0..self.ffm_weights_len {
-                    let mut w = merand48(i as u64) * band_width - band_width * 0.5;
-                    if w > 0.0 { 
-                        w += zero_half_band_width ;
-                    } else {
-                        w -= zero_half_band_width;
-                    }
-                    w += mi.ffm_init_center;
-                    self.weights[i as usize].weight = w; 
-                    self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
-                }
-
-            }
-        }
-    }
 
 
-    #[inline(always)]
-    fn forward_backwards(&mut self, 
-                        further_regressors: &mut [&mut dyn RegressorAlgoTrait], 
-                        wsum: f32, 
-                        example_num: u32, 
-                        fb: &feature_buffer::FeatureBuffer, 
-                        update:bool) -> (f32, f32) {
-        let mut wsum = wsum;
-        let local_data_ffm_len = fb.ffm_buffer.len() * (self.ffm_k * fb.ffm_fields_count) as usize;
-
-        unsafe {
-            macro_rules! core_macro {
-                (
-                $local_data_ffm_indices:ident,
-                $local_data_ffm_values:ident
-                ) => {
-                 
-                    let mut local_data_ffm_indices = &mut $local_data_ffm_indices;
-                    let mut local_data_ffm_values = &mut $local_data_ffm_values;
-                        
-                    let ffm_weights = &mut self.weights;
-                    let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
-                    let mut ifc:usize = 0;
-                    for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                        let base_weight_index = left_hash.hash;
-                        for j in 0..fc as usize {
-                            let addr = base_weight_index + j as u32;
-                            *local_data_ffm_indices.get_unchecked_mut(ifc + j) = addr;
-                            *local_data_ffm_values.get_unchecked_mut(ifc + j) = 0.0;
-                            _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(addr as usize).weight), _MM_HINT_T0);  // No benefit for now
-                       }
-                       ifc += fc;
-                    }
-
-                    specialize_k!(self.ffm_k, FFMK, wsumbuf, {
-                        let mut ifc:usize = 0;
-                        for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                            let mut right_local_index = left_hash.contra_field_index as usize + ifc;
-                            for right_hash in fb.ffm_buffer.get_unchecked(i+1 ..).iter() {
-                                right_local_index += fc;       
-                                 
-                                // Regular FFM implementation would prevent intra-field interactions
-                                // But for the use case we tested this is both faster and it decreases logloss
-                                /*if left_hash.contra_field_index == right_hash.contra_field_index {
-                                    continue	// not combining within a field
-                                }*/
-                                
-                                // FYI this is effectively what we calculate:
-            //                    let left_local_index =  i*fc + right_hash.contra_field_index as usize;
-            //                    let right_local_index = (i+1+j) * fc + left_hash.contra_field_index as usize;
-                                let left_local_index = ifc + right_hash.contra_field_index as usize;
-                                let joint_value = left_hash.value * right_hash.value;
-                                let lindex = *local_data_ffm_indices.get_unchecked(left_local_index) as usize;
-                                let rindex = *local_data_ffm_indices.get_unchecked(right_local_index) as usize;
-                                specialize_1f32!(joint_value, JOINT_VALUE, {
-                                    for k in 0..FFMK as usize {
-                                        let llik = (left_local_index as usize + k) as usize;
-                                        let rlik = (right_local_index as usize + k) as usize;
-                                        let left_hash_weight  = ffm_weights.get_unchecked((lindex+k) as usize).weight;
-                                        let right_hash_weight = ffm_weights.get_unchecked((rindex+k) as usize).weight;
-                                        
-                                        let right_side = right_hash_weight * JOINT_VALUE;
-                                        *local_data_ffm_values.get_unchecked_mut(llik) += right_side; // first derivate
-                                        *local_data_ffm_values.get_unchecked_mut(rlik) += left_hash_weight  * JOINT_VALUE; // first derivate
-                                        // We do this, so in theory Rust/LLVM could vectorize whole loop
-                                        // Original: wsum += left_hash_weight * right_side;
-                                        *wsumbuf.get_unchecked_mut(k) += left_hash_weight * right_side;
-                                    }
-                                });
-                                
-                            }
-                            ifc += fc;
-                            
-                        }
-                        for k in 0..FFMK as usize {
-                            wsum += wsumbuf[k];
-                        }
-                    });                     
-                    
-                    let (next_regressor, further_regressors) = further_regressors.split_at_mut(1);
-                    let (prediction_probability, general_gradient) = next_regressor[0].forward_backwards(further_regressors, wsum, example_num, fb, update);
-                    
-                    if update {
-                       for i in 0..local_data_ffm_len {
-                            let feature_value = *local_data_ffm_values.get_unchecked(i);
-                            let feature_index = *local_data_ffm_indices.get_unchecked(i) as usize;
-                            let gradient = general_gradient * feature_value;
-                            let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
-                            ffm_weights.get_unchecked_mut(feature_index).weight += update;
-                        }
-                    }
-                    // The only exit point
-                    return (prediction_probability, general_gradient)
-                }; 
-            }; // End of macro
-            
-
-            if local_data_ffm_len < FFM_STACK_BUF_LEN {
-                // Fast-path - using on-stack data structures
-                let mut local_data_ffm_indices: [u32; FFM_STACK_BUF_LEN as usize] = MaybeUninit::uninit().assume_init();
-                let mut local_data_ffm_values: [f32; FFM_STACK_BUF_LEN as usize] = MaybeUninit::uninit().assume_init();//[0.0; FFM_STACK_BUF_LEN as usize];
-                            
-                core_macro!(local_data_ffm_indices, local_data_ffm_values);
-            } else {
-                // Slow-path - using heap data structures
-                if local_data_ffm_len > self.local_data_ffm_indices.len() {
-                    self.local_data_ffm_indices.reserve(local_data_ffm_len - self.local_data_ffm_indices.len() + 1024);
-                }
-                if local_data_ffm_len > self.local_data_ffm_values.len() {
-                    self.local_data_ffm_values.reserve(local_data_ffm_len - self.local_data_ffm_values.len() + 1024);
-                }
-                let mut local_data_ffm_indices = &mut self.local_data_ffm_indices;
-                let mut local_data_ffm_values = &mut self.local_data_ffm_values;
-            
-                core_macro!(local_data_ffm_indices, local_data_ffm_values);
-            }
-             
-        } // unsafe end
-    }
-    
-    fn get_weights_len(&self) -> usize {
-        return self.ffm_weights_len as usize;
-    }
-
-
-}
-
-
-impl <L:OptimizerTrait> RegressorAlgoTrait for RegLR<L> 
-where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
-L: std::clone::Clone
-{
-    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
-        self.weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_lr.initial_data()}; self.weights_len as usize];
-        
-    }
-
-
-    #[inline(always)]
-    fn forward_backwards(&mut self, 
-                            further_regressors: &mut [&mut dyn RegressorAlgoTrait], 
-                            wsum: f32, 
-                            example_num: u32, 
-                            fb: &feature_buffer::FeatureBuffer, 
-                            update:bool) -> (f32, f32) {
-        let mut prediction_probability:f32;
-        let mut general_gradient:f32;
-        let mut wsum = wsum;
-        unsafe {
-            // Rust doesn't let us to simply take two mutable subslices... this tells rust they don't overlap
-            let weights = &mut self.weights;
-            {
-                for (i, hashvalue) in fb.lr_buffer.iter().enumerate() {
-                    // Prefetch couple of indexes from the future to prevent pipeline stalls due to memory latencies
-                    // _mm_prefetch(mem::transmute::<&f32, &i8>(&weights.get_unchecked((fb.lr_buffer.get_unchecked(i+8).hash) as usize).weight), _MM_HINT_T0);  // No benefit for now
-                    let feature_index     = hashvalue.hash;
-                    let feature_value:f32 = hashvalue.value;
-                    let feature_weight    = weights.get_unchecked(feature_index as usize).weight;
-                    wsum += feature_weight * feature_value;
-                }
-            }
-
-            let (next_regressor, further_regressors) = further_regressors.split_at_mut(1);
-            let (prediction_probability_o, general_gradient_o) = next_regressor[0].forward_backwards(further_regressors, wsum, example_num, fb, update);
-            prediction_probability = prediction_probability_o;
-            general_gradient = general_gradient_o;
-            if update {
-                for hashvalue in fb.lr_buffer.iter() {
-                    let feature_index     = hashvalue.hash as usize;
-                    let feature_value:f32 = hashvalue.value;                        
-                    let gradient = general_gradient * feature_value;
-                    let update = self.optimizer_lr.calculate_update(gradient, &mut weights.get_unchecked_mut(feature_index).optimizer_data);
-                    weights.get_unchecked_mut(feature_index).weight += update;
-                }
-            }
-        } // end of unsafe
-        (prediction_probability, general_gradient)
-        
-    }
-    
-    fn get_weights_len(&self) -> usize {
-        return self.weights_len as usize;
-    }
-
-}
 
     
 impl <L:OptimizerTrait + 'static> RegressorTrait for Regressor<'_, L> 
@@ -532,35 +286,24 @@ L: std::clone::Clone
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
         // It's OK! I am a limo driver!
         output_bufwriter.write_u64::<LittleEndian>((self.reg_lr.weights.len() + self.reg_ffm.weights.len()) as u64)?;
-        unsafe {
-             let buf_view:&[u8] = slice::from_raw_parts(self.reg_lr.weights.as_ptr() as *const u8, 
-                                              self.reg_lr.weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
-             output_bufwriter.write(buf_view)?;
+
+        for v in &self.vv {
+            v.write_weights_to_buf(output_bufwriter)?;
+        
         }
-        unsafe {
-             let buf_view:&[u8] = slice::from_raw_parts(self.reg_ffm.weights.as_ptr() as *const u8, 
-                                              self.reg_ffm.weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
-             output_bufwriter.write(buf_view)?;
-        }        
         Ok(())
     }
     
 
     fn overwrite_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
+        // This is a bit weird format - we'll break compatibility in next release
         let len = input_bufreader.read_u64::<LittleEndian>()?;
         let expected_length = (self.reg_lr.weights.len() + self.reg_ffm.weights.len()) as u64;
         if len != expected_length {
             return Err(format!("Lenghts of weights array in regressor file differ: got {}, expected {}", len, expected_length))?;
         }
-        unsafe {
-            let mut buf_view:&mut [u8] = slice::from_raw_parts_mut(self.reg_lr.weights.as_mut_ptr() as *mut u8, 
-                                             self.reg_lr.weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
-            input_bufreader.read_exact(&mut buf_view)?;
-        }
-        unsafe {
-            let mut buf_view:&mut [u8] = slice::from_raw_parts_mut(self.reg_ffm.weights.as_mut_ptr() as *mut u8, 
-                                             self.reg_ffm.weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
-            input_bufreader.read_exact(&mut buf_view)?;
+        for v in &mut self.vv {
+            v.read_weights_from_buf(input_bufreader)?;
         }
 
         Ok(())
@@ -570,7 +313,7 @@ L: std::clone::Clone
     // Creates immutable regressor from current setup and weights from buffer
     fn immutable_regressor_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<ImmutableRegressor, Box<dyn Error>> {
         let len = input_bufreader.read_u64::<LittleEndian>()?;
-        let expected_length = (self.reg_lr.weights_len + self.reg_ffm.ffm_weights_len) as u64;
+        let expected_length = (self.reg_lr.get_weights_len() + self.reg_ffm.get_weights_len()) as u64;
         if len != expected_length {
             return Err(format!("Lenghts of weights array in regressor file differ: got {}, expected {}", len, expected_length))?;
         }
@@ -578,7 +321,7 @@ L: std::clone::Clone
         let mut in_weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.reg_lr.optimizer_lr.initial_data()}; BUF_LEN as usize];
         let mut out_weights = Vec::<Weight>::new();
         
-        let mut remaining_weights = (self.reg_lr.weights_len + self.reg_ffm.ffm_weights_len) as usize;
+        let mut remaining_weights = expected_length as usize;
         unsafe {
             while remaining_weights > 0 {
                 let chunk_size = min(remaining_weights, BUF_LEN);
@@ -596,7 +339,7 @@ L: std::clone::Clone
 
         let fr = ImmutableRegressor {
                         weights: Arc::new(out_weights), 
-                        ffm_weights_offset: self.reg_lr.weights_len as u32,
+                        ffm_weights_offset: self.reg_lr.get_weights_len() as u32,
                         ffm_k: self.reg_ffm.ffm_k,
         };
         Ok(fr)
@@ -613,7 +356,7 @@ L: std::clone::Clone
         }
         let fr = ImmutableRegressor {
                         weights: Arc::new(weights), 
-                        ffm_weights_offset: self.reg_lr.weights_len as u32,
+                        ffm_weights_offset: self.reg_lr.get_weights_len() as u32,
                         ffm_k: self.reg_ffm.ffm_k,
         };
         Ok(fr)
@@ -622,6 +365,21 @@ L: std::clone::Clone
 
 
 }
+
+macro_rules! specialize_k {
+    ( $input_expr: expr, 
+      $output_const: ident,
+      $wsumbuf: ident,
+      $code_block: block  ) => {
+         match $input_expr {
+                2 => {const $output_const:u32 = 2;   let mut $wsumbuf: [f32;$output_const as usize] = [0.0;$output_const as usize]; $code_block},
+                4 => {const $output_const:u32 = 4;   let mut $wsumbuf: [f32;$output_const as usize] = [0.0;$output_const as usize]; $code_block},
+                8 => {const $output_const:u32 = 8;   let mut $wsumbuf: [f32;$output_const as usize] = [0.0;$output_const as usize]; $code_block},
+                val => {let $output_const:u32 = val; let mut $wsumbuf: [f32;consts::FFM_MAX_K] = [0.0;consts::FFM_MAX_K];      $code_block},
+            }
+    };
+}
+
 
 impl ImmutableRegressor {
 
