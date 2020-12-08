@@ -37,7 +37,7 @@ pub struct WeightAndOptimizerData<L:OptimizerTrait> {
 
 pub trait BlockTrait {
     fn forward_backwards(&mut self, 
-                         further_regressors: &mut [&mut dyn BlockTrait], 
+                         further_blocks: &mut [&mut dyn BlockTrait], 
                          wsum: f32, 
                          example_num: u32, 
                          fb: &feature_buffer::FeatureBuffer,
@@ -55,7 +55,7 @@ pub struct Regressor<'a, L:OptimizerTrait> {
     pub reg_ffm: Box<BlockFFM<L>>,
     pub reg_lr: Box<BlockLR<L>>,
     pub reg_sig: Box<BlockSigmoid>, 
-    pub vv: Vec<&'a mut dyn BlockTrait>,
+    pub blocks_list: Vec<&'a mut dyn BlockTrait>,
 }
 
 #[derive(Clone)]
@@ -134,32 +134,32 @@ L: std::clone::Clone
             reg_lr: Box::new(reg_lr),
             reg_ffm: Box::new(reg_ffm),
             reg_sig: Box::new(reg_sigmoid),
-            vv: Vec::new(),
+            blocks_list: Vec::new(),
         };
 
         unsafe {
             // A bit more elaborate than necessary. Let's really make it clear what's happening
             let r1: &mut BlockLR<L> = rg.reg_lr.as_mut();
             let r2: &mut BlockLR<L> = mem::transmute(&mut *r1);
-            rg.vv.push(r2 as &mut dyn BlockTrait);
+            rg.blocks_list.push(r2 as &mut dyn BlockTrait);
 
             if mi.ffm_k > 0 {
                 let r1: &mut BlockFFM<L> = rg.reg_ffm.as_mut();
                 let r2: &mut BlockFFM<L> = mem::transmute(&mut *r1);
-                rg.vv.push(r2 as &mut dyn BlockTrait);
+                rg.blocks_list.push(r2 as &mut dyn BlockTrait);
             }
             
             
             let r1: &mut BlockSigmoid = rg.reg_sig.as_mut();
             let r2: &mut BlockSigmoid = mem::transmute(&mut *r1);
-            rg.vv.push(r2 as &mut dyn BlockTrait);
+            rg.blocks_list.push(r2 as &mut dyn BlockTrait);
         }
 
         rg
     }
     
     pub fn allocate_and_init_weights_(&mut self, mi: &model_instance::ModelInstance) {
-        for rr in &mut self.vv {
+        for rr in &mut self.blocks_list {
             rr.allocate_and_init_weights(mi);
         }
     }
@@ -190,8 +190,8 @@ L: std::clone::Clone
     fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32 {
         let update:bool = update && (fb.example_importance != 0.0);
 
-        let (current, further_regressors) = &mut self.vv.split_at_mut(1);
-        let (prediction_probability, general_gradient) = current[0].forward_backwards(further_regressors, 0.0, example_num, fb, update);
+        let (current, further_blocks) = &mut self.blocks_list.split_at_mut(1);
+        let (prediction_probability, general_gradient) = current[0].forward_backwards(further_blocks, 0.0, example_num, fb, update);
     
         return prediction_probability
     }
@@ -201,7 +201,7 @@ L: std::clone::Clone
         // It's OK! I am a limo driver!
         output_bufwriter.write_u64::<LittleEndian>((self.reg_lr.weights.len() + self.reg_ffm.weights.len()) as u64)?;
 
-        for v in &self.vv {
+        for v in &self.blocks_list {
             v.write_weights_to_buf(output_bufwriter)?;
         
         }
@@ -210,13 +210,15 @@ L: std::clone::Clone
     
 
     fn overwrite_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
-        // This is a bit weird format - we'll break compatibility in next release
+        // This is a bit weird format
+        // You would expect each block to have its own sig
+        // We'll break compatibility in next release or something similar
         let len = input_bufreader.read_u64::<LittleEndian>()?;
-        let expected_length = (self.reg_lr.weights.len() + self.reg_ffm.weights.len()) as u64;
+        let expected_length = self.blocks_list.iter().map(|block| block.get_weights_len()).sum::<usize>() as u64;
         if len != expected_length {
             return Err(format!("Lenghts of weights array in regressor file differ: got {}, expected {}", len, expected_length))?;
         }
-        for v in &mut self.vv {
+        for v in &mut self.blocks_list {
             v.read_weights_from_buf(input_bufreader)?;
         }
 
@@ -227,7 +229,7 @@ L: std::clone::Clone
     // Creates immutable regressor from current setup and weights from buffer
     fn immutable_regressor_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<ImmutableRegressor, Box<dyn Error>> {
         let len = input_bufreader.read_u64::<LittleEndian>()?;
-        let expected_length = (self.reg_lr.get_weights_len() + self.reg_ffm.get_weights_len()) as u64;
+        let expected_length = self.blocks_list.iter().map(|bb| bb.get_weights_len()).sum::<usize>() as u64;
         if len != expected_length {
             return Err(format!("Lenghts of weights array in regressor file differ: got {}, expected {}", len, expected_length))?;
         }
