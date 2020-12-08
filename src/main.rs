@@ -28,8 +28,9 @@ mod serving;
 mod optimizer;
 mod version;
 mod consts;
-mod reg_ffm;
-mod reg_lr;
+mod block_ffm;
+mod block_lr;
+mod block_loss_functions;
 //use crate::regressor::RegressorTrait;
 
 

@@ -6,7 +6,6 @@ use crate::feature_buffer;
 use crate::consts;
 use std::io;
 use std::slice;
-use merand48::*;
 use core::arch::x86_64::*;
 use std::error::Error;
 
@@ -14,17 +13,17 @@ use std::error::Error;
 
 use std::mem::{self, MaybeUninit};
 use optimizer::OptimizerTrait;
-use regressor::RegressorAlgoTrait;
+use regressor::BlockTrait;
 use regressor::WeightAndOptimizerData;
 
 
-pub struct RegLR<L:OptimizerTrait> {
+pub struct BlockLR<L:OptimizerTrait> {
     pub weights: Vec<WeightAndOptimizerData<L>>,
     pub weights_len: u32,
     pub optimizer_lr: L,
 }
 
-impl <L:OptimizerTrait> RegressorAlgoTrait for RegLR<L> 
+impl <L:OptimizerTrait> BlockTrait for BlockLR<L> 
 where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
 L: std::clone::Clone
 {
@@ -36,12 +35,12 @@ L: std::clone::Clone
 
     #[inline(always)]
     fn forward_backwards(&mut self, 
-                            further_regressors: &mut [&mut dyn RegressorAlgoTrait], 
-                            wsum: f32, 
+                            further_regressors: &mut [&mut dyn BlockTrait], 
+                            wsum_in: f32, 
                             example_num: u32, 
                             fb: &feature_buffer::FeatureBuffer, 
                             update:bool) -> (f32, f32) {
-        let mut wsum = wsum;
+        let mut wsum:f32 = 0.0;
         unsafe {
             for (i, hashvalue) in fb.lr_buffer.iter().enumerate() {
                 // Prefetch couple of indexes from the future to prevent pipeline stalls due to memory latencies
@@ -53,7 +52,7 @@ L: std::clone::Clone
             }
 
             let (next_regressor, further_regressors) = further_regressors.split_at_mut(1);
-            let (prediction_probability, general_gradient) = next_regressor[0].forward_backwards(further_regressors, wsum, example_num, fb, update);
+            let (prediction_probability, general_gradient) = next_regressor[0].forward_backwards(further_regressors, wsum_in + wsum, example_num, fb, update);
 
             if update {
                 for hashvalue in fb.lr_buffer.iter() {

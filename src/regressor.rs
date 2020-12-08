@@ -2,7 +2,6 @@
 //use std::mem::{self};
 use std::mem::{self, MaybeUninit};
 use std::slice;
-//use fastapprox::fast::sigmoid; // surprisingly this doesn't work very well
 use std::sync::Arc;
 use core::arch::x86_64::*;
 use merand48::*;
@@ -18,20 +17,15 @@ use crate::feature_buffer::HashAndValueAndSeq;
 use crate::optimizer;
 use crate::consts;
 use optimizer::OptimizerTrait;
-use crate::reg_ffm::RegFFM;
-use crate::reg_lr::RegLR;
-
+use crate::block_ffm::BlockFFM;
+use crate::block_lr::BlockLR;
+use crate::block_loss_functions::BlockSigmoid;
 
 
 #[derive(Clone, Debug)]
 #[repr(C)]
 pub struct Weight {
     pub weight: f32, 
-}
-
-pub struct IndexAccgradientValue {
-    index: u32,
-    value: f32,
 }
 
 #[derive(Clone, Debug, Copy)]
@@ -41,12 +35,9 @@ pub struct WeightAndOptimizerData<L:OptimizerTrait> {
     pub optimizer_data: L::PerWeightStore,
 }
 
-
-
-
-pub trait RegressorAlgoTrait {
+pub trait BlockTrait {
     fn forward_backwards(&mut self, 
-                         further_regressors: &mut [&mut dyn RegressorAlgoTrait], 
+                         further_regressors: &mut [&mut dyn BlockTrait], 
                          wsum: f32, 
                          example_num: u32, 
                          fb: &feature_buffer::FeatureBuffer,
@@ -59,14 +50,12 @@ pub trait RegressorAlgoTrait {
 }
 
 
-pub struct RegSigmoid {
-}
 
 pub struct Regressor<'a, L:OptimizerTrait> {
-    pub reg_ffm: Box<RegFFM<L>>,
-    pub reg_lr: Box<RegLR<L>>,
-    pub reg_sig: Box<RegSigmoid>, 
-    pub vv: Vec<&'a mut dyn RegressorAlgoTrait>,
+    pub reg_ffm: Box<BlockFFM<L>>,
+    pub reg_lr: Box<BlockLR<L>>,
+    pub reg_sig: Box<BlockSigmoid>, 
+    pub vv: Vec<&'a mut dyn BlockTrait>,
 }
 
 #[derive(Clone)]
@@ -114,7 +103,7 @@ where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
 L: std::clone::Clone
 {
     pub fn new_without_weights(mi: &model_instance::ModelInstance) -> Regressor<'a, L> {
-        let mut reg_lr = RegLR::<L> {
+        let mut reg_lr = BlockLR::<L> {
             weights: Vec::new(),
             weights_len: 0, 
             optimizer_lr: L::new(),
@@ -123,7 +112,7 @@ L: std::clone::Clone
         reg_lr.weights_len = 1 << mi.bit_precision;
 
 
-        let mut reg_ffm = RegFFM::<L> {
+        let mut reg_ffm = BlockFFM::<L> {
             weights: Vec::new(),
             ffm_weights_len: 0, 
             local_data_ffm_indices: Vec::with_capacity(1024),
@@ -139,7 +128,7 @@ L: std::clone::Clone
             reg_ffm.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * reg_ffm.ffm_k);
         }
         
-        let reg_sigmoid = RegSigmoid {};
+        let reg_sigmoid = BlockSigmoid {};
 
         let mut rg = Regressor::<L>{
             reg_lr: Box::new(reg_lr),
@@ -150,20 +139,20 @@ L: std::clone::Clone
 
         unsafe {
             // A bit more elaborate than necessary. Let's really make it clear what's happening
-            let r1: &mut RegLR<L> = rg.reg_lr.as_mut();
-            let r2: &mut RegLR<L> = mem::transmute(&mut *r1);
-            rg.vv.push(r2 as &mut dyn RegressorAlgoTrait);
+            let r1: &mut BlockLR<L> = rg.reg_lr.as_mut();
+            let r2: &mut BlockLR<L> = mem::transmute(&mut *r1);
+            rg.vv.push(r2 as &mut dyn BlockTrait);
 
             if mi.ffm_k > 0 {
-                let r1: &mut RegFFM<L> = rg.reg_ffm.as_mut();
-                let r2: &mut RegFFM<L> = mem::transmute(&mut *r1);
-                rg.vv.push(r2 as &mut dyn RegressorAlgoTrait);
+                let r1: &mut BlockFFM<L> = rg.reg_ffm.as_mut();
+                let r2: &mut BlockFFM<L> = mem::transmute(&mut *r1);
+                rg.vv.push(r2 as &mut dyn BlockTrait);
             }
             
             
-            let r1: &mut RegSigmoid = rg.reg_sig.as_mut();
-            let r2: &mut RegSigmoid = mem::transmute(&mut *r1);
-            rg.vv.push(r2 as &mut dyn RegressorAlgoTrait);
+            let r1: &mut BlockSigmoid = rg.reg_sig.as_mut();
+            let r2: &mut BlockSigmoid = mem::transmute(&mut *r1);
+            rg.vv.push(r2 as &mut dyn BlockTrait);
         }
 
         rg
@@ -182,81 +171,6 @@ L: std::clone::Clone
         rg
     }
 }
-
-/* We tested standard stable logistic function, but it gives slightly 
-worse logloss results than plain logistic on our data */
-/*
-#[inline(always)]
-pub fn stable_logistic(t: f32) -> f32 {
-    if t > 0.0 {
-        return (1.0 +(-t).exp()).recip();
-    } else {
-        let texp = t.exp();
-        return texp / (1.0 + texp);
-    }
-}
-*/
-
-
-
-
-
-
-impl RegressorAlgoTrait for RegSigmoid {
-    #[inline(always)]
-    fn forward_backwards(&mut self, 
-                    further_regressors: &mut [&mut dyn RegressorAlgoTrait], 
-                    wsum: f32, 
-                    example_num: u32, 
-                    fb: &feature_buffer::FeatureBuffer, 
-                    update:bool) -> (f32, f32) {
-//    fn wsum_to_prediction(wsum: f32, example_num: u32, fb: &feature_buffer::FeatureBuffer) -> (f32, f32) {
-
-        if further_regressors.len() != 0 {
-            panic!("RegSigmoid can only be at the end of the chain!");
-        }
-        
-        #[inline(always)]
-        pub fn logistic(t: f32) -> f32 {
-            return (1.0+(-t).exp()).recip();
-        }
-
-        
-        // vowpal compatibility
-        if wsum.is_nan() {
-            eprintln!("NAN prediction in example {}, forcing 0.0", example_num);
-            return (logistic(0.0), 0.0);
-        } else if wsum < -50.0 {
-            return (logistic(-50.0), 0.0);
-        } else if wsum > 50.0 {
-            return (logistic(50.0), 0.0);
-        }        
-
-        let prediction_probability = logistic(wsum);
-        let general_gradient = (fb.label - prediction_probability) * fb.example_importance;
-        //println!("General gradient: {}", general_gradient);
-        (prediction_probability, general_gradient)
-    }
-    
-    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
-        // empty
-    }
-    fn get_weights_len(&self) -> usize {
-        return 0
-    }
-
-    fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
-
-    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
-}
-
-
-
-
 
 
     

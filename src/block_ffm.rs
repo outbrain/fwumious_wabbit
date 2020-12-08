@@ -15,13 +15,13 @@ use std::error::Error;
 
 use std::mem::{self, MaybeUninit};
 use optimizer::OptimizerTrait;
-use regressor::RegressorAlgoTrait;
+use regressor::BlockTrait;
 use regressor::WeightAndOptimizerData;
 
 const FFM_STACK_BUF_LEN:usize= 16384;
 
 
-pub struct RegFFM<L:OptimizerTrait> {
+pub struct BlockFFM<L:OptimizerTrait> {
     pub optimizer_ffm: L,
     pub local_data_ffm_indices: Vec<u32>,
     pub local_data_ffm_values: Vec<f32>,
@@ -63,7 +63,7 @@ macro_rules! specialize_k {
 
 
 
-impl <L:OptimizerTrait> RegressorAlgoTrait for RegFFM<L>
+impl <L:OptimizerTrait> BlockTrait for BlockFFM<L>
 where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
 L: std::clone::Clone
 
@@ -100,7 +100,7 @@ L: std::clone::Clone
 
     #[inline(always)]
     fn forward_backwards(&mut self, 
-                        further_regressors: &mut [&mut dyn RegressorAlgoTrait], 
+                        further_regressors: &mut [&mut dyn BlockTrait], 
                         wsum: f32, 
                         example_num: u32, 
                         fb: &feature_buffer::FeatureBuffer, 
