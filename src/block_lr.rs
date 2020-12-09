@@ -3,9 +3,7 @@ use crate::optimizer;
 use crate::regressor;
 use crate::model_instance;
 use crate::feature_buffer;
-use crate::consts;
 use std::io;
-use std::slice;
 use core::arch::x86_64::*;
 use std::error::Error;
 
@@ -14,7 +12,8 @@ use std::error::Error;
 use std::mem::{self, MaybeUninit};
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
-use regressor::WeightAndOptimizerData;
+use regressor::{Weight, WeightAndOptimizerData};
+use crate::block_helpers;
 
 
 pub struct BlockLR<L:OptimizerTrait> {
@@ -72,27 +71,17 @@ L: std::clone::Clone
     }
 
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
-        if self.weights.len() == 0 {
-            return Err(format!("Loading weights to unallocated weighs buffer"))?;
-        }
-        unsafe {
-            let mut buf_view:&mut [u8] = slice::from_raw_parts_mut(self.weights.as_mut_ptr() as *mut u8, 
-                                             self.weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
-            input_bufreader.read_exact(&mut buf_view)?;
-        }
-        Ok(())
+        block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader)
     }
 
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
-        if self.weights.len() == 0 {
-            return Err(format!("Writing weights of unallocated weights buffer"))?;
-        }
-        unsafe {
-             let buf_view:&[u8] = slice::from_raw_parts(self.weights.as_ptr() as *const u8, 
-                                              self.weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
-             output_bufwriter.write(buf_view)?;
-        }
-        Ok(())
+        block_helpers::write_weights_to_buf(&self.weights, output_bufwriter)
     }
+
+    fn read_immutable_weights_from_buf(&self, out_weights: &mut Vec<Weight>, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
+        block_helpers::read_immutable_weights_from_buf::<L>(self.get_weights_len(), out_weights, input_bufreader)
+    }
+
+
 }
 

@@ -5,6 +5,8 @@ use crate::regressor;
 use crate::feature_buffer;
 use crate::model_instance;
 use regressor::BlockTrait;
+use regressor::{Weight};
+
 
 //use fastapprox::fast::sigmoid; // surprisingly this doesn't work very well
 
@@ -76,5 +78,9 @@ impl BlockTrait for BlockSigmoid {
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
+    fn read_immutable_weights_from_buf(&self, out_weights: &mut Vec<Weight>, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+
 }
 

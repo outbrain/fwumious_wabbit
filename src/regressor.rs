@@ -47,6 +47,7 @@ pub trait BlockTrait {
     fn get_weights_len(&self) -> usize;
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>>;
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>;
+    fn read_immutable_weights_from_buf(&self, weights: &mut Vec<Weight>, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>;
 }
 
 
@@ -199,7 +200,8 @@ L: std::clone::Clone
     // Yeah, this is weird. I just didn't want to break the format compatibility at this point
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
         // It's OK! I am a limo driver!
-        output_bufwriter.write_u64::<LittleEndian>((self.reg_lr.weights.len() + self.reg_ffm.weights.len()) as u64)?;
+        let length = self.blocks_list.iter().map(|block| block.get_weights_len()).sum::<usize>() as u64;
+        output_bufwriter.write_u64::<LittleEndian>(length as u64)?;
 
         for v in &self.blocks_list {
             v.write_weights_to_buf(output_bufwriter)?;
@@ -233,24 +235,9 @@ L: std::clone::Clone
         if len != expected_length {
             return Err(format!("Lenghts of weights array in regressor file differ: got {}, expected {}", len, expected_length))?;
         }
-        const BUF_LEN:usize = 1024 * 1024;
-        let mut in_weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.reg_lr.optimizer_lr.initial_data()}; BUF_LEN as usize];
         let mut out_weights = Vec::<Weight>::new();
-        
-        let mut remaining_weights = expected_length as usize;
-        unsafe {
-            while remaining_weights > 0 {
-                let chunk_size = min(remaining_weights, BUF_LEN);
-                in_weights.set_len(chunk_size);
-                let mut in_weights_view:&mut [u8] = slice::from_raw_parts_mut(in_weights.as_mut_ptr() as *mut u8, 
-                                             chunk_size *mem::size_of::<WeightAndOptimizerData<L>>());
-                input_bufreader.read_exact(&mut in_weights_view)?;
-                for w in &in_weights {
-                    out_weights.push(Weight{weight:w.weight});
-                    
-                }
-                remaining_weights -= chunk_size;
-            }
+        for v in &mut self.blocks_list {
+            v.read_immutable_weights_from_buf(&mut out_weights, input_bufreader)?;
         }
 
         let fr = ImmutableRegressor {
