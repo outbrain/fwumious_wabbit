@@ -149,8 +149,7 @@ L: std::clone::Clone
                 let r2: &mut BlockFFM<L> = mem::transmute(&mut *r1);
                 rg.blocks_list.push(r2 as &mut dyn BlockTrait);
             }
-            
-            
+                        
             let r1: &mut BlockSigmoid = rg.reg_sig.as_mut();
             let r2: &mut BlockSigmoid = mem::transmute(&mut *r1);
             rg.blocks_list.push(r2 as &mut dyn BlockTrait);
@@ -172,7 +171,6 @@ L: std::clone::Clone
         rg
     }
 }
-
 
     
 impl <L:OptimizerTrait + 'static> RegressorTrait for Regressor<'_, L> 
@@ -199,7 +197,6 @@ L: std::clone::Clone
     
     // Yeah, this is weird. I just didn't want to break the format compatibility at this point
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
-        // It's OK! I am a limo driver!
         let length = self.blocks_list.iter().map(|block| block.get_weights_len()).sum::<usize>() as u64;
         output_bufwriter.write_u64::<LittleEndian>(length as u64)?;
 

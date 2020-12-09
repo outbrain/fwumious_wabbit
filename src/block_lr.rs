@@ -31,7 +31,6 @@ L: std::clone::Clone
         
     }
 
-
     #[inline(always)]
     fn forward_backwards(&mut self, 
                             further_regressors: &mut [&mut dyn BlockTrait], 

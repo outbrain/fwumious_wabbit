@@ -6,6 +6,7 @@ use std::slice;
 use std::mem::{self, MaybeUninit};
 use std::cmp::min;
 
+// It's OK! I am a limo driver!
 pub fn read_weights_from_buf<L:OptimizerTrait>(weights: &mut Vec<WeightAndOptimizerData<L>>, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
     if weights.len() == 0 {
         return Err(format!("Loading weights to unallocated weighs buffer"))?;

@@ -1,3 +1,8 @@
+use std::io;
+use merand48::*;
+use core::arch::x86_64::*;
+use std::error::Error;
+use std::mem::{self, MaybeUninit};
 
 
 use crate::optimizer;
@@ -6,20 +11,55 @@ use crate::model_instance;
 use crate::feature_buffer;
 use crate::consts;
 use crate::block_helpers;
-use std::io;
-use merand48::*;
-use core::arch::x86_64::*;
-use std::error::Error;
-
-
-
-use std::mem::{self, MaybeUninit};
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 use regressor::{Weight, WeightAndOptimizerData};
 
 
 const FFM_STACK_BUF_LEN:usize= 16384;
+
+
+
+
+
+ 
+use std::cell::UnsafeCell;
+use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
+
+
+#[derive(Clone)]
+pub struct Hogwild<T>(Arc<UnsafeCell<T>>);
+
+impl<T> Default for Hogwild<T>
+where
+    T: Default,
+{
+    fn default() -> Self {
+        Hogwild(Arc::new(UnsafeCell::new(T::default())))
+    }
+}
+
+impl<T> Deref for Hogwild<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        let ptr = self.0.as_ref().get();
+        unsafe { &*ptr }
+    }
+}
+
+impl<T> DerefMut for Hogwild<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        let ptr = self.0.as_ref().get();
+        unsafe { &mut *ptr }
+    }
+}
+
+unsafe impl<T> Send for Hogwild<T> {}
+
+unsafe impl<T> Sync for Hogwild<T> {}
+
 
 
 pub struct BlockFFM<L:OptimizerTrait> {
@@ -70,7 +110,7 @@ L: std::clone::Clone
 
  {
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
-        self.weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_ffm.initial_data()}; self.ffm_weights_len as usize];
+        self.weights =vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_ffm.initial_data()}; self.ffm_weights_len as usize];
         if mi.ffm_k > 0 {       
             if mi.ffm_init_width == 0.0 {
                 // Initialization that has showed to work ok for us, like in ffm.pdf, but centered around zero and further divided by 50
@@ -200,80 +240,7 @@ L: std::clone::Clone
                 // Fast-path - using on-stack data structures
                 let mut local_data_ffm_indices: [u32; FFM_STACK_BUF_LEN as usize] = MaybeUninit::uninit().assume_init();
                 let mut local_data_ffm_values: [f32; FFM_STACK_BUF_LEN as usize] = MaybeUninit::uninit().assume_init();//[0.0; FFM_STACK_BUF_LEN as usize];
-                            
-                    let ffm_weights = &mut self.weights;
-                    let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
-                    let mut ifc:usize = 0;
-                    for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                        let base_weight_index = left_hash.hash;
-                        for j in 0..fc as usize {
-                            let addr = base_weight_index + j as u32;
-                            *local_data_ffm_indices.get_unchecked_mut(ifc + j) = addr;
-                            *local_data_ffm_values.get_unchecked_mut(ifc + j) = 0.0;
-                            _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(addr as usize).weight), _MM_HINT_T0);  // No benefit for now
-                       }
-                       ifc += fc;
-                    }
-
-                    specialize_k!(self.ffm_k, FFMK, wsumbuf, {
-                        let mut ifc:usize = 0;
-                        for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                            let mut right_local_index = left_hash.contra_field_index as usize + ifc;
-                            for right_hash in fb.ffm_buffer.get_unchecked(i+1 ..).iter() {
-                                right_local_index += fc;       
-                                 
-                                // Regular FFM implementation would prevent intra-field interactions
-                                // But for the use case we tested this is both faster and it decreases logloss
-                                /*if left_hash.contra_field_index == right_hash.contra_field_index {
-                                    continue	// not combining within a field
-                                }*/
-                                
-                                // FYI this is effectively what we calculate:
-            //                    let left_local_index =  i*fc + right_hash.contra_field_index as usize;
-            //                    let right_local_index = (i+1+j) * fc + left_hash.contra_field_index as usize;
-                                let left_local_index = ifc + right_hash.contra_field_index as usize;
-                                let joint_value = left_hash.value * right_hash.value;
-                                let lindex = *local_data_ffm_indices.get_unchecked(left_local_index) as usize;
-                                let rindex = *local_data_ffm_indices.get_unchecked(right_local_index) as usize;
-                                specialize_1f32!(joint_value, JOINT_VALUE, {
-                                    for k in 0..FFMK as usize {
-                                        let llik = (left_local_index as usize + k) as usize;
-                                        let rlik = (right_local_index as usize + k) as usize;
-                                        let left_hash_weight  = ffm_weights.get_unchecked((lindex+k) as usize).weight;
-                                        let right_hash_weight = ffm_weights.get_unchecked((rindex+k) as usize).weight;
-                                        
-                                        let right_side = right_hash_weight * JOINT_VALUE;
-                                        *local_data_ffm_values.get_unchecked_mut(llik) += right_side; // first derivate
-                                        *local_data_ffm_values.get_unchecked_mut(rlik) += left_hash_weight  * JOINT_VALUE; // first derivate
-                                        // We do this, so in theory Rust/LLVM could vectorize whole loop
-                                        // Original: wsum += left_hash_weight * right_side;
-                                        *wsumbuf.get_unchecked_mut(k) += left_hash_weight * right_side;
-                                    }
-                                });
-                                
-                            }
-                            ifc += fc;
-                            
-                        }
-                        for k in 0..FFMK as usize {
-                            wsum += wsumbuf[k];
-                        }
-                    });                     
-                    
-                    let (next_regressor, further_regressors) = further_regressors.split_at_mut(1);
-                    let (prediction_probability, general_gradient) = next_regressor[0].forward_backwards(further_regressors, wsum, example_num, fb, update);
-                    
-                    if update {
-                       for i in 0..local_data_ffm_len {
-                            let feature_value = *local_data_ffm_values.get_unchecked(i);
-                            let feature_index = *local_data_ffm_indices.get_unchecked(i) as usize;
-                            let gradient = general_gradient * feature_value;
-                            let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
-                            ffm_weights.get_unchecked_mut(feature_index).weight += update;
-                        }
-                    }
-                    // The only exit point
-                    return (prediction_probability, general_gradient)
+                core_macro!(local_data_ffm_indices, local_data_ffm_values);
 
             } else {
                 // Slow-path - using heap data structures

@@ -68,20 +68,20 @@ fn main2() -> Result<(), Box<dyn Error>>  {
     
     /* setting up the pipeline, either from command line or from existing regressor */
     // we want heal-allocated objects here
-    let vw: vwmap::VwNamespaceMap;
-    let mut re: Box<dyn regressor::RegressorTrait>;
-    let mi: model_instance::ModelInstance;
-
+    
 
     if cl.is_present("daemon") {
         let filename = cl.value_of("initial_regressor").expect("Daemon mode only supports serving from --initial regressor");
         println!("initial_regressor = {}", filename);
         println!("WARNING: Command line model parameters will be ignored");
         let (mi2, vw2, re_fixed) = persistence::new_immutable_regressor_from_filename(filename)?;
-        mi = mi2; vw = vw2;
-        let mut se = serving::Serving::new(&cl, &vw, re_fixed, &mi)?;
+        let mut se = serving::Serving::new(&cl, &vw2, re_fixed, &mi2)?;
         se.serve()?;
     } else {
+        let vw: vwmap::VwNamespaceMap;
+        let mut re: Box<dyn regressor::RegressorTrait>;
+        let mi: model_instance::ModelInstance;
+
         if let Some(filename) = cl.value_of("initial_regressor") {
             println!("initial_regressor = {}", filename);
             println!("WARNING: Command line model parameters will be ignored");
