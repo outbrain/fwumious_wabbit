@@ -32,7 +32,7 @@ L: std::clone::Clone
     }
 
     #[inline(always)]
-    fn forward_backwards(&mut self, 
+    fn forward_backward(&mut self, 
                             further_regressors: &mut [&mut dyn BlockTrait], 
                             wsum_in: f32, 
                             example_num: u32, 
@@ -50,7 +50,7 @@ L: std::clone::Clone
             }
 
             let (next_regressor, further_regressors) = further_regressors.split_at_mut(1);
-            let (prediction_probability, general_gradient) = next_regressor[0].forward_backwards(further_regressors, wsum_in + wsum, example_num, fb, update);
+            let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_regressors, wsum_in + wsum, example_num, fb, update);
 
             if update {
                 for hashvalue in fb.lr_buffer.iter() {
@@ -64,6 +64,27 @@ L: std::clone::Clone
             (prediction_probability, general_gradient)
         } // end of unsafe
     }
+    
+    
+    fn forward(&self, 
+             further_blocks: &mut [&dyn BlockTrait], 
+             wsum: f32, 
+             example_num: u32, 
+             fb: &feature_buffer::FeatureBuffer) -> f32 {
+        let fbuf = &fb.lr_buffer;
+        let mut wsum:f32 = 0.0;
+        unsafe {
+            for val in fbuf {
+                let hash = val.hash as usize;
+                let feature_value:f32 = val.value;
+                wsum += self.weights.get_unchecked(hash).weight * feature_value;    
+            }
+        }
+        let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
+        let prediction_probability = next_regressor[0].forward(further_blocks, wsum, example_num, fb);
+        prediction_probability         
+    }
+    
     
     fn get_weights_len(&self) -> usize {
         return self.weights_len as usize;
@@ -81,6 +102,27 @@ L: std::clone::Clone
         block_helpers::read_immutable_weights_from_buf::<L>(self.get_weights_len(), out_weights, input_bufreader)
     }
 
+    fn get_forwards_only_version(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+        let forwards_only = BlockLR::<optimizer::OptimizerSGD> {
+            weights_len: self.weights_len,
+            weights: Vec::new(),
+            optimizer_lr:optimizer::OptimizerSGD::new(),
+        };
+        
+        Ok(Box::new(forwards_only))
+    }
+    
+    
+    
 
 }
+
+
+
+
+
+
+
+
+
 

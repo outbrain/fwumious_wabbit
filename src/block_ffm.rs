@@ -28,40 +28,6 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 
-#[derive(Clone)]
-pub struct Hogwild<T>(Arc<UnsafeCell<T>>);
-
-impl<T> Default for Hogwild<T>
-where
-    T: Default,
-{
-    fn default() -> Self {
-        Hogwild(Arc::new(UnsafeCell::new(T::default())))
-    }
-}
-
-impl<T> Deref for Hogwild<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        let ptr = self.0.as_ref().get();
-        unsafe { &*ptr }
-    }
-}
-
-impl<T> DerefMut for Hogwild<T> {
-    fn deref_mut(&mut self) -> &mut T {
-        let ptr = self.0.as_ref().get();
-        unsafe { &mut *ptr }
-    }
-}
-
-unsafe impl<T> Send for Hogwild<T> {}
-
-unsafe impl<T> Sync for Hogwild<T> {}
-
-
-
 pub struct BlockFFM<L:OptimizerTrait> {
     pub optimizer_ffm: L,
     pub local_data_ffm_indices: Vec<u32>,
@@ -140,8 +106,8 @@ L: std::clone::Clone
 
 
     #[inline(always)]
-    fn forward_backwards(&mut self, 
-                        further_regressors: &mut [&mut dyn BlockTrait], 
+    fn forward_backward(&mut self, 
+                        further_blocks: &mut [&mut dyn BlockTrait], 
                         wsum: f32, 
                         example_num: u32, 
                         fb: &feature_buffer::FeatureBuffer, 
@@ -218,8 +184,8 @@ L: std::clone::Clone
                         }
                     });                     
                     
-                    let (next_regressor, further_regressors) = further_regressors.split_at_mut(1);
-                    let (prediction_probability, general_gradient) = next_regressor[0].forward_backwards(further_regressors, wsum, example_num, fb, update);
+                    let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
+                    let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_blocks, wsum, example_num, fb, update);
                     
                     if update {
                        for i in 0..local_data_ffm_len {
@@ -259,6 +225,49 @@ L: std::clone::Clone
         } // unsafe end
     }
     
+    fn forward(&self, 
+                 further_blocks: &mut [&dyn BlockTrait], 
+                 wsum: f32, 
+                 example_num: u32, 
+                 fb: &feature_buffer::FeatureBuffer) -> f32 {
+
+        let mut wsum:f32 = 0.0;
+        unsafe {
+            let ffm_weights = &self.weights;
+            specialize_k!(self.ffm_k, FFMK, wsumbuf, {                        
+                for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
+                    for right_hash in fb.ffm_buffer.get_unchecked(i+1 ..).iter() {
+                        //if left_hash.contra_field_index == right_hash.contra_field_index {
+                        //    continue	// not combining within a field
+                        //}
+                        let joint_value = left_hash.value * right_hash.value;
+                        let lindex = (left_hash.hash + right_hash.contra_field_index) as u32;
+                        let rindex = (right_hash.hash + left_hash.contra_field_index) as u32;
+                        for k in 0..FFMK {
+                            let left_hash_weight  = ffm_weights.get_unchecked((lindex+k) as usize).weight;
+                            let right_hash_weight = ffm_weights.get_unchecked((rindex+k) as usize).weight;
+                            let right_side = right_hash_weight * joint_value;
+                            //wsum += left_hash_weight * right_side;
+                            // We do this, so in theory Rust/LLVM could vectorize whole loop
+                            // Unfortunately it does not happen in practice, but we will get there
+                            // Original: wsum += left_hash_weight * right_side;
+                            *wsumbuf.get_unchecked_mut(k as usize) += left_hash_weight * right_side;                        
+                        }
+                    }
+                
+                }
+                for k in 0..FFMK as usize {
+                    wsum += wsumbuf[k];
+                }
+            });
+        }
+        let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
+        let prediction_probability = next_regressor[0].forward(further_blocks, wsum, example_num, fb);
+        prediction_probability         
+                 
+    }
+    
+    
     fn get_weights_len(&self) -> usize {
         return self.ffm_weights_len as usize;
     }
@@ -275,6 +284,19 @@ L: std::clone::Clone
         block_helpers::read_immutable_weights_from_buf::<L>(self.get_weights_len(), out_weights, input_bufreader)
     }
 
+    fn get_forwards_only_version(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+        let forwards_only = BlockFFM::<optimizer::OptimizerSGD> {
+            weights: Vec::new(),
+            ffm_weights_len: self.ffm_weights_len, 
+            local_data_ffm_indices: Vec::new(),
+            local_data_ffm_values: Vec::new(),
+            ffm_k: self.ffm_k, 
+            ffm_one_over_k_root: self.ffm_one_over_k_root, 
+            optimizer_ffm: optimizer::OptimizerSGD::new(),
+        };
+        
+        Ok(Box::new(forwards_only))
+    }
 
 
 }

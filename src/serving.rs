@@ -17,6 +17,9 @@ use crate::model_instance;
 use crate::optimizer;
 use crate::regressor::ImmutableRegressor;
 use crate::regressor::RegressorTrait;
+use crate::multithread_helpers::{BoxedRegressorTrait};
+
+
 
 pub struct Serving {
     listening_interface: String,
@@ -27,7 +30,7 @@ pub struct Serving {
 
 pub struct WorkerThread {
     id: u32,
-    re_fixed: Arc<regressor::ImmutableRegressor>,
+    re_fixed: BoxedRegressorTrait,
     fbt: feature_buffer::FeatureBufferTranslator,
     pa: parser::VowpalParser,
 }
@@ -52,8 +55,10 @@ pub enum ConnectionEnd {
 
 impl WorkerThread {
     pub fn new(
-        id: u32, re_fixed: Arc<regressor::ImmutableRegressor>, fbt:
-        feature_buffer::FeatureBufferTranslator, pa: parser::VowpalParser,
+        id: u32, 
+        re_fixed: BoxedRegressorTrait, 
+        fbt: feature_buffer::FeatureBufferTranslator, 
+        pa: parser::VowpalParser,
         receiver: Arc<Mutex<mpsc::Receiver<net::TcpStream>>>,
     ) -> Result<thread::JoinHandle<u32>, Box<dyn Error>> {
         let mut wt = WorkerThread {
@@ -82,7 +87,7 @@ impl WorkerThread {
                 Ok([]) => return ConnectionEnd::EndOfStream, // EOF
                 Ok(buffer2) => {
                     self.fbt.translate(buffer2);
-                    let p = self.re_fixed.predict(&(self.fbt.feature_buffer), i);
+                    let p = self.re_fixed.learn(&(self.fbt.feature_buffer),  false, i);
                     let p_res = format!("{:.6}\n", p);
                     match writer.write_all(p_res.as_bytes()) {
                         Ok(_) => {},
@@ -179,12 +184,12 @@ impl Serving {
             }
         }
 
-        let re_fixed = Arc::new(re_fixed);
+        let re_fixed2 = BoxedRegressorTrait::new(re_fixed);
         let fbt = feature_buffer::FeatureBufferTranslator::new(mi);
         let pa = parser::VowpalParser::new(&vw);
         for i in 0..num_children {
             let newt = WorkerThread::new(i,
-                                         re_fixed.clone(),
+                                         re_fixed2.clone(),
                                          fbt.clone(),
                                          pa.clone(),
                                          Arc::clone(&receiver),
@@ -236,7 +241,7 @@ C,featureC
         let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mi = model_instance::ModelInstance::new_empty().unwrap();        
         let mut re = regressor::Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
-        let re_fixed = Arc::new(re.immutable_regressor().unwrap());
+        let re_fixed = BoxedRegressorTrait::new(re.immutable_regressor().unwrap());
         let fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
         let pa = parser::VowpalParser::new(&vw);
 

@@ -35,8 +35,9 @@ pub struct BlockSigmoid {
 }
 
 impl BlockTrait for BlockSigmoid {
+
     #[inline(always)]
-    fn forward_backwards(&mut self, 
+    fn forward_backward(&mut self, 
                     further_regressors: &mut [&mut dyn BlockTrait], 
                     wsum: f32, 
                     example_num: u32, 
@@ -45,8 +46,6 @@ impl BlockTrait for BlockSigmoid {
         if further_regressors.len() != 0 {
             panic!("RegSigmoid can only be at the end of the chain!");
         }
-        
-
         
         // vowpal compatibility
         if wsum.is_nan() {
@@ -64,6 +63,32 @@ impl BlockTrait for BlockSigmoid {
         (prediction_probability, general_gradient)
     }
     
+    fn forward(&self, 
+                     further_blocks: &mut [&dyn BlockTrait], 
+                     wsum: f32, 
+                     example_num: u32, 
+                     fb: &feature_buffer::FeatureBuffer) -> f32 {
+
+        if further_blocks.len() != 0 {
+            panic!("RegSigmoid can only be at the end of the chain!");
+        }
+        
+        // vowpal compatibility
+        if wsum.is_nan() {
+            eprintln!("NAN prediction in example {}, forcing 0.0", example_num);
+            return logistic(0.0);
+        } else if wsum < -50.0 {
+            return logistic(-50.0);
+        } else if wsum > 50.0 {
+            return logistic(50.0);
+        }        
+
+        let prediction_probability = logistic(wsum);
+        prediction_probability
+    }
+
+    
+    
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
         // empty
     }
@@ -80,6 +105,10 @@ impl BlockTrait for BlockSigmoid {
     }
     fn read_immutable_weights_from_buf(&self, out_weights: &mut Vec<Weight>, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
         Ok(())
+    }
+
+    fn get_forwards_only_version(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+        Ok(Box::new(BlockSigmoid{}))
     }
 
 }

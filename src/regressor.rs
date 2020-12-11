@@ -36,18 +36,25 @@ pub struct WeightAndOptimizerData<L:OptimizerTrait> {
 }
 
 pub trait BlockTrait {
-    fn forward_backwards(&mut self, 
+    fn forward_backward(&mut self, 
                          further_blocks: &mut [&mut dyn BlockTrait], 
                          wsum: f32, 
                          example_num: u32, 
                          fb: &feature_buffer::FeatureBuffer,
                          update:bool) -> (f32, f32);
 
+    fn forward(&self, 
+                         further_blocks: &mut [&dyn BlockTrait], 
+                         wsum: f32, 
+                         example_num: u32, 
+                         fb: &feature_buffer::FeatureBuffer) -> f32;
+
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance);
     fn get_weights_len(&self) -> usize;
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>>;
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>;
     fn read_immutable_weights_from_buf(&self, weights: &mut Vec<Weight>, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>;
+    fn get_forwards_only_version(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>>;
 }
 
 
@@ -71,6 +78,7 @@ pub struct ImmutableRegressor {
 
 pub trait RegressorTrait {
     fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32;
+    fn predict(&self, fb: &feature_buffer::FeatureBuffer, example_num: u32) -> f32;
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>>;
     fn overwrite_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>; 
     fn get_name(&self) -> String;
@@ -78,6 +86,12 @@ pub trait RegressorTrait {
     fn immutable_regressor_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<ImmutableRegressor, Box<dyn Error>>; 
     fn immutable_regressor(&mut self) -> Result<ImmutableRegressor, Box<dyn Error>>;
 }
+
+
+
+
+
+
 
 
 pub fn get_regressor_without_weights(mi: &model_instance::ModelInstance) -> Box<dyn RegressorTrait> {
@@ -190,9 +204,16 @@ L: std::clone::Clone
         let update:bool = update && (fb.example_importance != 0.0);
 
         let (current, further_blocks) = &mut self.blocks_list.split_at_mut(1);
-        let (prediction_probability, general_gradient) = current[0].forward_backwards(further_blocks, 0.0, example_num, fb, update);
+        let (prediction_probability, general_gradient) = current[0].forward_backward(further_blocks, 0.0, example_num, fb, update);
     
         return prediction_probability
+    }
+    
+    fn predict(&self, fb: &feature_buffer::FeatureBuffer, example_num: u32) -> f32 {
+//        let (current, further_blocks) = &mut self.blocks_list.split_at(1);
+//        let prediction_probability = self.blocks_list[0].forward(&mut self.blocks_list[1..2], 0.0, example_num, fb);
+        panic!("Not yet implemented");
+  //      return prediction_probability
     }
     
     // Yeah, this is weird. I just didn't want to break the format compatibility at this point
@@ -283,7 +304,7 @@ macro_rules! specialize_k {
 
 impl ImmutableRegressor {
 
-    pub fn predict(&self, fb: &feature_buffer::FeatureBuffer, example_num: u32) -> f32 {
+    pub fn predict_x(&self, fb: &feature_buffer::FeatureBuffer, example_num: u32) -> f32 {
         let fbuf = &fb.lr_buffer;
         let mut wsum:f32 = 0.0;
         unsafe {
@@ -349,6 +370,9 @@ impl RegressorTrait for ImmutableRegressor {
             panic!("You cannot call immutable regressor with update=true");
         }
         return self.predict(fb, example_num)
+    }
+    fn predict(&self, fb: &feature_buffer::FeatureBuffer, example_num: u32) -> f32{
+        return self.predict_x(fb, example_num)
     }
 
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
