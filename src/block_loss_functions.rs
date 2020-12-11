@@ -64,7 +64,7 @@ impl BlockTrait for BlockSigmoid {
     }
     
     fn forward(&self, 
-                     further_blocks: &mut [&dyn BlockTrait], 
+                     further_blocks: &[&dyn BlockTrait], 
                      wsum: f32, 
                      example_num: u32, 
                      fb: &feature_buffer::FeatureBuffer) -> f32 {

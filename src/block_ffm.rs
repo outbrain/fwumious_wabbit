@@ -226,7 +226,7 @@ L: std::clone::Clone
     }
     
     fn forward(&self, 
-                 further_blocks: &mut [&dyn BlockTrait], 
+                 further_blocks: &[&dyn BlockTrait], 
                  wsum: f32, 
                  example_num: u32, 
                  fb: &feature_buffer::FeatureBuffer) -> f32 {
@@ -261,7 +261,7 @@ L: std::clone::Clone
                 }
             });
         }
-        let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
+        let (next_regressor, further_blocks) = further_blocks.split_at(1);
         let prediction_probability = next_regressor[0].forward(further_blocks, wsum, example_num, fb);
         prediction_probability         
                  

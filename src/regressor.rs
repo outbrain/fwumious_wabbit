@@ -44,7 +44,7 @@ pub trait BlockTrait {
                          update:bool) -> (f32, f32);
 
     fn forward(&self, 
-                         further_blocks: &mut [&dyn BlockTrait], 
+                         further_blocks: &[&dyn BlockTrait], 
                          wsum: f32, 
                          example_num: u32, 
                          fb: &feature_buffer::FeatureBuffer) -> f32;
@@ -210,8 +210,8 @@ L: std::clone::Clone
     }
     
     fn predict(&self, fb: &feature_buffer::FeatureBuffer, example_num: u32) -> f32 {
-//        let (current, further_blocks) = &mut self.blocks_list.split_at(1);
-//        let prediction_probability = self.blocks_list[0].forward(&mut self.blocks_list[1..2], 0.0, example_num, fb);
+//        let (current, further_blocks) = self.blocks_list.split_at(1);
+//        let prediction_probability = current[0].forward(further_blocks, 0.0, example_num, fb);
         panic!("Not yet implemented");
   //      return prediction_probability
     }
