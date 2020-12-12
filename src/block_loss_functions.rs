@@ -36,6 +36,11 @@ pub struct BlockSigmoid {
 
 impl BlockTrait for BlockSigmoid {
 
+
+    fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+        Ok(Box::new(BlockSigmoid {}))
+    }
+
     #[inline(always)]
     fn forward_backward(&mut self, 
                     further_regressors: &mut [&mut dyn BlockTrait], 
@@ -62,7 +67,7 @@ impl BlockTrait for BlockSigmoid {
         //println!("General gradient: {}", general_gradient);
         (prediction_probability, general_gradient)
     }
-    
+
     fn forward(&self, 
                      further_blocks: &[&dyn BlockTrait], 
                      wsum: f32, 

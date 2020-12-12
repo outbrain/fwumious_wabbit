@@ -1,4 +1,3 @@
-#![allow(unused_macros)]
 //use std::mem::{self};
 use std::mem::{self, MaybeUninit};
 use std::slice;
@@ -55,14 +54,15 @@ pub trait BlockTrait {
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>;
     fn read_immutable_weights_from_buf(&self, weights: &mut Vec<Weight>, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>;
     fn get_forwards_only_version(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>>;
+    fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> where Self:Sized;
 }
 
+use std::marker::PhantomData;
 
 
 pub struct Regressor<'a, L:OptimizerTrait> {
-    pub reg_ffm: Box<BlockFFM<L>>,
-    pub reg_lr: Box<BlockLR<L>>,
-    pub reg_sig: Box<BlockSigmoid>, 
+    pub a: PhantomData<L>,
+    pub blocks_boxes: Vec<Box<dyn BlockTrait>>,
     pub blocks_list: Vec<&'a mut dyn BlockTrait>,
 }
 
@@ -86,12 +86,6 @@ pub trait RegressorTrait {
     fn immutable_regressor_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<ImmutableRegressor, Box<dyn Error>>; 
     fn immutable_regressor(&mut self) -> Result<ImmutableRegressor, Box<dyn Error>>;
 }
-
-
-
-
-
-
 
 
 pub fn get_regressor_without_weights(mi: &model_instance::ModelInstance) -> Box<dyn RegressorTrait> {
@@ -118,55 +112,35 @@ where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
 L: std::clone::Clone
 {
     pub fn new_without_weights(mi: &model_instance::ModelInstance) -> Regressor<'a, L> {
-        let mut reg_lr = BlockLR::<L> {
-            weights: Vec::new(),
-            weights_len: 0, 
-            optimizer_lr: L::new(),
-        };
-        reg_lr.optimizer_lr.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
-        reg_lr.weights_len = 1 << mi.bit_precision;
 
-
-        let mut reg_ffm = BlockFFM::<L> {
-            weights: Vec::new(),
-            ffm_weights_len: 0, 
-            local_data_ffm_indices: Vec::with_capacity(1024),
-            local_data_ffm_values: Vec::with_capacity(1024),
-            ffm_k: mi.ffm_k, 
-            ffm_one_over_k_root: 0.0, 
-            optimizer_ffm: L::new(),
-        };
-
-        if mi.ffm_k > 0 {
-            reg_ffm.optimizer_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
-            // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
-            reg_ffm.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * reg_ffm.ffm_k);
-        }
-        
-        let reg_sigmoid = BlockSigmoid {};
+        let mut reg_lr = BlockLR::<L>::new_without_weights(mi).unwrap();
+        let mut reg_ffm = BlockFFM::<L>::new_without_weights(mi).unwrap();
+        let mut reg_sigmoid = BlockSigmoid::new_without_weights(mi).unwrap();
 
         let mut rg = Regressor::<L>{
-            reg_lr: Box::new(reg_lr),
-            reg_ffm: Box::new(reg_ffm),
-            reg_sig: Box::new(reg_sigmoid),
             blocks_list: Vec::new(),
+            blocks_boxes: Vec::new(),
+            a: PhantomData{},
         };
 
         unsafe {
             // A bit more elaborate than necessary. Let's really make it clear what's happening
-            let r1: &mut BlockLR<L> = rg.reg_lr.as_mut();
-            let r2: &mut BlockLR<L> = mem::transmute(&mut *r1);
-            rg.blocks_list.push(r2 as &mut dyn BlockTrait);
+            let r1: &mut dyn BlockTrait = reg_lr.as_mut();
+            let r2: &mut dyn BlockTrait = mem::transmute(&mut *r1);
+            rg.blocks_boxes.push(reg_lr);
+            rg.blocks_list.push(r2);
 
             if mi.ffm_k > 0 {
-                let r1: &mut BlockFFM<L> = rg.reg_ffm.as_mut();
-                let r2: &mut BlockFFM<L> = mem::transmute(&mut *r1);
-                rg.blocks_list.push(r2 as &mut dyn BlockTrait);
+                let r1: &mut dyn BlockTrait = reg_ffm.as_mut();
+                let r2: &mut dyn BlockTrait = mem::transmute(&mut *r1);
+                rg.blocks_boxes.push(reg_ffm);
+                rg.blocks_list.push(r2);
             }
                         
-            let r1: &mut BlockSigmoid = rg.reg_sig.as_mut();
-            let r2: &mut BlockSigmoid = mem::transmute(&mut *r1);
-            rg.blocks_list.push(r2 as &mut dyn BlockTrait);
+            let r1: &mut dyn BlockTrait = reg_sigmoid.as_mut();
+            let r2: &mut dyn BlockTrait = mem::transmute(&mut *r1);
+            rg.blocks_list.push(r2);
+            rg.blocks_boxes.push(reg_sigmoid);
         }
 
         rg
@@ -210,10 +184,13 @@ L: std::clone::Clone
     }
     
     fn predict(&self, fb: &feature_buffer::FeatureBuffer, example_num: u32) -> f32 {
-//        let (current, further_blocks) = self.blocks_list.split_at(1);
-//        let prediction_probability = current[0].forward(further_blocks, 0.0, example_num, fb);
-        panic!("Not yet implemented");
-  //      return prediction_probability
+            // TODO: we should find a way of not using unsafe
+            let blocks_list = &self.blocks_list[..];
+            let blocks_list = unsafe {std::slice::from_raw_parts(blocks_list.as_ptr() as *const &dyn BlockTrait, blocks_list.len())};
+//            let blocks_list: &[&dyn BlockTrait] = mem::transmute(&self.blocks_list[..]);
+            let (current, further_blocks) = blocks_list.split_at(1);
+            let prediction_probability = current[0].forward(further_blocks, 0.0, example_num, fb);
+            return prediction_probability
     }
     
     // Yeah, this is weird. I just didn't want to break the format compatibility at this point
@@ -260,8 +237,8 @@ L: std::clone::Clone
 
         let fr = ImmutableRegressor {
                         weights: Arc::new(out_weights), 
-                        ffm_weights_offset: self.reg_lr.get_weights_len() as u32,
-                        ffm_k: self.reg_ffm.ffm_k,
+                        ffm_weights_offset: 0, // self.reg_lr.get_weights_len() as u32,
+                        ffm_k: 0, //self.reg_ffm.ffm_k, TODO OOOOO
         };
         Ok(fr)
     }
@@ -269,16 +246,17 @@ L: std::clone::Clone
     // Create immutable regressor from current regressor
     fn immutable_regressor(&mut self) -> Result<ImmutableRegressor, Box<dyn Error>> {
         let mut weights = Vec::<Weight>::new();
+        /* TODO
         for w in &self.reg_lr.weights {
             weights.push(Weight{weight:w.weight});
         }
         for w in &self.reg_ffm.weights {
             weights.push(Weight{weight:w.weight});
-        }
+        }*/
         let fr = ImmutableRegressor {
                         weights: Arc::new(weights), 
-                        ffm_weights_offset: self.reg_lr.get_weights_len() as u32,
-                        ffm_k: self.reg_ffm.ffm_k,
+                        ffm_weights_offset: 0, //self.reg_lr.get_weights_len() as u32,
+                        ffm_k: 0 //TODOself.reg_ffm.ffm_k,
         };
         Ok(fr)
     }
@@ -545,11 +523,10 @@ mod tests {
     }
 
     fn ffm_init<T:OptimizerTrait>(rg: &mut Regressor<T>) -> () {
-        for i in 0..rg.reg_ffm.weights.len() {
-            rg.reg_ffm.weights[i].weight = 1.0;
-//            rg.weights[i].acc_grad = 1.0;
-            rg.reg_ffm.weights[i].optimizer_data = rg.reg_ffm.optimizer_ffm.initial_data();
-        }
+//        for i in 0..rg.reg_ffm.weights.len() {
+//TODO            rg.reg_ffm.weights[i].weight = 1.0;
+//TODO            rg.reg_ffm.weights[i].optimizer_data = rg.reg_ffm.optimizer_ffm.initial_data();
+//        }
     }
 
 

@@ -22,10 +22,22 @@ pub struct BlockLR<L:OptimizerTrait> {
     pub optimizer_lr: L,
 }
 
-impl <L:OptimizerTrait> BlockTrait for BlockLR<L> 
+impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L> 
 where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
 L: std::clone::Clone
 {
+    fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>>  where Self: Sized {
+        let mut reg_lr = BlockLR::<L> {
+            weights: Vec::new(),
+            weights_len: 0, 
+            optimizer_lr: L::new(),
+        };
+        reg_lr.optimizer_lr.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
+        reg_lr.weights_len = 1 << mi.bit_precision;
+        Ok(Box::new(reg_lr))
+    }
+
+
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
         self.weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_lr.initial_data()}; self.weights_len as usize];
         

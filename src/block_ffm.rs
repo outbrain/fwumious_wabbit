@@ -70,11 +70,30 @@ macro_rules! specialize_k {
 
 
 
-impl <L:OptimizerTrait> BlockTrait for BlockFFM<L>
+impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
 where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
 L: std::clone::Clone
 
  {
+    fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+        let mut reg_ffm = BlockFFM::<L> {
+            weights: Vec::new(),
+            ffm_weights_len: 0, 
+            local_data_ffm_indices: Vec::with_capacity(1024),
+            local_data_ffm_values: Vec::with_capacity(1024),
+            ffm_k: mi.ffm_k, 
+            ffm_one_over_k_root: 0.0, 
+            optimizer_ffm: L::new(),
+        };
+
+        if mi.ffm_k > 0 {
+            reg_ffm.optimizer_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
+            // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
+            reg_ffm.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * reg_ffm.ffm_k);
+        }
+        Ok(Box::new(reg_ffm))
+    }
+
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
         self.weights =vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_ffm.initial_data()}; self.ffm_weights_len as usize];
         if mi.ffm_k > 0 {       
