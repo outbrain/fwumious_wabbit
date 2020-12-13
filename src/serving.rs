@@ -240,7 +240,7 @@ C,featureC
 "#;
         let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mi = model_instance::ModelInstance::new_empty().unwrap();        
-        let mut re = regressor::Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
+        let mut re = regressor::Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
         let re_fixed = BoxedRegressorTrait::new(re.immutable_regressor(&mi).unwrap());
         let fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
         let pa = parser::VowpalParser::new(&vw);

@@ -225,7 +225,7 @@ B,featureB
 
     }    
 
-    fn ffm_fixed_init<T:OptimizerTrait>(rg: &mut Regressor<T>) -> () {
+    fn ffm_fixed_init(rg: &mut Regressor) -> () {
         // This is a bit of black magic - we "know" that FFM is at index 1 and we downcast...
         let block_ffm = &mut rg.blocks_list[1];
         let mut block_ffm = block_ffm.as_any().downcast_mut::<BlockFFM<optimizer::OptimizerAdagradFlex>>().unwrap();
@@ -265,7 +265,7 @@ B,featureB
         mi.ffm_fields = vec![vec![],vec![]]; 
         mi.optimizer = model_instance::Optimizer::Adagrad;
         mi.fastmath = false;
-        let mut re = regressor::Regressor::<optimizer::OptimizerAdagradFlex>::new(&mi);
+        let mut re = regressor::Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi);
         let mut p: f32;
 
         ffm_fixed_init(&mut re);

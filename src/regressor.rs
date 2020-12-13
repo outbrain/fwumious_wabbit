@@ -66,8 +66,8 @@ pub trait BlockTrait {
 use std::marker::PhantomData;
 
 
-pub struct Regressor<'a, L:OptimizerTrait> {
-    pub a: PhantomData<L>,
+pub struct Regressor<'a> {
+    pub regressor_name: String,
     pub blocks_boxes: Vec<Box<dyn BlockTrait>>,
     pub blocks_list: Vec<&'a mut dyn BlockTrait>,
 }
@@ -97,12 +97,12 @@ pub trait RegressorTrait {
 pub fn get_regressor_without_weights(mi: &model_instance::ModelInstance) -> Box<dyn RegressorTrait> {
     if mi.optimizer == model_instance::Optimizer::Adagrad {
         if mi.fastmath {
-            Box::new(Regressor::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi))
+            Box::new(Regressor::new_without_weights::<optimizer::OptimizerAdagradLUT>(&mi))
         } else {
-            Box::new(Regressor::<optimizer::OptimizerAdagradFlex>::new_without_weights(&mi))
+            Box::new(Regressor::new_without_weights::<optimizer::OptimizerAdagradFlex>(&mi))
         }
     } else {
-        Box::new(Regressor::<optimizer::OptimizerSGD>::new_without_weights(&mi))
+        Box::new(Regressor::new_without_weights::<optimizer::OptimizerSGD>(&mi))
     }    
 }
 
@@ -113,20 +113,21 @@ pub fn get_regressor(mi: &model_instance::ModelInstance) -> Box<dyn RegressorTra
 }
 
 
-impl <'a, L:OptimizerTrait + 'static>Regressor<'a, L> 
+impl <'a>Regressor<'a> 
+{
+    pub fn new_without_weights<L: optimizer::OptimizerTrait + 'static>(mi: &model_instance::ModelInstance) -> Regressor<'a>
 where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
 L: std::clone::Clone
-{
-    pub fn new_without_weights(mi: &model_instance::ModelInstance) -> Regressor<'a, L> {
+     {
 
         let mut reg_lr = BlockLR::<L>::new_without_weights(mi).unwrap();
         let mut reg_ffm = BlockFFM::<L>::new_without_weights(mi).unwrap();
         let mut reg_sigmoid = BlockSigmoid::new_without_weights(mi).unwrap();
 
-        let mut rg = Regressor::<L>{
+        let mut rg = Regressor{
             blocks_list: Vec::new(),
             blocks_boxes: Vec::new(),
-            a: PhantomData{},
+            regressor_name: format!("Regressor with optimizer {:?}", L::get_name()),
         };
 
         unsafe {
@@ -159,21 +160,20 @@ L: std::clone::Clone
     }
     
 
-    pub fn new(mi: &model_instance::ModelInstance) -> Regressor<'a, L> {
-        let mut rg = Regressor::<L>::new_without_weights(mi);
+    pub fn new<L: optimizer::OptimizerTrait + 'static>(mi: &model_instance::ModelInstance) -> Regressor<'a> 
+where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
+L: std::clone::Clone {
+        let mut rg = Regressor::new_without_weights::<L>(mi);
         rg.allocate_and_init_weights(mi);
         rg
     }
 }
 
     
-impl <L:OptimizerTrait + 'static> RegressorTrait for Regressor<'_, L> 
-where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
-L: std::clone::Clone
+impl RegressorTrait for Regressor<'_> 
 {
-
     fn get_name(&self) -> String {
-        format!("Regressor with optimizer {:?}", L::get_name())
+        self.regressor_name.to_owned()    
     }
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
@@ -232,7 +232,7 @@ L: std::clone::Clone
     fn immutable_regressor_from_buf(&mut self, mi: &model_instance::ModelInstance, input_bufreader: &mut dyn io::Read) -> Result<Box<dyn RegressorTrait>, Box<dyn Error>> {
         // TODO Ideally we would make a copy, not based on model_instance. but this is easier at the moment
         
-        let mut rg = Box::new(Regressor::<optimizer::OptimizerSGD>::new_without_weights(&mi));
+        let mut rg = Box::new(Regressor::new_without_weights::<optimizer::OptimizerSGD>(&mi));
     
         let len = input_bufreader.read_u64::<LittleEndian>()?;
         let expected_length = self.blocks_list.iter().map(|bb| bb.get_weights_len()).sum::<usize>() as u64;
@@ -246,12 +246,10 @@ L: std::clone::Clone
         Ok(rg)
     }
 
-
-
     // Create immutable regressor from current regressor
     fn immutable_regressor(&mut self, mi: &model_instance::ModelInstance) -> Result<Box<dyn RegressorTrait>, Box<dyn Error>> {
         // Only to be used by unit tests 
-        let mut rg = Box::new(Regressor::<optimizer::OptimizerSGD>::new_without_weights(&mi));
+        let mut rg = Box::new(Regressor::new_without_weights::<optimizer::OptimizerSGD>(&mi));
 
         let mut tmp_vec: Vec<u8> = Vec::new();
         for (i, v) in &mut self.blocks_list.iter().enumerate() {
@@ -286,7 +284,7 @@ mod tests {
     #[test]
     fn test_learning_turned_off() {
         let mi = model_instance::ModelInstance::new_empty().unwrap();        
-        let mut re = Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
+        let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
         // Empty model: no matter how many features, prediction is 0.5
         assert_eq!(re.learn(&lr_vec(vec![]), false, 0), 0.5);
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), false, 0), 0.5);
@@ -306,7 +304,7 @@ mod tests {
         // Here learning rate mechanism does not affect the results, so let's verify three different ones
         let mut regressors: Vec<Box<dyn RegressorTrait>> = vec![
             //Box::new(Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi)),
-            Box::new(Regressor::<optimizer::OptimizerAdagradFlex>::new(&mi)),
+            Box::new(Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi)),
             //Box::new(Regressor::<optimizer::OptimizerSGD>::new(&mi))
             ];
         
@@ -326,7 +324,7 @@ mod tests {
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
         
-        let mut re = Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
+        let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
         let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash: 1, value: 2.0}]);
 
         assert_eq!(re.learn(vec_in, true, 0), 0.5);
@@ -342,7 +340,7 @@ mod tests {
         mi.power_t = 0.5;
         mi.init_acc_gradient = 0.0;
         
-        let mut re = Regressor::<optimizer::OptimizerAdagradFlex>::new(&mi);
+        let mut re = Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi);
         
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0), 0.5);
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0), 0.4750208);
@@ -381,7 +379,7 @@ mod tests {
         mi.bit_precision = 18;
         mi.init_acc_gradient = 0.0;
         
-        let mut re = Regressor::<optimizer::OptimizerAdagradFlex>::new(&mi);
+        let mut re = Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi);
         // Here we take twice two features and then once just one
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true, 0), 0.5);
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true, 0), 0.45016602);
@@ -395,7 +393,7 @@ mod tests {
         mi.power_t = 0.0;
         mi.bit_precision = 18;
         
-        let mut re = Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
+        let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
         
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true, 0), 0.5);
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true, 0), 0.45016602);
@@ -411,7 +409,7 @@ mod tests {
         mi.optimizer = model_instance::Optimizer::Adagrad;
         mi.fastmath = true;
         
-        let mut re = Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
+        let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
         
         let mut fb_instance = lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);
         fb_instance.example_importance = 0.5;
