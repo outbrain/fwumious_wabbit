@@ -212,7 +212,7 @@ impl Serving {
 
 #[cfg(test)]
 mod tests {
-/*    // Note this useful idiom: importing names from outer (for mod tests) scope.
+    // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use crate::regressor;
     use std::io::ErrorKind;
@@ -241,7 +241,7 @@ C,featureC
         let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mi = model_instance::ModelInstance::new_empty().unwrap();        
         let mut re = regressor::Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
-        let re_fixed = BoxedRegressorTrait::new(re.immutable_regressor().unwrap());
+        let re_fixed = BoxedRegressorTrait::new(re.immutable_regressor(&mi).unwrap());
         let fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
         let pa = parser::VowpalParser::new(&vw);
 
@@ -301,7 +301,7 @@ C,featureC
                                  
     }
 
-*/
+
 
 }
 
