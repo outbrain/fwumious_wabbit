@@ -48,7 +48,6 @@ impl BlockTrait for BlockSigmoid {
     fn forward_backward(&mut self, 
                     further_regressors: &mut [&mut dyn BlockTrait], 
                     wsum: f32, 
-                    example_num: u32, 
                     fb: &feature_buffer::FeatureBuffer, 
                     update:bool) -> (f32, f32) {
         if further_regressors.len() != 0 {
@@ -57,7 +56,7 @@ impl BlockTrait for BlockSigmoid {
         
         // vowpal compatibility
         if wsum.is_nan() {
-            eprintln!("NAN prediction in example {}, forcing 0.0", example_num);
+            eprintln!("NAN prediction in example {}, forcing 0.0", fb.example_number);
             return (logistic(0.0), 0.0);
         } else if wsum < -50.0 {
             return (logistic(-50.0), 0.0);
@@ -74,7 +73,6 @@ impl BlockTrait for BlockSigmoid {
     fn forward(&self, 
                      further_blocks: &[&dyn BlockTrait], 
                      wsum: f32, 
-                     example_num: u32, 
                      fb: &feature_buffer::FeatureBuffer) -> f32 {
 
         if further_blocks.len() != 0 {
@@ -83,7 +81,7 @@ impl BlockTrait for BlockSigmoid {
         
         // vowpal compatibility
         if wsum.is_nan() {
-            eprintln!("NAN prediction in example {}, forcing 0.0", example_num);
+            eprintln!("NAN prediction in example {}, forcing 0.0", fb.example_number);
             return logistic(0.0);
         } else if wsum < -50.0 {
             return logistic(-50.0);

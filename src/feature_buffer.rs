@@ -23,6 +23,7 @@ pub struct HashAndValueAndSeq {
 pub struct FeatureBuffer {
     pub label: f32,
     pub example_importance: f32,
+    pub example_number: u64,
     pub lr_buffer: Vec<HashAndValue>,
     pub ffm_buffer: Vec<HashAndValueAndSeq>,
     pub ffm_fields_count: u32,
@@ -85,6 +86,7 @@ impl FeatureBufferTranslator {
         let mut fb = FeatureBuffer {
             label: 0.0,
             example_importance: 1.0,
+            example_number: 0,
             lr_buffer: Vec::new(),
             ffm_buffer: Vec::new(),
             ffm_fields_count: 0,
@@ -107,12 +109,13 @@ impl FeatureBufferTranslator {
     }
     
     
-    pub fn translate(&mut self, record_buffer: &[u32]) -> () {
+    pub fn translate(&mut self, record_buffer: &[u32], example_number: u64) -> () {
         unsafe {
         let lr_buffer = &mut self.feature_buffer.lr_buffer;
         lr_buffer.truncate(0);
         self.feature_buffer.label = record_buffer[parser::LABEL_OFFSET] as f32;  // copy label
         self.feature_buffer.example_importance = f32::from_bits(record_buffer[parser::EXAMPLE_IMPORTANCE_OFFSET]);    
+        self.feature_buffer.example_number = example_number;
         let mut output_len:usize = 0;
         let mut hashes_vec_in : &mut Vec<HashAndValue> = &mut self.hashes_vec_in;
         let mut hashes_vec_out : &mut Vec<HashAndValue> = &mut self.hashes_vec_out;

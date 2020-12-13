@@ -100,14 +100,14 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"), &vw);
         let mut fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
 
-        let predictions_after:u32 = match cl.value_of("predictions_after") {
+        let predictions_after:u64 = match cl.value_of("predictions_after") {
             Some(examples) => examples.parse()?,
             None => 0
         };
 
-        let holdout_after_option : Option<u32> = cl.value_of("holdout_after").map(|s| s.parse().unwrap());
+        let holdout_after_option : Option<u64> = cl.value_of("holdout_after").map(|s| s.parse().unwrap());
 
-        let prediction_model_delay:u32 = match cl.value_of("prediction_model_delay") {
+        let prediction_model_delay:u64 = match cl.value_of("prediction_model_delay") {
             Some(delay) => delay.parse()?,
             None => 0
         };
@@ -150,7 +150,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
                 };
             }
             example_num += 1;
-            fbt.translate(buffer);
+            fbt.translate(buffer, example_num);
             let mut prediction: f32 = 0.0;
 
             if prediction_model_delay == 0 {
@@ -158,15 +158,15 @@ fn main2() -> Result<(), Box<dyn Error>>  {
                     Some(holdout_after) => !testonly && example_num < holdout_after,
                     None => !testonly
                 };
-                prediction = re.learn(&fbt.feature_buffer, update, example_num);
+                prediction = re.learn(&fbt.feature_buffer, update);
             } else {
                 if example_num > predictions_after {
-                    prediction = re.learn(&fbt.feature_buffer, false, example_num);
+                    prediction = re.learn(&fbt.feature_buffer, false);
                 }
                 delayed_learning_fbs.push_back(fbt.feature_buffer.clone());
                 if (prediction_model_delay as usize) < delayed_learning_fbs.len() {
                     let delayed_buffer = delayed_learning_fbs.pop_front().unwrap();
-                    re.learn(&delayed_buffer, !testonly, example_num);
+                    re.learn(&delayed_buffer, !testonly);
                 }
             } 
             

@@ -78,15 +78,15 @@ impl WorkerThread {
                              writer: &mut impl io::Write,
                              ) -> ConnectionEnd
     {
-        let mut i = 0u32;
+        let mut i = 0u64;  // This is per-thread example number
         loop {
             let reading_result = self.pa.next_vowpal(reader);
 
             match reading_result {
                 Ok([]) => return ConnectionEnd::EndOfStream, // EOF
                 Ok(buffer2) => {
-                    self.fbt.translate(buffer2);
-                    let p = self.re_fixed.learn(&(self.fbt.feature_buffer),  false, i);
+                    self.fbt.translate(buffer2, i);
+                    let p = self.re_fixed.predict(&(self.fbt.feature_buffer));
                     let p_res = format!("{:.6}\n", p);
                     match writer.write_all(p_res.as_bytes()) {
                         Ok(_) => {},

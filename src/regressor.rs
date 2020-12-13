@@ -29,14 +29,12 @@ pub trait BlockTrait {
     fn forward_backward(&mut self, 
                          further_blocks: &mut [&mut dyn BlockTrait], 
                          wsum: f32, 
-                         example_num: u32, 
                          fb: &feature_buffer::FeatureBuffer,
                          update:bool) -> (f32, f32);
 
     fn forward(&self, 
                          further_blocks: &[&dyn BlockTrait], 
                          wsum: f32, 
-                         example_num: u32, 
                          fb: &feature_buffer::FeatureBuffer) -> f32;
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance);
@@ -59,8 +57,8 @@ pub struct Regressor<'a> {
 }
 
 pub trait RegressorTrait {
-    fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32;
-    fn predict(&self, fb: &feature_buffer::FeatureBuffer, example_num: u32) -> f32;
+    fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool) -> f32;
+    fn predict(&self, fb: &feature_buffer::FeatureBuffer) -> f32;
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>>;
     fn overwrite_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>; 
     fn get_name(&self) -> String;
@@ -153,22 +151,22 @@ impl RegressorTrait for Regressor<'_>
         self.allocate_and_init_weights_(mi);
     }
 
-    fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32 {
+    fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool) -> f32 {
         let update:bool = update && (fb.example_importance != 0.0);
 
         let (current, further_blocks) = &mut self.blocks_list.split_at_mut(1);
-        let (prediction_probability, general_gradient) = current[0].forward_backward(further_blocks, 0.0, example_num, fb, update);
+        let (prediction_probability, general_gradient) = current[0].forward_backward(further_blocks, 0.0, fb, update);
     
         return prediction_probability
     }
     
-    fn predict(&self, fb: &feature_buffer::FeatureBuffer, example_num: u32) -> f32 {
+    fn predict(&self, fb: &feature_buffer::FeatureBuffer) -> f32 {
             // TODO: we should find a way of not using unsafe
             let blocks_list = &self.blocks_list[..];
             let blocks_list = unsafe {std::slice::from_raw_parts(blocks_list.as_ptr() as *const &dyn BlockTrait, blocks_list.len())};
 //            let blocks_list: &[&dyn BlockTrait] = mem::transmute(&self.blocks_list[..]);
             let (current, further_blocks) = blocks_list.split_at(1);
-            let prediction_probability = current[0].forward(further_blocks, 0.0, example_num, fb);
+            let prediction_probability = current[0].forward(further_blocks, 0.0, fb);
             return prediction_probability
     }
     
@@ -247,6 +245,7 @@ mod tests {
         feature_buffer::FeatureBuffer {
                     label: 0.0,
                     example_importance: 1.0,
+                    example_number: 0,
                     lr_buffer: v,
                     ffm_buffer: Vec::new(),
                     ffm_fields_count: 0,

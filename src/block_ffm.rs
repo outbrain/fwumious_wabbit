@@ -146,7 +146,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
     fn forward_backward(&mut self, 
                         further_blocks: &mut [&mut dyn BlockTrait], 
                         wsum: f32, 
-                        example_num: u32, 
                         fb: &feature_buffer::FeatureBuffer, 
                         update:bool) -> (f32, f32) {
         let mut wsum = wsum;
@@ -222,7 +221,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                     });                     
                     
                     let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
-                    let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_blocks, wsum, example_num, fb, update);
+                    let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_blocks, wsum, fb, update);
                     
                     if update {
                        for i in 0..local_data_ffm_len {
@@ -262,7 +261,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         } // unsafe end
     }
     
-    fn forward(&self, further_blocks: &[&dyn BlockTrait], wsum: f32, example_num: u32, fb: &feature_buffer::FeatureBuffer) -> f32 {
+    fn forward(&self, further_blocks: &[&dyn BlockTrait], wsum: f32, fb: &feature_buffer::FeatureBuffer) -> f32 {
         let mut wsum:f32 = 0.0;
         unsafe {
             let ffm_weights = &self.weights;
@@ -293,7 +292,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
             });
         }
         let (next_regressor, further_blocks) = further_blocks.split_at(1);
-        let prediction_probability = next_regressor[0].forward(further_blocks, wsum, example_num, fb);
+        let prediction_probability = next_regressor[0].forward(further_blocks, wsum, fb);
         prediction_probability         
                  
     }
@@ -338,6 +337,7 @@ mod tests {
         feature_buffer::FeatureBuffer {
                     label: 0.0,
                     example_importance: 1.0,
+                    example_number: 0,
                     lr_buffer: Vec::new(),
                     ffm_buffer: v,
                     ffm_fields_count: ffm_fields_count,
@@ -359,7 +359,7 @@ mod tests {
                         update: bool) -> f32 {
         let mut further_blocks: Vec<&mut dyn BlockTrait> = vec![block_loss_function.as_mut()];
         let further_blocks = &mut further_blocks[..];
-        let (prediction_probability, general_gradient) = block_ffm.forward_backward(further_blocks, 0.0, 0, fb, update);
+        let (prediction_probability, general_gradient) = block_ffm.forward_backward(further_blocks, 0.0, fb, update);
     
         return prediction_probability
     }
