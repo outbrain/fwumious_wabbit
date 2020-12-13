@@ -86,9 +86,7 @@ pub fn get_regressor(mi: &model_instance::ModelInstance) -> Box<dyn RegressorTra
     re
 }
 
-
-impl <'a>Regressor<'a> 
-{
+impl <'a>Regressor<'a>  {
     pub fn new_without_weights<L: optimizer::OptimizerTrait + 'static>(mi: &model_instance::ModelInstance) -> Regressor<'a>
     {
 
@@ -162,11 +160,11 @@ impl RegressorTrait for Regressor<'_>
     }
     
     fn predict(&self, fb: &feature_buffer::FeatureBuffer) -> f32 {
-            // TODO: we should find a way of not using unsafe
-            let blocks_list = &self.blocks_boxes[..];
-            let (current, further_blocks) = blocks_list.split_at(1);
-            let prediction_probability = current[0].forward(further_blocks, 0.0, fb);
-            return prediction_probability
+        // TODO: we should find a way of not using unsafe
+        let blocks_list = &self.blocks_boxes[..];
+        let (current, further_blocks) = blocks_list.split_at(1);
+        let prediction_probability = current[0].forward(further_blocks, 0.0, fb);
+        return prediction_probability
     }
     
     // Yeah, this is weird. I just didn't want to break the format compatibility at this point

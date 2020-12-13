@@ -14,7 +14,7 @@ use crate::consts;
 use crate::block_helpers;
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
-use block_helpers::{Weight, WeightAndOptimizerData};
+use block_helpers::{Weight, WeightAndOptimizerData, slearn};
 
 
 const FFM_STACK_BUF_LEN:usize= 16384;
@@ -353,20 +353,6 @@ mod tests {
         }
     }
 
-    fn slearn<'a>(block_ffm: &mut Box<dyn BlockTrait>, 
-                        block_loss_function: &mut Box<dyn BlockTrait>,
-                        fb: &feature_buffer::FeatureBuffer, 
-                        update: bool) -> f32 {
-        unsafe {
-            let block_loss_function: Box<dyn BlockTrait> = mem::transmute(& *block_loss_function.deref().deref());
-            let mut further_blocks_v: Vec<Box<dyn BlockTrait>> = vec![block_loss_function];
-            let further_blocks = &mut further_blocks_v[..];
-            let (prediction_probability, general_gradient) = block_ffm.forward_backward(further_blocks, 0.0, fb, update);
-            // black magic here: forget about further blocks that we got through transmute:
-            further_blocks_v.set_len(0);
-            return prediction_probability
-        }
-    }
 
     #[test]
     fn test_ffm() {
