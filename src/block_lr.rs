@@ -130,6 +130,12 @@ L: std::clone::Clone
         let mut forward = forward.as_any().downcast_mut::<BlockLR<optimizer::OptimizerSGD>>().unwrap();
         block_helpers::read_weights_only_from_buf2::<L>(self.weights_len as usize, &mut forward.weights, input_bufreader)
     }
+    /// Sets internal state of weights based on some completely object-dependent parameters
+    fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {
+        self.weights[index].weight = w[0];
+        self.weights[index].optimizer_data = self.optimizer_lr.initial_data();
+        Ok(())
+    }
 
 
 }

@@ -300,7 +300,6 @@ L: std::clone::Clone
                  
     }
     
-    
     fn get_weights_len(&self) -> usize {
         return self.ffm_weights_len as usize;
     }
@@ -318,6 +317,12 @@ L: std::clone::Clone
         block_helpers::read_weights_only_from_buf2::<L>(self.ffm_weights_len as usize, &mut forward.weights, input_bufreader)
     }
 
+    // Sets internal state of weights based on some completely object-dependent parameters
+    fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {
+        self.weights[index].weight = w[0];
+        self.weights[index].optimizer_data = self.optimizer_ffm.initial_data();
+        Ok(())
+    }
 }
 
 

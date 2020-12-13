@@ -139,8 +139,11 @@ mod tests {
     use crate::feature_buffer;
     use crate::feature_buffer::HashAndValue;
     use crate::feature_buffer::HashAndValueAndSeq;
-    use regressor::Regressor;
 
+    use regressor::Regressor;
+    use regressor::BlockTrait;
+    use crate::block_ffm::BlockFFM;
+    
     use tempfile::{tempdir};
     #[test]
     fn save_empty_model() {
@@ -221,11 +224,14 @@ B,featureB
         }
 
     }    
-/*
+
     fn ffm_fixed_init<T:OptimizerTrait>(rg: &mut Regressor<T>) -> () {
-        for i in 0..rg.reg_ffm.weights.len() {
-            rg.reg_ffm.weights[i].weight = 1.0;
-            rg.reg_ffm.weights[i].optimizer_data = rg.reg_ffm.optimizer_ffm.initial_data();
+        // This is a bit of black magic - we "know" that FFM is at index 1 and we downcast...
+        let block_ffm = &mut rg.blocks_list[1];
+        let mut block_ffm = block_ffm.as_any().downcast_mut::<BlockFFM<optimizer::OptimizerAdagradFlex>>().unwrap();
+
+        for i in 0..block_ffm.get_weights_len() {
+            block_ffm.testing_set_weights(0, 0, i, &[1.0f32]).unwrap();
         }
     }
 
@@ -276,7 +282,7 @@ B,featureB
 
         // Now we test conversion to fixed regressor 
         {
-            let re_fixed = re.immutable_regressor().unwrap();
+            let re_fixed = re.immutable_regressor(&mi).unwrap();
             // predict with the same feature vector
             assert_eq!(re_fixed.predict(&fbuf, 0), CONST_RESULT);
         }
@@ -293,7 +299,7 @@ B,featureB
 
             // b) load as regular regressor, immutable
             let (_mi2, _vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap(), true).unwrap();
-            assert_eq!(re2.get_name(), "ImmutableRegressor");
+            assert_eq!(re2.get_name(), "Regressor with optimizer \"SGD\"");
             assert_eq!(re2.learn(fbuf, false, 0), CONST_RESULT);
 
             // c) load as fixed regressor
@@ -304,5 +310,5 @@ B,featureB
         
 
     }    
-*/
+
 }
