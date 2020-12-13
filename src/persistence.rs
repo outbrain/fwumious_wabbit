@@ -170,7 +170,7 @@ B,featureB
                     ffm_fields_count: 0,
         }
     }
-/*
+
     #[test]
     fn save_load_and_test_mode_lr() {
         let vw_map_string = r#"
@@ -197,7 +197,7 @@ B,featureB
 
         // Now we test conversion to fixed regressor 
         {
-            let re_fixed = re.immutable_regressor().unwrap();
+            let re_fixed = re.immutable_regressor(&mi).unwrap();
             // predict with the same feature vector
             assert_eq!(re_fixed.predict(&fbuf, 0), CONST_RESULT);
         }
@@ -221,7 +221,7 @@ B,featureB
         }
 
     }    
-
+/*
     fn ffm_fixed_init<T:OptimizerTrait>(rg: &mut Regressor<T>) -> () {
         for i in 0..rg.reg_ffm.weights.len() {
             rg.reg_ffm.weights[i].weight = 1.0;

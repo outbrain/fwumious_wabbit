@@ -58,7 +58,6 @@ pub trait BlockTrait {
     fn new_forward_only_without_weights(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>>;
     fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> where Self:Sized;
     fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut dyn BlockTrait) -> Result<(), Box<dyn Error>>;
-
 }
 
 use std::marker::PhantomData;
@@ -251,10 +250,11 @@ L: std::clone::Clone
         // Only to be used by unit tests 
         let mut rg = Box::new(Regressor::<optimizer::OptimizerSGD>::new_without_weights(&mi));
 
-        let mut tmp_vec:Vec<u8> = Vec::new();
+        let mut tmp_vec: Vec<u8> = Vec::new();
         for (i, v) in &mut self.blocks_list.iter().enumerate() {
             let mut cursor = Cursor::new(&mut tmp_vec);
             v.write_weights_to_buf(&mut cursor)?;
+            cursor.set_position(0);
             v.read_weights_from_buf_into_forward_only(&mut cursor, rg.blocks_list[i])?;
         }
         Ok(rg)
@@ -510,72 +510,6 @@ mod tests {
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true, 0), 0.45016602);
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true, 0), 0.40611085);
     }
-
-/* FFM TESTS */
-    fn ffm_vec(v:Vec<feature_buffer::HashAndValueAndSeq>, ffm_fields_count: u32) -> feature_buffer::FeatureBuffer {
-        feature_buffer::FeatureBuffer {
-                    label: 0.0,
-                    example_importance: 1.0,
-                    lr_buffer: Vec::new(),
-                    ffm_buffer: v,
-                    ffm_fields_count: ffm_fields_count,
-        }
-    }
-
-    fn ffm_init<T:OptimizerTrait>(rg: &mut Regressor<T>) -> () {
-//        for i in 0..rg.reg_ffm.weights.len() {
-//TODO            rg.reg_ffm.weights[i].weight = 1.0;
-//TODO            rg.reg_ffm.weights[i].optimizer_data = rg.reg_ffm.optimizer_ffm.initial_data();
-//        }
-    }
-
-
-    #[test]
-    fn test_ffm() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
-        mi.learning_rate = 0.1;
-        mi.ffm_learning_rate = 0.1;
-        mi.power_t = 0.0;
-        mi.ffm_power_t = 0.0;
-        mi.bit_precision = 18;
-        mi.ffm_k = 4;
-        mi.ffm_bit_precision = 18;
-        mi.ffm_fields = vec![vec![], vec![]]; // This isn't really used
-        
-        let mut p: f32;
-        
-        // Nothing can be learned from a single field
-        let mut re = Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
-        let ffm_buf = ffm_vec(vec![HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0}], 1);
-        p = re.learn(&ffm_buf, true, 0);
-        assert_eq!(p, 0.5);
-        p = re.learn(&ffm_buf, true, 0);
-        assert_eq!(p, 0.5);
-
-        // With two fields, things start to happen
-        // Since fields depend on initial randomization, these tests are ... peculiar.
-        let mut re = Regressor::<optimizer::OptimizerAdagradFlex>::new(&mi);
-        ffm_init(&mut re);
-        let ffm_buf = ffm_vec(vec![
-                                  HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
-                                  HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: 1}
-                                  ], 2);
-        assert_eq!(re.learn(&ffm_buf, true, 0), 0.98201376); 
-        assert_eq!(re.learn(&ffm_buf, true, 0), 0.96277946);
-
-        // Two fields, use values
-        let mut re = Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi);
-        ffm_init(&mut re);
-        let ffm_buf = ffm_vec(vec![
-                                  HashAndValueAndSeq{hash:1, value: 2.0, contra_field_index: 0},
-                                  HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: 1}
-                                  ], 2);
-        assert_eq!(re.learn(&ffm_buf, true, 0), 0.9999999);
-        assert_eq!(re.learn(&ffm_buf, true, 0), 0.99685884);
-
-
-    }
-
 
     #[test]
     fn test_example_importance() {

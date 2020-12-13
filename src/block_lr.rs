@@ -128,7 +128,7 @@ L: std::clone::Clone
 
     fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut dyn BlockTrait) -> Result<(), Box<dyn Error>> {
         let mut forward = forward.as_any().downcast_mut::<BlockLR<optimizer::OptimizerSGD>>().unwrap();
-        block_helpers::read_weights_only_from_buf2::<L>(self.get_weights_len(), &mut forward.weights, input_bufreader)
+        block_helpers::read_weights_only_from_buf2::<L>(self.weights_len as usize, &mut forward.weights, input_bufreader)
     }
 
 

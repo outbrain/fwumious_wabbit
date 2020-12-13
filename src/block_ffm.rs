@@ -315,7 +315,7 @@ L: std::clone::Clone
 
     fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut dyn BlockTrait) -> Result<(), Box<dyn Error>> {
         let mut forward = forward.as_any().downcast_mut::<BlockFFM<optimizer::OptimizerSGD>>().unwrap();
-        block_helpers::read_weights_only_from_buf2::<L>(self.get_weights_len(), &mut forward.weights, input_bufreader)
+        block_helpers::read_weights_only_from_buf2::<L>(self.ffm_weights_len as usize, &mut forward.weights, input_bufreader)
     }
 
 }
@@ -341,14 +341,16 @@ mod tests {
         }
     }
 
-    fn ffm_init<T:OptimizerTrait>(block_ffm: &mut BlockFFM<T>) -> () {
+    fn ffm_init<T:OptimizerTrait + 'static>(block_ffm: &mut Box<dyn BlockTrait>) -> () {
+        let mut block_ffm = block_ffm.as_any().downcast_mut::<BlockFFM<T>>().unwrap();
+        
         for i in 0..block_ffm.weights.len() {
             block_ffm.weights[i].weight = 1.0;
             block_ffm.weights[i].optimizer_data = block_ffm.optimizer_ffm.initial_data();
         }
     }
 
-    fn simple_learn<'a>(block_ffm: &mut Box<dyn BlockTrait>, 
+    fn slearn<'a>(block_ffm: &mut Box<dyn BlockTrait>, 
                         block_loss_function: &mut Box<dyn BlockTrait>,
                         fb: &feature_buffer::FeatureBuffer, 
                         update: bool) -> f32 {
@@ -370,64 +372,44 @@ mod tests {
         mi.ffm_k = 4;
         mi.ffm_bit_precision = 18;
         mi.ffm_fields = vec![vec![], vec![]]; // This isn't really used
+        let mut lossf = BlockSigmoid::new_without_weights(&mi).unwrap();
         
-        let mut p: f32;
-        
-        // Nothing can be learned from a single field
-        let mut loss_function = BlockSigmoid::new_without_weights(&mi).unwrap();
+        // Nothing can be learned from a single field in FFMs
         let mut re = BlockFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
         re.allocate_and_init_weights(&mi);
 
         let ffm_buf = ffm_vec(vec![HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0}], 1);
-        p = simple_learn(&mut re, &mut loss_function, &ffm_buf, true);
-        assert_eq!(p, 0.5);
-        p = simple_learn(&mut re, &mut loss_function, &ffm_buf, true);
-        assert_eq!(p, 0.5);
+        assert_eq!(slearn(&mut re, &mut lossf, &ffm_buf, true), 0.5);
+        assert_eq!(slearn(&mut re, &mut lossf, &ffm_buf, true), 0.5);
 
         // With two fields, things start to happen
         // Since fields depend on initial randomization, these tests are ... peculiar.
         let mut re = BlockFFM::<optimizer::OptimizerAdagradFlex>::new_without_weights(&mi).unwrap();
         re.allocate_and_init_weights(&mi);
-        let mut re2 = re.as_any().downcast_mut::<BlockFFM<optimizer::OptimizerAdagradFlex>>().unwrap();
 
-        ffm_init(&mut re2);
+        ffm_init::<optimizer::OptimizerAdagradFlex>(&mut re);
         let ffm_buf = ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: 1}
                                   ], 2);
-        p = simple_learn(&mut re, &mut loss_function, &ffm_buf, true);
-        assert_eq!(p, 0.98201376); 
-        p = simple_learn(&mut re, &mut loss_function, &ffm_buf, true);
-        assert_eq!(p, 0.96277946);
+        assert_eq!(slearn(&mut re, &mut lossf, &ffm_buf, true), 0.98201376); 
+        assert_eq!(slearn(&mut re, &mut lossf, &ffm_buf, true), 0.96277946);
 
         // Two fields, use values
         let mut re = BlockFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
         re.allocate_and_init_weights(&mi);
-        let mut re2 = re.as_any().downcast_mut::<BlockFFM<optimizer::OptimizerAdagradLUT>>().unwrap();
 
-        ffm_init(&mut re2);
+        ffm_init::<optimizer::OptimizerAdagradLUT>(&mut re);
         let ffm_buf = ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 2.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: 1}
                                   ], 2);
-        p = simple_learn(&mut re, &mut loss_function, &ffm_buf, true);
-        assert_eq!(p, 0.9999999);
-        p = simple_learn(&mut re, &mut loss_function, &ffm_buf, true);
-        assert_eq!(p, 0.99685884);
-
-
+        assert_eq!(slearn(&mut re, &mut lossf, &ffm_buf, true), 0.9999999);
+        assert_eq!(slearn(&mut re, &mut lossf, &ffm_buf, true), 0.99685884);
     }
 
 
 }
-
-
-
-
-
-
-
-
 
 
 
