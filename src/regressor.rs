@@ -27,18 +27,18 @@ use crate::block_loss_functions::BlockSigmoid;
 pub trait BlockTrait {
     fn as_any(&mut self) -> &mut dyn Any; // This enables downcasting
     fn forward_backward(&mut self, 
-                         further_blocks: &mut [&mut dyn BlockTrait], 
+                         further_blocks: &mut [Box<dyn BlockTrait>], 
                          wsum: f32, 
                          fb: &feature_buffer::FeatureBuffer,
                          update:bool) -> (f32, f32);
 
     fn forward(&self, 
-                         further_blocks: &[&dyn BlockTrait], 
+                         further_blocks: &[Box<dyn BlockTrait>], 
                          wsum: f32, 
                          fb: &feature_buffer::FeatureBuffer) -> f32;
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance);
-    fn get_weights_len(&self) -> usize;
+    fn get_serialized_len(&self) -> usize;
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>>;
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>;
     fn new_forward_only_without_weights(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>>;
@@ -154,7 +154,8 @@ impl RegressorTrait for Regressor<'_>
     fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool) -> f32 {
         let update:bool = update && (fb.example_importance != 0.0);
 
-        let (current, further_blocks) = &mut self.blocks_list.split_at_mut(1);
+        let blocks_list = &mut self.blocks_boxes[..];
+        let (current, further_blocks) = &mut blocks_list.split_at_mut(1);
         let (prediction_probability, general_gradient) = current[0].forward_backward(further_blocks, 0.0, fb, update);
     
         return prediction_probability
@@ -162,9 +163,7 @@ impl RegressorTrait for Regressor<'_>
     
     fn predict(&self, fb: &feature_buffer::FeatureBuffer) -> f32 {
             // TODO: we should find a way of not using unsafe
-            let blocks_list = &self.blocks_list[..];
-            let blocks_list = unsafe {std::slice::from_raw_parts(blocks_list.as_ptr() as *const &dyn BlockTrait, blocks_list.len())};
-//            let blocks_list: &[&dyn BlockTrait] = mem::transmute(&self.blocks_list[..]);
+            let blocks_list = &self.blocks_boxes[..];
             let (current, further_blocks) = blocks_list.split_at(1);
             let prediction_probability = current[0].forward(further_blocks, 0.0, fb);
             return prediction_probability
@@ -172,7 +171,7 @@ impl RegressorTrait for Regressor<'_>
     
     // Yeah, this is weird. I just didn't want to break the format compatibility at this point
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
-        let length = self.blocks_list.iter().map(|block| block.get_weights_len()).sum::<usize>() as u64;
+        let length = self.blocks_list.iter().map(|block| block.get_serialized_len()).sum::<usize>() as u64;
         output_bufwriter.write_u64::<LittleEndian>(length as u64)?;
 
         for v in &self.blocks_list {
@@ -188,7 +187,7 @@ impl RegressorTrait for Regressor<'_>
         // You would expect each block to have its own sig
         // We'll break compatibility in next release or something similar
         let len = input_bufreader.read_u64::<LittleEndian>()?;
-        let expected_length = self.blocks_list.iter().map(|block| block.get_weights_len()).sum::<usize>() as u64;
+        let expected_length = self.blocks_list.iter().map(|block| block.get_serialized_len()).sum::<usize>() as u64;
         if len != expected_length {
             return Err(format!("Lenghts of weights array in regressor file differ: got {}, expected {}", len, expected_length))?;
         }
@@ -206,7 +205,7 @@ impl RegressorTrait for Regressor<'_>
         let mut rg = Box::new(Regressor::new_without_weights::<optimizer::OptimizerSGD>(&mi));
     
         let len = input_bufreader.read_u64::<LittleEndian>()?;
-        let expected_length = self.blocks_list.iter().map(|bb| bb.get_weights_len()).sum::<usize>() as u64;
+        let expected_length = self.blocks_list.iter().map(|bb| bb.get_serialized_len()).sum::<usize>() as u64;
         if len != expected_length {
             return Err(format!("Lenghts of weights array in regressor file differ: got {}, expected {}", len, expected_length))?;
         }
@@ -258,9 +257,9 @@ mod tests {
         let mi = model_instance::ModelInstance::new_empty().unwrap();        
         let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
         // Empty model: no matter how many features, prediction is 0.5
-        assert_eq!(re.learn(&lr_vec(vec![]), false, 0), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), false, 0), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), false, 0), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![]), false), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), false), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), false), 0.5);
     }
 
     #[test]
@@ -281,9 +280,9 @@ mod tests {
             ];
         
         for re in &mut regressors {
-            assert_eq!(re.learn(vec_in, true, 0), 0.5);
-            assert_eq!(re.learn(vec_in, true, 0), 0.48750263);
-            assert_eq!(re.learn(vec_in, true, 0), 0.47533244);
+            assert_eq!(re.learn(vec_in, true), 0.5);
+            assert_eq!(re.learn(vec_in, true), 0.48750263);
+            assert_eq!(re.learn(vec_in, true), 0.47533244);
         }
     }
 
@@ -299,9 +298,9 @@ mod tests {
         let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
         let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash: 1, value: 2.0}]);
 
-        assert_eq!(re.learn(vec_in, true, 0), 0.5);
-        assert_eq!(re.learn(vec_in, true, 0), 0.38936076);
-        assert_eq!(re.learn(vec_in, true, 0), 0.30993468);
+        assert_eq!(re.learn(vec_in, true), 0.5);
+        assert_eq!(re.learn(vec_in, true), 0.38936076);
+        assert_eq!(re.learn(vec_in, true), 0.30993468);
     }
 
 
@@ -314,9 +313,9 @@ mod tests {
         
         let mut re = Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi);
         
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0), 0.4750208);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0), 0.45788094);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true), 0.4750208);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true), 0.45788094);
     }
 
     #[test]
@@ -331,9 +330,9 @@ mod tests {
         let mut re = get_regressor(&mi);
         let mut p: f32;
         
-        p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0);
+        p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true);
         assert_eq!(p, 0.5);
-        p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true, 0);
+        p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true);
         if optimizer::FASTMATH_LR_LUT_BITS == 12 { 
             assert_eq!(p, 0.47539312);
         } else if optimizer::FASTMATH_LR_LUT_BITS == 11 { 
@@ -353,9 +352,9 @@ mod tests {
         
         let mut re = Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi);
         // Here we take twice two features and then once just one
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true, 0), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true, 0), 0.45016602);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), true, 0), 0.45836908);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true), 0.45016602);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), true), 0.45836908);
     }
 
     #[test]
@@ -367,9 +366,9 @@ mod tests {
         
         let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
         
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true, 0), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true, 0), 0.45016602);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true, 0), 0.40611085);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true), 0.45016602);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true), 0.40611085);
     }
 
     #[test]
@@ -385,9 +384,9 @@ mod tests {
         
         let mut fb_instance = lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);
         fb_instance.example_importance = 0.5;
-        assert_eq!(re.learn(&fb_instance, true, 0), 0.5);
-        assert_eq!(re.learn(&fb_instance, true, 0), 0.49375027);
-        assert_eq!(re.learn(&fb_instance, true, 0), 0.4875807);
+        assert_eq!(re.learn(&fb_instance, true), 0.5);
+        assert_eq!(re.learn(&fb_instance, true), 0.49375027);
+        assert_eq!(re.learn(&fb_instance, true), 0.4875807);
     }
 
 }

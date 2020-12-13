@@ -46,7 +46,7 @@ impl BlockTrait for BlockSigmoid {
 
     #[inline(always)]
     fn forward_backward(&mut self, 
-                    further_regressors: &mut [&mut dyn BlockTrait], 
+                    further_regressors: &mut [Box<dyn BlockTrait>], 
                     wsum: f32, 
                     fb: &feature_buffer::FeatureBuffer, 
                     update:bool) -> (f32, f32) {
@@ -71,7 +71,7 @@ impl BlockTrait for BlockSigmoid {
     }
 
     fn forward(&self, 
-                     further_blocks: &[&dyn BlockTrait], 
+                     further_blocks: &[Box<dyn BlockTrait>], 
                      wsum: f32, 
                      fb: &feature_buffer::FeatureBuffer) -> f32 {
 
@@ -98,7 +98,7 @@ impl BlockTrait for BlockSigmoid {
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
         // empty
     }
-    fn get_weights_len(&self) -> usize {
+    fn get_serialized_len(&self) -> usize {
         return 0
     }
 

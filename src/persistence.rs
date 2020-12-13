@@ -168,6 +168,7 @@ B,featureB
         feature_buffer::FeatureBuffer {
                     label: 0.0,
                     example_importance: 1.0,
+                    example_number: 0,
                     lr_buffer: v,
                     ffm_buffer: Vec::new(),
                     ffm_fields_count: 0,
@@ -191,18 +192,18 @@ B,featureB
         let mut re = regressor::get_regressor(&mi);
 
         let fbuf = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]);
-        assert_eq!(re.learn(fbuf, true, 0), 0.5);
-        assert_eq!(re.learn(fbuf, true, 0), 0.45016602);
-        assert_eq!(re.learn(fbuf, false, 0), 0.41731137);
+        assert_eq!(re.learn(fbuf, true), 0.5);
+        assert_eq!(re.learn(fbuf, true), 0.45016602);
+        assert_eq!(re.learn(fbuf, false), 0.41731137);
 
         let CONST_RESULT = 0.41731137;
-        assert_eq!(re.learn(fbuf, false, 0), CONST_RESULT);
+        assert_eq!(re.learn(fbuf, false), CONST_RESULT);
 
         // Now we test conversion to fixed regressor 
         {
             let re_fixed = re.immutable_regressor(&mi).unwrap();
             // predict with the same feature vector
-            assert_eq!(re_fixed.predict(&fbuf, 0), CONST_RESULT);
+            assert_eq!(re_fixed.predict(&fbuf), CONST_RESULT);
         }
         // Now we test saving and loading a) regular regressor, b) fixed regressor
         {
@@ -212,15 +213,15 @@ B,featureB
 
             // a) load as regular regressor
             let (_mi2, _vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap(), false).unwrap();
-            assert_eq!(re2.learn(fbuf, false, 0), CONST_RESULT);
+            assert_eq!(re2.learn(fbuf, false), CONST_RESULT);
 
             // a) load as regular regressor, immutable
             let (_mi2, _vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap(), true).unwrap();
-            assert_eq!(re2.learn(fbuf, false, 0), CONST_RESULT);
+            assert_eq!(re2.learn(fbuf, false), CONST_RESULT);
 
             // c) load as fixed regressor direclty
             let (_mi2, _vw2, re_fixed) = new_immutable_regressor_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
-            assert_eq!(re_fixed.predict(fbuf, 0), CONST_RESULT);
+            assert_eq!(re_fixed.predict(fbuf), CONST_RESULT);
         }
 
     }    
@@ -230,7 +231,8 @@ B,featureB
         let block_ffm = &mut rg.blocks_list[1];
         let mut block_ffm = block_ffm.as_any().downcast_mut::<BlockFFM<optimizer::OptimizerAdagradFlex>>().unwrap();
 
-        for i in 0..block_ffm.get_weights_len() {
+        // TODO: this is not future compatible
+        for i in 0..block_ffm.get_serialized_len() {// it only happens that this matches number of weights
             block_ffm.testing_set_weights(0, 0, i, &[1.0f32]).unwrap();
         }
     }
@@ -240,6 +242,7 @@ B,featureB
         feature_buffer::FeatureBuffer {
                     label: 0.0,
                     example_importance: 1.0,
+                    example_number: 0,
                     lr_buffer: Vec::new(),
                     ffm_buffer: v,
                     ffm_fields_count: ffm_fields_count,
@@ -274,9 +277,9 @@ B,featureB
                                   HashAndValueAndSeq{hash:3 * 1000, value: 1.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: 1}
                                   ], 2);
-        p = re.learn(fbuf, true, 0);
+        p = re.learn(fbuf, true);
         assert_eq!(p, 0.9933072); 
-        p = re.learn(fbuf, false, 0);
+        p = re.learn(fbuf, false);
         let CONST_RESULT = 0.9395168;
         assert_eq!(p, CONST_RESULT);
 
@@ -284,7 +287,7 @@ B,featureB
         {
             let re_fixed = re.immutable_regressor(&mi).unwrap();
             // predict with the same feature vector
-            assert_eq!(re_fixed.predict(&fbuf, 0), CONST_RESULT);
+            assert_eq!(re_fixed.predict(&fbuf), CONST_RESULT);
         }
         // Now we test saving and loading a) regular regressor, b) fixed regressor
         {
@@ -295,16 +298,16 @@ B,featureB
             // a) load as regular regressor
             let (_mi2, _vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap(), false).unwrap();
             assert_eq!(re2.get_name(), "Regressor with optimizer \"AdagradFlex\"");
-            assert_eq!(re2.learn(fbuf, false, 0), CONST_RESULT);
+            assert_eq!(re2.learn(fbuf, false), CONST_RESULT);
 
             // b) load as regular regressor, immutable
             let (_mi2, _vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap(), true).unwrap();
             assert_eq!(re2.get_name(), "Regressor with optimizer \"SGD\"");
-            assert_eq!(re2.learn(fbuf, false, 0), CONST_RESULT);
+            assert_eq!(re2.learn(fbuf, false), CONST_RESULT);
 
             // c) load as fixed regressor
             let (_mi2, _vw2, re_fixed) = new_immutable_regressor_from_filename(regressor_filepath.to_str().unwrap()).unwrap();
-            assert_eq!(re_fixed.predict(fbuf, 0), CONST_RESULT);
+            assert_eq!(re_fixed.predict(fbuf), CONST_RESULT);
         
         }
         

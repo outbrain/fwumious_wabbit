@@ -144,7 +144,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
 
     #[inline(always)]
     fn forward_backward(&mut self, 
-                        further_blocks: &mut [&mut dyn BlockTrait], 
+                        further_blocks: &mut [Box<dyn BlockTrait>], 
                         wsum: f32, 
                         fb: &feature_buffer::FeatureBuffer, 
                         update:bool) -> (f32, f32) {
@@ -261,7 +261,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         } // unsafe end
     }
     
-    fn forward(&self, further_blocks: &[&dyn BlockTrait], wsum: f32, fb: &feature_buffer::FeatureBuffer) -> f32 {
+    fn forward(&self, further_blocks: &[Box<dyn BlockTrait>], wsum: f32, fb: &feature_buffer::FeatureBuffer) -> f32 {
         let mut wsum:f32 = 0.0;
         unsafe {
             let ffm_weights = &self.weights;
@@ -297,7 +297,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                  
     }
     
-    fn get_weights_len(&self) -> usize {
+    fn get_serialized_len(&self) -> usize {
         return self.ffm_weights_len as usize;
     }
 
@@ -314,7 +314,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         block_helpers::read_weights_only_from_buf2::<L>(self.ffm_weights_len as usize, &mut forward.weights, input_bufreader)
     }
 
-    // Sets internal state of weights based on some completely object-dependent parameters
+    /// Sets internal state of weights based on some completely object-dependent parameters
     fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {
         self.weights[index].weight = w[0];
         self.weights[index].optimizer_data = self.optimizer_ffm.initial_data();
@@ -357,11 +357,15 @@ mod tests {
                         block_loss_function: &mut Box<dyn BlockTrait>,
                         fb: &feature_buffer::FeatureBuffer, 
                         update: bool) -> f32 {
-        let mut further_blocks: Vec<&mut dyn BlockTrait> = vec![block_loss_function.as_mut()];
-        let further_blocks = &mut further_blocks[..];
-        let (prediction_probability, general_gradient) = block_ffm.forward_backward(further_blocks, 0.0, fb, update);
-    
-        return prediction_probability
+        unsafe {
+            let block_loss_function: Box<dyn BlockTrait> = mem::transmute(& *block_loss_function.deref().deref());
+            let mut further_blocks_v: Vec<Box<dyn BlockTrait>> = vec![block_loss_function];
+            let further_blocks = &mut further_blocks_v[..];
+            let (prediction_probability, general_gradient) = block_ffm.forward_backward(further_blocks, 0.0, fb, update);
+            // black magic here: forget about further blocks that we got through transmute:
+            further_blocks_v.set_len(0);
+            return prediction_probability
+        }
     }
 
     #[test]

@@ -209,7 +209,7 @@ mod tests {
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::NULL]); // no feature
-        fbt.translate(&rb);
+        fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:116060, value:1.0}]); // vw compatibility - no feature is no feature
     }
     
@@ -224,16 +224,16 @@ mod tests {
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::NULL]); // no feature
-        fbt.translate(&rb);
+        fbt.translate(&rb, 0 );
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]); // vw compatibility - no feature is no feature
         
 
         let rb = add_header(vec![0xfea]);
-        fbt.translate(&rb);
+        fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}]);
 
         let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(4,8), 0xfea, 1.0f32.to_bits(), 0xfeb, 1.0f32.to_bits()]);
-        fbt.translate(&rb);
+        fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}, HashAndValue {hash:0xfeb, value:1.0}]);
     }
 
@@ -251,15 +251,15 @@ mod tests {
         let mut fbt = FeatureBufferTranslator::new(&mi);
 
         let rb = add_header(vec![parser::NULL, parser::NULL]);
-        fbt.translate(&rb);
+        fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]);
 
         let rb = add_header(vec![0xfea, parser::NULL]);
-        fbt.translate(&rb);
+        fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}]);
 
         let rb = add_header(vec![0xfea, 0xfeb]);
-        fbt.translate(&rb);
+        fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}, HashAndValue {hash:0xfeb, value:1.0}]);
 
     }
@@ -276,15 +276,15 @@ mod tests {
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::NULL]);
-        fbt.translate(&rb);
+        fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]);
 
         let rb = add_header(vec![123456789, parser::NULL]);
-        fbt.translate(&rb);
+        fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]);	// since the other feature is missing - VW compatibility says no feature is here
 
         let rb = add_header(vec![2988156968 & parser::MASK31, 2422381320 & parser::MASK31, parser::NULL]);
-        fbt.translate(&rb);
+        fbt.translate(&rb, 0);
 //        println!("out {}, out mod 2^24 {}", fbt.feature_buffer.lr_buffer[1], fbt.feature_buffer.lr_buffer[1] & ((1<<24)-1));
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash: 208368, value:1.0}]);
         
@@ -300,7 +300,7 @@ mod tests {
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![0xfea]);
-        fbt.translate(&rb);
+        fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash: 0xfea, value:2.0}]);
     }
     
@@ -312,7 +312,7 @@ mod tests {
         mi.ffm_k = 1;
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![0xfea]);
-        fbt.translate(&rb);
+        fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.ffm_buffer, vec![]);
     }
 
@@ -324,7 +324,7 @@ mod tests {
         mi.ffm_k = 1;
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![0xfea]);
-        fbt.translate(&rb);
+        fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.ffm_buffer, vec![HashAndValueAndSeq{hash: 0xfea, value: 1.0, contra_field_index:0}]);
     }
 
@@ -337,7 +337,7 @@ mod tests {
         mi.ffm_k = 1;
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(5,9), 0xfec, 0xfea, 2.0f32.to_bits(), 0xfeb, 3.0f32.to_bits()]);
-        fbt.translate(&rb);
+        fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.ffm_buffer, vec![     HashAndValueAndSeq{hash: 0xfea, value: 2.0, contra_field_index:0}, 
                                                             HashAndValueAndSeq{hash: 0xfeb, value: 3.0, contra_field_index:0},
                                                             HashAndValueAndSeq{hash: 0xfea, value: 2.0, contra_field_index:1}, 
@@ -355,7 +355,7 @@ mod tests {
         mi.ffm_k = 1;
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(5,9), 0x1, 0xfff, 2.0f32.to_bits(), 0xfeb, 3.0f32.to_bits()]);
-        fbt.translate(&rb);
+        fbt.translate(&rb, 0);
         // Hashes get changed, because k = 3 means we'll be aligning hashes
         assert_eq!(fbt.feature_buffer.ffm_buffer, vec![ HashAndValueAndSeq{hash: 0xfff, value: 2.0, contra_field_index: 0}, 
                                                         HashAndValueAndSeq{hash: 0xfeb, value: 3.0, contra_field_index: 0},
@@ -368,7 +368,7 @@ mod tests {
         mi.ffm_k = 3;
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(5,9), 0x1, 0xfff, 2.0f32.to_bits(), 0xfeb, 3.0f32.to_bits()]);
-        fbt.translate(&rb);
+        fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.ffm_buffer, vec![ HashAndValueAndSeq{hash: 0xffc, value: 2.0, contra_field_index: 0}, 
                                                         HashAndValueAndSeq{hash: 0xfe8, value: 3.0, contra_field_index: 0},
                                                         HashAndValueAndSeq{hash: 0xffc, value: 2.0, contra_field_index: 3}, 
@@ -389,7 +389,7 @@ mod tests {
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::NULL]); // no feature
-        fbt.translate(&rb);
+        fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.example_importance, 1.0); // Did example importance get parsed correctly
     }
 
