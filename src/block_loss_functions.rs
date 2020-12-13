@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::error::Error;
 use std::io;
 
@@ -36,6 +37,9 @@ pub struct BlockSigmoid {
 
 impl BlockTrait for BlockSigmoid {
 
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
 
     fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
         Ok(Box::new(BlockSigmoid {}))
@@ -108,11 +112,12 @@ impl BlockTrait for BlockSigmoid {
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
-    fn read_immutable_weights_from_buf(&self, out_weights: &mut Vec<Weight>, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
-        Ok(())
+
+    fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut dyn BlockTrait) -> Result<(), Box<dyn Error>> {
+        Ok(())        
     }
 
-    fn get_forwards_only_version(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+    fn new_forward_only_without_weights(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
         Ok(Box::new(BlockSigmoid{}))
     }
 

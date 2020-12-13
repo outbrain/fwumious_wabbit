@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::io;
 use merand48::*;
 use core::arch::x86_64::*;
@@ -23,7 +24,6 @@ const FFM_STACK_BUF_LEN:usize= 16384;
 
 
  
-use std::cell::UnsafeCell;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
@@ -75,6 +75,10 @@ where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
 L: std::clone::Clone
 
  {
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
     fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
         let mut reg_ffm = BlockFFM::<L> {
             weights: Vec::new(),
@@ -93,6 +97,22 @@ L: std::clone::Clone
         }
         Ok(Box::new(reg_ffm))
     }
+
+    fn new_forward_only_without_weights(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+        let forwards_only = BlockFFM::<optimizer::OptimizerSGD> {
+            weights: Vec::new(),
+            ffm_weights_len: self.ffm_weights_len, 
+            local_data_ffm_indices: Vec::new(),
+            local_data_ffm_values: Vec::new(),
+            ffm_k: self.ffm_k, 
+            ffm_one_over_k_root: self.ffm_one_over_k_root, 
+            optimizer_ffm: optimizer::OptimizerSGD::new(),
+        };
+        
+        Ok(Box::new(forwards_only))
+    }
+
+
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
         self.weights =vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_ffm.initial_data()}; self.ffm_weights_len as usize];
@@ -244,12 +264,7 @@ L: std::clone::Clone
         } // unsafe end
     }
     
-    fn forward(&self, 
-                 further_blocks: &[&dyn BlockTrait], 
-                 wsum: f32, 
-                 example_num: u32, 
-                 fb: &feature_buffer::FeatureBuffer) -> f32 {
-
+    fn forward(&self, further_blocks: &[&dyn BlockTrait], wsum: f32, example_num: u32, fb: &feature_buffer::FeatureBuffer) -> f32 {
         let mut wsum:f32 = 0.0;
         unsafe {
             let ffm_weights = &self.weights;
@@ -265,12 +280,11 @@ L: std::clone::Clone
                         for k in 0..FFMK {
                             let left_hash_weight  = ffm_weights.get_unchecked((lindex+k) as usize).weight;
                             let right_hash_weight = ffm_weights.get_unchecked((rindex+k) as usize).weight;
-                            let right_side = right_hash_weight * joint_value;
                             //wsum += left_hash_weight * right_side;
                             // We do this, so in theory Rust/LLVM could vectorize whole loop
                             // Unfortunately it does not happen in practice, but we will get there
                             // Original: wsum += left_hash_weight * right_side;
-                            *wsumbuf.get_unchecked_mut(k as usize) += left_hash_weight * right_side;                        
+                            *wsumbuf.get_unchecked_mut(k as usize) += left_hash_weight * right_hash_weight * joint_value;                        
                         }
                     }
                 
@@ -299,24 +313,121 @@ L: std::clone::Clone
         block_helpers::write_weights_to_buf(&self.weights, output_bufwriter)
     }
 
-    fn read_immutable_weights_from_buf(&self, out_weights: &mut Vec<Weight>, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
-        block_helpers::read_immutable_weights_from_buf::<L>(self.get_weights_len(), out_weights, input_bufreader)
+    fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut dyn BlockTrait) -> Result<(), Box<dyn Error>> {
+        let mut forward = forward.as_any().downcast_mut::<BlockFFM<optimizer::OptimizerSGD>>().unwrap();
+        block_helpers::read_weights_only_from_buf2::<L>(self.get_weights_len(), &mut forward.weights, input_bufreader)
     }
 
-    fn get_forwards_only_version(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-        let forwards_only = BlockFFM::<optimizer::OptimizerSGD> {
-            weights: Vec::new(),
-            ffm_weights_len: self.ffm_weights_len, 
-            local_data_ffm_indices: Vec::new(),
-            local_data_ffm_values: Vec::new(),
-            ffm_k: self.ffm_k, 
-            ffm_one_over_k_root: self.ffm_one_over_k_root, 
-            optimizer_ffm: optimizer::OptimizerSGD::new(),
-        };
+}
+
+
+
+
+mod tests {
+    // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
+    use crate::block_loss_functions::BlockSigmoid;
+    use crate::feature_buffer;
+    use crate::feature_buffer::HashAndValueAndSeq;
+
+
+    fn ffm_vec(v:Vec<feature_buffer::HashAndValueAndSeq>, ffm_fields_count: u32) -> feature_buffer::FeatureBuffer {
+        feature_buffer::FeatureBuffer {
+                    label: 0.0,
+                    example_importance: 1.0,
+                    lr_buffer: Vec::new(),
+                    ffm_buffer: v,
+                    ffm_fields_count: ffm_fields_count,
+        }
+    }
+
+    fn ffm_init<T:OptimizerTrait>(block_ffm: &mut BlockFFM<T>) -> () {
+        for i in 0..block_ffm.weights.len() {
+            block_ffm.weights[i].weight = 1.0;
+            block_ffm.weights[i].optimizer_data = block_ffm.optimizer_ffm.initial_data();
+        }
+    }
+
+    fn simple_learn<'a>(block_ffm: &mut Box<dyn BlockTrait>, 
+                        block_loss_function: &mut Box<dyn BlockTrait>,
+                        fb: &feature_buffer::FeatureBuffer, 
+                        update: bool) -> f32 {
+        let mut further_blocks: Vec<&mut dyn BlockTrait> = vec![block_loss_function.as_mut()];
+        let further_blocks = &mut further_blocks[..];
+        let (prediction_probability, general_gradient) = block_ffm.forward_backward(further_blocks, 0.0, 0, fb, update);
+    
+        return prediction_probability
+    }
+
+    #[test]
+    fn test_ffm() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.learning_rate = 0.1;
+        mi.ffm_learning_rate = 0.1;
+        mi.power_t = 0.0;
+        mi.ffm_power_t = 0.0;
+        mi.bit_precision = 18;
+        mi.ffm_k = 4;
+        mi.ffm_bit_precision = 18;
+        mi.ffm_fields = vec![vec![], vec![]]; // This isn't really used
         
-        Ok(Box::new(forwards_only))
+        let mut p: f32;
+        
+        // Nothing can be learned from a single field
+        let mut loss_function = BlockSigmoid::new_without_weights(&mi).unwrap();
+        let mut re = BlockFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
+        re.allocate_and_init_weights(&mi);
+
+        let ffm_buf = ffm_vec(vec![HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0}], 1);
+        p = simple_learn(&mut re, &mut loss_function, &ffm_buf, true);
+        assert_eq!(p, 0.5);
+        p = simple_learn(&mut re, &mut loss_function, &ffm_buf, true);
+        assert_eq!(p, 0.5);
+
+        // With two fields, things start to happen
+        // Since fields depend on initial randomization, these tests are ... peculiar.
+        let mut re = BlockFFM::<optimizer::OptimizerAdagradFlex>::new_without_weights(&mi).unwrap();
+        re.allocate_and_init_weights(&mi);
+        let mut re2 = re.as_any().downcast_mut::<BlockFFM<optimizer::OptimizerAdagradFlex>>().unwrap();
+
+        ffm_init(&mut re2);
+        let ffm_buf = ffm_vec(vec![
+                                  HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
+                                  HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: 1}
+                                  ], 2);
+        p = simple_learn(&mut re, &mut loss_function, &ffm_buf, true);
+        assert_eq!(p, 0.98201376); 
+        p = simple_learn(&mut re, &mut loss_function, &ffm_buf, true);
+        assert_eq!(p, 0.96277946);
+
+        // Two fields, use values
+        let mut re = BlockFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
+        re.allocate_and_init_weights(&mi);
+        let mut re2 = re.as_any().downcast_mut::<BlockFFM<optimizer::OptimizerAdagradLUT>>().unwrap();
+
+        ffm_init(&mut re2);
+        let ffm_buf = ffm_vec(vec![
+                                  HashAndValueAndSeq{hash:1, value: 2.0, contra_field_index: 0},
+                                  HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: 1}
+                                  ], 2);
+        p = simple_learn(&mut re, &mut loss_function, &ffm_buf, true);
+        assert_eq!(p, 0.9999999);
+        p = simple_learn(&mut re, &mut loss_function, &ffm_buf, true);
+        assert_eq!(p, 0.99685884);
+
+
     }
 
 
 }
+
+
+
+
+
+
+
+
+
+
 

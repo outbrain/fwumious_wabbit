@@ -1,3 +1,4 @@
+use std::any::Any;
 
 use crate::optimizer;
 use crate::regressor;
@@ -26,6 +27,10 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
 where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
 L: std::clone::Clone
 {
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
     fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>>  where Self: Sized {
         let mut reg_lr = BlockLR::<L> {
             weights: Vec::new(),
@@ -36,6 +41,17 @@ L: std::clone::Clone
         reg_lr.weights_len = 1 << mi.bit_precision;
         Ok(Box::new(reg_lr))
     }
+
+    fn new_forward_only_without_weights(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+        let forwards_only = BlockLR::<optimizer::OptimizerSGD> {
+            weights_len: self.weights_len,
+            weights: Vec::new(),
+            optimizer_lr:optimizer::OptimizerSGD::new(),
+        };
+        
+        Ok(Box::new(forwards_only))
+    }
+
 
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
@@ -110,22 +126,11 @@ L: std::clone::Clone
         block_helpers::write_weights_to_buf(&self.weights, output_bufwriter)
     }
 
-    fn read_immutable_weights_from_buf(&self, out_weights: &mut Vec<Weight>, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
-        block_helpers::read_immutable_weights_from_buf::<L>(self.get_weights_len(), out_weights, input_bufreader)
+    fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut dyn BlockTrait) -> Result<(), Box<dyn Error>> {
+        let mut forward = forward.as_any().downcast_mut::<BlockLR<optimizer::OptimizerSGD>>().unwrap();
+        block_helpers::read_weights_only_from_buf2::<L>(self.get_weights_len(), &mut forward.weights, input_bufreader)
     }
 
-    fn get_forwards_only_version(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-        let forwards_only = BlockLR::<optimizer::OptimizerSGD> {
-            weights_len: self.weights_len,
-            weights: Vec::new(),
-            optimizer_lr:optimizer::OptimizerSGD::new(),
-        };
-        
-        Ok(Box::new(forwards_only))
-    }
-    
-    
-    
 
 }
 

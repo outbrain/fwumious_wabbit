@@ -1,10 +1,12 @@
 //use std::mem::{self};
+use std::any::Any;
 use std::mem::{self, MaybeUninit};
 use std::slice;
 use std::sync::Arc;
 use core::arch::x86_64::*;
 use merand48::*;
 use std::io;
+use std::io::Cursor;
 use std::error::Error;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::cmp::min;
@@ -35,6 +37,7 @@ pub struct WeightAndOptimizerData<L:OptimizerTrait> {
 }
 
 pub trait BlockTrait {
+    fn as_any(&mut self) -> &mut dyn Any; // This enables downcasting
     fn forward_backward(&mut self, 
                          further_blocks: &mut [&mut dyn BlockTrait], 
                          wsum: f32, 
@@ -52,9 +55,10 @@ pub trait BlockTrait {
     fn get_weights_len(&self) -> usize;
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>>;
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>;
-    fn read_immutable_weights_from_buf(&self, weights: &mut Vec<Weight>, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>;
-    fn get_forwards_only_version(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>>;
+    fn new_forward_only_without_weights(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>>;
     fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> where Self:Sized;
+    fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut dyn BlockTrait) -> Result<(), Box<dyn Error>>;
+
 }
 
 use std::marker::PhantomData;
@@ -83,8 +87,8 @@ pub trait RegressorTrait {
     fn overwrite_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>; 
     fn get_name(&self) -> String;
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance);
-    fn immutable_regressor_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<ImmutableRegressor, Box<dyn Error>>; 
-    fn immutable_regressor(&mut self) -> Result<ImmutableRegressor, Box<dyn Error>>;
+    fn immutable_regressor(&mut self, mi: &model_instance::ModelInstance) -> Result<Box<dyn RegressorTrait>, Box<dyn Error>>;
+    fn immutable_regressor_from_buf(&mut self, mi: &model_instance::ModelInstance, input_bufreader: &mut dyn io::Read) -> Result<Box<dyn RegressorTrait>, Box<dyn Error>>;
 }
 
 
@@ -223,44 +227,38 @@ L: std::clone::Clone
     }
 
     
-    // Creates immutable regressor from current setup and weights from buffer
-    fn immutable_regressor_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<ImmutableRegressor, Box<dyn Error>> {
+    fn immutable_regressor_from_buf(&mut self, mi: &model_instance::ModelInstance, input_bufreader: &mut dyn io::Read) -> Result<Box<dyn RegressorTrait>, Box<dyn Error>> {
+        // TODO Ideally we would make a copy, not based on model_instance. but this is easier at the moment
+        
+        let mut rg = Box::new(Regressor::<optimizer::OptimizerSGD>::new_without_weights(&mi));
+    
         let len = input_bufreader.read_u64::<LittleEndian>()?;
         let expected_length = self.blocks_list.iter().map(|bb| bb.get_weights_len()).sum::<usize>() as u64;
         if len != expected_length {
             return Err(format!("Lenghts of weights array in regressor file differ: got {}, expected {}", len, expected_length))?;
         }
-        let mut out_weights = Vec::<Weight>::new();
-        for v in &mut self.blocks_list {
-            v.read_immutable_weights_from_buf(&mut out_weights, input_bufreader)?;
+        for (i, v) in &mut self.blocks_list.iter().enumerate() {
+            v.read_weights_from_buf_into_forward_only(input_bufreader, rg.blocks_list[i])?;
         }
 
-        let fr = ImmutableRegressor {
-                        weights: Arc::new(out_weights), 
-                        ffm_weights_offset: 0, // self.reg_lr.get_weights_len() as u32,
-                        ffm_k: 0, //self.reg_ffm.ffm_k, TODO OOOOO
-        };
-        Ok(fr)
+        Ok(rg)
     }
+
+
 
     // Create immutable regressor from current regressor
-    fn immutable_regressor(&mut self) -> Result<ImmutableRegressor, Box<dyn Error>> {
-        let mut weights = Vec::<Weight>::new();
-        /* TODO
-        for w in &self.reg_lr.weights {
-            weights.push(Weight{weight:w.weight});
-        }
-        for w in &self.reg_ffm.weights {
-            weights.push(Weight{weight:w.weight});
-        }*/
-        let fr = ImmutableRegressor {
-                        weights: Arc::new(weights), 
-                        ffm_weights_offset: 0, //self.reg_lr.get_weights_len() as u32,
-                        ffm_k: 0 //TODOself.reg_ffm.ffm_k,
-        };
-        Ok(fr)
-    }
+    fn immutable_regressor(&mut self, mi: &model_instance::ModelInstance) -> Result<Box<dyn RegressorTrait>, Box<dyn Error>> {
+        // Only to be used by unit tests 
+        let mut rg = Box::new(Regressor::<optimizer::OptimizerSGD>::new_without_weights(&mi));
 
+        let mut tmp_vec:Vec<u8> = Vec::new();
+        for (i, v) in &mut self.blocks_list.iter().enumerate() {
+            let mut cursor = Cursor::new(&mut tmp_vec);
+            v.write_weights_to_buf(&mut cursor)?;
+            v.read_weights_from_buf_into_forward_only(&mut cursor, rg.blocks_list[i])?;
+        }
+        Ok(rg)
+    }
 
 
 }
@@ -366,12 +364,14 @@ impl RegressorTrait for ImmutableRegressor {
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
         panic!("Not implemented!");
     }
-    fn immutable_regressor_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<ImmutableRegressor, Box<dyn Error>> {
+    fn immutable_regressor_from_buf(&mut self, mi: &model_instance::ModelInstance, input_bufreader: &mut dyn io::Read) -> Result<Box<dyn RegressorTrait>, Box<dyn Error>> {
         panic!("Not implemented!");
     }
-    fn immutable_regressor(&mut self) -> Result<ImmutableRegressor, Box<dyn Error>> {
+    fn immutable_regressor(&mut self, mi: &model_instance::ModelInstance) -> Result<Box<dyn RegressorTrait>, Box<dyn Error>> {
         panic!("Not implemented!");
     }
+    
+
 
 }
 

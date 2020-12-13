@@ -145,7 +145,7 @@ impl WorkerThread {
 impl Serving {
     pub fn new<'a>(cl: &clap::ArgMatches<'a>,
                    vw: &vwmap::VwNamespaceMap,
-                   re_fixed: ImmutableRegressor,
+                   re_fixed: Box<dyn regressor::RegressorTrait>,
                    mi: &model_instance::ModelInstance,
     ) -> Result<Serving, Box<dyn Error>> {
         let port = match cl.value_of("port") {
@@ -212,7 +212,7 @@ impl Serving {
 
 #[cfg(test)]
 mod tests {
-    // Note this useful idiom: importing names from outer (for mod tests) scope.
+/*    // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use crate::regressor;
     use std::io::ErrorKind;
@@ -301,7 +301,7 @@ C,featureC
                                  
     }
 
-
+*/
 
 }
 

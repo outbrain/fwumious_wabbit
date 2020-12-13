@@ -97,19 +97,18 @@ pub fn new_regressor_from_filename(filename: &str, immutable: bool)
         Ok((mi, vw, re))
     } else {
         let (mi, vw, immutable_re) =  new_immutable_regressor_from_filename(filename).unwrap();
-        let re = Box::new(immutable_re);
-        Ok((mi, vw, re))
+        Ok((mi, vw, immutable_re))
     }
 }
 
 pub fn new_immutable_regressor_from_filename(filename: &str) 
                         -> Result<(model_instance::ModelInstance,
                                    vwmap::VwNamespaceMap,
-                                   regressor::ImmutableRegressor), 
+                                   Box<dyn regressor::RegressorTrait>), 
                                   Box<dyn Error>> {
     let mut input_bufreader = io::BufReader::new(fs::File::open(filename).unwrap());
     let (mi, vw, mut re) = load_regressor_without_weights(&mut input_bufreader)?;
-    let immutable_re = re.immutable_regressor_from_buf(&mut input_bufreader)?;
+    let immutable_re = re.immutable_regressor_from_buf(&mi, &mut input_bufreader)?;
     Ok((mi, vw, immutable_re))
 }
 
@@ -171,7 +170,7 @@ B,featureB
                     ffm_fields_count: 0,
         }
     }
-
+/*
     #[test]
     fn save_load_and_test_mode_lr() {
         let vw_map_string = r#"
@@ -305,5 +304,5 @@ B,featureB
         
 
     }    
-
+*/
 }
