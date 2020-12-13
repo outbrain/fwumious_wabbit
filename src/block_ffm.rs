@@ -14,7 +14,7 @@ use crate::consts;
 use crate::block_helpers;
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
-use regressor::{Weight, WeightAndOptimizerData};
+use block_helpers::{Weight, WeightAndOptimizerData};
 
 
 const FFM_STACK_BUF_LEN:usize= 16384;
@@ -71,8 +71,6 @@ macro_rules! specialize_k {
 
 
 impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
-where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
-L: std::clone::Clone
 
  {
     fn as_any(&mut self) -> &mut dyn Any {

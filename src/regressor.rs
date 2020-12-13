@@ -23,18 +23,6 @@ use crate::block_lr::BlockLR;
 use crate::block_loss_functions::BlockSigmoid;
 
 
-#[derive(Clone, Debug)]
-#[repr(C)]
-pub struct Weight {
-    pub weight: f32, 
-}
-
-#[derive(Clone, Debug, Copy)]
-#[repr(C)]
-pub struct WeightAndOptimizerData<L:OptimizerTrait> {
-    pub weight: f32, 
-    pub optimizer_data: L::PerWeightStore,
-}
 
 pub trait BlockTrait {
     fn as_any(&mut self) -> &mut dyn Any; // This enables downcasting
@@ -63,24 +51,12 @@ pub trait BlockTrait {
     fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>>;
 }
 
-use std::marker::PhantomData;
-
 
 pub struct Regressor<'a> {
     pub regressor_name: String,
     pub blocks_boxes: Vec<Box<dyn BlockTrait>>,
     pub blocks_list: Vec<&'a mut dyn BlockTrait>,
 }
-
-#[derive(Clone)]
-pub struct ImmutableRegressor {
-    pub weights: Arc<Vec<Weight>>,
-    ffm_weights_offset: u32, 
-    ffm_k: u32,
-}
-
-
-
 
 pub trait RegressorTrait {
     fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool, example_num: u32) -> f32;
@@ -116,9 +92,7 @@ pub fn get_regressor(mi: &model_instance::ModelInstance) -> Box<dyn RegressorTra
 impl <'a>Regressor<'a> 
 {
     pub fn new_without_weights<L: optimizer::OptimizerTrait + 'static>(mi: &model_instance::ModelInstance) -> Regressor<'a>
-where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
-L: std::clone::Clone
-     {
+    {
 
         let mut reg_lr = BlockLR::<L>::new_without_weights(mi).unwrap();
         let mut reg_ffm = BlockFFM::<L>::new_without_weights(mi).unwrap();
@@ -161,8 +135,7 @@ L: std::clone::Clone
     
 
     pub fn new<L: optimizer::OptimizerTrait + 'static>(mi: &model_instance::ModelInstance) -> Regressor<'a> 
-where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
-L: std::clone::Clone {
+    {
         let mut rg = Regressor::new_without_weights::<L>(mi);
         rg.allocate_and_init_weights(mi);
         rg

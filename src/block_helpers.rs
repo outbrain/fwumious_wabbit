@@ -1,12 +1,25 @@
 use std::error::Error;
 use crate::optimizer::OptimizerTrait;
-use crate::regressor::{Weight, WeightAndOptimizerData};
 use std::io;
 use std::slice;
 use std::mem::{self, MaybeUninit};
 use std::cmp::min;
 use crate::optimizer::OptimizerSGD;
 use std::marker::PhantomData;
+
+#[derive(Clone, Debug)]
+#[repr(C)]
+pub struct Weight {
+    pub weight: f32, 
+}
+
+#[derive(Clone, Debug, Copy)]
+#[repr(C)]
+pub struct WeightAndOptimizerData<L:OptimizerTrait> {
+    pub weight: f32, 
+    pub optimizer_data: L::PerWeightStore,
+}
+
 
 // It's OK! I am a limo driver!
 pub fn read_weights_from_buf<L:OptimizerTrait>(weights: &mut Vec<WeightAndOptimizerData<L>>, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {

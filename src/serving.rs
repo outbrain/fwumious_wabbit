@@ -15,7 +15,6 @@ use crate::regressor;
 use crate::feature_buffer;
 use crate::model_instance;
 use crate::optimizer;
-use crate::regressor::ImmutableRegressor;
 use crate::regressor::RegressorTrait;
 use crate::multithread_helpers::{BoxedRegressorTrait};
 

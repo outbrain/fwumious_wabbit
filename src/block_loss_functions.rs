@@ -6,7 +6,6 @@ use crate::regressor;
 use crate::feature_buffer;
 use crate::model_instance;
 use regressor::BlockTrait;
-use regressor::{Weight};
 
 
 //use fastapprox::fast::sigmoid; // surprisingly this doesn't work very well

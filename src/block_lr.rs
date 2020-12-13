@@ -13,8 +13,8 @@ use std::error::Error;
 use std::mem::{self, MaybeUninit};
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
-use regressor::{Weight, WeightAndOptimizerData};
 use crate::block_helpers;
+use block_helpers::{Weight, WeightAndOptimizerData};
 
 
 pub struct BlockLR<L:OptimizerTrait> {
@@ -24,8 +24,6 @@ pub struct BlockLR<L:OptimizerTrait> {
 }
 
 impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L> 
-where <L as optimizer::OptimizerTrait>::PerWeightStore: std::clone::Clone,
-L: std::clone::Clone
 {
     fn as_any(&mut self) -> &mut dyn Any {
         self
@@ -139,13 +137,4 @@ L: std::clone::Clone
 
 
 }
-
-
-
-
-
-
-
-
-
 

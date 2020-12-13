@@ -2,8 +2,8 @@
 use std::marker::PhantomData;
 
 
-pub trait OptimizerTrait {
-    type PerWeightStore;
+pub trait OptimizerTrait : std::clone::Clone {
+    type PerWeightStore: std::clone::Clone;
     fn new() -> Self;
     fn init(&mut self, learning_rate: f32, power_t: f32, initial_acc_gradient: f32);
     unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32;
