@@ -50,6 +50,7 @@ pub trait BlockTrait {
 pub struct Regressor {
     pub regressor_name: String,
     pub blocks_boxes: Vec<Box<dyn BlockTrait>>,
+    pub immutable: bool,
 }
 
 
@@ -77,6 +78,7 @@ impl Regressor  {
         let mut rg = Regressor{
             blocks_boxes: Vec::new(),
             regressor_name: format!("Regressor with optimizer {:?}", L::get_name()),
+            immutable: false,
         };
 
         // A bit more elaborate than necessary. Let's really make it clear what's happening
@@ -117,6 +119,9 @@ impl Regressor  {
     }
 
     pub fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool) -> f32 {
+        if update && self.immutable {
+            panic!("This regressor is immutable, you cannot call learn() with update = true");
+        }
         let update:bool = update && (fb.example_importance != 0.0);
 
         let blocks_list = &mut self.blocks_boxes[..];
@@ -168,6 +173,7 @@ impl Regressor  {
         // TODO Ideally we would make a copy, not based on model_instance. but this is easier at the moment
         
         let mut rg = Regressor::new_without_weights::<optimizer::OptimizerSGD>(&mi);
+        rg.immutable = true;
     
         let len = input_bufreader.read_u64::<LittleEndian>()?;
         let expected_length = self.blocks_boxes.iter().map(|bb| bb.get_serialized_len()).sum::<usize>() as u64;
@@ -185,6 +191,7 @@ impl Regressor  {
     pub fn immutable_regressor(&mut self, mi: &model_instance::ModelInstance) -> Result<Regressor, Box<dyn Error>> {
         // Only to be used by unit tests 
         let mut rg = Regressor::new_without_weights::<optimizer::OptimizerSGD>(&mi);
+        rg.immutable = true;
 
         let mut tmp_vec: Vec<u8> = Vec::new();
         for (i, v) in &mut self.blocks_boxes.iter().enumerate() {
