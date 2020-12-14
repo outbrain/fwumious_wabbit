@@ -74,12 +74,12 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         let filename = cl.value_of("initial_regressor").expect("Daemon mode only supports serving from --initial regressor");
         println!("initial_regressor = {}", filename);
         println!("WARNING: Command line model parameters will be ignored");
-        let (mi2, vw2, re_fixed) = persistence::new_immutable_regressor_from_filename(filename)?;
-        let mut se = serving::Serving::new(&cl, &vw2, re_fixed, &mi2)?;
+        let (mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true)?;
+        let mut se = serving::Serving::new(&cl, &vw2, Box::new(re_fixed), &mi2)?;
         se.serve()?;
     } else {
         let vw: vwmap::VwNamespaceMap;
-        let mut re: Box<regressor::Regressor>;
+        let mut re: regressor::Regressor;
         let mi: model_instance::ModelInstance;
 
         if let Some(filename) = cl.value_of("initial_regressor") {

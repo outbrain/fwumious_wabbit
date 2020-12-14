@@ -53,19 +53,19 @@ pub struct Regressor {
 }
 
 
-pub fn get_regressor_without_weights(mi: &model_instance::ModelInstance) -> Box<Regressor> {
+pub fn get_regressor_without_weights(mi: &model_instance::ModelInstance) -> Regressor {
     if mi.optimizer == model_instance::Optimizer::Adagrad {
         if mi.fastmath {
-            Box::new(Regressor::new_without_weights::<optimizer::OptimizerAdagradLUT>(&mi))
+            Regressor::new_without_weights::<optimizer::OptimizerAdagradLUT>(&mi)
         } else {
-            Box::new(Regressor::new_without_weights::<optimizer::OptimizerAdagradFlex>(&mi))
+            Regressor::new_without_weights::<optimizer::OptimizerAdagradFlex>(&mi)
         }
     } else {
-        Box::new(Regressor::new_without_weights::<optimizer::OptimizerSGD>(&mi))
+        Regressor::new_without_weights::<optimizer::OptimizerSGD>(&mi)
     }    
 }
 
-pub fn get_regressor(mi: &model_instance::ModelInstance) -> Box<Regressor> {
+pub fn get_regressor(mi: &model_instance::ModelInstance) -> Regressor {
     let mut re = get_regressor_without_weights(mi);
     re.allocate_and_init_weights(mi);
     re
@@ -164,10 +164,10 @@ impl Regressor  {
     }
 
     
-    pub fn immutable_regressor_from_buf(&mut self, mi: &model_instance::ModelInstance, input_bufreader: &mut dyn io::Read) -> Result<Box<Regressor>, Box<dyn Error>> {
+    pub fn immutable_regressor_from_buf(&mut self, mi: &model_instance::ModelInstance, input_bufreader: &mut dyn io::Read) -> Result<Regressor, Box<dyn Error>> {
         // TODO Ideally we would make a copy, not based on model_instance. but this is easier at the moment
         
-        let mut rg = Box::new(Regressor::new_without_weights::<optimizer::OptimizerSGD>(&mi));
+        let mut rg = Regressor::new_without_weights::<optimizer::OptimizerSGD>(&mi);
     
         let len = input_bufreader.read_u64::<LittleEndian>()?;
         let expected_length = self.blocks_boxes.iter().map(|bb| bb.get_serialized_len()).sum::<usize>() as u64;
@@ -182,9 +182,9 @@ impl Regressor  {
     }
 
     // Create immutable regressor from current regressor
-    pub fn immutable_regressor(&mut self, mi: &model_instance::ModelInstance) -> Result<Box<Regressor>, Box<dyn Error>> {
+    pub fn immutable_regressor(&mut self, mi: &model_instance::ModelInstance) -> Result<Regressor, Box<dyn Error>> {
         // Only to be used by unit tests 
-        let mut rg = Box::new(Regressor::new_without_weights::<optimizer::OptimizerSGD>(&mi));
+        let mut rg = Regressor::new_without_weights::<optimizer::OptimizerSGD>(&mi);
 
         let mut tmp_vec: Vec<u8> = Vec::new();
         for (i, v) in &mut self.blocks_boxes.iter().enumerate() {
