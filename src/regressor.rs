@@ -120,6 +120,7 @@ impl Regressor  {
 
     pub fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool) -> f32 {
         if update && self.immutable {
+            // Important to know: learn() functions in blocks aren't guaranteed to be thread-safe
             panic!("This regressor is immutable, you cannot call learn() with update = true");
         }
         let update:bool = update && (fb.example_importance != 0.0);

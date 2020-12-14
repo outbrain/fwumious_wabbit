@@ -201,10 +201,12 @@ B,featureB
             // a) load as regular regressor
             let (_mi2, _vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap(), false).unwrap();
             assert_eq!(re2.learn(fbuf, false), CONST_RESULT);
+            assert_eq!(re2.predict(fbuf), CONST_RESULT);
 
             // a) load as regular regressor, immutable
             let (_mi2, _vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap(), true).unwrap();
             assert_eq!(re2.learn(fbuf, false), CONST_RESULT);
+            assert_eq!(re2.predict(fbuf), CONST_RESULT);
 
         }
 
@@ -263,8 +265,10 @@ B,featureB
                                   ], 2);
         p = re.learn(fbuf, true);
         assert_eq!(p, 0.9933072); 
-        p = re.learn(fbuf, false);
         let CONST_RESULT = 0.9395168;
+        p = re.learn(fbuf, false);
+        assert_eq!(p, CONST_RESULT);
+        p = re.predict(fbuf);
         assert_eq!(p, CONST_RESULT);
 
         // Now we test conversion to fixed regressor 
@@ -283,11 +287,13 @@ B,featureB
             let (_mi2, _vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap(), false).unwrap();
             assert_eq!(re2.get_name(), "Regressor with optimizer \"AdagradFlex\"");
             assert_eq!(re2.learn(fbuf, false), CONST_RESULT);
+            assert_eq!(re2.predict(fbuf), CONST_RESULT);
 
             // b) load as regular regressor, immutable
             let (_mi2, _vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap(), true).unwrap();
             assert_eq!(re2.get_name(), "Regressor with optimizer \"SGD\"");
             assert_eq!(re2.learn(fbuf, false), CONST_RESULT);
+            assert_eq!(re2.predict(fbuf), CONST_RESULT);
 
         }
         
