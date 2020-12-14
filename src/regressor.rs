@@ -1,6 +1,6 @@
 //use std::mem::{self};
 use std::any::Any;
-use std::mem::{self, MaybeUninit};
+use std::mem;
 use std::slice;
 use std::sync::Arc;
 use core::arch::x86_64::*;
@@ -13,10 +13,7 @@ use std::cmp::min;
 
 use crate::model_instance;
 use crate::feature_buffer;
-use crate::feature_buffer::HashAndValue;
-use crate::feature_buffer::HashAndValueAndSeq;
 use crate::optimizer;
-use crate::consts;
 use optimizer::OptimizerTrait;
 use crate::block_ffm::BlockFFM;
 use crate::block_lr::BlockLR;
@@ -50,10 +47,9 @@ pub trait BlockTrait {
 }
 
 
-pub struct Regressor<'a> {
+pub struct Regressor {
     pub regressor_name: String,
     pub blocks_boxes: Vec<Box<dyn BlockTrait>>,
-    pub blocks_lista: Vec<&'a mut dyn BlockTrait>,
 }
 
 pub trait RegressorTrait {
@@ -86,39 +82,25 @@ pub fn get_regressor(mi: &model_instance::ModelInstance) -> Box<dyn RegressorTra
     re
 }
 
-impl <'a>Regressor<'a>  {
-    pub fn new_without_weights<L: optimizer::OptimizerTrait + 'static>(mi: &model_instance::ModelInstance) -> Regressor<'a>
-    {
-
-        let mut reg_lr = BlockLR::<L>::new_without_weights(mi).unwrap();
-        let mut reg_ffm = BlockFFM::<L>::new_without_weights(mi).unwrap();
-        let mut reg_sigmoid = BlockSigmoid::new_without_weights(mi).unwrap();
+impl Regressor  {
+    pub fn new_without_weights<L: optimizer::OptimizerTrait + 'static>(mi: &model_instance::ModelInstance) -> Regressor {
 
         let mut rg = Regressor{
-            blocks_lista: Vec::new(),
             blocks_boxes: Vec::new(),
             regressor_name: format!("Regressor with optimizer {:?}", L::get_name()),
         };
 
-        unsafe {
-            // A bit more elaborate than necessary. Let's really make it clear what's happening
-            let r1: &mut dyn BlockTrait = reg_lr.as_mut();
-            let r2: &mut dyn BlockTrait = mem::transmute(&mut *r1);
-            rg.blocks_boxes.push(reg_lr);
-            rg.blocks_lista.push(r2);
+        // A bit more elaborate than necessary. Let's really make it clear what's happening
+        let mut reg_lr = BlockLR::<L>::new_without_weights(mi).unwrap();
+        rg.blocks_boxes.push(reg_lr);
 
-            if mi.ffm_k > 0 {
-                let r1: &mut dyn BlockTrait = reg_ffm.as_mut();
-                let r2: &mut dyn BlockTrait = mem::transmute(&mut *r1);
-                rg.blocks_boxes.push(reg_ffm);
-                rg.blocks_lista.push(r2);
-            }
-                        
-            let r1: &mut dyn BlockTrait = reg_sigmoid.as_mut();
-            let r2: &mut dyn BlockTrait = mem::transmute(&mut *r1);
-            rg.blocks_lista.push(r2);
-            rg.blocks_boxes.push(reg_sigmoid);
+        if mi.ffm_k > 0 {
+            let mut reg_ffm = BlockFFM::<L>::new_without_weights(mi).unwrap();
+            rg.blocks_boxes.push(reg_ffm);
         }
+                    
+        let mut reg_sigmoid = BlockSigmoid::new_without_weights(mi).unwrap();
+        rg.blocks_boxes.push(reg_sigmoid);
 
         rg
     }
@@ -130,7 +112,7 @@ impl <'a>Regressor<'a>  {
     }
     
 
-    pub fn new<L: optimizer::OptimizerTrait + 'static>(mi: &model_instance::ModelInstance) -> Regressor<'a> 
+    pub fn new<L: optimizer::OptimizerTrait + 'static>(mi: &model_instance::ModelInstance) -> Regressor 
     {
         let mut rg = Regressor::new_without_weights::<L>(mi);
         rg.allocate_and_init_weights(mi);
@@ -139,7 +121,7 @@ impl <'a>Regressor<'a>  {
 }
 
     
-impl RegressorTrait for Regressor<'_> 
+impl RegressorTrait for Regressor 
 {
     fn get_name(&self) -> String {
         self.regressor_name.to_owned()    
@@ -236,6 +218,7 @@ impl RegressorTrait for Regressor<'_>
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
+    use crate::feature_buffer::HashAndValue;
 
     /* LR TESTS */
     fn lr_vec(v:Vec<feature_buffer::HashAndValue>) -> feature_buffer::FeatureBuffer {
