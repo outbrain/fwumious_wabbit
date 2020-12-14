@@ -228,7 +228,7 @@ B,featureB
 
     fn ffm_fixed_init(rg: &mut Regressor) -> () {
         // This is a bit of black magic - we "know" that FFM is at index 1 and we downcast...
-        let block_ffm = &mut rg.blocks_list[1];
+        let block_ffm = &mut rg.blocks_boxes[1];
         let mut block_ffm = block_ffm.as_any().downcast_mut::<BlockFFM<optimizer::OptimizerAdagradFlex>>().unwrap();
 
         // TODO: this is not future compatible

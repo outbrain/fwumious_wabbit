@@ -43,7 +43,7 @@ pub trait BlockTrait {
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>;
     fn new_forward_only_without_weights(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>>;
     fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> where Self:Sized;
-    fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut dyn BlockTrait) -> Result<(), Box<dyn Error>>;
+    fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>>;
 
     /// Sets internal state of weights based on some completely object-dependent parameters
     fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>>;
@@ -53,7 +53,7 @@ pub trait BlockTrait {
 pub struct Regressor<'a> {
     pub regressor_name: String,
     pub blocks_boxes: Vec<Box<dyn BlockTrait>>,
-    pub blocks_list: Vec<&'a mut dyn BlockTrait>,
+    pub blocks_lista: Vec<&'a mut dyn BlockTrait>,
 }
 
 pub trait RegressorTrait {
@@ -95,7 +95,7 @@ impl <'a>Regressor<'a>  {
         let mut reg_sigmoid = BlockSigmoid::new_without_weights(mi).unwrap();
 
         let mut rg = Regressor{
-            blocks_list: Vec::new(),
+            blocks_lista: Vec::new(),
             blocks_boxes: Vec::new(),
             regressor_name: format!("Regressor with optimizer {:?}", L::get_name()),
         };
@@ -105,18 +105,18 @@ impl <'a>Regressor<'a>  {
             let r1: &mut dyn BlockTrait = reg_lr.as_mut();
             let r2: &mut dyn BlockTrait = mem::transmute(&mut *r1);
             rg.blocks_boxes.push(reg_lr);
-            rg.blocks_list.push(r2);
+            rg.blocks_lista.push(r2);
 
             if mi.ffm_k > 0 {
                 let r1: &mut dyn BlockTrait = reg_ffm.as_mut();
                 let r2: &mut dyn BlockTrait = mem::transmute(&mut *r1);
                 rg.blocks_boxes.push(reg_ffm);
-                rg.blocks_list.push(r2);
+                rg.blocks_lista.push(r2);
             }
                         
             let r1: &mut dyn BlockTrait = reg_sigmoid.as_mut();
             let r2: &mut dyn BlockTrait = mem::transmute(&mut *r1);
-            rg.blocks_list.push(r2);
+            rg.blocks_lista.push(r2);
             rg.blocks_boxes.push(reg_sigmoid);
         }
 
@@ -124,7 +124,7 @@ impl <'a>Regressor<'a>  {
     }
     
     pub fn allocate_and_init_weights_(&mut self, mi: &model_instance::ModelInstance) {
-        for rr in &mut self.blocks_list {
+        for rr in &mut self.blocks_boxes {
             rr.allocate_and_init_weights(mi);
         }
     }
@@ -169,10 +169,10 @@ impl RegressorTrait for Regressor<'_>
     
     // Yeah, this is weird. I just didn't want to break the format compatibility at this point
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
-        let length = self.blocks_list.iter().map(|block| block.get_serialized_len()).sum::<usize>() as u64;
+        let length = self.blocks_boxes.iter().map(|block| block.get_serialized_len()).sum::<usize>() as u64;
         output_bufwriter.write_u64::<LittleEndian>(length as u64)?;
 
-        for v in &self.blocks_list {
+        for v in &self.blocks_boxes {
             v.write_weights_to_buf(output_bufwriter)?;
         
         }
@@ -185,11 +185,11 @@ impl RegressorTrait for Regressor<'_>
         // You would expect each block to have its own sig
         // We'll break compatibility in next release or something similar
         let len = input_bufreader.read_u64::<LittleEndian>()?;
-        let expected_length = self.blocks_list.iter().map(|block| block.get_serialized_len()).sum::<usize>() as u64;
+        let expected_length = self.blocks_boxes.iter().map(|block| block.get_serialized_len()).sum::<usize>() as u64;
         if len != expected_length {
             return Err(format!("Lenghts of weights array in regressor file differ: got {}, expected {}", len, expected_length))?;
         }
-        for v in &mut self.blocks_list {
+        for v in &mut self.blocks_boxes {
             v.read_weights_from_buf(input_bufreader)?;
         }
 
@@ -203,12 +203,12 @@ impl RegressorTrait for Regressor<'_>
         let mut rg = Box::new(Regressor::new_without_weights::<optimizer::OptimizerSGD>(&mi));
     
         let len = input_bufreader.read_u64::<LittleEndian>()?;
-        let expected_length = self.blocks_list.iter().map(|bb| bb.get_serialized_len()).sum::<usize>() as u64;
+        let expected_length = self.blocks_boxes.iter().map(|bb| bb.get_serialized_len()).sum::<usize>() as u64;
         if len != expected_length {
             return Err(format!("Lenghts of weights array in regressor file differ: got {}, expected {}", len, expected_length))?;
         }
-        for (i, v) in &mut self.blocks_list.iter().enumerate() {
-            v.read_weights_from_buf_into_forward_only(input_bufreader, rg.blocks_list[i])?;
+        for (i, v) in &mut self.blocks_boxes.iter().enumerate() {
+            v.read_weights_from_buf_into_forward_only(input_bufreader, &mut rg.blocks_boxes[i])?;
         }
 
         Ok(rg)
@@ -220,11 +220,11 @@ impl RegressorTrait for Regressor<'_>
         let mut rg = Box::new(Regressor::new_without_weights::<optimizer::OptimizerSGD>(&mi));
 
         let mut tmp_vec: Vec<u8> = Vec::new();
-        for (i, v) in &mut self.blocks_list.iter().enumerate() {
+        for (i, v) in &mut self.blocks_boxes.iter().enumerate() {
             let mut cursor = Cursor::new(&mut tmp_vec);
             v.write_weights_to_buf(&mut cursor)?;
             cursor.set_position(0);
-            v.read_weights_from_buf_into_forward_only(&mut cursor, rg.blocks_list[i])?;
+            v.read_weights_from_buf_into_forward_only(&mut cursor, &mut rg.blocks_boxes[i])?;
         }
         Ok(rg)
     }

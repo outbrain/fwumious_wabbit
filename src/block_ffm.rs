@@ -309,7 +309,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         block_helpers::write_weights_to_buf(&self.weights, output_bufwriter)
     }
 
-    fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut dyn BlockTrait) -> Result<(), Box<dyn Error>> {
+    fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>> {
         let mut forward = forward.as_any().downcast_mut::<BlockFFM<optimizer::OptimizerSGD>>().unwrap();
         block_helpers::read_weights_only_from_buf2::<L>(self.ffm_weights_len as usize, &mut forward.weights, input_bufreader)
     }
