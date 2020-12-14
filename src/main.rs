@@ -79,7 +79,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         se.serve()?;
     } else {
         let vw: vwmap::VwNamespaceMap;
-        let mut re: Box<dyn regressor::RegressorTrait>;
+        let mut re: Box<regressor::Regressor>;
         let mi: model_instance::ModelInstance;
 
         if let Some(filename) = cl.value_of("initial_regressor") {

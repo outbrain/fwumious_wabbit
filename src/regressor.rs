@@ -52,19 +52,8 @@ pub struct Regressor {
     pub blocks_boxes: Vec<Box<dyn BlockTrait>>,
 }
 
-pub trait RegressorTrait {
-    fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool) -> f32;
-    fn predict(&self, fb: &feature_buffer::FeatureBuffer) -> f32;
-    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>>;
-    fn overwrite_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>; 
-    fn get_name(&self) -> String;
-    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance);
-    fn immutable_regressor(&mut self, mi: &model_instance::ModelInstance) -> Result<Box<dyn RegressorTrait>, Box<dyn Error>>;
-    fn immutable_regressor_from_buf(&mut self, mi: &model_instance::ModelInstance, input_bufreader: &mut dyn io::Read) -> Result<Box<dyn RegressorTrait>, Box<dyn Error>>;
-}
 
-
-pub fn get_regressor_without_weights(mi: &model_instance::ModelInstance) -> Box<dyn RegressorTrait> {
+pub fn get_regressor_without_weights(mi: &model_instance::ModelInstance) -> Box<Regressor> {
     if mi.optimizer == model_instance::Optimizer::Adagrad {
         if mi.fastmath {
             Box::new(Regressor::new_without_weights::<optimizer::OptimizerAdagradLUT>(&mi))
@@ -76,7 +65,7 @@ pub fn get_regressor_without_weights(mi: &model_instance::ModelInstance) -> Box<
     }    
 }
 
-pub fn get_regressor(mi: &model_instance::ModelInstance) -> Box<dyn RegressorTrait> {
+pub fn get_regressor(mi: &model_instance::ModelInstance) -> Box<Regressor> {
     let mut re = get_regressor_without_weights(mi);
     re.allocate_and_init_weights(mi);
     re
@@ -118,20 +107,16 @@ impl Regressor  {
         rg.allocate_and_init_weights(mi);
         rg
     }
-}
 
-    
-impl RegressorTrait for Regressor 
-{
-    fn get_name(&self) -> String {
+    pub fn get_name(&self) -> String {
         self.regressor_name.to_owned()    
     }
 
-    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
+    pub fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
         self.allocate_and_init_weights_(mi);
     }
 
-    fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool) -> f32 {
+    pub fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool) -> f32 {
         let update:bool = update && (fb.example_importance != 0.0);
 
         let blocks_list = &mut self.blocks_boxes[..];
@@ -141,7 +126,7 @@ impl RegressorTrait for Regressor
         return prediction_probability
     }
     
-    fn predict(&self, fb: &feature_buffer::FeatureBuffer) -> f32 {
+    pub fn predict(&self, fb: &feature_buffer::FeatureBuffer) -> f32 {
         // TODO: we should find a way of not using unsafe
         let blocks_list = &self.blocks_boxes[..];
         let (current, further_blocks) = blocks_list.split_at(1);
@@ -150,7 +135,7 @@ impl RegressorTrait for Regressor
     }
     
     // Yeah, this is weird. I just didn't want to break the format compatibility at this point
-    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
+    pub fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
         let length = self.blocks_boxes.iter().map(|block| block.get_serialized_len()).sum::<usize>() as u64;
         output_bufwriter.write_u64::<LittleEndian>(length as u64)?;
 
@@ -162,7 +147,7 @@ impl RegressorTrait for Regressor
     }
     
 
-    fn overwrite_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
+    pub fn overwrite_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
         // This is a bit weird format
         // You would expect each block to have its own sig
         // We'll break compatibility in next release or something similar
@@ -179,7 +164,7 @@ impl RegressorTrait for Regressor
     }
 
     
-    fn immutable_regressor_from_buf(&mut self, mi: &model_instance::ModelInstance, input_bufreader: &mut dyn io::Read) -> Result<Box<dyn RegressorTrait>, Box<dyn Error>> {
+    pub fn immutable_regressor_from_buf(&mut self, mi: &model_instance::ModelInstance, input_bufreader: &mut dyn io::Read) -> Result<Box<Regressor>, Box<dyn Error>> {
         // TODO Ideally we would make a copy, not based on model_instance. but this is easier at the moment
         
         let mut rg = Box::new(Regressor::new_without_weights::<optimizer::OptimizerSGD>(&mi));
@@ -197,7 +182,7 @@ impl RegressorTrait for Regressor
     }
 
     // Create immutable regressor from current regressor
-    fn immutable_regressor(&mut self, mi: &model_instance::ModelInstance) -> Result<Box<dyn RegressorTrait>, Box<dyn Error>> {
+    pub fn immutable_regressor(&mut self, mi: &model_instance::ModelInstance) -> Result<Box<Regressor>, Box<dyn Error>> {
         // Only to be used by unit tests 
         let mut rg = Box::new(Regressor::new_without_weights::<optimizer::OptimizerSGD>(&mi));
 
@@ -254,7 +239,7 @@ mod tests {
         let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);
         
         // Here learning rate mechanism does not affect the results, so let's verify three different ones
-        let mut regressors: Vec<Box<dyn RegressorTrait>> = vec![
+        let mut regressors: Vec<Box<Regressor>> = vec![
             //Box::new(Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi)),
             Box::new(Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi)),
             //Box::new(Regressor::<optimizer::OptimizerSGD>::new(&mi))

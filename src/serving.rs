@@ -15,7 +15,7 @@ use crate::regressor;
 use crate::feature_buffer;
 use crate::model_instance;
 use crate::optimizer;
-use crate::regressor::RegressorTrait;
+use crate::regressor::Regressor;
 use crate::multithread_helpers::{BoxedRegressorTrait};
 
 
@@ -144,7 +144,7 @@ impl WorkerThread {
 impl Serving {
     pub fn new<'a>(cl: &clap::ArgMatches<'a>,
                    vw: &vwmap::VwNamespaceMap,
-                   re_fixed: Box<dyn regressor::RegressorTrait>,
+                   re_fixed: Box<regressor::Regressor>,
                    mi: &model_instance::ModelInstance,
     ) -> Result<Serving, Box<dyn Error>> {
         let port = match cl.value_of("port") {

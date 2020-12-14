@@ -12,7 +12,7 @@ use crate::regressor;
 use crate::vwmap;
 use crate::optimizer;
 use optimizer::OptimizerTrait;
-use regressor::RegressorTrait;
+use regressor::Regressor;
 
 const REGRESSOR_HEADER_MAGIC_STRING: &[u8; 4] = b"FWRE";    // Fwumious Wabbit REgressor
 const REGRESSOR_HEADER_VERSION:u32 = 4;
@@ -53,7 +53,7 @@ pub fn save_regressor_to_filename(
                         filename: &str, 
                         mi: &model_instance::ModelInstance,
                         vwmap: &vwmap::VwNamespaceMap,
-                        re: Box<dyn regressor::RegressorTrait>,
+                        re: Box<regressor::Regressor>,
                         ) -> Result<(), Box<dyn Error>> {
         let output_bufwriter = &mut io::BufWriter::new(fs::File::create(filename).expect(format!("Cannot open {} to save regressor to", filename).as_str()));
         write_regressor_header(output_bufwriter)?;
@@ -74,7 +74,7 @@ fn write_regressor_header(output_bufwriter: &mut dyn io::Write) -> Result<(), Bo
 fn load_regressor_without_weights(input_bufreader: &mut io::BufReader::<File>) 
                         -> Result<(model_instance::ModelInstance,
                                    vwmap::VwNamespaceMap,
-                                   Box<dyn regressor::RegressorTrait>,
+                                   Box<regressor::Regressor>,
                                  ), Box<dyn Error>> {
     verify_header(input_bufreader).expect("Regressor header error");    
     let vw = vwmap::VwNamespaceMap::new_from_buf(input_bufreader).expect("Loading vwmap from regressor failed");
@@ -87,7 +87,7 @@ fn load_regressor_without_weights(input_bufreader: &mut io::BufReader::<File>)
 pub fn new_regressor_from_filename(filename: &str, immutable: bool) 
                         -> Result<(model_instance::ModelInstance,
                                    vwmap::VwNamespaceMap,
-                                   Box<dyn regressor::RegressorTrait>), 
+                                   Box<regressor::Regressor>), 
                                   Box<dyn Error>> {
     if !immutable {
         let mut input_bufreader = io::BufReader::new(fs::File::open(filename).unwrap());
@@ -104,7 +104,7 @@ pub fn new_regressor_from_filename(filename: &str, immutable: bool)
 pub fn new_immutable_regressor_from_filename(filename: &str) 
                         -> Result<(model_instance::ModelInstance,
                                    vwmap::VwNamespaceMap,
-                                   Box<dyn regressor::RegressorTrait>), 
+                                   Box<regressor::Regressor>), 
                                   Box<dyn Error>> {
     let mut input_bufreader = io::BufReader::new(fs::File::open(filename).unwrap());
     let (mi, vw, mut re) = load_regressor_without_weights(&mut input_bufreader)?;

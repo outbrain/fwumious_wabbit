@@ -4,7 +4,7 @@ use std::mem::ManuallyDrop;
 use core::ops::{Deref, DerefMut};
 use std::mem;
 use std::marker::PhantomData;
-use crate::regressor::RegressorTrait;
+use crate::regressor::Regressor;
 
 
 
@@ -15,7 +15,7 @@ pub struct UnsafelySharableTrait<T:Sized> {
     reference_count: Arc<Mutex<PhantomData<u32>>>,
 }
 
-pub type BoxedRegressorTrait  = UnsafelySharableTrait<Box<dyn RegressorTrait>>;
+pub type BoxedRegressorTrait  = UnsafelySharableTrait<Box<Regressor>>;
 
 // SUPER UNSAFE
 // SUPER UNSAFE
@@ -76,7 +76,7 @@ impl BoxedRegressorTrait {
         unsafe {
             // Double deref here sounds weird, but you got to know that dyn Trait and Box<dyn Trait> are the same thing, just box owns it.
             // And you can get dyn Trait content, but you can't get box content (directly)
-            let r2: Box<dyn RegressorTrait> = mem::transmute(& *self.content.deref().deref());
+            let r2: Box<Regressor> = mem::transmute(& *self.content.deref().deref());
             let ret = BoxedRegressorTrait{
                 content: ManuallyDrop::new(r2),
                 reference_count: self.reference_count.clone()        
