@@ -32,7 +32,7 @@ pub struct VowpalParser {
 pub struct FlushCommand;  // Parser returns FlushCommand to signal flush message
 #[derive(Debug)]
 pub struct HogwildLoadCommand { // Parser returns Hogwild Load as a command  
-    filename: String,
+    pub filename: String,
 }
 
 
@@ -149,9 +149,8 @@ impl VowpalParser {
                             if vecs.len() == 2 {
                                 let command = String::from_utf8_lossy(&vecs[0]) ;
                                 if command == "hogwild_load" {
-                                    let file_name = String::from_utf8_lossy(&vecs[1]);
-                                    let command = HogwildLoadCommand{filename:file_name.to_string()};
-                                    return Err(Box::new(command));
+                                    let filename = String::from_utf8_lossy(&vecs[1]);
+                                    return Err(Box::new(HogwildLoadCommand{filename: filename.to_string()}));
                                 }                            
                             } else {
                                 return Err(Box::new(IOError::new(ErrorKind::Other, format!("Cannot parse an example"))))

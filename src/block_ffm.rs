@@ -262,7 +262,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
     }
     
     fn forward(&self, further_blocks: &[Box<dyn BlockTrait>], wsum: f32, fb: &feature_buffer::FeatureBuffer) -> f32 {
-        let mut wsum:f32 = 0.0;
+        let mut wsum:f32 = wsum;
         unsafe {
             let ffm_weights = &self.weights;
             specialize_k!(self.ffm_k, FFMK, wsumbuf, {                        

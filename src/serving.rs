@@ -6,6 +6,7 @@ use std::thread;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::ops::DerefMut;
 
 use daemonize::Daemonize;
 
@@ -15,6 +16,7 @@ use crate::regressor;
 use crate::feature_buffer;
 use crate::model_instance;
 use crate::optimizer;
+use crate::persistence;
 use crate::regressor::Regressor;
 use crate::multithread_helpers::{BoxedRegressorTrait};
 
@@ -101,6 +103,16 @@ impl WorkerThread {
                                 Ok(_) => {},
                                 Err(_e) => { /*println!("Flushing the socket failed, dropping it");*/ return ConnectionEnd::StreamFlushError; }
                             }
+                        } else if e.is::<parser::HogwildLoadCommand>() {
+                            // FlushCommand just causes us to flush, not to break
+                            let hogwild_command = e.downcast_ref::<parser::HogwildLoadCommand>().unwrap();
+                            match persistence::hogwild_load(self.re_fixed.deref_mut(), &hogwild_command.filename) {
+                                Ok(_) => {},
+                                Err(_e) => {
+                                    // TODO This kind of error should fold the whole daemon...
+                                    return ConnectionEnd::StreamWriteError;
+                                }
+                            }                   
                         } else
                         {
                             let p_res = format!("ERR: {}\n", e.to_string());

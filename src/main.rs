@@ -94,7 +94,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             let vw_namespace_map_filepath = Path::new(input_filename).parent().expect("Couldn't access path given by --data").join("vw_namespace_map.csv");
             vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
             mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
-            re = regressor::get_regressor(&mi);
+            re = regressor::get_regressor_with_weights(&mi);
         };
         let input_filename = cl.value_of("data").expect("--data expected");
         let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"), &vw);
