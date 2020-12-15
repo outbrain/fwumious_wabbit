@@ -30,10 +30,23 @@ pub struct VowpalParser {
 
 #[derive(Debug)]
 pub struct FlushCommand;  // Parser returns FlushCommand to signal flush message
+#[derive(Debug)]
+pub struct HogwildLoadCommand { // Parser returns Hogwild Load as a command  
+    filename: String,
+}
+
+
 impl Error for FlushCommand {}
 impl fmt::Display for FlushCommand {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Not really an error: a flush command from client")
+        write!(f, "Not really an error: a \"flush\" command from client")
+    }
+}
+
+impl Error for HogwildLoadCommand {}
+impl fmt::Display for HogwildLoadCommand {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Not really an error: a \"hogwild_load\" command from client to load: {}", self.filename)
     }
 }
 
@@ -83,6 +96,23 @@ impl VowpalParser {
         };
     }
 
+    // This is a very very slow implementation, but it's ok, this is called extremely infrequently to decode a command
+    pub fn parse_cmd(&self, i_start: usize, rowlen :usize) -> Result<Vec<Vec<u8>>, Box<dyn Error>> {
+        let mut o: Vec<Vec<u8>> = Vec::new();
+        let mut i_end = i_start;
+        while i_end < rowlen {
+            let mut out_vec : Vec<u8> = Vec::new();
+            while i_end < rowlen && self.tmp_read_buf[i_end] != 0x20 {
+                out_vec.push(self.tmp_read_buf[i_end]);
+                i_end += 1;
+            }
+            o.push(out_vec);
+            while i_end < rowlen && self.tmp_read_buf[i_end] == 0x20 {i_end += 1;}
+
+        }
+        Ok(o)
+    }
+
     pub fn next_vowpal(&mut self, input_bufread: &mut impl BufRead) -> Result<&[u32], Box<dyn Error>> {
             self.tmp_read_buf.truncate(0);
             let rowlen1 = match input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
@@ -112,8 +142,23 @@ impl VowpalParser {
                         // "flush" ascii 66, 6C, 75, 73, 68
                         if rowlen1 >= 5 && *p.add(0) == 0x66  && *p.add(1) == 0x6C && *p.add(2) == 0x75 && *p.add(3) == 0x73 && *p.add(4) == 0x68 {
                             return Err(Box::new(FlushCommand))
+                        } else if rowlen1 >= "hogwild_load ".len() {
+                            // THIS IS SLOW, BUT IT IS CALLED VERY RARELY
+                            // IF WE WILL AVE COMMANDS CALLED MORE FREQUENTLY, WE WILL NEED A FASTER IMPLEMENTATION
+                            let vecs = self.parse_cmd(0, rowlen1)?;
+                            if vecs.len() == 2 {
+                                let command = String::from_utf8_lossy(&vecs[0]) ;
+                                if command == "hogwild_load" {
+                                    let file_name = String::from_utf8_lossy(&vecs[1]);
+                                    let command = HogwildLoadCommand{filename:file_name.to_string()};
+                                    return Err(Box::new(command));
+                                }                            
+                            } else {
+                                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Cannot parse an example"))))
+                            }
                         } else {
-                            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown first character of the label: ascii {:?}", *p.add(0)))))
+                            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Cannot parse an example"))))
+//                            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown first character of the label: ascii {:?}", *p.add(0)))))
                         }
                     }
                 };
@@ -417,7 +462,7 @@ C,featureC
         let mut buf = str_to_cursor("$1");
         let result = rr.next_vowpal(&mut buf);
         assert!(result.is_err());
-        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Unknown first character of the label: ascii 36\" })");
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Cannot parse an example\" })");
 
         // Example importance is negative -> Error
         let mut buf = str_to_cursor("1 -0.1 |A a\n");
@@ -446,6 +491,43 @@ C,featureC
                                                         NULL]);
  
  
+ 
+        // flush should return FlushCommand
+        let mut buf = str_to_cursor("flush");
+        assert_eq!(rr.next_vowpal(&mut buf).err().unwrap().is::<FlushCommand>(), true);
+
+        // flush should return FlushCommand
+        let mut buf = str_to_cursor("hogwild_load /path/to/filename");
+        let result = rr.next_vowpal(&mut buf).err().unwrap();
+        assert_eq!(result.is::<HogwildLoadCommand>(), true);
+        let hogwild_command = result.downcast_ref::<HogwildLoadCommand>().unwrap();
+        assert_eq!(hogwild_command.filename, "/path/to/filename");
+
+        // flush should return FlushCommand
+        let mut buf = str_to_cursor("hogwild_load   /path/to/filename");
+        let result = rr.next_vowpal(&mut buf).err().unwrap();
+        assert_eq!(result.is::<HogwildLoadCommand>(), true);
+        let hogwild_command = result.downcast_ref::<HogwildLoadCommand>().unwrap();
+        assert_eq!(hogwild_command.filename, "/path/to/filename");
+ 
+
+        // flush should return FlushCommand
+        let mut buf = str_to_cursor("hogwild_load   /path/to/filename  ");
+        let result = rr.next_vowpal(&mut buf).err().unwrap();
+        assert_eq!(result.is::<HogwildLoadCommand>(), true);
+        let hogwild_command = result.downcast_ref::<HogwildLoadCommand>().unwrap();
+        assert_eq!(hogwild_command.filename, "/path/to/filename");
+
+        // Check for two pathological cases - command without space, and command with a space but no file
+        let mut buf = str_to_cursor("hogwild_load");
+        let result = rr.next_vowpal(&mut buf);
+        assert!(result.is_err());
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Cannot parse an example\" })");
+
+        let mut buf = str_to_cursor("hogwild_load ");
+        let result = rr.next_vowpal(&mut buf);
+        assert!(result.is_err());
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Cannot parse an example\" })");
  
     }
 }

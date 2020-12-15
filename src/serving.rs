@@ -273,7 +273,7 @@ C,featureC
             mocked_stream.push_bytes_to_read(b"! exclamation mark is not a valid label");
             assert_eq!(ConnectionEnd::ParseError, newt.handle_connection(&mut reader, &mut writer));
             let x = mocked_stream.pop_bytes_written();
-            assert_eq!(&x[..] == &b"ERR: Unknown first character of the label: ascii 33\n"[..], true);
+            assert_eq!(&x[..] == &b"ERR: Cannot parse an example\n"[..], true);
         } 
         
         // Non Working stream test
