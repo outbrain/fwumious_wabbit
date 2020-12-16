@@ -105,7 +105,8 @@ pub fn new_regressor_from_filename(filename: &str, immutable: bool)
 
 
 pub fn hogwild_load(re: &mut regressor::Regressor, filename: &str) -> Result<(), Box<dyn Error>> {
-    let mut input_bufreader = io::BufReader::new(fs::File::open(filename).unwrap());
+
+    let mut input_bufreader = io::BufReader::new(fs::File::open(filename)?);
     let (mi_hw, vw_hw, mut re_hw) = load_regressor_without_weights(&mut input_bufreader)?;
     // TODO: Here we should do safety comparison that the regressor is really the same;
     if !re.immutable {
@@ -446,12 +447,6 @@ B,featureB
 
         }
     }    
-    
-    
-    
-    
-    
-    
     
     
 
