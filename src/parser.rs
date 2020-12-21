@@ -19,6 +19,8 @@ pub const NULL: u32= IS_NOT_SINGLE_MASK; // null is just an exact IS_NOT_SINGLE_
 pub const NO_LABEL: u32 = 0xff;
 pub const FLOAT32_ONE: u32 = 1065353216;  // 1.0f32.to_bits()
 
+
+
 #[derive (Clone)]
 pub struct VowpalParser {
     vw_map: vwmap::VwNamespaceMap,
@@ -190,7 +192,6 @@ impl VowpalParser {
                 let mut current_char_index:usize = HEADER_LEN;
                 let mut bufpos_namespace_start = 0;
                 let mut current_namespace_weight:f32 = 1.0;
-//                print!("AAAAAAAA\n");
                 while i_end < rowlen {
                     // <letter>[:<weight>]
                     
@@ -214,7 +215,7 @@ impl VowpalParser {
                         } else {
                             current_namespace_weight = 1.0;
                         }
-                     //   print!("Only single letter namespaces are allowed, however namespace string is: {:?}\n", String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end_first_part]));
+                     //   print!("Only single letter namespaces are allowed, however nfffffffffffffffamespace string is: {:?}\n", String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end_first_part]));
                         current_char = *p.add(i_start) as usize;
                         current_char_index = self.vw_map.lookup_char_to_index[current_char] * NAMESPACE_DESC_LEN + HEADER_LEN;
                         current_char_num_of_features = 0;
@@ -284,7 +285,7 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, None).unwrap();
 
         fn str_to_cursor(s: &str) -> Cursor<Vec<u8>> {
           Cursor::new(s.as_bytes().to_vec())

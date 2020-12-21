@@ -137,6 +137,12 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .multiple(false)
                      .takes_value(false))
 
+                    .arg(Arg::with_name("float_namespaces")
+                     .long("float_namespaces")
+                     .value_name("namespaces")
+                     .help("Namespaces to be parsed as floats - which can be used for binning")
+                     .multiple(false)
+                     .takes_value(true))
 
                      // FFMs
                     .arg(Arg::with_name("lrqfa")
