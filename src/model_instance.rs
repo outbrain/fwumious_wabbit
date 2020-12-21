@@ -112,20 +112,13 @@ fn create_feature_combo_desc(vw: &vwmap::VwNamespaceMap, s: &str) -> Result<Feat
                         })
 }
 
-fn add_float_namespaces(in_v: &str, vw: &vwmap::VwNamespaceMap, mi: &mut ModelInstance) -> Result<(), Box<dyn Error>> {
-    for char in in_v.chars() {
-        // create an list of indexes dfrom list of namespace chars
-        let from_index = match vw.map_char_to_index.get(&char) {
-            Some(index) => *index,
-            None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown namespace char in command line: {}", char))))
-        };
-        let to_index = vw.num_namespaces + mi.vwmapextension.num_extended_namespaces;
-        mi.vwmapextension.from_index_to_index[from_index] = to_index as u8;
-        mi.vwmapextension.num_extended_namespaces += 1;
-//        println!("From index {} to index {}", from_index, to_index);
-        
-    }
-    Ok(())
+
+pub fn get_float_namespaces<'a>(cl: &clap::ArgMatches<'a>) -> Result<String, Box<dyn Error>>{
+   if let Some(in_v) = cl.value_of("float_namespaces") {
+       Ok(in_v.to_owned())
+   } else {
+       Ok("".to_owned())
+   }
 }
 
 
@@ -193,10 +186,6 @@ impl ModelInstance {
             }
             
         
-        }
-
-        if let Some(in_v) = cl.value_of("float_namespaces") {
-            add_float_namespaces(in_v, &vw, &mut mi)?;
         }
 
         
@@ -393,7 +382,7 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, None).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, "").unwrap();
         let aa = create_feature_combo_desc(&vw, "A").unwrap();
         assert_eq!(aa, FeatureComboDesc {
                                 feature_indices: vec![0],
@@ -415,7 +404,7 @@ A,featureA:2
 B,featureB:3
 "#;
         // The main point is that weight in feature names from vw_map_str is ignored
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, None).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, "").unwrap();
         let aa = create_feature_combo_desc(&vw, "BA:1.5").unwrap();
         assert_eq!(aa, FeatureComboDesc {
                                 feature_indices: vec![1,0],

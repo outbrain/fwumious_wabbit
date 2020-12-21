@@ -92,7 +92,8 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             // This is one of the major differences from vowpal
             let input_filename = cl.value_of("data").expect("--data expected");
             let vw_namespace_map_filepath = Path::new(input_filename).parent().expect("Couldn't access path given by --data").join("vw_namespace_map.csv");
-            vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath, &cl)?;
+            let float_namespaces = model_instance::get_float_namespaces(&cl)?;
+            vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath, &float_namespaces)?;
             mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
             re = regressor::get_regressor_with_weights(&mi);
         };

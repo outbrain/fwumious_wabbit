@@ -63,14 +63,14 @@ impl VwNamespaceMap {
         Ok(vw)
     }
 
-    pub fn new_from_csv_filepath<'a>(path: PathBuf, cl: &clap::ArgMatches<'a>) -> Result<VwNamespaceMap, Box<dyn Error>> {
+    pub fn new_from_csv_filepath(path: PathBuf, float_namespaces: &str) -> Result<VwNamespaceMap, Box<dyn Error>> {
         let mut input_bufreader = fs::File::open(&path).expect("Could not find vw_namespace_map.csv in input dataset directory");
         let mut s = String::new();
         input_bufreader.read_to_string(&mut s)?;
-        VwNamespaceMap::new(&s, Some(cl))   
+        VwNamespaceMap::new(&s, float_namespaces)
     }
 
-    pub fn new<'a>(data: &str, cl: Option<&clap::ArgMatches<'a>>) -> Result<VwNamespaceMap, Box<dyn Error>> {
+    pub fn new(data: &str, float_namespaces: &str) -> Result<VwNamespaceMap, Box<dyn Error>> {
         let mut rdr = csv::ReaderBuilder::new()
             .has_headers(false)
             .from_reader(data.as_bytes());
@@ -95,22 +95,16 @@ impl VwNamespaceMap {
 
         // It is a bit fugly that we need command line here ...
         // But we need to know which input params to mark with 'save_as_float' flag
-        if cl.is_some() {
-            let cl = cl.unwrap();
-            if let Some(in_v) = cl.value_of("float_namespaces") {
-                for char in in_v.chars() {
-                    // create an list of indexes dfrom list of namespace chars
-                    // Find index:
-                    let from_index:Vec<&VwNamespaceMapEntry> = vw_source.entries.iter().filter(|e| e.namespace_char == char).collect(); 
-                    if from_index.len() != 1 {
-                        return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown or ambigious namespace char passed by --float_namespaces: {}", char))))
-                    }
-                    let from_index = from_index[0].namespace_index;
-                    //println!("From index {}", from_index);
-                    vw_source.entries[from_index].namespace_save_as_float = true;
-                }
-
+        for char in float_namespaces.chars() {
+            // create an list of indexes dfrom list of namespace chars
+            // Find index:
+            let from_index:Vec<&VwNamespaceMapEntry> = vw_source.entries.iter().filter(|e| e.namespace_char == char).collect(); 
+            if from_index.len() != 1 {
+                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown or ambigious namespace char passed by --float_namespaces: {}", char))))
             }
+            let from_index = from_index[0].namespace_index;
+            //println!("From index {}", from_index);
+            vw_source.entries[from_index].namespace_save_as_float = true;
         }
 
         VwNamespaceMap::new_from_source(vw_source)
