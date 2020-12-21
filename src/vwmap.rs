@@ -15,7 +15,7 @@ pub struct VwNamespaceMap {
     pub map_char_to_name: HashMap <char, std::string::String>,
     pub map_char_to_index: HashMap <char, usize>,
     pub lookup_char_to_index: [usize; 256], 
-    pub lookup_index_save_as_float: [bool; 256],
+    pub lookup_char_to_save_as_float: [bool; 256],
     pub vw_source: VwNamespaceMapSource,    // this is the source from which VwNamespaceMap can be constructed - for persistence
 }
 
@@ -41,7 +41,7 @@ impl VwNamespaceMap {
                                 map_char_to_index:HashMap::new(),
                                 map_char_to_name:HashMap::new(),
                                 lookup_char_to_index: [0; 256],
-                                lookup_index_save_as_float: [false; 256],
+                                lookup_char_to_save_as_float: [false; 256],
                                 vw_source: vw_source,
                                 };
         for vw_entry in &vw.vw_source.entries {
@@ -54,7 +54,7 @@ impl VwNamespaceMap {
             vw.map_char_to_index.insert(char, i as usize);
             vw.map_char_to_name.insert(char, String::from(name_str));
             vw.lookup_char_to_index[char as usize] = i as usize;
-            vw.lookup_index_save_as_float[i] = vw_entry.namespace_save_as_float;
+            vw.lookup_char_to_save_as_float[char as usize] = vw_entry.namespace_save_as_float;
             if i > vw.num_namespaces {
                 vw.num_namespaces = i;
             } 
