@@ -144,6 +144,13 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .multiple(false)
                      .takes_value(true))
 
+                    .arg(Arg::with_name("transform_namespace")
+                     .long("transform_namespace")
+                     .value_name("target_namespace=func(source_float_namespace)")
+                     .help("How one namespace should be transformed into another")
+                     .multiple(false)
+                     .takes_value(true))
+
                      // FFMs
                     .arg(Arg::with_name("lrqfa")
                      .long("lrqfa")

@@ -10,11 +10,11 @@ use std::io::Error as IOError;
 
 #[derive(Clone)]
 pub struct VwNamespaceMap {
-    pub num_namespaces: usize,
-    pub map_name_to_index: HashMap <std::string::String, usize>,
+    pub num_namespaces: u32,
+    pub map_name_to_index: HashMap <std::string::String, u32>,
     pub map_char_to_name: HashMap <char, std::string::String>,
-    pub map_char_to_index: HashMap <char, usize>,
-    pub lookup_char_to_index: [usize; 256], 
+    pub map_char_to_index: HashMap <char, u32>,
+    pub lookup_char_to_index: [u32; 256], 
     pub lookup_char_to_save_as_float: [bool; 256],
     pub vw_source: VwNamespaceMapSource,    // this is the source from which VwNamespaceMap can be constructed - for persistence
 }
@@ -24,7 +24,7 @@ pub struct VwNamespaceMap {
 pub struct VwNamespaceMapEntry {
     namespace_char: char,
     namespace_name: std::string::String,
-    namespace_index: usize,
+    namespace_index: u32,
     namespace_save_as_float: bool, 
 }
 
@@ -44,16 +44,17 @@ impl VwNamespaceMap {
                                 lookup_char_to_save_as_float: [false; 256],
                                 vw_source: vw_source,
                                 };
+
         for vw_entry in &vw.vw_source.entries {
             //let record = result?;
             let name_str = &vw_entry.namespace_name;
             let char = vw_entry.namespace_char;
             let i = vw_entry.namespace_index;
             
-            vw.map_name_to_index.insert(String::from(name_str), i as usize);
-            vw.map_char_to_index.insert(char, i as usize);
+            vw.map_name_to_index.insert(String::from(name_str), i as u32);
+            vw.map_char_to_index.insert(char, i as u32);
             vw.map_char_to_name.insert(char, String::from(name_str));
-            vw.lookup_char_to_index[char as usize] = i as usize;
+            vw.lookup_char_to_index[char as usize] = i as u32;
             vw.lookup_char_to_save_as_float[char as usize] = vw_entry.namespace_save_as_float;
             if i > vw.num_namespaces {
                 vw.num_namespaces = i;
@@ -87,7 +88,7 @@ impl VwNamespaceMap {
             vw_source.entries.push(VwNamespaceMapEntry {
                 namespace_char: char,
                 namespace_name: name_str.to_string(),
-                namespace_index: i,
+                namespace_index: i as u32,
                 namespace_save_as_float: false,
             });
 //            println!("Char: {}, name: {}, index: {}", char, name_str, i);
@@ -104,7 +105,7 @@ impl VwNamespaceMap {
             }
             let from_index = from_index[0].namespace_index;
             //println!("From index {}", from_index);
-            vw_source.entries[from_index].namespace_save_as_float = true;
+            vw_source.entries[from_index as usize].namespace_save_as_float = true;
         }
 
         VwNamespaceMap::new_from_source(vw_source)

@@ -49,7 +49,7 @@ macro_rules! feature_reader {
       $hash_data:ident, 
       $hash_value:ident, 
       $bl:block  ) => {
-        let namespace_desc = *$record_buffer.get_unchecked($feature_index_offset + parser::HEADER_LEN);
+        let namespace_desc = *$record_buffer.get_unchecked(($feature_index_offset + parser::HEADER_LEN) as usize);
         if (namespace_desc & parser::IS_NOT_SINGLE_MASK) == 0 {
             let $hash_data = namespace_desc;
             let $hash_value: f32 = 1.0;

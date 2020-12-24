@@ -9,8 +9,8 @@ use std::string::String;
 use crate::vwmap;
 
 const RECBUF_LEN:usize = 2048;
-pub const HEADER_LEN:usize = 3;
-pub const NAMESPACE_DESC_LEN:usize = 1;
+pub const HEADER_LEN:u32 = 3;
+pub const NAMESPACE_DESC_LEN:u32 = 1;
 pub const LABEL_OFFSET:usize = 1;
 pub const EXAMPLE_IMPORTANCE_OFFSET:usize = 2;
 pub const IS_NOT_SINGLE_MASK : u32 = 1u32 << 31;
@@ -78,7 +78,7 @@ impl VowpalParser {
                             output_buffer: Vec::with_capacity(RECBUF_LEN*2),
                             namespace_hash_seeds: [0; 256],
                         };
-        rr.output_buffer.resize(vw.num_namespaces as usize * NAMESPACE_DESC_LEN + HEADER_LEN, 0);
+        rr.output_buffer.resize((vw.num_namespaces * NAMESPACE_DESC_LEN + HEADER_LEN) as usize, 0);
         for i in 0..=255 {
             rr.namespace_hash_seeds[i as usize] = murmur3::hash32([i;1]);
         }
@@ -124,7 +124,7 @@ impl VowpalParser {
                 Err(e) => Err(e)?
             };
 
-            let bufpos: usize = (self.vw_map.num_namespaces as usize) + HEADER_LEN;
+            let bufpos: usize = (self.vw_map.num_namespaces + HEADER_LEN) as usize;
             self.output_buffer.truncate(bufpos);
             for i in &mut self.output_buffer[0..bufpos] { *i = NULL };
 
@@ -190,7 +190,7 @@ impl VowpalParser {
                 while *p.add(i_end) != 0x7c && i_end < rowlen { i_end += 1;};
                 
                 let mut current_char:usize = 0;
-                let mut current_char_index:usize = HEADER_LEN;
+                let mut current_char_index:usize = HEADER_LEN as usize;
                 let mut current_char_is_float_namespace = false;
                 let mut bufpos_namespace_start = 0;
                 let mut current_namespace_weight:f32 = 1.0;
@@ -219,7 +219,7 @@ impl VowpalParser {
                         }
                      //   print!("Only single letter namespaces are allowed, however nfffffffffffffffamespace string is: {:?}\n", String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end_first_part]));
                         current_char = *p.add(i_start) as usize;
-                        current_char_index = self.vw_map.lookup_char_to_index[current_char] * NAMESPACE_DESC_LEN + HEADER_LEN;
+                        current_char_index = (self.vw_map.lookup_char_to_index[current_char] * NAMESPACE_DESC_LEN + HEADER_LEN) as usize;
                         current_char_num_of_features = 0;
                         current_char_is_float_namespace = self.vw_map.lookup_char_to_save_as_float[current_char];
                         bufpos_namespace_start = self.output_buffer.len(); // this is only used if we will have multiple values
