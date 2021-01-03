@@ -11,6 +11,8 @@ use crate::vwmap;
 use crate::consts;
 extern crate regex;
 
+use crate::feature_transform;
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct FeatureComboDesc {
     pub feature_indices: Vec<u32>,
@@ -144,12 +146,21 @@ impl ModelInstance {
             let from_namespace_index = self.get_namespace_id(vw, from_namespace_char)?;
             println!("to: {}, func: {} from: {}({})", &cap[1], &cap[2], from_namespace_char, from_namespace_index);
             
+            if !vw.lookup_char_to_save_as_float[from_namespace_char as usize] {
+                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Issue in parsing {}: From namespace ({}) has to be defined as --float_namespaces", s, from_namespace_char))));
+            }
+
+            if from_namespace_index & feature_transform::TRANSFORM_NAMESPACE_MARK != 0 {
+                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Issue in parsing {}: From namespace ({}) cannot be already transformed namespace", s, from_namespace_char))));
+            }
+
+            
             let to_namespace_char = cap[1].chars().nth(0).unwrap();
             let to_namespace_index = self.get_namespace_id(vw, to_namespace_char);
             if to_namespace_index.is_ok() {
                 return Err(Box::new(IOError::new(ErrorKind::Other, format!("To namespace of {} already exists: {:?}", s, to_namespace_char))));
             }
-            let to_namespace_index = self.transform_namespaces.len() as u32 | (1 <<31); // mark it as special
+            let to_namespace_index = self.transform_namespaces.len() as u32 | feature_transform::TRANSFORM_NAMESPACE_MARK; // mark it as special
             
             let function_str = &cap[2];
 

@@ -254,7 +254,10 @@ impl VowpalParser {
                             self.output_buffer.push(h);
                             self.output_buffer.push((current_namespace_weight * feature_weight).to_bits());
                             if current_char_is_float_namespace == true {
-                                self.output_buffer.push((self.parse_float_or_error(i_start, i_end_first_part, "Failed parsing float namespace")?).to_bits());
+                                // HACK HACK TODO TODO
+                                // the +1 is here to handle outbrain's internal format:
+                                self.output_buffer.push((self.parse_float_or_error(i_start + 1, i_end_first_part, "Failed parsing float namespace")?).to_bits());
+                                
                                 *buf.add(current_char_index) = IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
                             } else {
                                 *buf.add(current_char_index) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);

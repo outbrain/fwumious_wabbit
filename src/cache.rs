@@ -97,6 +97,7 @@ impl RecordCache {
                     }
                 }
             }
+            
             if !rc.reading {
                 rc.writing = true;
                 println!("creating cache file = {}", final_filename );
