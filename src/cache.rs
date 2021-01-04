@@ -173,6 +173,9 @@ impl RecordCache {
         }
         unsafe { 
             // We're going to cast another view over the data, so we can read it as u32
+            // This requires that the allocator we're using gives us sufficiently-aligned bytes,
+            // but that's not guaranteed, so blow up to avoid UB if the allocator uses that freedom.
+            assert_eq!(self.byte_buffer.as_ptr() as usize % mem::align_of::<u32>(), 0);
             let buf_view:&[u32] = slice::from_raw_parts(self.byte_buffer.as_ptr() as *const u32, READBUF_LEN/4);
             loop {
                 // Classical buffer strategy:
