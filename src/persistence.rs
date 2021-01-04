@@ -21,7 +21,7 @@ impl model_instance::ModelInstance {
     pub fn save_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
         let serialized = serde_json::to_vec_pretty(&self)?;
         output_bufwriter.write_u64::<LittleEndian>(serialized.len() as u64)?;
-        output_bufwriter.write(&serialized)?;
+        output_bufwriter.write_all(&serialized)?;
         Ok(())
     }
     pub fn new_from_buf(input_bufreader: &mut dyn io::Read) -> Result<model_instance::ModelInstance, Box<dyn Error>> {
@@ -35,7 +35,7 @@ impl vwmap::VwNamespaceMap {
     pub fn save_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
         let serialized = serde_json::to_vec_pretty(&self.vw_source)?;
         output_bufwriter.write_u64::<LittleEndian>(serialized.len() as u64)?;
-        output_bufwriter.write(&serialized)?;
+        output_bufwriter.write_all(&serialized)?;
         Ok(())
     }
 
@@ -66,7 +66,7 @@ pub fn save_regressor_to_filename(
 fn write_regressor_header(output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
     // we will write magic string FWFW
     // And then 32 bit unsigned version of the regressor
-    output_bufwriter.write(REGRESSOR_HEADER_MAGIC_STRING)?;
+    output_bufwriter.write_all(REGRESSOR_HEADER_MAGIC_STRING)?;
     output_bufwriter.write_u32::<LittleEndian>(REGRESSOR_HEADER_VERSION)?;
     Ok(())
 }

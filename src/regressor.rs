@@ -147,7 +147,6 @@ impl Regressor  {
 
         for v in &self.blocks_boxes {
             v.write_weights_to_buf(output_bufwriter)?;
-        
         }
         Ok(())
     }

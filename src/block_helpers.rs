@@ -45,7 +45,7 @@ pub fn write_weights_to_buf<L:OptimizerTrait>(weights: &Vec<WeightAndOptimizerDa
     unsafe {
          let buf_view:&[u8] = slice::from_raw_parts(weights.as_ptr() as *const u8, 
                                           weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
-         output_bufwriter.write(buf_view)?;
+         output_bufwriter.write_all(buf_view)?;
     }
     Ok(())
 }
