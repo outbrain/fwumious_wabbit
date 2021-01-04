@@ -124,7 +124,7 @@ impl RecordCache {
             unsafe { 
                 let vv:&[u8] = slice::from_raw_parts(record_buf.as_ptr() as *const u8, 
                                             record_buf.len() * element_size) ;
-                self.output_bufwriter.write(&vv)?;
+                self.output_bufwriter.write_all(&vv)?;
             }
         }
         Ok(())
@@ -139,7 +139,7 @@ impl RecordCache {
     }
 
     pub fn write_header(&mut self, vw_map: &vwmap::VwNamespaceMap) -> Result<(), Box<dyn Error>> {
-        self.output_bufwriter.write(CACHE_HEADER_MAGIC_STRING)?;
+        self.output_bufwriter.write_all(CACHE_HEADER_MAGIC_STRING)?;
         self.output_bufwriter.write_u32::<LittleEndian>(CACHE_HEADER_VERSION)?;
         vw_map.save_to_buf(&mut self.output_bufwriter)?;
         Ok(())
