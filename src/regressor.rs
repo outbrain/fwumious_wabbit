@@ -391,7 +391,7 @@ L: std::clone::Clone
         unsafe {
              let buf_view:&[u8] = slice::from_raw_parts(self.weights.as_ptr() as *const u8, 
                                               self.weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
-             output_bufwriter.write(buf_view)?;
+             output_bufwriter.write_all(buf_view)?;
         }
         
         Ok(())
