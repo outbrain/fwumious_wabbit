@@ -125,7 +125,7 @@ impl RecordCache {
             unsafe { 
                 let vv:&[u8] = slice::from_raw_parts(record_buf.as_ptr() as *const u8, 
                                             record_buf.len() * element_size) ;
-                self.output_bufwriter.write(&vv)?;
+                self.output_bufwriter.write_all(&vv)?;
             }
         }
         Ok(())
@@ -140,7 +140,7 @@ impl RecordCache {
     }
 
     pub fn write_header(&mut self, vw_map: &vwmap::VwNamespaceMap) -> Result<(), Box<dyn Error>> {
-        self.output_bufwriter.write(CACHE_HEADER_MAGIC_STRING)?;
+        self.output_bufwriter.write_all(CACHE_HEADER_MAGIC_STRING)?;
         self.output_bufwriter.write_u32::<LittleEndian>(CACHE_HEADER_VERSION)?;
         vw_map.save_to_buf(&mut self.output_bufwriter)?;
         Ok(())
@@ -174,6 +174,9 @@ impl RecordCache {
         }
         unsafe { 
             // We're going to cast another view over the data, so we can read it as u32
+            // This requires that the allocator we're using gives us sufficiently-aligned bytes,
+            // but that's not guaranteed, so blow up to avoid UB if the allocator uses that freedom.
+            assert_eq!(self.byte_buffer.as_ptr() as usize % mem::align_of::<u32>(), 0);
             let buf_view:&[u32] = slice::from_raw_parts(self.byte_buffer.as_ptr() as *const u32, READBUF_LEN/4);
             loop {
                 // Classical buffer strategy:
