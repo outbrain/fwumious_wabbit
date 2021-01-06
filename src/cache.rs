@@ -16,7 +16,7 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use crate::vwmap;
 
 const CACHE_HEADER_MAGIC_STRING: &[u8; 4] = b"FWCA";    // Fwumious Wabbit CAche
-const CACHE_HEADER_VERSION:u32 = 8;
+const CACHE_HEADER_VERSION:u32 = 9; 
 /*
 Version incompatibilites:
 7->8: add example importance to the parsed buffer format
@@ -26,7 +26,6 @@ Version incompatibilites:
 // 4 bytes: Magic bytes
 // u32: Version of the cache format
 // u_size + blob: json encoding of vw_source
-// u_size + blob: json encoding of model_instance
 // ...cached examples
 
 

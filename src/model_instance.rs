@@ -9,9 +9,9 @@ use serde_json::{Value};
 
 use crate::vwmap;
 use crate::consts;
-extern crate regex;
-
 use crate::feature_transform;
+
+extern crate regex;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct FeatureComboDesc {
@@ -19,33 +19,11 @@ pub struct FeatureComboDesc {
     pub weight:f32,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct NamespaceTransform {
-    to_namespace_char: char,
-    to_namespace_index: u32,
-    from_namespace_char: char,
-    from_namespace_index: u32, 
-    function: TransformFunction,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Copy)]
-pub enum TransformFunction {
-    Sqrt = 1,
-}
-
-
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Copy)]
 pub enum Optimizer {
     SGD = 1,
     Adagrad = 2,
-}
-
-use regex::Regex;
-use lazy_static::lazy_static; 
-
-lazy_static! {
-    static ref NAMESPACE_TRANSFORM_REGEX: Regex = Regex::new(r"^(.)=(\w+)\((.)\)$").unwrap();
 }
 
 
@@ -90,7 +68,7 @@ pub struct ModelInstance {
     #[serde(default = "default_optimizer_adagrad")]
     pub optimizer: Optimizer,
     
-    pub transform_namespaces: Vec<NamespaceTransform>,
+    pub transform_namespaces: feature_transform::TransformNamespaces,
     
 }
 
@@ -133,70 +111,11 @@ impl ModelInstance {
             ffm_init_acc_gradient: 0.0,
             init_acc_gradient: 1.0,
             optimizer: Optimizer::SGD,
-            transform_namespaces: Vec::new(),
+            transform_namespaces: feature_transform::TransformNamespaces::new(),
         };
         Ok(mi)
     }
 
-    pub fn add_transform_namespace(&mut self, vw: &vwmap::VwNamespaceMap, s: &str) -> Result<(), Box<dyn Error>> {
-        // This is super super simple parser... more complicated stuff TBD
-        
-        for cap in NAMESPACE_TRANSFORM_REGEX.captures_iter(s) {
-            let from_namespace_char = cap[3].chars().nth(0).unwrap();
-            let from_namespace_index = self.get_namespace_id(vw, from_namespace_char)?;
-            println!("to: {}, func: {} from: {}({})", &cap[1], &cap[2], from_namespace_char, from_namespace_index);
-            
-            if !vw.lookup_char_to_save_as_float[from_namespace_char as usize] {
-                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Issue in parsing {}: From namespace ({}) has to be defined as --float_namespaces", s, from_namespace_char))));
-            }
-
-            if from_namespace_index & feature_transform::TRANSFORM_NAMESPACE_MARK != 0 {
-                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Issue in parsing {}: From namespace ({}) cannot be already transformed namespace", s, from_namespace_char))));
-            }
-
-            
-            let to_namespace_char = cap[1].chars().nth(0).unwrap();
-            let to_namespace_index = self.get_namespace_id(vw, to_namespace_char);
-            if to_namespace_index.is_ok() {
-                return Err(Box::new(IOError::new(ErrorKind::Other, format!("To namespace of {} already exists: {:?}", s, to_namespace_char))));
-            }
-            let to_namespace_index = self.transform_namespaces.len() as u32 | feature_transform::TRANSFORM_NAMESPACE_MARK; // mark it as special
-            
-            let function_str = &cap[2];
-
-            let function = match function_str {
-                "sqrt" => TransformFunction::Sqrt,
-                _ => return Err(Box::new(IOError::new(ErrorKind::Other, format!("to namespace of {} has unknown transform function {}", s, function_str)))),
-            };
-            // Now we need to add it
-            let nt = NamespaceTransform {
-                from_namespace_char: from_namespace_char,
-                from_namespace_index: from_namespace_index,
-                to_namespace_char: to_namespace_char,
-                to_namespace_index: to_namespace_index,
-                function: function    
-            };
-        
-            self.transform_namespaces.push(nt);
-
-        }
-        Ok(())
-    }
-
-    pub fn get_namespace_id(&self, vw: &vwmap::VwNamespaceMap, namespace_char: char) -> Result<u32, Box<dyn Error>> {
-       let index = match vw.map_char_to_index.get(&namespace_char) {
-           Some(index) => return Ok(*index as u32),
-           None => {
-               let f:Vec<&NamespaceTransform> = self.transform_namespaces.iter().filter(|x| x.to_namespace_char == namespace_char).collect();
-               if f.len() == 0 {
-                   return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown namespace char in command line: {}", namespace_char))));
-               } else {
-                   return Ok(f[0].to_namespace_index as u32);
-               }
-           }
-       };
-       
-    }
     
     pub fn create_feature_combo_desc(&self, vw: &vwmap::VwNamespaceMap, s: &str) -> Result<FeatureComboDesc, Box<dyn Error>> {
 
@@ -215,7 +134,7 @@ impl ModelInstance {
         for char in namespaces_str.chars() {
            // create an list of indexes dfrom list of namespace chars
            
-           let index = self.get_namespace_id(vw, char)?;
+           let index = feature_transform::get_namespace_id(&self.transform_namespaces, vw, char)?;
            feature_indices.push(index);
         }
         Ok(FeatureComboDesc {
@@ -264,7 +183,7 @@ impl ModelInstance {
         // we first need transform namespaces, before processing keep or interactions
         if let Some(in_v) = cl.values_of("transform_namespace") {
             for value_str in in_v {                
-                mi.add_transform_namespace(vw, value_str)?;
+                mi.transform_namespaces.add_transform_namespace(vw, value_str)?;
             }
         }
         
@@ -291,7 +210,7 @@ impl ModelInstance {
             let k_str = vsplit[1];
             for char in namespaces_str.chars() {
                 // create an list of indexes dfrom list of namespace chars
-                let index = mi.get_namespace_id(vw, char)?;
+                let index = feature_transform::get_namespace_id(&mi.transform_namespaces, vw, char)?;
                 mi.ffm_fields.push(vec![index]);
             }
             mi.ffm_k = k_str.parse().expect("Number expected");
@@ -333,7 +252,7 @@ impl ModelInstance {
                 let mut field: Vec<u32>= Vec::new();
                 for char in namespaces_str.chars() {
                     //println!("K: {}", char);
-                    let index = mi.get_namespace_id(vw, char)?;
+                    let index = feature_transform::get_namespace_id(&mi.transform_namespaces, vw, char)?;
                     field.push(index);
                 }
                 mi.ffm_fields.push(field);

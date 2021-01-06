@@ -94,7 +94,7 @@ impl VwNamespaceMap {
 //            println!("Char: {}, name: {}, index: {}", char, name_str, i);
         }
 
-        // It is a bit fugly that we need command line here ...
+        // It is a bit fugly that we need this passed out-of-band from command line parameters
         // But we need to know which input params to mark with 'save_as_float' flag
         for char in float_namespaces.chars() {
             // create an list of indexes dfrom list of namespace chars
