@@ -1,6 +1,7 @@
 use crate::model_instance;
 use crate::parser;
-use crate::feature_transform;
+use crate::feature_transform_executor;
+use crate::feature_transform_parser;
 
 const VOWPAL_FNV_PRIME:u32 = 16777619;	// vowpal magic number
 //const CONSTANT_NAMESPACE:usize = 128;
@@ -52,9 +53,9 @@ macro_rules! feature_reader {
       $hash_data:ident, 
       $hash_value:ident, 
       $bl:block  ) => {
-        if $feature_index_offset & feature_transform::TRANSFORM_NAMESPACE_MARK != 0 {
+        if $feature_index_offset & feature_transform_parser::TRANSFORM_NAMESPACE_MARK != 0 {
             // This is super-unoptimized
-            for ($hash_data, $hash_value) in feature_transform::transformed_feature($record_buffer, $mi, *$feature_index_offset) {
+            for ($hash_data, $hash_value) in feature_transform_executor::transformed_feature($record_buffer, $mi, *$feature_index_offset) {
                 $bl
             }
         } else {
@@ -458,17 +459,4 @@ mod tests {
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xffc, value:2.0}, HashAndValue {hash:0xffa, value:1.0}]);
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
 }
-

@@ -9,7 +9,7 @@ use serde_json::{Value};
 
 use crate::vwmap;
 use crate::consts;
-use crate::feature_transform;
+use crate::feature_transform_parser;
 
 extern crate regex;
 
@@ -68,7 +68,7 @@ pub struct ModelInstance {
     #[serde(default = "default_optimizer_adagrad")]
     pub optimizer: Optimizer,
     
-    pub transform_namespaces: feature_transform::TransformNamespaces,
+    pub transform_namespaces: feature_transform_parser::TransformNamespaces,
     
 }
 
@@ -111,7 +111,7 @@ impl ModelInstance {
             ffm_init_acc_gradient: 0.0,
             init_acc_gradient: 1.0,
             optimizer: Optimizer::SGD,
-            transform_namespaces: feature_transform::TransformNamespaces::new(),
+            transform_namespaces: feature_transform_parser::TransformNamespaces::new(),
         };
         Ok(mi)
     }
@@ -134,7 +134,7 @@ impl ModelInstance {
         for char in namespaces_str.chars() {
            // create an list of indexes dfrom list of namespace chars
            
-           let index = feature_transform::get_namespace_id(&self.transform_namespaces, vw, char)?;
+           let index = feature_transform_parser::get_namespace_id(&self.transform_namespaces, vw, char)?;
            feature_indices.push(index);
         }
         Ok(FeatureComboDesc {
@@ -210,7 +210,7 @@ impl ModelInstance {
             let k_str = vsplit[1];
             for char in namespaces_str.chars() {
                 // create an list of indexes dfrom list of namespace chars
-                let index = feature_transform::get_namespace_id(&mi.transform_namespaces, vw, char)?;
+                let index = feature_transform_parser::get_namespace_id(&mi.transform_namespaces, vw, char)?;
                 mi.ffm_fields.push(vec![index]);
             }
             mi.ffm_k = k_str.parse().expect("Number expected");
@@ -252,7 +252,7 @@ impl ModelInstance {
                 let mut field: Vec<u32>= Vec::new();
                 for char in namespaces_str.chars() {
                     //println!("K: {}", char);
-                    let index = feature_transform::get_namespace_id(&mi.transform_namespaces, vw, char)?;
+                    let index = feature_transform_parser::get_namespace_id(&mi.transform_namespaces, vw, char)?;
                     field.push(index);
                 }
                 mi.ffm_fields.push(field);
