@@ -11,7 +11,6 @@ use crate::vwmap;
 use crate::consts;
 use crate::feature_transform_parser;
 
-extern crate regex;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct FeatureComboDesc {

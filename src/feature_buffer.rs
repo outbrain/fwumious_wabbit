@@ -32,6 +32,8 @@ pub struct FeatureBuffer {
 }
 
 
+
+
 #[derive(Clone)]
 pub struct FeatureBufferTranslator {
     model_instance: model_instance::ModelInstance,
@@ -41,6 +43,7 @@ pub struct FeatureBufferTranslator {
     pub feature_buffer: FeatureBuffer,
     pub lr_hash_mask: u32,
     pub ffm_hash_mask: u32,
+    pub transformed_namespaces: Vec<feature_transform_executor::TransformExecutor>,
 }
 
 // A macro that takes care of decoding the individual feature - which can have two different encodings
@@ -136,7 +139,8 @@ impl FeatureBufferTranslator {
             lr_buffer: Vec::new(),
             ffm_buffer: Vec::new(),
             ffm_fields_count: 0,
-        };
+        };      
+        
 
         // avoid doing any allocations in translate
         let fbt = FeatureBufferTranslator{
@@ -146,6 +150,7 @@ impl FeatureBufferTranslator {
                             feature_buffer: fb,
                             lr_hash_mask: lr_hash_mask,
                             ffm_hash_mask: ffm_hash_mask, 
+                            transformed_namespaces: Vec::new(),
         };
         fbt
     }

@@ -16,6 +16,9 @@ use std::time::Instant;
 use flate2::read::MultiGzDecoder;
 
 
+#[macro_use]
+extern crate nom;
+
 mod vwmap;
 mod parser;
 mod model_instance;
