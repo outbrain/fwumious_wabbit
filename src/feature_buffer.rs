@@ -43,7 +43,7 @@ pub struct FeatureBufferTranslator {
     pub feature_buffer: FeatureBuffer,
     pub lr_hash_mask: u32,
     pub ffm_hash_mask: u32,
-    pub transformed_namespaces: Vec<feature_transform_executor::TransformExecutor>,
+    pub transform_executors: feature_transform_executor::TransformExecutors,
 }
 
 // A macro that takes care of decoding the individual feature - which can have two different encodings
@@ -51,14 +51,17 @@ pub struct FeatureBufferTranslator {
 #[macro_export]
 macro_rules! feature_reader {
     ( $record_buffer:ident, 
-      $mi: expr,
+      $transform_executors:expr,
       $feature_index_offset:ident, 
       $hash_data:ident, 
       $hash_value:ident, 
       $bl:block  ) => {
         if $feature_index_offset & feature_transform_parser::TRANSFORM_NAMESPACE_MARK != 0 {
             // This is super-unoptimized
-            for ($hash_data, $hash_value) in feature_transform_executor::transformed_feature($record_buffer, $mi, *$feature_index_offset) {
+            for (hash_data1, hash_value1) in $transform_executors.get_transformations($record_buffer, *$feature_index_offset) {
+                let $hash_data = *hash_data1;
+                let $hash_value = *hash_value1;
+                println!("{} SSSSSSS {}", $hash_value, $hash_data);
                 $bl
             }
         } else {
@@ -150,7 +153,7 @@ impl FeatureBufferTranslator {
                             feature_buffer: fb,
                             lr_hash_mask: lr_hash_mask,
                             ffm_hash_mask: ffm_hash_mask, 
-                            transformed_namespaces: Vec::new(),
+                            transform_executors: feature_transform_executor::TransformExecutors::from_namespace_transforms(&mi.transform_namespaces),
         };
         fbt
     }
@@ -177,20 +180,20 @@ impl FeatureBufferTranslator {
                 let feature_index_offset = feature_combo_desc.feature_indices.get_unchecked(0);
                 // We special case a single feature (common occurance)
                 if num_namespaces == 1 {
-                    feature_reader!(record_buffer, &self.model_instance, feature_index_offset, hash_data, hash_value, {
+                    feature_reader!(record_buffer, self.transform_executors, feature_index_offset, hash_data, hash_value, {
                         lr_buffer.push(HashAndValue {hash: hash_data & self.lr_hash_mask, 
                                                      value: hash_value * feature_combo_weight});
                     });
                 } else {
                     hashes_vec_in.truncate(0);
-                    feature_reader!(record_buffer, &self.model_instance, feature_index_offset, hash_data, hash_value, {
-                            hashes_vec_in.push(HashAndValue {hash: hash_data, value:hash_value});
+                    feature_reader!(record_buffer, self.transform_executors, feature_index_offset, hash_data, hash_value, {
+                            hashes_vec_in.push(HashAndValue {hash: hash_data, value: hash_value});
                         });
                     for feature_index in feature_combo_desc.feature_indices.get_unchecked(1 as usize .. num_namespaces) {
                         hashes_vec_out.truncate(0);
                         for handv in &(*hashes_vec_in) {
                             let half_hash = handv.hash.overflowing_mul(VOWPAL_FNV_PRIME).0;
-                            feature_reader!(record_buffer, &self.model_instance, feature_index, hash_data, hash_value, {
+                            feature_reader!(record_buffer, self.transform_executors, feature_index, hash_data, hash_value, {
                                 hashes_vec_out.push(HashAndValue{   hash: hash_data ^ half_hash,
                                                                     value: handv.value * hash_value});
                             });
@@ -220,7 +223,7 @@ impl FeatureBufferTranslator {
                 //let feature_len = self.feature_buffer.ffm_fields_count * self.model_instance.ffm_k;
                 for (contra_field_index, ffm_field) in self.model_instance.ffm_fields.iter().enumerate() {
                     for feature_index in ffm_field {
-                        feature_reader!(record_buffer, &self.model_instance, feature_index, hash_data, hash_value, {
+                        feature_reader!(record_buffer, self.transform_executors, feature_index, hash_data, hash_value, {
                                 ffm_buffer.push(HashAndValueAndSeq {hash: hash_data & self.ffm_hash_mask,
                                                                         value: hash_value,
                                                                         contra_field_index: contra_field_index as u32 * self.model_instance.ffm_k as u32});

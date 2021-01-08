@@ -12,9 +12,6 @@ use fasthash::murmur3;
 use serde::{Serialize,Deserialize};
 
 
-// this is macro, globally exported
-use crate::feature_reader;
-use crate::feature_reader_float_namespace;
 use crate::feature_transform_executor;
 
 pub const TRANSFORM_NAMESPACE_MARK: u32 = 1<< 31;
@@ -35,13 +32,13 @@ pub struct NamespaceTransform {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct TransformNamespaces {
+pub struct NamespaceTransforms {
     pub v: Vec<NamespaceTransform>
 }
 
-impl TransformNamespaces {
-    pub fn new() -> TransformNamespaces {
-        TransformNamespaces {v: Vec::new()}
+impl NamespaceTransforms {
+    pub fn new() -> NamespaceTransforms {
+        NamespaceTransforms {v: Vec::new()}
     }
 
     pub fn add_transform_namespace(&mut self, vw: &vwmap::VwNamespaceMap, s: &str) -> Result<(), Box<dyn Error>> {
@@ -96,7 +93,7 @@ impl TransformNamespaces {
     }
 }
 
-pub fn get_namespace_id(transform_namespaces: &TransformNamespaces, vw: &vwmap::VwNamespaceMap, namespace_char: char) -> Result<u32, Box<dyn Error>> {
+pub fn get_namespace_id(transform_namespaces: &NamespaceTransforms, vw: &vwmap::VwNamespaceMap, namespace_char: char) -> Result<u32, Box<dyn Error>> {
    let index = match vw.map_char_to_index.get(&namespace_char) {
        Some(index) => return Ok(*index as u32),
        None => {

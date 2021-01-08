@@ -67,7 +67,7 @@ pub struct ModelInstance {
     #[serde(default = "default_optimizer_adagrad")]
     pub optimizer: Optimizer,
     
-    pub transform_namespaces: feature_transform_parser::TransformNamespaces,
+    pub transform_namespaces: feature_transform_parser::NamespaceTransforms,
     
 }
 
@@ -110,7 +110,7 @@ impl ModelInstance {
             ffm_init_acc_gradient: 0.0,
             init_acc_gradient: 1.0,
             optimizer: Optimizer::SGD,
-            transform_namespaces: feature_transform_parser::TransformNamespaces::new(),
+            transform_namespaces: feature_transform_parser::NamespaceTransforms::new(),
         };
         Ok(mi)
     }
