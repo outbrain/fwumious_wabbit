@@ -61,7 +61,7 @@ macro_rules! feature_reader {
             for (hash_data1, hash_value1) in $transform_executors.get_transformations($record_buffer, *$feature_index_offset) {
                 let $hash_data = *hash_data1;
                 let $hash_value = *hash_value1;
-                println!("{} SSSSSSS {}", $hash_value, $hash_data);
+//                println!("{} SSSSSSS {}", $hash_value, $hash_data);
                 $bl
             }
         } else {

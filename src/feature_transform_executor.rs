@@ -23,6 +23,7 @@ pub struct ExecutorToNamespace {
     namespace_index: u32,
     namespace_char: char,
     namespace_seed: u32,
+    alternative_namespace_seeds: [u32; 4],	// These are precomputed alternative namespace seeds
     tmp_data: Vec<(u32, f32)>,
 }
 
@@ -35,8 +36,59 @@ pub struct ExecutorFromNamespace {
 
 impl ExecutorToNamespace {
     #[inline(always)]
-    fn emit_u32(&mut self, to_data:u32, hash_value:f32) {
+    fn emit_i32(&mut self, to_data:i32, hash_value:f32) {
         let hash_data = murmur3::hash32_with_seed(to_data.to_le_bytes(), self.namespace_seed) & parser::MASK31;
+        self.tmp_data.push((hash_data, hash_value));
+    } 
+
+    #[inline(always)]
+    fn emit_f32(&mut self, f:f32, hash_value:f32, interpolated: bool) {
+        if interpolated {
+            let floor = f.floor();
+            let floor_int = floor as i32;
+            let part = f - floor;
+            if part != 0.0 {
+                self.emit_i32(floor_int, hash_value * part);
+            }
+            let part = 1.0 - part;
+            if part != 0.0 {
+                self.emit_i32(floor_int + 1, hash_value * part);
+            }
+        } else {
+            self.emit_i32(f as i32, hash_value);
+        }
+    }
+    
+
+    #[inline(always)]
+    fn emit_i32_alternative(&mut self, to_data:i32, hash_value:f32, alternative_seed_id: usize) {
+        let hash_data = murmur3::hash32_with_seed(to_data.to_le_bytes(), self.alternative_namespace_seeds[alternative_seed_id]) & parser::MASK31;
+        self.tmp_data.push((hash_data, hash_value));
+    } 
+
+    #[inline(always)]
+    fn emit_f32_alternative(&mut self, f:f32, hash_value:f32, interpolated: bool, alternative_seed_id: usize) {
+        if interpolated {
+            let floor = f.floor();
+            let floor_int = floor as i32;
+            let part = f - floor;
+            if part != 0.0 {
+                self.emit_i32_alternative(floor_int, hash_value * part, alternative_seed_id);
+            }
+            let part = 1.0 - part;
+            if part != 0.0 {
+                self.emit_i32_alternative(floor_int + 1, hash_value * part, alternative_seed_id);
+            }
+        } else {
+            self.emit_i32_alternative(f as i32, hash_value, alternative_seed_id);
+        
+        }
+    } 
+
+    #[inline(always)]
+    fn emit_i32_i32_alternative(&mut self, to_data1:i32, to_data2:i32, hash_value:f32, alternative_seed_id: usize) {
+        let hash_data = murmur3::hash32_with_seed(to_data1.to_le_bytes(), self.alternative_namespace_seeds[alternative_seed_id]);
+        let hash_data = murmur3::hash32_with_seed(to_data2.to_le_bytes(), hash_data) & parser::MASK31;
         self.tmp_data.push((hash_data, hash_value));
     } 
 }
@@ -50,10 +102,16 @@ pub struct TransformExecutor {
 
 impl TransformExecutor {
     pub fn from_namespace_transform(namespace_transform: &feature_transform_parser::NamespaceTransform) -> Result<TransformExecutor, Box<dyn Error>> {
+        
         let namespace_to = ExecutorToNamespace {
             namespace_index: namespace_transform.to_namespace.namespace_index,
             namespace_char: namespace_transform.to_namespace.namespace_char,
             namespace_seed: murmur3::hash32(vec![namespace_transform.to_namespace.namespace_index as u8, 255]),
+            // These are random numbers, i threw a dice!
+            alternative_namespace_seeds: [murmur3::hash32(vec![3, namespace_transform.to_namespace.namespace_index as u8, 222, 52, 53]),
+                                              murmur3::hash32(vec![6, namespace_transform.to_namespace.namespace_index as u8, 35, 51, 245]),
+                                              murmur3::hash32(vec![24, namespace_transform.to_namespace.namespace_index as u8, 32, 0, 111]),
+                                              murmur3::hash32(vec![76, namespace_transform.to_namespace.namespace_index as u8, 23, 234, 0])],
             tmp_data: Vec::new(),
         };
         
@@ -71,8 +129,30 @@ impl TransformExecutor {
         for namespace in namespaces_from {
             executor_namespaces_from.push(ExecutorFromNamespace{namespace_index: namespace.namespace_index, namespace_char: namespace.namespace_char});
         }
-
-        FunctionSqrt::create_function(function_name, &executor_namespaces_from, function_params)
+        if function_name == "BinnerMinSqrt" {
+            TransformerBinner::create_function(&(|x| x.sqrt()), function_name, &executor_namespaces_from, function_params, false)
+        } else if function_name == "BinnerMinLn" {
+            TransformerBinner::create_function(&(|x| x.ln()), function_name, &executor_namespaces_from, function_params, false)
+        } else if function_name == "BinnerMinLog20" {
+            TransformerBinner::create_function(&(|x| x.log(2.0)), function_name, &executor_namespaces_from, function_params, false)
+        } else if function_name == "BinnerMinLog15" {
+            TransformerBinner::create_function(&(|x| x.log(1.5)), function_name, &executor_namespaces_from, function_params, false)
+        } else if function_name == "BinnerMinInterpolatedSqrt" {
+            TransformerBinner::create_function(&(|x| x.sqrt()), function_name, &executor_namespaces_from, function_params, true)
+        } else if function_name == "BinnerMinInterpolatedLn" {
+            TransformerBinner::create_function(&(|x| x.ln()), function_name, &executor_namespaces_from, function_params, true)
+        } else if function_name == "BinnerMinInterpolatedLog20" {
+            TransformerBinner::create_function(&(|x| x.log(2.0)), function_name, &executor_namespaces_from, function_params, true)
+        } else if function_name == "BinnerMinInterpolatedLog15" {
+            TransformerBinner::create_function(&(|x| x.log(1.5)), function_name, &executor_namespaces_from, function_params, true)
+        } else if function_name == "BinnerLogRatio" {
+            TransformerLogRatioBinner::create_function(function_name, &executor_namespaces_from, function_params, false)
+        } else if function_name == "BinnerInterpolatedLogRatio" {
+            TransformerLogRatioBinner::create_function(function_name, &executor_namespaces_from, function_params, true)
+        } else {
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown function: {}", function_name))));            
+        
+        }
     }
 }
 
@@ -110,60 +190,152 @@ impl TransformExecutors {
 // We need clone() because of serving. There is also an option of doing FeatureBufferTransform from scratch in each thread
 pub trait FunctionExecutorTrait: DynClone + Send {
     fn execute_function(&self, record_buffer: &[u32], namespace: &mut ExecutorToNamespace);
-    fn create_function(function_name: &str, from_namespaces: &Vec<ExecutorFromNamespace>, function_params: &Vec<f32>) ->  Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> where Self:Sized;
 }
-
 clone_trait_object!(FunctionExecutorTrait);
 
 
-    
-
+// BASIC EXAMPLE    
+// Basic example of a "full blown" simple FunctionExecutorTrait
 #[derive(Clone)]
-struct FunctionSqrt {
+struct FunctionExampleSqrt {
     from_namespace: ExecutorFromNamespace,
 }
 
-impl FunctionExecutorTrait for FunctionSqrt {
+impl FunctionExecutorTrait for FunctionExampleSqrt {
     fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace) {
         feature_reader_float_namespace!(record_buffer, self.from_namespace.namespace_index, hash_data, hash_value, float_value, {
             let transformed_float = float_value.sqrt();
-            let transformed_int = transformed_float as u32;
-            to_namespace.emit_u32(transformed_int, hash_value);
+            let transformed_int = transformed_float as i32;
+            to_namespace.emit_i32(transformed_int, hash_value);
         });
     }
-    
+}
+
+impl FunctionExampleSqrt {
     fn create_function(function_name: &str, from_namespaces: &Vec<ExecutorFromNamespace>, function_params: &Vec<f32>) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
         assert!(function_params.len() == 0);
         Ok(Box::new(Self{from_namespace: from_namespaces[0].clone()}))
     }   
 }
 
+// TRANSFORMERBINNER
+// TransformerBinner - A basic binner
+// It can take any function as a binning function f32 -> f32. Then output is rounded to integer 
+// However if output is smaller than floating parameter (greater_than), then output is custom encoded with that value
+// Example of use: you want to bin number of pageviews per user, so you generally want to do sqrt on it, but not do binning when pageviews <= 10
+// In that case you would call BinnerMinSqrt(A)(10.0)
+
+// What does inerpolated mean?
+// Example: BinnerMinSqrt(X)(10.0)
+// let's assume X is 150. sqrt(150) = 12.247
+// You now want two values emitted - 12 at value 0.247 and 13 at value (1-0.247
+
 
 #[derive(Clone)]
-struct FunctionSqrt2 {
+struct TransformerBinner {
     from_namespace: ExecutorFromNamespace,
-    greater_than: f32
+    greater_than: f32,
+    interpolated: bool,
+    function_pointer: &'static (dyn Fn(f32) -> f32 +'static + Sync), 
 }
 
-impl FunctionExecutorTrait for FunctionSqrt2 {
+impl FunctionExecutorTrait for TransformerBinner {
     fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace) {
         feature_reader_float_namespace!(record_buffer, self.from_namespace.namespace_index, hash_data, hash_value, float_value, {
-            let mut transformed_int:u32;
-            if float_value > self.greater_than {
-                let transformed_float = float_value.sqrt();
-                transformed_int = transformed_float as u32;
+            if float_value <= self.greater_than {
+                to_namespace.emit_i32_alternative(float_value as i32, hash_value, 0);
             } else {
-                transformed_int =  (- (float_value as i32)) as u32;
+                let transformed_float = (self.function_pointer)(float_value);
+                to_namespace.emit_f32(transformed_float, hash_value, self.interpolated);
             }
-            to_namespace.emit_u32(transformed_int, hash_value);
         });
     }
-    
-    fn create_function(function_name: &str, from_namespaces: &Vec<ExecutorFromNamespace>, function_params: &Vec<f32>) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
-        assert!(function_params.len() == 1);
-        Ok(Box::new(Self{from_namespace: from_namespaces[0].clone(), greater_than: function_params[0]}))
-    }   
 }
+
+impl TransformerBinner {
+    fn create_function(function_pointer: &'static (dyn Fn(f32) -> f32 +'static + Sync), 
+                        function_name: &str, 
+                        from_namespaces: &Vec<ExecutorFromNamespace>, 
+                        function_params: &Vec<f32>,
+                        interpolated: bool,
+                        ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
+        if function_params.len() != 1 {
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes exactly one float argument, example {}(A)(2.0)", function_name, function_name))));            
+        }
+        if from_namespaces.len() != 1 {
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes exactly one namespace argument, example {}(A)(2.0)", function_name, function_name))));            
+        }
+        Ok(Box::new(Self{from_namespace: from_namespaces[0].clone(), 
+                        greater_than: function_params[0],
+                        function_pointer: function_pointer,
+                        interpolated: interpolated,
+                        }))
+    }
+}   
+
+
+
+
+
+
+
+
+
+#[derive(Clone)]
+struct TransformerLogRatioBinner {
+    from_namespace1: ExecutorFromNamespace,
+    from_namespace2: ExecutorFromNamespace,
+    greater_than: f32,
+    interpolated: bool,
+    resolution: f32,
+}
+
+impl FunctionExecutorTrait for TransformerLogRatioBinner {
+    fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace) {
+        feature_reader_float_namespace!(record_buffer, self.from_namespace1.namespace_index, hash_data1, hash_value1, float_value1, {
+            feature_reader_float_namespace!(record_buffer, self.from_namespace2.namespace_index, hash_data2, hash_value2, float_value2, {
+
+                let joint_value = hash_value1 * hash_value2;
+                let val1 = float_value1;
+                let val2 = float_value2;
+                
+                if val2 + val1 < self.greater_than {
+                    to_namespace.emit_i32_i32_alternative(val1 as i32, val2 as i32, joint_value, 1);    
+                } else if val1 == 0.0 {
+                    to_namespace.emit_f32_alternative(val2.sqrt(), joint_value, self.interpolated, 2);    
+                } else if val2 == 0.0 {
+                    to_namespace.emit_i32_alternative(val1 as i32, joint_value, 3);    
+                } else {
+                    let o = (val1/val2).ln()*self.resolution;
+                    to_namespace.emit_f32(o, joint_value, self.interpolated);
+                }
+            });
+        });
+    }
+}
+
+impl TransformerLogRatioBinner {
+    fn create_function(
+                        function_name: &str, 
+                        from_namespaces: &Vec<ExecutorFromNamespace>, 
+                        function_params: &Vec<f32>,
+                        interpolated: bool,
+                        ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
+        if function_params.len() != 2 {
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes exactly one float argument, example {}(A)(2.0)", function_name, function_name))));            
+        }
+        if from_namespaces.len() != 2 {
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes exactly two namespace arguments, example {}(A,B)(2.0)", function_name, function_name))));            
+        }
+        Ok(Box::new(Self{from_namespace1: from_namespaces[0].clone(), 
+                        from_namespace2: from_namespaces[1].clone(), 
+                        greater_than: function_params[0],
+                        resolution: function_params[1],
+                        interpolated: interpolated,
+                        }))
+    }
+}   
+
 
 
 
