@@ -102,6 +102,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
             re = regressor::get_regressor_with_weights(&mi);
         };
+        
         let input_filename = cl.value_of("data").expect("--data expected");
         let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"), &vw);
         let mut fbt = feature_buffer::FeatureBufferTranslator::new(&mi);

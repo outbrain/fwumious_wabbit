@@ -382,7 +382,7 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, "").unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("".to_string(), 0)).unwrap();
         let mi = ModelInstance::new_empty().unwrap();        
         
         let aa = mi.create_feature_combo_desc(&vw, "A").unwrap();
@@ -406,7 +406,7 @@ A,featureA:2
 B,featureB:3
 "#;
         // The main point is that weight in feature names from vw_map_str is ignored
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, "").unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("".to_string(), 0)).unwrap();
         let mi = ModelInstance::new_empty().unwrap();        
         let aa = mi.create_feature_combo_desc(&vw, "BA:1.5").unwrap();
         assert_eq!(aa, FeatureComboDesc {

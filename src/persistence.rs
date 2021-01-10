@@ -153,7 +153,7 @@ mod tests {
 A,featureA
 B,featureB
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, "").unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("".to_string(), 0)).unwrap();
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
@@ -183,7 +183,7 @@ B,featureB
 A,featureA
 B,featureB
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, "").unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("".to_string(), 0)).unwrap();
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
@@ -257,7 +257,7 @@ B,featureB
 A,featureA
 B,featureB
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, "").unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("".to_string(), 0)).unwrap();
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
@@ -332,7 +332,7 @@ B,featureB
 A,featureA
 B,featureB
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, "").unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("".to_string(), 0)).unwrap();
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;

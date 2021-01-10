@@ -52,22 +52,22 @@ pub struct FeatureBufferTranslator {
 macro_rules! feature_reader {
     ( $record_buffer:ident, 
       $transform_executors:expr,
-      $feature_index_offset:ident, 
-      $hash_data:ident, 
+      $namespace_index:ident, 
+      $hash_index:ident, 
       $hash_value:ident, 
       $bl:block  ) => {
-        if $feature_index_offset & feature_transform_parser::TRANSFORM_NAMESPACE_MARK != 0 {
+        if $namespace_index & feature_transform_parser::TRANSFORM_NAMESPACE_MARK != 0 {
             // This is super-unoptimized
-            for (hash_data1, hash_value1) in $transform_executors.get_transformations($record_buffer, *$feature_index_offset) {
-                let $hash_data = *hash_data1;
+            for (hash_index1, hash_value1) in $transform_executors.get_transformations($record_buffer, *$namespace_index) {
+                let $hash_index = *hash_index1;
                 let $hash_value = *hash_value1;
-//                println!("{} SSSSSSS {}", $hash_value, $hash_data);
+//                println!("{} SSSSSSS {}", $hash_value, $hash_index);
                 $bl
             }
         } else {
-            let namespace_desc = *$record_buffer.get_unchecked(($feature_index_offset + parser::HEADER_LEN) as usize);
+            let namespace_desc = *$record_buffer.get_unchecked(($namespace_index + parser::HEADER_LEN) as usize);
             if (namespace_desc & parser::IS_NOT_SINGLE_MASK) == 0 {
-                let $hash_data = namespace_desc;
+                let $hash_index = namespace_desc;
                 let $hash_value: f32 = 1.0;
                 $bl
             } else {
@@ -75,7 +75,7 @@ macro_rules! feature_reader {
                     let start = ((namespace_desc >> 16) & 0x3fff) as usize; 
                     let end = (namespace_desc & 0xffff) as usize;
                     for hash_offset in (start..end).step_by(2) {
-                        let $hash_data = *$record_buffer.get_unchecked(hash_offset);
+                        let $hash_index = *$record_buffer.get_unchecked(hash_offset);
                         let $hash_value = f32::from_bits(*$record_buffer.get_unchecked(hash_offset+1));
                         $bl
                     }
@@ -83,7 +83,7 @@ macro_rules! feature_reader {
                     let start = ((namespace_desc >> 16) & 0x3fff) as usize; 
                     let end = (namespace_desc & 0xffff) as usize;
                     for hash_offset in (start..end).step_by(3) {
-                        let $hash_data = *$record_buffer.get_unchecked(hash_offset);
+                        let $hash_index = *$record_buffer.get_unchecked(hash_offset);
                         let $hash_value = f32::from_bits(*$record_buffer.get_unchecked(hash_offset+1));
                         $bl
                     }
@@ -96,17 +96,17 @@ macro_rules! feature_reader {
 #[macro_export]
 macro_rules! feature_reader_float_namespace {
     ( $record_buffer:ident, 
-      $feature_index_offset:expr, 
-      $hash_data:ident, 
+      $namespace_index:expr, 
+      $hash_index:ident, 
       $hash_value:ident, 
       $float_value:ident, 
       $bl:block  ) => {
-        let namespace_desc = unsafe {*$record_buffer.get_unchecked(($feature_index_offset + parser::HEADER_LEN) as usize)};
+        let namespace_desc = unsafe {*$record_buffer.get_unchecked(($namespace_index + parser::HEADER_LEN) as usize)};
         if (namespace_desc & parser::IS_FLOAT_NAMESPACE_MASK) != 0 {
             let start = ((namespace_desc >> 16) & 0x3fff) as usize; 
             let end = (namespace_desc & 0xffff) as usize;
             for hash_offset in (start..end).step_by(3) {
-                let $hash_data = unsafe {*$record_buffer.get_unchecked(hash_offset)};
+                let $hash_index = unsafe {*$record_buffer.get_unchecked(hash_offset)};
                 let $hash_value = unsafe {f32::from_bits(*$record_buffer.get_unchecked(hash_offset+1))};
                 let $float_value = unsafe {f32::from_bits(*$record_buffer.get_unchecked(hash_offset+2))};
                 $bl
@@ -177,24 +177,24 @@ impl FeatureBufferTranslator {
                 let feature_combo_weight = feature_combo_desc.weight;
                 // we unroll first iteration of the loop and optimize
                 let num_namespaces:usize = feature_combo_desc.feature_indices.len() ;
-                let feature_index_offset = feature_combo_desc.feature_indices.get_unchecked(0);
+                let namespace_index = feature_combo_desc.feature_indices.get_unchecked(0);
                 // We special case a single feature (common occurance)
                 if num_namespaces == 1 {
-                    feature_reader!(record_buffer, self.transform_executors, feature_index_offset, hash_data, hash_value, {
-                        lr_buffer.push(HashAndValue {hash: hash_data & self.lr_hash_mask, 
+                    feature_reader!(record_buffer, self.transform_executors, namespace_index, hash_index, hash_value, {
+                        lr_buffer.push(HashAndValue {hash: hash_index & self.lr_hash_mask, 
                                                      value: hash_value * feature_combo_weight});
                     });
                 } else {
                     hashes_vec_in.truncate(0);
-                    feature_reader!(record_buffer, self.transform_executors, feature_index_offset, hash_data, hash_value, {
-                            hashes_vec_in.push(HashAndValue {hash: hash_data, value: hash_value});
+                    feature_reader!(record_buffer, self.transform_executors, namespace_index, hash_index, hash_value, {
+                            hashes_vec_in.push(HashAndValue {hash: hash_index, value: hash_value});
                         });
-                    for feature_index in feature_combo_desc.feature_indices.get_unchecked(1 as usize .. num_namespaces) {
+                    for namespace_index in feature_combo_desc.feature_indices.get_unchecked(1 as usize .. num_namespaces) {
                         hashes_vec_out.truncate(0);
                         for handv in &(*hashes_vec_in) {
                             let half_hash = handv.hash.overflowing_mul(VOWPAL_FNV_PRIME).0;
-                            feature_reader!(record_buffer, self.transform_executors, feature_index, hash_data, hash_value, {
-                                hashes_vec_out.push(HashAndValue{   hash: hash_data ^ half_hash,
+                            feature_reader!(record_buffer, self.transform_executors, namespace_index, hash_index, hash_value, {
+                                hashes_vec_out.push(HashAndValue{   hash: hash_index ^ half_hash,
                                                                     value: handv.value * hash_value});
                             });
                         }
@@ -222,9 +222,9 @@ impl FeatureBufferTranslator {
                 self.feature_buffer.ffm_fields_count = self.model_instance.ffm_fields.len() as u32;    
                 //let feature_len = self.feature_buffer.ffm_fields_count * self.model_instance.ffm_k;
                 for (contra_field_index, ffm_field) in self.model_instance.ffm_fields.iter().enumerate() {
-                    for feature_index in ffm_field {
-                        feature_reader!(record_buffer, self.transform_executors, feature_index, hash_data, hash_value, {
-                                ffm_buffer.push(HashAndValueAndSeq {hash: hash_data & self.ffm_hash_mask,
+                    for namespace_index in ffm_field {
+                        feature_reader!(record_buffer, self.transform_executors, namespace_index, hash_index, hash_value, {
+                                ffm_buffer.push(HashAndValueAndSeq {hash: hash_index & self.ffm_hash_mask,
                                                                         value: hash_value,
                                                                         contra_field_index: contra_field_index as u32 * self.model_instance.ffm_k as u32});
                         });

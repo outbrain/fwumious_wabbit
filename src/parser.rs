@@ -297,7 +297,7 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, "").unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("".to_string(), 0)).unwrap();
 
         fn str_to_cursor(s: &str) -> Cursor<Vec<u8>> {
           Cursor::new(s.as_bytes().to_vec())
@@ -556,7 +556,7 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, "").unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("".to_string(), 0)).unwrap();
         let mut rr = VowpalParser::new(&vw);
         // we test a single record, single namespace, with string value "3"
         let mut buf = str_to_cursor("-1 |B 3\n");
@@ -565,7 +565,7 @@ C,featureC
                                                         1775699190 & MASK31, 
                                                         NULL]);
 
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, "B").unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("B".to_string(), 0)).unwrap();
         let mut rr = VowpalParser::new(&vw);
         // we test a single record, single namespace, with string value "3" with weight "2"
         let mut buf = str_to_cursor("-1 |B 3:2\n");
@@ -589,6 +589,24 @@ C,featureC
         assert!(result.is_err());
         assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Failed parsing float namespace: not_a_number\" })");
  
+
+        // Now test with skip_prefix = 1 
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("B".to_string(), 1)).unwrap();
+        let mut rr = VowpalParser::new(&vw);
+        // we test a single record, single namespace, with string value "3" with weight "2"
+        let mut buf = str_to_cursor("-1 |B B3:2\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [9, 0, FLOAT32_ONE,
+                                                        NULL, 
+                                                        nd(6, 9) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                                                        NULL, 
+                                                        1416737454 & MASK31, 2.0f32.to_bits(), 3.0f32.to_bits()]);
+
+        
+
+
+
+
+
     } 
 
 

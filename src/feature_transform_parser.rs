@@ -73,19 +73,15 @@ impl NamespaceTransforms {
             from_namespaces.push(Namespace{namespace_index: from_namespace_index, namespace_char: *from_namespace_char});
          }
 
-         // TODO ... function name & parameter verification step needs to happen here
-
-        /*let function = match &function_name[..] {
-            "sqrt" => TransformFunction::Sqrt,
-            _ => return Err(Box::new(IOError::new(ErrorKind::Other, format!("to namespace of {} has unknown transform function {}", s, function_name)))),
-        };*/
-
         let nt = NamespaceTransform {
             from_namespaces: from_namespaces,
             to_namespace: to_namespace,
             function_name: function_name,
             function_parameters: function_parameters,
         };
+        
+         // Now we try to setup a function and then throw it away - for early validation
+        let _ = feature_transform_executor::TransformExecutor::from_namespace_transform(&nt)?;
     
         self.v.push(nt);
 
