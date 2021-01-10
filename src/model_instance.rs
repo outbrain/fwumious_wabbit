@@ -77,11 +77,15 @@ fn default_bool_false() -> bool{false}
 fn default_optimizer_adagrad() -> Optimizer{Optimizer::Adagrad}
 
 
-pub fn get_float_namespaces<'a>(cl: &clap::ArgMatches<'a>) -> Result<String, Box<dyn Error>> {
+pub fn get_float_namespaces<'a>(cl: &clap::ArgMatches<'a>) -> Result<(String, u32), Box<dyn Error>> {
    if let Some(in_v) = cl.value_of("float_namespaces") {
-       Ok(in_v.to_owned())
+       let prefix_skip:u32 = match cl.value_of("float_namespaces_skip_prefix") {
+           Some(prefix_skip_str) => prefix_skip_str.parse()?,
+           None => 0,
+       };
+       Ok((in_v.to_owned(), prefix_skip))
    } else {
-       Ok("".to_owned())
+       Ok(("".to_owned(), 0))
    }
 }
 

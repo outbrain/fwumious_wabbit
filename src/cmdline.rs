@@ -143,6 +143,12 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .help("Namespaces to be parsed as floats - which can be used for binning")
                      .multiple(false)
                      .takes_value(true))
+                    .arg(Arg::with_name("float_namespaces_skip_prefix")
+                     .long("float_namespaces_skip_prefix")
+                     .value_name("number_of_bytes_to_skip")
+                     .help("When parsing namespaces as floats, how many prefix bytes to skip")
+                     .multiple(false)
+                     .takes_value(true))
 
                     .arg(Arg::with_name("transform_namespace")
                      .long("transform_namespace")

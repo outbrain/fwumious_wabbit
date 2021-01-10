@@ -31,6 +31,7 @@ pub struct VwNamespaceMapEntry {
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct VwNamespaceMapSource {
     entries: Vec<VwNamespaceMapEntry>,
+    pub float_namespaces_skip_prefix: u32,
 }
 
 impl VwNamespaceMap {
@@ -64,18 +65,18 @@ impl VwNamespaceMap {
         Ok(vw)
     }
 
-    pub fn new_from_csv_filepath(path: PathBuf, float_namespaces: &str) -> Result<VwNamespaceMap, Box<dyn Error>> {
+    pub fn new_from_csv_filepath(path: PathBuf, float_namespaces: (String, u32)) -> Result<VwNamespaceMap, Box<dyn Error>> {
         let mut input_bufreader = fs::File::open(&path).expect("Could not find vw_namespace_map.csv in input dataset directory");
         let mut s = String::new();
         input_bufreader.read_to_string(&mut s)?;
         VwNamespaceMap::new(&s, float_namespaces)
     }
 
-    pub fn new(data: &str, float_namespaces: &str) -> Result<VwNamespaceMap, Box<dyn Error>> {
+    pub fn new(data: &str, float_namespaces: (String, u32)) -> Result<VwNamespaceMap, Box<dyn Error>> {
         let mut rdr = csv::ReaderBuilder::new()
             .has_headers(false)
             .from_reader(data.as_bytes());
-        let mut vw_source = VwNamespaceMapSource { entries: vec![]};
+        let mut vw_source = VwNamespaceMapSource { entries: vec![], float_namespaces_skip_prefix: 0};
         for (i, record_w) in rdr.records().enumerate() {
             let record = record_w?;
             let char_str = &record[0];
@@ -96,7 +97,7 @@ impl VwNamespaceMap {
 
         // It is a bit fugly that we need this passed out-of-band from command line parameters
         // But we need to know which input params to mark with 'save_as_float' flag
-        for char in float_namespaces.chars() {
+        for char in float_namespaces.0.chars() {
             // create an list of indexes dfrom list of namespace chars
             // Find index:
             let from_index:Vec<&VwNamespaceMapEntry> = vw_source.entries.iter().filter(|e| e.namespace_char == char).collect(); 
@@ -107,6 +108,7 @@ impl VwNamespaceMap {
             //println!("From index {}", from_index);
             vw_source.entries[from_index as usize].namespace_save_as_float = true;
         }
+        vw_source.float_namespaces_skip_prefix = float_namespaces.1;
 
         VwNamespaceMap::new_from_source(vw_source)
     }
