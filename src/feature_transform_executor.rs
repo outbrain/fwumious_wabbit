@@ -57,11 +57,11 @@ impl ExecutorToNamespace {
             let floor_int = floor as i32;
             let part = f - floor;
             if part != 0.0 {
-                self.emit_i32(floor_int, hash_value * part, seed_id);
+                self.emit_i32(floor_int + 1, hash_value * part, seed_id);
             }
             let part = 1.0 - part;
             if part != 0.0 {
-                self.emit_i32(floor_int + 1, hash_value * part, seed_id);
+                self.emit_i32(floor_int, hash_value * part, seed_id);
             }
         } else {
             self.emit_i32(f as i32, hash_value, seed_id);
