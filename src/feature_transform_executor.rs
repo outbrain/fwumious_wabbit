@@ -235,6 +235,7 @@ impl FunctionExecutorTrait for TransformerBinner {
     }
 }
 
+
 impl TransformerBinner {
     fn create_function(function_pointer: &'static (dyn Fn(f32) -> f32 +'static + Sync), 
                         function_name: &str, 

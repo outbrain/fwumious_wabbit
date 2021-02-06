@@ -200,7 +200,7 @@ pub fn parse_namespace_statement(input: &str) -> IResult<&str, (char, String, Ve
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::parser::{NULL, IS_NOT_SINGLE_MASK, IS_FLOAT_NAMESPACE_MASK, MASK31};
+    use crate::parser::{NO_FEATURES, IS_NOT_SINGLE_MASK, IS_FLOAT_NAMESPACE_MASK, MASK31};
 
 
     #[test]

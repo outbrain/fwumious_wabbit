@@ -241,7 +241,7 @@ impl FeatureBufferTranslator {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::parser::{NULL, IS_NOT_SINGLE_MASK, IS_FLOAT_NAMESPACE_MASK, MASK31};
+    use crate::parser::{NO_FEATURES, IS_NOT_SINGLE_MASK, IS_FLOAT_NAMESPACE_MASK, MASK31};
 
     fn add_header(v2: Vec<u32>) -> Vec<u32> {
         let mut rr: Vec<u32> = vec![100, 1, 1.0f32.to_bits()];
@@ -263,7 +263,7 @@ mod tests {
                                                         weight: 1.0});
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
-        let rb = add_header(vec![parser::NULL]); // no feature
+        let rb = add_header(vec![parser::NO_FEATURES]); // no feature
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:116060, value:1.0}]); // vw compatibility - no feature is no feature
     }
@@ -278,7 +278,7 @@ mod tests {
                                                         weight: 1.0});
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
-        let rb = add_header(vec![parser::NULL]); // no feature
+        let rb = add_header(vec![parser::NO_FEATURES]); // no feature
         fbt.translate(&rb, 0 );
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]); // vw compatibility - no feature is no feature
         
@@ -305,11 +305,11 @@ mod tests {
 
         let mut fbt = FeatureBufferTranslator::new(&mi);
 
-        let rb = add_header(vec![parser::NULL, parser::NULL]);
+        let rb = add_header(vec![parser::NO_FEATURES, parser::NO_FEATURES]);
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]);
 
-        let rb = add_header(vec![0xfea, parser::NULL]);
+        let rb = add_header(vec![0xfea, parser::NO_FEATURES]);
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}]);
 
@@ -330,15 +330,15 @@ mod tests {
                                                         weight: 1.0});
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
-        let rb = add_header(vec![parser::NULL]);
+        let rb = add_header(vec![parser::NO_FEATURES]);
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]);
 
-        let rb = add_header(vec![123456789, parser::NULL]);
+        let rb = add_header(vec![123456789, parser::NO_FEATURES]);
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]);	// since the other feature is missing - VW compatibility says no feature is here
 
-        let rb = add_header(vec![2988156968 & parser::MASK31, 2422381320 & parser::MASK31, parser::NULL]);
+        let rb = add_header(vec![2988156968 & parser::MASK31, 2422381320 & parser::MASK31, parser::NO_FEATURES]);
         fbt.translate(&rb, 0);
 //        println!("out {}, out mod 2^24 {}", fbt.feature_buffer.lr_buffer[1], fbt.feature_buffer.lr_buffer[1] & ((1<<24)-1));
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash: 208368, value:1.0}]);
@@ -443,7 +443,7 @@ mod tests {
                                                         weight: 1.0});
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
-        let rb = add_header(vec![parser::NULL]); // no feature
+        let rb = add_header(vec![parser::NO_FEATURES]); // no feature
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.example_importance, 1.0); // Did example importance get parsed correctly
     }
@@ -457,9 +457,9 @@ mod tests {
                                                         weight: 1.0});
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
-        let rb = add_header(vec![                       NULL, 
+        let rb = add_header(vec![                       NO_FEATURES, 
                                                         nd(6, 12) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
-                                                        NULL, 
+                                                        NO_FEATURES, 
                                                         0xffc & MASK31, 2.0f32.to_bits(), 3.0f32.to_bits(),
                                                         0xffa & MASK31, 1.0f32.to_bits(), 4.0f32.to_bits(),
                                                         ]);

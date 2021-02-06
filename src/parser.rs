@@ -16,7 +16,7 @@ pub const EXAMPLE_IMPORTANCE_OFFSET:usize = 2;
 pub const IS_NOT_SINGLE_MASK : u32 = 1u32 << 31;
 pub const IS_FLOAT_NAMESPACE_MASK : u32 = 1u32 << 30;
 pub const MASK31: u32 = !IS_NOT_SINGLE_MASK;
-pub const NULL: u32= IS_NOT_SINGLE_MASK; // null is just an exact IS_NOT_SINGLE_MASK
+pub const NO_FEATURES: u32= IS_NOT_SINGLE_MASK; // null is just an exact IS_NOT_SINGLE_MASK
 pub const NO_LABEL: u32 = 0xff;
 pub const FLOAT32_ONE: u32 = 1065353216;  // 1.0f32.to_bits()
 
@@ -65,9 +65,12 @@ organization of records buffer
             - bits 1-31 are a feature hash
             - feature value is assumed to be 1.0
     -- if the most significant bit is one
-            - 15 next bits are the start offset, and lower 16 bits are the end offset of features beyond initial map
-            - the dynamic buffer consists of (hash of the feature name, f32 value of the feature) 
-[dynamic buffer of (u32 hash, f32 value of the feature]
+            - the second most significant bit indicates if this is "float namespace", which means that 
+                there are tripels instead of tuples in dynamic buffer
+            - 14 next bits are the start offset, and lower 16 bits are the end offset of features beyond initial map
+            - the dynamic buffer consists of (hash of the feature name, f32 value of the feature)
+            - or (hash of the fature name, 32 value of the feature, f32 parse of the feature name) 
+[dynamic buffer (of u32/f32 types, exact layout depends on the above bits)]
 */
 
 impl VowpalParser {
@@ -126,7 +129,7 @@ impl VowpalParser {
 
             let bufpos: usize = (self.vw_map.num_namespaces + HEADER_LEN) as usize;
             self.output_buffer.truncate(bufpos);
-            for i in &mut self.output_buffer[0..bufpos] { *i = NULL };
+            for i in &mut self.output_buffer[0..bufpos] { *i = NO_FEATURES };
 
             let mut current_char_num_of_features = 0;
 
@@ -255,7 +258,12 @@ impl VowpalParser {
                             self.output_buffer.push((current_namespace_weight * feature_weight).to_bits());
                             if current_char_is_float_namespace == true {
                                 // The float_namespaces_skip_prefix allows us to parse a value A100, where A is one byte prefix which gets ignored
-                                self.output_buffer.push((self.parse_float_or_error(i_start + self.vw_map.vw_source.float_namespaces_skip_prefix as usize, i_end_first_part, "Failed parsing float namespace")?).to_bits());
+                                let float_start = i_start + self.vw_map.vw_source.float_namespaces_skip_prefix as usize;
+                                let float_value:f32 = match i_end_first_part - float_start {
+                                    0 => f32::NAN,
+                                    _ => self.parse_float_or_error(float_start, i_end_first_part, "Failed parsing feature value to float (for float namespace)")?
+                                };
+                                self.output_buffer.push(float_value.to_bits());
                                 *buf.add(current_char_index) = IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
                             } else {
                                 *buf.add(current_char_index) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
@@ -308,30 +316,30 @@ C,featureC
         let mut buf = str_to_cursor("1 |A a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6,  1, FLOAT32_ONE,  
                                                         2988156968 & MASK31, 
-                                                        NULL, 
-                                                        NULL]);
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES]);
  
         // we test a single record, single namespace, space at the end
         let mut buf = str_to_cursor("1 |A a \n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6,  1, FLOAT32_ONE,  
                                                         2988156968 & MASK31, 
-                                                        NULL, 
-                                                        NULL]);
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES]);
                                                         
 
         // we test a single record, single namespace, space after label
         let mut buf = str_to_cursor("1  |A a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6,  1, FLOAT32_ONE,  
                                                         2988156968 & MASK31, 
-                                                        NULL, 
-                                                        NULL]);
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES]);
                                                         
         // we test a single record, single namespace, space between namespace and label
         let mut buf = str_to_cursor("1 |A  a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6,  1, FLOAT32_ONE,  
                                                         2988156968 & MASK31, 
-                                                        NULL, 
-                                                        NULL]);
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES]);
                                                         
                                                         
                                                         
@@ -339,15 +347,15 @@ C,featureC
                                                         
         let mut buf = str_to_cursor("-1 |B b\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 0, FLOAT32_ONE,
-                                                        NULL, 
+                                                        NO_FEATURES, 
                                                         2422381320 & MASK31, 
-                                                        NULL]);
+                                                        NO_FEATURES]);
         // single namespace with two features
         let mut buf = str_to_cursor("1 |A a b\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [10, 1, FLOAT32_ONE,  
                                                         nd(6,10) | IS_NOT_SINGLE_MASK, 	// |A
-                                                        NULL, 				// |B 
-                                                        NULL, 				// |C
+                                                        NO_FEATURES, 				// |B 
+                                                        NO_FEATURES, 				// |C
                                                         2988156968 & MASK31, FLOAT32_ONE,   // |A a
                                                         3529656005 & MASK31, FLOAT32_ONE]); // |A b
         // two namespaces
@@ -355,14 +363,14 @@ C,featureC
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 0, FLOAT32_ONE,
                                                         2988156968 & MASK31, 
                                                         2422381320 & MASK31, 
-                                                        NULL]);
+                                                        NO_FEATURES]);
 
         // two namespaces, double space
         let mut buf = str_to_cursor("-1 |A a  |B b\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 0, FLOAT32_ONE,
                                                         2988156968 & MASK31, 
                                                         2422381320 & MASK31, 
-                                                        NULL]);
+                                                        NO_FEATURES]);
         
         // only single letter namespaces are allowed
         let mut buf = str_to_cursor("1 |MORE_THAN_A_LETTER a\n");
@@ -377,8 +385,8 @@ C,featureC
         let mut buf = str_to_cursor("1 |A:1.0 a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 1, FLOAT32_ONE,
                                                         2988156968 & MASK31, 
-                                                        NULL, 
-                                                        NULL]);
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES]);
         // not a parsable number
         let mut buf = str_to_cursor("1 |A:not_a_parsable_number a\n");
         let result = rr.next_vowpal(&mut buf);
@@ -395,23 +403,23 @@ C,featureC
         let mut buf = str_to_cursor("1 |A:2.0 a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [8, 1, FLOAT32_ONE, 
                                                         nd(6, 8) | IS_NOT_SINGLE_MASK, 
-                                                        NULL, 
-                                                        NULL, 
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES, 
                                                         2988156968 & MASK31, 2.0f32.to_bits()]);
        // feature weight
         let mut buf = str_to_cursor("1 |A a:2.0\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [8, 1, FLOAT32_ONE, 
                                                         nd(6, 8) | IS_NOT_SINGLE_MASK, 
-                                                        NULL, 
-                                                        NULL, 
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES, 
                                                         2988156968 & MASK31, 2.0f32.to_bits()]);
 
        // two feature weights
         let mut buf = str_to_cursor("1 |A a:2.0 b:3.0\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [10, 1, FLOAT32_ONE, 
                                                         nd(6, 10) | IS_NOT_SINGLE_MASK, 
-                                                        NULL, 
-                                                        NULL, 
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES, 
                                                         2988156968 & MASK31, 2.0f32.to_bits(),
                                                         3529656005 & MASK31, 3.0f32.to_bits(),
                                                         ]);
@@ -420,8 +428,8 @@ C,featureC
         let mut buf = str_to_cursor("1 |A:3 a:2.0\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [8, 1, FLOAT32_ONE, 
                                                         nd(6, 8) | IS_NOT_SINGLE_MASK, 
-                                                        NULL, 
-                                                        NULL, 
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES, 
                                                         2988156968 & MASK31, 6.0f32.to_bits()]);
 
        // bad feature weight
@@ -435,8 +443,8 @@ C,featureC
         let mut buf = str_to_cursor("1 |A a b:2.0 c:3.0\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [12, 1, FLOAT32_ONE, 
                                                         nd(6, 12) | IS_NOT_SINGLE_MASK, 
-                                                        NULL, 
-                                                        NULL, 
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES, 
                                                         2988156968 & MASK31, 1.0f32.to_bits(),
                                                         3529656005 & MASK31, 2.0f32.to_bits(),
                                                         906509 & MASK31, 3.0f32.to_bits(),
@@ -450,15 +458,15 @@ C,featureC
         let mut buf = str_to_cursor("|A a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, NO_LABEL, FLOAT32_ONE,
                                                         2988156968 & MASK31, 
-                                                        NULL, 
-                                                        NULL]);
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES]);
 
         /* Should we support this ? 
         let mut buf = str_to_cursor(" |A a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, NO_LABEL, FLOAT32_ONE,
                                                         2988156968 & MASK31, 
-                                                        NULL, 
-                                                        NULL]);
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES]);
         */
                 
         //println!("{:?}", rr.output_buffer);
@@ -492,15 +500,15 @@ C,featureC
         let mut buf = str_to_cursor("1 0.1 |A a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 1, 0.1f32.to_bits(),
                                                         2988156968 & MASK31, 
-                                                        NULL, 
-                                                        NULL]);
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES]);
 
         // Example importance with bunch of spaces
         let mut buf = str_to_cursor("1  0.1  |A  a \n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 1, 0.1f32.to_bits(),
                                                         2988156968 & MASK31, 
-                                                        NULL, 
-                                                        NULL]);
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES]);
  
  
  
@@ -561,25 +569,25 @@ C,featureC
         // we test a single record, single namespace, with string value "3"
         let mut buf = str_to_cursor("-1 |B 3\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 0, FLOAT32_ONE,
-                                                        NULL, 
+                                                        NO_FEATURES, 
                                                         1775699190 & MASK31, 
-                                                        NULL]);
+                                                        NO_FEATURES]);
 
         let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("B".to_string(), 0)).unwrap();
         let mut rr = VowpalParser::new(&vw);
         // we test a single record, single namespace, with string value "3" with weight "2"
         let mut buf = str_to_cursor("-1 |B 3:2\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [9, 0, FLOAT32_ONE,
-                                                        NULL, 
+                                                        NO_FEATURES, 
                                                         nd(6, 9) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
-                                                        NULL, 
+                                                        NO_FEATURES, 
                                                         1775699190 & MASK31, 2.0f32.to_bits(), 3.0f32.to_bits()]);
 
         let mut buf = str_to_cursor("-1 |B 3:2 4\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [12, 0, FLOAT32_ONE,
-                                                        NULL, 
+                                                        NO_FEATURES, 
                                                         nd(6, 12) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
-                                                        NULL, 
+                                                        NO_FEATURES, 
                                                         1775699190 & MASK31, 2.0f32.to_bits(), 3.0f32.to_bits(),
                                                         382082293 & MASK31, 1.0f32.to_bits(), 4.0f32.to_bits(),
                                                         
@@ -587,7 +595,7 @@ C,featureC
         let mut buf = str_to_cursor("-1 |B not_a_number\n");
         let result = rr.next_vowpal(&mut buf);
         assert!(result.is_err());
-        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Failed parsing float namespace: not_a_number\" })");
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Failed parsing feature value to float (for float namespace): not_a_number\" })");
  
 
         // Now test with skip_prefix = 1 
@@ -596,10 +604,19 @@ C,featureC
         // we test a single record, single namespace, with string value "3" with weight "2"
         let mut buf = str_to_cursor("-1 |B B3:2\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [9, 0, FLOAT32_ONE,
-                                                        NULL, 
+                                                        NO_FEATURES, 
                                                         nd(6, 9) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
-                                                        NULL, 
+                                                        NO_FEATURES, 
                                                         1416737454 & MASK31, 2.0f32.to_bits(), 3.0f32.to_bits()]);
+
+        // Because we skip one char, the float value of B is the float value of "" which is NAN
+        let mut buf = str_to_cursor("-1 |B B:2\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [9, 0, FLOAT32_ONE,
+                                                        NO_FEATURES, 
+                                                        nd(6, 9) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                                                        NO_FEATURES, 
+                                                        25602353 & MASK31, 2.0f32.to_bits(), f32::NAN.to_bits()]);
+
 
         
 
@@ -608,11 +625,4 @@ C,featureC
 
 
     } 
-
-
-
-
-
-
-
 }
