@@ -27,9 +27,12 @@ mod persistence;
 mod serving;
 mod optimizer;
 mod version;
-
-//use crate::regressor::RegressorTrait;
-
+mod consts;
+mod block_ffm;
+mod block_lr;
+mod block_loss_functions;
+mod block_helpers;
+mod multithread_helpers;
 
 fn main() {
     match main2() {
@@ -65,20 +68,20 @@ fn main2() -> Result<(), Box<dyn Error>>  {
     
     /* setting up the pipeline, either from command line or from existing regressor */
     // we want heal-allocated objects here
-    let vw: vwmap::VwNamespaceMap;
-    let mut re: Box<dyn regressor::RegressorTrait>;
-    let mi: model_instance::ModelInstance;
-
+    
 
     if cl.is_present("daemon") {
         let filename = cl.value_of("initial_regressor").expect("Daemon mode only supports serving from --initial regressor");
         println!("initial_regressor = {}", filename);
         println!("WARNING: Command line model parameters will be ignored");
-        let (mi2, vw2, re_fixed) = persistence::new_immutable_regressor_from_filename(filename)?;
-        mi = mi2; vw = vw2;
-        let mut se = serving::Serving::new(&cl, &vw, re_fixed, &mi)?;
+        let (mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true)?;
+        let mut se = serving::Serving::new(&cl, &vw2, Box::new(re_fixed), &mi2)?;
         se.serve()?;
     } else {
+        let vw: vwmap::VwNamespaceMap;
+        let mut re: regressor::Regressor;
+        let mi: model_instance::ModelInstance;
+
         if let Some(filename) = cl.value_of("initial_regressor") {
             println!("initial_regressor = {}", filename);
             println!("WARNING: Command line model parameters will be ignored");
@@ -97,14 +100,14 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"), &vw);
         let mut fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
 
-        let predictions_after:u32 = match cl.value_of("predictions_after") {
+        let predictions_after:u64 = match cl.value_of("predictions_after") {
             Some(examples) => examples.parse()?,
             None => 0
         };
 
-        let holdout_after_option : Option<u32> = cl.value_of("holdout_after").map(|s| s.parse().unwrap());
+        let holdout_after_option : Option<u64> = cl.value_of("holdout_after").map(|s| s.parse().unwrap());
 
-        let prediction_model_delay:u32 = match cl.value_of("prediction_model_delay") {
+        let prediction_model_delay:u64 = match cl.value_of("prediction_model_delay") {
             Some(delay) => delay.parse()?,
             None => 0
         };
@@ -147,7 +150,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
                 };
             }
             example_num += 1;
-            fbt.translate(buffer);
+            fbt.translate(buffer, example_num);
             let mut prediction: f32 = 0.0;
 
             if prediction_model_delay == 0 {
@@ -155,15 +158,15 @@ fn main2() -> Result<(), Box<dyn Error>>  {
                     Some(holdout_after) => !testonly && example_num < holdout_after,
                     None => !testonly
                 };
-                prediction = re.learn(&fbt.feature_buffer, update, example_num);
+                prediction = re.learn(&fbt.feature_buffer, update);
             } else {
                 if example_num > predictions_after {
-                    prediction = re.learn(&fbt.feature_buffer, false, example_num);
+                    prediction = re.learn(&fbt.feature_buffer, false);
                 }
                 delayed_learning_fbs.push_back(fbt.feature_buffer.clone());
                 if (prediction_model_delay as usize) < delayed_learning_fbs.len() {
                     let delayed_buffer = delayed_learning_fbs.pop_front().unwrap();
-                    re.learn(&delayed_buffer, !testonly, example_num);
+                    re.learn(&delayed_buffer, !testonly);
                 }
             } 
             
@@ -176,13 +179,15 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             
         }
         cache.write_finish()?;
+
+        let elapsed = now.elapsed();
+        println!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
+
         match final_regressor_filename {
             Some(filename) => persistence::save_regressor_to_filename(filename, &mi, &vw, re).unwrap(),
             None => {}
         }
     
-        let elapsed = now.elapsed();
-        println!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
     }
 
     Ok(())

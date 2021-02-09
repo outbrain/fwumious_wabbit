@@ -2,8 +2,8 @@
 use std::marker::PhantomData;
 
 
-pub trait OptimizerTrait {
-    type PerWeightStore;
+pub trait OptimizerTrait : std::clone::Clone {
+    type PerWeightStore: std::clone::Clone;
     fn new() -> Self;
     fn init(&mut self, learning_rate: f32, power_t: f32, initial_acc_gradient: f32);
     unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32;
@@ -248,8 +248,8 @@ mod tests {
                     } else {
                         relative_error = error; // happens when the update is 0.0
                     }
-                    println!("Relative error {}", relative_error);
-                    println!("Err: {} - p_flex: {}, p_lut: {}, gradient: {}, accumulation {}", error, p_flex, p_lut, *gradient, *accumulation);
+                    //println!("Relative error {}", relative_error);
+                    //println!("Err: {} - p_flex: {}, p_lut: {}, gradient: {}, accumulation {}", error, p_flex, p_lut, *gradient, *accumulation);
                     assert!(relative_error < 0.05); 
                 }
             }
