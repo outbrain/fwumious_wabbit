@@ -148,10 +148,10 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
     #[inline(always)]
     fn forward_backward(&mut self, 
                         further_blocks: &mut [Box<dyn BlockTrait>], 
-                        wsum: f32, 
+                        wsum_input: f32, 
                         fb: &feature_buffer::FeatureBuffer, 
                         update:bool) -> (f32, f32) {
-        let mut wsum = wsum;
+        let mut wsum = wsum_input;
         let local_data_ffm_len = fb.ffm_buffer.len() * (self.ffm_k * fb.ffm_fields_count) as usize;
 
         unsafe {
@@ -221,7 +221,11 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                         for k in 0..FFMK as usize {
                             wsum += wsumbuf[k];
                         }
-                    });                     
+                    });
+                    
+                    /*if fb.audit_mode {
+                        self.audit_forward(wsum_input, wsum, fb);
+                    }*/
                     
                     let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
                     let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_blocks, wsum, fb, update);
@@ -298,7 +302,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
             });
         }
         if fb.audit_mode {
-            self.audit(wsum_input, wsum, fb);
+            self.audit_forward(wsum_input, wsum, fb);
         }
         let (next_regressor, further_blocks) = further_blocks.split_at(1);
         let prediction_probability = next_regressor[0].forward(further_blocks, wsum, fb);
@@ -306,7 +310,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                  
     }
 
-    fn audit(&self, 
+    fn audit_forward(&self, 
         wsum_input: f32, 
         wsum_output: f32, 
         fb: &feature_buffer::FeatureBuffer) {

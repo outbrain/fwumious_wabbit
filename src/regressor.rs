@@ -31,7 +31,7 @@ pub trait BlockTrait {
                          further_blocks: &[Box<dyn BlockTrait>], 
                          wsum: f32, 
                          fb: &feature_buffer::FeatureBuffer) -> f32;
-    fn audit(&self, 
+    fn audit_forward(&self, 
                          wsum_input: f32, 
                          output: f32,
                          fb: &feature_buffer::FeatureBuffer);

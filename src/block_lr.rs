@@ -60,7 +60,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
     #[inline(always)]
     fn forward_backward(&mut self, 
                             further_regressors: &mut [Box<dyn BlockTrait>], 
-                            wsum_in: f32, 
+                            wsum_input: f32, 
                             fb: &feature_buffer::FeatureBuffer, 
                             update:bool) -> (f32, f32) {
         let mut wsum:f32 = 0.0;
@@ -74,9 +74,14 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
                 let feature_weight    = self.weights.get_unchecked(feature_index as usize).weight;
                 wsum += feature_weight * feature_value;
             }
+            let wsum_output = wsum + wsum_input;
+
+            if fb.audit_mode {
+                self.audit_forward(wsum_input, wsum_output, fb)
+            }
 
             let (next_regressor, further_regressors) = further_regressors.split_at_mut(1);
-            let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_regressors, wsum_in + wsum, fb, update);
+            let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_regressors, wsum_output, fb, update);
 
             if update {
                 for hashvalue in fb.lr_buffer.iter() {
@@ -107,7 +112,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
         let wsum_output = wsum_input + wsum;
         
         if fb.audit_mode {
-            self.audit(wsum_input, wsum_output, fb)
+            self.audit_forward(wsum_input, wsum_output, fb)
         }
 
         let (next_regressor, further_blocks) = further_blocks.split_at(1);
@@ -115,7 +120,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
         prediction_probability
     }
     
-    fn audit(&self, 
+    fn audit_forward(&self, 
         wsum_input: f32, 
         output: f32, 
         fb: &feature_buffer::FeatureBuffer) {
@@ -181,9 +186,10 @@ mod tests {
         fb.lr_buffer = v;
         fb
     }
+
     
     #[test]
-    fn test_basic1() {
+    fn test_basic_audit() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
@@ -215,32 +221,19 @@ C,featureC
         assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.5);
         assert_eq!(slearn(&mut re, &mut lossf, &fb, false), 0.475734);
         fb.audit_mode = true;
+        fb.reset_audit_json();
         assert_eq!(spredict(&mut re, &mut lossf, &fb), 0.475734);
-        println!("{}", to_string_pretty(&fb.audit_json).unwrap());
-
+        let audit1 = format!("{}", to_string_pretty(&fb.audit_json).unwrap());
+        println!("{}", audit1);
+        fb.reset_audit_json();
+        assert_eq!(slearn(&mut re, &mut lossf, &fb, false), 0.475734);
+        let audit2 = format!("{}", to_string_pretty(&fb.audit_json).unwrap());
+        assert_eq!(audit1, audit2);     // both have to be equal, no matter if spredict or slearn was used
 
 
     }
 
 
-    #[test]
-    fn test_basic() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
-        let mut re = BlockSigmoid::new_without_weights(&mi).unwrap();
-        re.allocate_and_init_weights(&mi);
-
-        let mut fb = feature_buffer::FeatureBuffer::new();
-        fb.audit_mode = true;
-        let result = re.forward(&[], 0.1, &fb);
-        assert_eq!(result, 0.5249792);
-        assert_eq!(to_string_pretty(&fb.audit_json).unwrap(),
-r#"{
-  "_type": "BlockSigmoid",
-  "input": 0.10000000149011612,
-  "output": 0.5249791741371155,
-  "predcessor": null
-}"#);
-    }
 }
 
 

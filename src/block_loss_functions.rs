@@ -50,7 +50,7 @@ impl BlockTrait for BlockSigmoid {
     #[inline(always)]
     fn forward_backward(&mut self, 
                     further_regressors: &mut [Box<dyn BlockTrait>], 
-                    wsum: f32, 
+                    wsum_input: f32, 
                     fb: &feature_buffer::FeatureBuffer, 
                     update:bool) -> (f32, f32) {
         if further_regressors.len() != 0 {
@@ -58,16 +58,22 @@ impl BlockTrait for BlockSigmoid {
         }
         
         // vowpal compatibility
-        if wsum.is_nan() {
+        let prediction_probability: f32;
+        if wsum_input.is_nan() {
             eprintln!("NAN prediction in example {}, forcing 0.0", fb.example_number);
-            return (logistic(0.0), 0.0);
-        } else if wsum < -50.0 {
-            return (logistic(-50.0), 0.0);
-        } else if wsum > 50.0 {
-            return (logistic(50.0), 0.0);
-        }        
+            prediction_probability = logistic(0.0);
+        } else if wsum_input < -50.0 {
+            prediction_probability = logistic(-50.0);
+        } else if wsum_input > 50.0 {
+            prediction_probability = logistic(50.0);
+        } else {        
+          prediction_probability = logistic(wsum_input);
+        }
+        
+        if fb.audit_mode {
+            self.audit_forward(wsum_input, prediction_probability, fb);
+        }
 
-        let prediction_probability = logistic(wsum);
         let general_gradient = (fb.label - prediction_probability) * fb.example_importance;
         //println!("General gradient: {}", general_gradient);
         (prediction_probability, general_gradient)
@@ -96,14 +102,13 @@ impl BlockTrait for BlockSigmoid {
         }
         
         if fb.audit_mode {
-            self.audit(wsum_input, prediction_probability, fb);
+            self.audit_forward(wsum_input, prediction_probability, fb);
         }
         prediction_probability
     }
-    fn audit(&self, 
+    fn audit_forward(&self, 
         wsum_input: f32, 
         output: f32, 
-
         fb: &feature_buffer::FeatureBuffer) {
 
         let mut map = Map::new();
