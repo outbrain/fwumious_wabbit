@@ -7,14 +7,14 @@ use crate::feature_buffer;
 use std::io;
 use core::arch::x86_64::*;
 use std::error::Error;
-use serde_json::Value;
-
+use serde_json::{Value, Map, json};
+use std::sync::Arc;
 
 use std::mem::{self, MaybeUninit};
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 use crate::block_helpers;
-use block_helpers::{Weight, WeightAndOptimizerData};
+use block_helpers::{Weight, WeightAndOptimizerData, f32_to_json};
 
 
 pub struct BlockLR<L:OptimizerTrait> {
@@ -94,20 +94,49 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
     
     fn forward(&self, 
              further_blocks: &[Box<dyn BlockTrait>], 
-             wsum_in: f32, 
+             wsum_input: f32, 
              fb: &feature_buffer::FeatureBuffer) -> f32 {
         let mut wsum:f32 = 0.0;
         unsafe {
             for val in fb.lr_buffer.iter() {
-                let hash = val.hash as usize;
+                let feature_hash_index = val.hash as usize;
                 let feature_value:f32 = val.value;
-                wsum += self.weights.get_unchecked(hash).weight * feature_value;
+                wsum += self.weights.get_unchecked(feature_hash_index).weight * feature_value;
             }
         }
+        let wsum_output = wsum_input + wsum;
+        
+        if fb.audit_mode {
+            self.audit(wsum_input, wsum_output, fb)
+        }
+
         let (next_regressor, further_blocks) = further_blocks.split_at(1);
-        let prediction_probability = next_regressor[0].forward(further_blocks, wsum_in + wsum, fb);
-        prediction_probability         
+        let prediction_probability = next_regressor[0].forward(further_blocks, wsum_output, fb);
+        prediction_probability
     }
+    
+    fn audit(&self, 
+        wsum_input: f32, 
+        output: f32, 
+        fb: &feature_buffer::FeatureBuffer) {
+    
+        let mut map = Map::new();
+            map.insert("_type".to_string(), Value::String("BlockLR".to_string()));
+            let mut features: Vec<Value> = Vec::new();
+            for (val, combo_number) in fb.lr_buffer.iter().zip(fb.lr_buffer_audit.iter()) {
+                let feature_hash_index = val.hash;
+                let feature_value = val.value;
+                features.push(json!({
+                    "index": feature_hash_index,
+                    "value": feature_value,
+                    "weight": self.weights[feature_hash_index as usize].weight,
+                    "feature": fb.audit_aux_data.combo_index_to_string[combo_number]}));
+            }
+            map.insert("input".to_string(), Value::Array(features));
+            map.insert("output".to_string(), f32_to_json(output));
+            fb.add_audit_json(map);
+    }
+    
     
     fn get_serialized_len(&self) -> usize {
         return self.weights_len as usize;
@@ -134,4 +163,103 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
 
 
 }
+
+
+mod tests {
+    // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
+    use serde_json::to_string_pretty;
+    use crate::feature_buffer::HashAndValue;
+    use crate::block_loss_functions::BlockSigmoid;
+    use crate::block_helpers::{spredict, slearn};
+    use crate::vwmap;
+
+
+    /* LR TESTS */
+    fn lr_vec(v:Vec<feature_buffer::HashAndValue>) -> feature_buffer::FeatureBuffer {
+        let mut fb = feature_buffer::FeatureBuffer::new();
+        fb.lr_buffer = v;
+        fb
+    }
+    
+    #[test]
+    fn test_basic1() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.learning_rate = 0.1;
+        mi.power_t = 0.5;
+        mi.init_acc_gradient = 0.0;
+        // Now prepare the "reverse resolution" data for auditing
+        let vw_map_string = r#"
+A,featureA
+B,featureB
+C,featureC
+"#;
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("".to_string(), 0)).unwrap();
+
+        mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
+                                                        feature_indices: vec![0, 2], 
+                                                        weight: 1.0});
+        mi.enable_audit(&vw); 
+        
+                
+        let fb = &mut lr_vec(vec![HashAndValue{hash:15, value: 1.0}]);
+        fb.lr_buffer_audit.push(0); // we have one feature combo 
+        fb.audit_aux_data = mi.audit_aux_data.as_ref().unwrap().clone();
+
+        let mut lossf = BlockSigmoid::new_without_weights(&mi).unwrap();
+        lossf.allocate_and_init_weights(&mi);
+        
+        let mut re = BlockLR::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
+        re.allocate_and_init_weights(&mi);
+
+        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.5);
+        assert_eq!(slearn(&mut re, &mut lossf, &fb, false), 0.475734);
+        fb.audit_mode = true;
+        assert_eq!(spredict(&mut re, &mut lossf, &fb), 0.475734);
+        println!("{}", to_string_pretty(&fb.audit_json).unwrap());
+
+
+
+    }
+
+
+    #[test]
+    fn test_basic() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        let mut re = BlockSigmoid::new_without_weights(&mi).unwrap();
+        re.allocate_and_init_weights(&mi);
+
+        let mut fb = feature_buffer::FeatureBuffer::new();
+        fb.audit_mode = true;
+        let result = re.forward(&[], 0.1, &fb);
+        assert_eq!(result, 0.5249792);
+        assert_eq!(to_string_pretty(&fb.audit_json).unwrap(),
+r#"{
+  "_type": "BlockSigmoid",
+  "input": 0.10000000149011612,
+  "output": 0.5249791741371155,
+  "predcessor": null
+}"#);
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

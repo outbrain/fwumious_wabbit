@@ -266,9 +266,9 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
     
     fn forward(&self, 
                 further_blocks: &[Box<dyn BlockTrait>], 
-                wsum: f32, 
+                wsum_input: f32, 
                 fb: &feature_buffer::FeatureBuffer) -> f32 {
-        let mut wsum:f32 = wsum;
+        let mut wsum:f32 = wsum_input;
         unsafe {
             let ffm_weights = &self.weights;
             specialize_k!(self.ffm_k, FFMK, wsumbuf, {                        
@@ -297,10 +297,19 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                 }
             });
         }
+        if fb.audit_mode {
+            self.audit(wsum_input, wsum, fb);
+        }
         let (next_regressor, further_blocks) = further_blocks.split_at(1);
         let prediction_probability = next_regressor[0].forward(further_blocks, wsum, fb);
         prediction_probability         
                  
+    }
+
+    fn audit(&self, 
+        wsum_input: f32, 
+        wsum_output: f32, 
+        fb: &feature_buffer::FeatureBuffer) {
     }
 
     fn get_serialized_len(&self) -> usize {

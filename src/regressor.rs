@@ -3,8 +3,6 @@ use std::any::Any;
 use std::mem;
 use std::slice;
 use std::sync::Arc;
-use core::arch::x86_64::*;
-use merand48::*;
 use std::io;
 use std::io::Cursor;
 use std::error::Error;
@@ -33,6 +31,11 @@ pub trait BlockTrait {
                          further_blocks: &[Box<dyn BlockTrait>], 
                          wsum: f32, 
                          fb: &feature_buffer::FeatureBuffer) -> f32;
+    fn audit(&self, 
+                         wsum_input: f32, 
+                         output: f32,
+                         fb: &feature_buffer::FeatureBuffer);
+
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance);
     fn get_serialized_len(&self) -> usize;

@@ -19,7 +19,11 @@ const REGRESSOR_HEADER_VERSION:u32 = 4;
 
 impl model_instance::ModelInstance {
     pub fn save_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
-        let serialized = serde_json::to_vec_pretty(&self)?;
+        let mut mi_saving = self.clone();
+        // Audit info always gets regenerated on load
+        mi_saving.audit_mode = false;
+        mi_saving.audit_aux_data = None;
+        let serialized = serde_json::to_vec_pretty(&mi_saving)?;
         output_bufwriter.write_u64::<LittleEndian>(serialized.len() as u64)?;
         output_bufwriter.write_all(&serialized)?;
         Ok(())

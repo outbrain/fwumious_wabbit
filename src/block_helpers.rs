@@ -97,6 +97,23 @@ pub fn slearn<'a>(block_run: &mut Box<dyn BlockTrait>,
     }
 }
 
+/// This function is used only in tests to run a single block with given loss function
+pub fn spredict<'a>(block_run: &mut Box<dyn BlockTrait>, 
+                    block_loss_function: &mut Box<dyn BlockTrait>,
+                    fb: &feature_buffer::FeatureBuffer
+                    ) -> f32 {
+
+    unsafe {
+        let block_loss_function: Box<dyn BlockTrait> = mem::transmute(& *block_loss_function.deref().deref());
+        let mut further_blocks_v: Vec<Box<dyn BlockTrait>> = vec![block_loss_function];
+        let further_blocks = &mut further_blocks_v[..];
+        let prediction_probability = block_run.forward(further_blocks, 0.0, fb);
+        // black magic here: forget about further blocks that we got through transmute:
+        further_blocks_v.set_len(0);
+        return prediction_probability
+    }
+}
+
 pub fn f32_to_json(f: f32) -> Value {
     let n = Number::from_f64(f as f64);
     match n {

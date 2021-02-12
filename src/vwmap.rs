@@ -23,14 +23,14 @@ pub struct VwNamespaceMap {
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct VwNamespaceMapEntry {
     namespace_char: char,
-    namespace_name: std::string::String,
-    namespace_index: u32,
+    pub namespace_name: std::string::String,
+    pub namespace_index: u32,
     namespace_save_as_float: bool, 
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct VwNamespaceMapSource {
-    entries: Vec<VwNamespaceMapEntry>,
+    pub entries: Vec<VwNamespaceMapEntry>,
     pub float_namespaces_skip_prefix: u32,
 }
 

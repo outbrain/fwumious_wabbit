@@ -4,6 +4,8 @@ use crate::parser;
 use crate::feature_transform_executor;
 use crate::feature_transform_parser;
 use std::cell::RefCell;
+use std::sync::Arc;
+
 
 const VOWPAL_FNV_PRIME:u32 = 16777619;	// vowpal magic number
 //const CONSTANT_NAMESPACE:usize = 128;
@@ -33,7 +35,8 @@ pub struct FeatureBuffer {
     pub ffm_buffer: Vec<HashAndValueAndSeq>,
     pub ffm_fields_count: u32,
     pub audit_json: RefCell<Value>,
-    pub audit: bool,
+    pub audit_mode: bool,
+    pub audit_aux_data: model_instance::AuditData,
 }
 
 
@@ -62,7 +65,8 @@ impl FeatureBuffer {
             ffm_buffer: Vec::new(),
             ffm_fields_count: 0,
             audit_json: RefCell::new(Value::Null),
-            audit: false,
+            audit_mode: false,
+            audit_aux_data: model_instance::default_audit_data(),
         }
     }
 
@@ -173,6 +177,10 @@ impl FeatureBufferTranslator {
 
 
         let mut fb = FeatureBuffer::new();
+        if mi.audit_mode {
+            fb.audit_aux_data = mi.audit_aux_data.as_ref().unwrap().clone();
+            fb.audit_mode = true;
+        }
         
 
         // avoid doing any allocations in translate

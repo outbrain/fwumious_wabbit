@@ -75,7 +75,7 @@ impl BlockTrait for BlockSigmoid {
 
     fn forward(&self, 
                      further_blocks: &[Box<dyn BlockTrait>], 
-                     wsum: f32, 
+                     wsum_input: f32, 
                      fb: &feature_buffer::FeatureBuffer) -> f32 {
 
         if further_blocks.len() != 0 {
@@ -84,25 +84,34 @@ impl BlockTrait for BlockSigmoid {
         
         // vowpal compatibility
         let mut prediction_probability: f32;
-        if wsum.is_nan() {
+        if wsum_input.is_nan() {
             eprintln!("NAN prediction in example {}, forcing 0.0", fb.example_number);
             prediction_probability = logistic(0.0);
-        } else if wsum < -50.0 {
+        } else if wsum_input < -50.0 {
             prediction_probability = logistic(-50.0);
-        } else if wsum > 50.0 {
+        } else if wsum_input > 50.0 {
             prediction_probability = logistic(50.0);
         } else {        
-          prediction_probability = logistic(wsum);
+          prediction_probability = logistic(wsum_input);
         }
         
-        if fb.audit {
-            let mut map = Map::new();
-            map.insert("_type".to_string(), Value::String("BlockSigmoid".to_string()));
-            map.insert("input".to_string(), f32_to_json(wsum));
-            map.insert("output".to_string(), f32_to_json(prediction_probability));
-            fb.add_audit_json(map);
+        if fb.audit_mode {
+            self.audit(wsum_input, prediction_probability, fb);
         }
         prediction_probability
+    }
+    fn audit(&self, 
+        wsum_input: f32, 
+        output: f32, 
+
+        fb: &feature_buffer::FeatureBuffer) {
+
+        let mut map = Map::new();
+        map.insert("_type".to_string(), Value::String("BlockSigmoid".to_string()));
+        map.insert("input".to_string(), f32_to_json(wsum_input));
+        map.insert("output".to_string(), f32_to_json(output));
+        fb.add_audit_json(map);
+
     }
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
@@ -138,8 +147,8 @@ impl BlockTrait for BlockSigmoid {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::block_loss_functions::BlockSigmoid;
     use serde_json::to_string_pretty;
+    use crate::block_helpers::slearn;
 
     fn in_vec() -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer::new()
@@ -160,7 +169,7 @@ mod tests {
         re.allocate_and_init_weights(&mi);
 
         let mut in_buf = in_vec();
-        in_buf.audit = true;
+        in_buf.audit_mode = true;
         let result = re.forward(&[], 0.1, &in_buf);
         assert_eq!(result, 0.5249792);
         assert_eq!(to_string_pretty(&in_buf.audit_json).unwrap(),
@@ -170,19 +179,8 @@ r#"{
   "output": 0.5249791741371155,
   "predcessor": null
 }"#);
-        
-                
     }
-
-
 }
-
-
-
-
-
-
-
 
 
 
