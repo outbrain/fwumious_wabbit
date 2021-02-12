@@ -1,7 +1,9 @@
+use serde_json::{Value, Map};
 use crate::model_instance;
 use crate::parser;
 use crate::feature_transform_executor;
 use crate::feature_transform_parser;
+use std::cell::RefCell;
 
 const VOWPAL_FNV_PRIME:u32 = 16777619;	// vowpal magic number
 //const CONSTANT_NAMESPACE:usize = 128;
@@ -27,8 +29,11 @@ pub struct FeatureBuffer {
     pub example_importance: f32,
     pub example_number: u64,
     pub lr_buffer: Vec<HashAndValue>,
+    pub lr_buffer_audit: Vec<i32>, // Corresponding ids of feature combos from lr_buffer
     pub ffm_buffer: Vec<HashAndValueAndSeq>,
     pub ffm_fields_count: u32,
+    pub audit_json: RefCell<Value>,
+    pub audit: bool,
 }
 
 
@@ -45,6 +50,38 @@ pub struct FeatureBufferTranslator {
     pub ffm_hash_mask: u32,
     pub transform_executors: feature_transform_executor::TransformExecutors,
 }
+
+impl FeatureBuffer {
+    pub fn new() -> FeatureBuffer {
+        FeatureBuffer {
+            label: 0.0,
+            example_importance: 1.0,
+            example_number: 0,
+            lr_buffer: Vec::new(),
+            lr_buffer_audit: Vec::new(),
+            ffm_buffer: Vec::new(),
+            ffm_fields_count: 0,
+            audit_json: RefCell::new(Value::Null),
+            audit: false,
+        }
+    }
+
+    pub fn add_audit_json(&self, mut audit_json: Map<String, Value>) {
+        let old_value = self.audit_json.replace(Value::Null);
+        audit_json.insert("predcessor".to_string(), old_value);
+        self.audit_json.replace(Value::Object(audit_json));
+    }
+    pub fn reset_audit_json(&self) {
+        self.audit_json.replace(Value::Null);
+    }
+
+}
+
+
+
+
+
+
 
 // A macro that takes care of decoding the individual feature - which can have two different encodings
 // this simplifies a lot of the code, as it is used often
@@ -135,14 +172,7 @@ impl FeatureBufferTranslator {
         let ffm_hash_mask = ((1 << mi.ffm_bit_precision) -1) ^ dimensions_mask;
 
 
-        let mut fb = FeatureBuffer {
-            label: 0.0,
-            example_importance: 1.0,
-            example_number: 0,
-            lr_buffer: Vec::new(),
-            ffm_buffer: Vec::new(),
-            ffm_fields_count: 0,
-        };      
+        let mut fb = FeatureBuffer::new();
         
 
         // avoid doing any allocations in translate
@@ -168,12 +198,13 @@ impl FeatureBufferTranslator {
             let lr_buffer = &mut self.feature_buffer.lr_buffer;
             lr_buffer.truncate(0);
             self.feature_buffer.label = record_buffer[parser::LABEL_OFFSET] as f32;  // copy label
-            self.feature_buffer.example_importance = f32::from_bits(record_buffer[parser::EXAMPLE_IMPORTANCE_OFFSET]);    
+            self.feature_buffer.example_importance = f32::from_bits(record_buffer[parser::EXAMPLE_IMPORTANCE_OFFSET]);
             self.feature_buffer.example_number = example_number;
             let mut output_len:usize = 0;
             let mut hashes_vec_in : &mut Vec<HashAndValue> = &mut self.hashes_vec_in;
             let mut hashes_vec_out : &mut Vec<HashAndValue> = &mut self.hashes_vec_out;
-            for feature_combo_desc in &self.model_instance.feature_combo_descs {
+//            for feature_combo_desc in &self.model_instance.feature_combo_descs {     // We have to do this due to audit mode :(
+            for (feature_combo_n, feature_combo_desc) in self.model_instance.feature_combo_descs.iter().enumerate() {
                 let feature_combo_weight = feature_combo_desc.weight;
                 // we unroll first iteration of the loop and optimize
                 let num_namespaces:usize = feature_combo_desc.feature_indices.len() ;
@@ -184,6 +215,11 @@ impl FeatureBufferTranslator {
                         lr_buffer.push(HashAndValue {hash: hash_index & self.lr_hash_mask, 
                                                      value: hash_value * feature_combo_weight});
                     });
+                    if self.model_instance.audit_mode {
+                        while lr_buffer.len() < self.feature_buffer.lr_buffer_audit.len() {
+                            self.feature_buffer.lr_buffer_audit.push(feature_combo_n as i32);
+                        }
+                    }
                 } else {
                     hashes_vec_in.truncate(0);
                     feature_reader!(record_buffer, self.transform_executors, namespace_index, hash_index, hash_value, {
@@ -204,12 +240,23 @@ impl FeatureBufferTranslator {
                         lr_buffer.push(HashAndValue{hash: handv.hash & self.lr_hash_mask,
                                                     value: handv.value * feature_combo_weight});
                     }
+                    if self.model_instance.audit_mode {
+                        while lr_buffer.len() < self.feature_buffer.lr_buffer_audit.len() {
+                            self.feature_buffer.lr_buffer_audit.push(feature_combo_n as i32);
+                        }
+                    }
+
                 }
             }
             // add the constant
             if self.model_instance.add_constant_feature {
                     lr_buffer.push(HashAndValue{hash: CONSTANT_HASH & self.lr_hash_mask,
                                                 value: 1.0});
+                    if self.model_instance.audit_mode {
+                        while lr_buffer.len() < self.feature_buffer.lr_buffer_audit.len() {
+                            self.feature_buffer.lr_buffer_audit.push(-1);   // -1 denotes the constant
+                        }
+                    }
             }
 
             // FFM loops have not been optimized yet

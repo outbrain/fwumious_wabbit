@@ -1,4 +1,4 @@
-use clap::{App, Arg,  AppSettings};
+ use clap::{App, Arg,  AppSettings};
 use crate::version;
 
 pub fn parse<'a>() -> clap::ArgMatches<'a> {
@@ -43,6 +43,11 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .help("Adds single features")
                      .multiple(true)
                      .takes_value(true))
+                   .arg(Arg::with_name("audit")
+                     .long("audit")
+                     .help("Audit mode - verbosely output data useful for model insights")
+                     .takes_value(false))
+ 
 
                     .arg(Arg::with_name("learning_rate")
                      .short("l")

@@ -18,7 +18,7 @@ use optimizer::OptimizerTrait;
 use crate::block_ffm::BlockFFM;
 use crate::block_lr::BlockLR;
 use crate::block_loss_functions::BlockSigmoid;
-
+use serde_json::Value;
 
 
 pub trait BlockTrait {
@@ -123,6 +123,7 @@ impl Regressor  {
             // Important to know: learn() functions in blocks aren't guaranteed to be thread-safe
             panic!("This regressor is immutable, you cannot call learn() with update = true");
         }
+        fb.reset_audit_json();
         let update:bool = update && (fb.example_importance != 0.0);
 
         let blocks_list = &mut self.blocks_boxes[..];
@@ -134,6 +135,7 @@ impl Regressor  {
     
     pub fn predict(&self, fb: &feature_buffer::FeatureBuffer) -> f32 {
         // TODO: we should find a way of not using unsafe
+        fb.reset_audit_json();
         let blocks_list = &self.blocks_boxes[..];
         let (current, further_blocks) = blocks_list.split_at(1);
         let prediction_probability = current[0].forward(further_blocks, 0.0, fb);
@@ -218,14 +220,9 @@ mod tests {
 
     /* LR TESTS */
     fn lr_vec(v:Vec<feature_buffer::HashAndValue>) -> feature_buffer::FeatureBuffer {
-        feature_buffer::FeatureBuffer {
-                    label: 0.0,
-                    example_importance: 1.0,
-                    example_number: 0,
-                    lr_buffer: v,
-                    ffm_buffer: Vec::new(),
-                    ffm_fields_count: 0,
-        }
+        let mut fb = feature_buffer::FeatureBuffer::new();
+        fb.lr_buffer = v;
+        fb
     }
 
 

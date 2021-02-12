@@ -1,12 +1,15 @@
 use std::any::Any;
 use std::error::Error;
 use std::io;
+use serde_json::{Value, Map, Number};
+use std::mem;
+use std::mem::size_of;
 
 use crate::regressor;
 use crate::feature_buffer;
 use crate::model_instance;
 use regressor::BlockTrait;
-
+use crate::block_helpers::f32_to_json;
 
 //use fastapprox::fast::sigmoid; // surprisingly this doesn't work very well
 
@@ -80,21 +83,28 @@ impl BlockTrait for BlockSigmoid {
         }
         
         // vowpal compatibility
+        let mut prediction_probability: f32;
         if wsum.is_nan() {
             eprintln!("NAN prediction in example {}, forcing 0.0", fb.example_number);
-            return logistic(0.0);
+            prediction_probability = logistic(0.0);
         } else if wsum < -50.0 {
-            return logistic(-50.0);
+            prediction_probability = logistic(-50.0);
         } else if wsum > 50.0 {
-            return logistic(50.0);
-        }        
-
-        let prediction_probability = logistic(wsum);
+            prediction_probability = logistic(50.0);
+        } else {        
+          prediction_probability = logistic(wsum);
+        }
+        
+        if fb.audit {
+            let mut map = Map::new();
+            map.insert("_type".to_string(), Value::String("BlockSigmoid".to_string()));
+            map.insert("input".to_string(), f32_to_json(wsum));
+            map.insert("output".to_string(), f32_to_json(prediction_probability));
+            fb.add_audit_json(map);
+        }
         prediction_probability
     }
 
-    
-    
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
         // empty
     }
@@ -123,4 +133,56 @@ impl BlockTrait for BlockSigmoid {
     }
 
 }
+
+
+mod tests {
+    // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
+    use crate::block_loss_functions::BlockSigmoid;
+    use serde_json::to_string_pretty;
+
+    fn in_vec() -> feature_buffer::FeatureBuffer {
+        feature_buffer::FeatureBuffer::new()
+    }
+
+    #[test]
+    fn test_basic() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.learning_rate = 0.1;
+        mi.ffm_learning_rate = 0.1;
+        mi.power_t = 0.0;
+        mi.ffm_power_t = 0.0;
+        mi.bit_precision = 18;
+        mi.ffm_k = 4;
+        mi.ffm_bit_precision = 18;
+        mi.ffm_fields = vec![vec![], vec![]]; // This isn't really used
+        let mut re = BlockSigmoid::new_without_weights(&mi).unwrap();
+        re.allocate_and_init_weights(&mi);
+
+        let mut in_buf = in_vec();
+        in_buf.audit = true;
+        let result = re.forward(&[], 0.1, &in_buf);
+        assert_eq!(result, 0.5249792);
+        assert_eq!(to_string_pretty(&in_buf.audit_json).unwrap(),
+r#"{
+  "_type": "BlockSigmoid",
+  "input": 0.10000000149011612,
+  "output": 0.5249791741371155,
+  "predcessor": null
+}"#);
+        
+                
+    }
+
+
+}
+
+
+
+
+
+
+
+
+
 

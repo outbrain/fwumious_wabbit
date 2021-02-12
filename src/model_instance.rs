@@ -69,6 +69,9 @@ pub struct ModelInstance {
     
     pub transform_namespaces: feature_transform_parser::NamespaceTransforms,
     
+    
+    #[serde(default = "default_bool_false")]
+    pub audit_mode: bool,
 }
 
 fn default_u32_zero() -> u32{0}
@@ -115,6 +118,7 @@ impl ModelInstance {
             init_acc_gradient: 1.0,
             optimizer: Optimizer::SGD,
             transform_namespaces: feature_transform_parser::NamespaceTransforms::new(),
+            audit_mode: false,
         };
         Ok(mi)
     }
@@ -327,6 +331,9 @@ impl ModelInstance {
             mi.optimizer = Optimizer::Adagrad;
         }
 
+        if cl.is_present("audit") {
+            mi.audit_mode = true;
+        }
         
         
         Ok(mi)

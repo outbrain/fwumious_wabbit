@@ -7,7 +7,7 @@ use crate::feature_buffer;
 use std::io;
 use core::arch::x86_64::*;
 use std::error::Error;
-
+use serde_json::Value;
 
 
 use std::mem::{self, MaybeUninit};
@@ -108,7 +108,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
         let prediction_probability = next_regressor[0].forward(further_blocks, wsum_in + wsum, fb);
         prediction_probability         
     }
-    
     
     fn get_serialized_len(&self) -> usize {
         return self.weights_len as usize;

@@ -7,6 +7,7 @@ use std::cmp::min;
 use std::ops::Deref;
 use crate::optimizer::OptimizerSGD;
 use std::marker::PhantomData;
+use serde_json::{Value, Number};
 use crate::feature_buffer;
 use crate::regressor::BlockTrait;
 
@@ -95,3 +96,15 @@ pub fn slearn<'a>(block_run: &mut Box<dyn BlockTrait>,
         return prediction_probability
     }
 }
+
+pub fn f32_to_json(f: f32) -> Value {
+    let n = Number::from_f64(f as f64);
+    match n {
+        Some(v) => return Value::Number(v),
+        None => return Value::String(format!("{}", f).to_string()) 
+    };
+}
+
+
+
+

@@ -4,6 +4,7 @@ use merand48::*;
 use core::arch::x86_64::*;
 use std::error::Error;
 use std::mem::{self, MaybeUninit};
+use serde_json::{Value, Map, Number};
 
 
 use crate::optimizer;
@@ -15,6 +16,8 @@ use crate::block_helpers;
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 use block_helpers::{Weight, WeightAndOptimizerData, slearn};
+
+use crate::block_helpers::f32_to_json;
 
 
 const FFM_STACK_BUF_LEN:usize= 16384;
@@ -261,7 +264,10 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         } // unsafe end
     }
     
-    fn forward(&self, further_blocks: &[Box<dyn BlockTrait>], wsum: f32, fb: &feature_buffer::FeatureBuffer) -> f32 {
+    fn forward(&self, 
+                further_blocks: &[Box<dyn BlockTrait>], 
+                wsum: f32, 
+                fb: &feature_buffer::FeatureBuffer) -> f32 {
         let mut wsum:f32 = wsum;
         unsafe {
             let ffm_weights = &self.weights;
@@ -296,7 +302,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         prediction_probability         
                  
     }
-    
+
     fn get_serialized_len(&self) -> usize {
         return self.ffm_weights_len as usize;
     }
@@ -333,15 +339,11 @@ mod tests {
     use crate::feature_buffer::HashAndValueAndSeq;
 
 
-    fn ffm_vec(v:Vec<feature_buffer::HashAndValueAndSeq>, ffm_fields_count: u32) -> feature_buffer::FeatureBuffer {
-        feature_buffer::FeatureBuffer {
-                    label: 0.0,
-                    example_importance: 1.0,
-                    example_number: 0,
-                    lr_buffer: Vec::new(),
-                    ffm_buffer: v,
-                    ffm_fields_count: ffm_fields_count,
-        }
+    fn ffm_vec(v:Vec<feature_buffer::HashAndValueAndSeq>, ffm_fields_count:u32) -> feature_buffer::FeatureBuffer {
+        let mut fb = feature_buffer::FeatureBuffer::new();
+        fb.ffm_buffer = v;
+        fb.ffm_fields_count = ffm_fields_count;
+        fb
     }
 
     fn ffm_init<T:OptimizerTrait + 'static>(block_ffm: &mut Box<dyn BlockTrait>) -> () {
