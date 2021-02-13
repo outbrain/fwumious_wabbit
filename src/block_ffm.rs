@@ -4,7 +4,7 @@ use merand48::*;
 use core::arch::x86_64::*;
 use std::error::Error;
 use std::mem::{self, MaybeUninit};
-use serde_json::{Value, Map, Number};
+use serde_json::{Value, Map, Number, json};
 
 
 use crate::optimizer;
@@ -15,7 +15,7 @@ use crate::consts;
 use crate::block_helpers;
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
-use block_helpers::{Weight, WeightAndOptimizerData, slearn};
+use block_helpers::{Weight, WeightAndOptimizerData, slearn, spredict};
 
 use crate::block_helpers::f32_to_json;
 
@@ -222,8 +222,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                             wsum += wsumbuf[k];
                         }
                     });
-                    
-                    /*if fb.audit_mode {
+                    /*
+                    if fb.audit_mode {
                         self.audit_forward(wsum_input, wsum, fb);
                     }*/
                     
@@ -314,6 +314,39 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         wsum_input: f32, 
         wsum_output: f32, 
         fb: &feature_buffer::FeatureBuffer) {
+
+        let mut map = Map::new();
+            map.insert("_type".to_string(), Value::String("BlockFFM".to_string()));
+            let mut features: Vec<Value> = Vec::new();
+            for (val, namespace_index) in fb.ffm_buffer.iter().zip(fb.ffm_buffer_audit.iter()) {
+                let feature_hash_index = val.hash;
+                let feature_value = val.value;
+                let mut contra_fields: Vec<Value> = Vec::new();
+                for contra_field in 0..fb.ffm_fields_count as usize {
+                    let mut weights_vec: Vec<Value> = Vec::new();
+                    let mut optimizer_data_vec: Vec<Value> = Vec::new();
+                    
+                    for k in 0..self.ffm_k as usize{
+                        weights_vec.push(f32_to_json(self.weights[feature_hash_index as usize + contra_field * self.ffm_k as usize + k].weight));
+                        optimizer_data_vec.push(self.optimizer_ffm.get_audit_data(&self.weights[feature_hash_index as usize + contra_field].optimizer_data));
+                    }
+                    contra_fields.push(json!({
+                    "weight": weights_vec,
+                    "optimizer_data": optimizer_data_vec,
+                    }));    
+                }
+                features.push(json!({
+                    "index": feature_hash_index,
+                    "value": feature_value,
+                    "feature": fb.audit_aux_data.namespace_index_to_string[namespace_index],
+                    "weights": contra_fields, 
+                    }));
+            }
+            map.insert("input".to_string(), Value::Array(features));
+            map.insert("output".to_string(), f32_to_json(wsum_output));
+            fb.add_audit_json(map);
+
+
     }
 
     fn get_serialized_len(&self) -> usize {
@@ -350,6 +383,8 @@ mod tests {
     use crate::block_loss_functions::BlockSigmoid;
     use crate::feature_buffer;
     use crate::feature_buffer::HashAndValueAndSeq;
+    use crate::vwmap;
+    use serde_json::to_string_pretty;
 
 
     fn ffm_vec(v:Vec<feature_buffer::HashAndValueAndSeq>, ffm_fields_count:u32) -> feature_buffer::FeatureBuffer {
@@ -361,7 +396,6 @@ mod tests {
 
     fn ffm_init<T:OptimizerTrait + 'static>(block_ffm: &mut Box<dyn BlockTrait>) -> () {
         let mut block_ffm = block_ffm.as_any().downcast_mut::<BlockFFM<T>>().unwrap();
-        
         for i in 0..block_ffm.weights.len() {
             block_ffm.weights[i].weight = 1.0;
             block_ffm.weights[i].optimizer_data = block_ffm.optimizer_ffm.initial_data();
@@ -415,6 +449,59 @@ mod tests {
         assert_eq!(slearn(&mut re, &mut lossf, &ffm_buf, true), 0.9999999);
         assert_eq!(slearn(&mut re, &mut lossf, &ffm_buf, true), 0.99685884);
     }
+
+    
+    #[test]
+    fn test_audit() {
+        
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+
+        // Now prepare the "reverse resolution" data for auditing
+        let vw_map_string = r#"
+A,featureA
+B,featureB
+C,featureC
+"#;
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("".to_string(), 0)).unwrap();
+
+        mi.ffm_fields = vec![vec![0], vec![1]]; // we need this in the test in order to know which fields to output
+        
+        mi.enable_audit(&vw);
+
+        mi.learning_rate = 0.1;
+        mi.ffm_learning_rate = 0.1;
+        mi.power_t = 0.0;
+        
+        mi.ffm_power_t = 0.0;
+        mi.bit_precision = 18;
+        mi.ffm_k = 4;
+        mi.ffm_bit_precision = 18;
+        let mut lossf = BlockSigmoid::new_without_weights(&mi).unwrap();
+        
+        let mut re = BlockFFM::<optimizer::OptimizerAdagradFlex>::new_without_weights(&mi).unwrap();
+        re.allocate_and_init_weights(&mi);
+
+        ffm_init::<optimizer::OptimizerAdagradFlex>(&mut re);
+        let mut fb = ffm_vec(vec![
+                                  HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
+                                  HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: 1}
+                                  ], 2);
+        fb.ffm_buffer_audit.push(0); // we have one feature combo 
+        fb.ffm_buffer_audit.push(1); // we have one feature combo 
+                
+        fb.audit_aux_data = mi.audit_aux_data.as_ref().unwrap().clone();
+
+        fb.audit_mode = true;
+        fb.reset_audit_json();
+        assert_eq!(spredict(&mut re, &mut lossf, &fb), 0.98201376);
+//        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.98201376); 
+        let audit2 = format!("{}", to_string_pretty(&fb.audit_json).unwrap());
+        println!("audit: {}", audit2);
+        
+    }
+
+
+
 
 
 }

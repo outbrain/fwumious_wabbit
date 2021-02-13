@@ -31,14 +31,14 @@ pub struct FeatureBuffer {
     pub example_importance: f32,
     pub example_number: u64,
     pub lr_buffer: Vec<HashAndValue>,
-    pub lr_buffer_audit: Vec<i32>, // Corresponding ids of feature combos from lr_buffer
     pub ffm_buffer: Vec<HashAndValueAndSeq>,
     pub ffm_fields_count: u32,
     pub audit_json: RefCell<Value>,
     pub audit_mode: bool,
     pub audit_aux_data: model_instance::AuditData,
+    pub lr_buffer_audit: Vec<i32>, // Corresponding ids of feature combos from lr_buffer
+    pub ffm_buffer_audit: Vec<u32>, // Corresponding ids of namespace indexes
 }
-
 
 
 
@@ -61,12 +61,13 @@ impl FeatureBuffer {
             example_importance: 1.0,
             example_number: 0,
             lr_buffer: Vec::new(),
-            lr_buffer_audit: Vec::new(),
             ffm_buffer: Vec::new(),
             ffm_fields_count: 0,
             audit_json: RefCell::new(Value::Null),
             audit_mode: false,
             audit_aux_data: model_instance::default_audit_data(),
+            lr_buffer_audit: Vec::new(),
+            ffm_buffer_audit: Vec::new(),
         }
     }
 
@@ -283,6 +284,11 @@ impl FeatureBufferTranslator {
                                                                         value: hash_value,
                                                                         contra_field_index: contra_field_index as u32 * self.model_instance.ffm_k as u32});
                         });
+                        if self.model_instance.audit_mode {
+                            while ffm_buffer.len() < self.feature_buffer.ffm_buffer_audit.len() {
+                                self.feature_buffer.ffm_buffer_audit.push(*namespace_index);
+                            }
+                        }
                     }
                 }
             }
