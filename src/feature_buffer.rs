@@ -33,6 +33,8 @@ pub struct FeatureBuffer {
     pub lr_buffer: Vec<HashAndValue>,
     pub ffm_buffer: Vec<HashAndValueAndSeq>,
     pub ffm_fields_count: u32,
+
+    // Maybe all these should be moved out and then having a composable
     pub audit_json: RefCell<Value>,
     pub audit_mode: bool,
     pub audit_aux_data: model_instance::AuditData,
@@ -225,7 +227,7 @@ impl FeatureBufferTranslator {
                                                      value: hash_value * feature_combo_weight});
                     });
                     if self.model_instance.audit_mode {
-                        while lr_buffer.len() < self.feature_buffer.lr_buffer_audit.len() {
+                        while lr_buffer.len() > self.feature_buffer.lr_buffer_audit.len() {
                             self.feature_buffer.lr_buffer_audit.push(feature_combo_n as i32);
                         }
                     }
@@ -250,7 +252,7 @@ impl FeatureBufferTranslator {
                                                     value: handv.value * feature_combo_weight});
                     }
                     if self.model_instance.audit_mode {
-                        while lr_buffer.len() < self.feature_buffer.lr_buffer_audit.len() {
+                        while lr_buffer.len() > self.feature_buffer.lr_buffer_audit.len() {
                             self.feature_buffer.lr_buffer_audit.push(feature_combo_n as i32);
                         }
                     }
@@ -262,7 +264,7 @@ impl FeatureBufferTranslator {
                     lr_buffer.push(HashAndValue{hash: CONSTANT_HASH & self.lr_hash_mask,
                                                 value: 1.0});
                     if self.model_instance.audit_mode {
-                        while lr_buffer.len() < self.feature_buffer.lr_buffer_audit.len() {
+                        while lr_buffer.len() > self.feature_buffer.lr_buffer_audit.len() {
                             self.feature_buffer.lr_buffer_audit.push(-1);   // -1 denotes the constant
                         }
                     }
@@ -285,7 +287,7 @@ impl FeatureBufferTranslator {
                                                                         contra_field_index: contra_field_index as u32 * self.model_instance.ffm_k as u32});
                         });
                         if self.model_instance.audit_mode {
-                            while ffm_buffer.len() < self.feature_buffer.ffm_buffer_audit.len() {
+                            while ffm_buffer.len() > self.feature_buffer.ffm_buffer_audit.len() {
                                 self.feature_buffer.ffm_buffer_audit.push(*namespace_index);
                             }
                         }

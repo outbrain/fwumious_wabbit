@@ -128,6 +128,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
         let mut map = Map::new();
             map.insert("_type".to_string(), Value::String("BlockLR".to_string()));
             let mut features: Vec<Value> = Vec::new();
+//            println!("A: {}. B: {}", fb.lr_buffer.len(), fb.lr_buffer_audit.len());
             for (val, combo_number) in fb.lr_buffer.iter().zip(fb.lr_buffer_audit.iter()) {
                 let feature_hash_index = val.hash;
                 let feature_value = val.value;

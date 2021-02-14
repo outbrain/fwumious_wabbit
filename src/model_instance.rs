@@ -25,6 +25,7 @@ pub struct FeatureComboDesc {
 pub struct AuditData {
     pub namespace_index_to_string: HashMap<u32, String>,
     pub combo_index_to_string: HashMap<i32, String>,
+    pub field_index_to_string: HashMap<u32, String>,
 }
 
 
@@ -99,6 +100,7 @@ pub fn default_audit_data() -> AuditData {
     AuditData{
         namespace_index_to_string: HashMap::new(),
         combo_index_to_string: HashMap::new(),
+        field_index_to_string: HashMap::new(),
     }
 }
 fn default_audit_data_option() -> Option<AuditData>{None}
@@ -151,9 +153,11 @@ impl ModelInstance {
 
     pub fn enable_audit(&mut self, vw: &vwmap::VwNamespaceMap) {
         let mut audit_aux_data = default_audit_data();
+
         for vw_entry in &vw.vw_source.entries {
             audit_aux_data.namespace_index_to_string.insert(vw_entry.namespace_index, vw_entry.namespace_name.to_string());
         }
+
         for (combo_index, combo_desc) in self.feature_combo_descs.iter().enumerate() {
             let mut names_list: Vec<String> = Vec::new();
             for namespace_index in &combo_desc.feature_indices {
@@ -162,6 +166,17 @@ impl ModelInstance {
             
             audit_aux_data.combo_index_to_string.insert(combo_index as i32, names_list.join(","));
         }
+        audit_aux_data.combo_index_to_string.insert(-1, "Constant_feature".to_string());
+
+        for (field_index, field_vec) in self.ffm_fields.iter().enumerate() {
+            let mut names_list: Vec<String> = Vec::new();
+            for namespace_index in field_vec {
+                names_list.push(audit_aux_data.namespace_index_to_string[namespace_index].to_string());
+            }
+            audit_aux_data.field_index_to_string.insert(field_index as u32, names_list.join(","));
+        }
+        
+        
         self.audit_aux_data = Some(audit_aux_data);
         self.audit_mode = true;
     }
@@ -373,9 +388,6 @@ impl ModelInstance {
             mi.optimizer = Optimizer::Adagrad;
         }
 
-        if cl.is_present("audit") {
-            mi.enable_audit(&vw);
-        }
         
         Ok(mi)
     }
