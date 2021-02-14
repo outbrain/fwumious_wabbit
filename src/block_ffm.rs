@@ -151,11 +151,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                         wsum_input: f32, 
                         fb: &feature_buffer::FeatureBuffer, 
                         update:bool) -> (f32, f32) {
-<<<<<<< HEAD
-        let mut wsum = wsum_input;
-=======
         let mut wsum = 0.0;
->>>>>>> main
         let local_data_ffm_len = fb.ffm_buffer.len() * (self.ffm_k * fb.ffm_fields_count) as usize;
 
         unsafe {
@@ -223,12 +219,13 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                         }
                     });
                     
+                    let wsum_output = wsum_input + wsum;
                     if fb.audit_mode {
-                        self.audit_forward(wsum_input, wsum, fb);
+                        self.audit_forward(wsum_input, wsum_output, fb);
                     }
                     
                     let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
-                    let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_blocks, wsum + wsum_input, fb, update);
+                    let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_blocks, wsum_output, fb, update);
                     
                     if update {
                        for i in 0..local_data_ffm_len {
@@ -300,7 +297,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
             });
         }
         
-        wsum_output = wsum_input + wsum;
+        let wsum_output = wsum_input + wsum;
         
         if fb.audit_mode {
             self.audit_forward(wsum_input, wsum_output, fb);
