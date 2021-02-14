@@ -145,10 +145,10 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
     #[inline(always)]
     fn forward_backward(&mut self, 
                         further_blocks: &mut [Box<dyn BlockTrait>], 
-                        wsum: f32, 
+                        wsum_input: f32, 
                         fb: &feature_buffer::FeatureBuffer, 
                         update:bool) -> (f32, f32) {
-        let mut wsum = wsum;
+        let mut wsum = 0.0;
         let local_data_ffm_len = fb.ffm_buffer.len() * (self.ffm_k * fb.ffm_fields_count) as usize;
 
         unsafe {
@@ -221,7 +221,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                     });                     
                     
                     let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
-                    let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_blocks, wsum, fb, update);
+                    let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_blocks, wsum + wsum_input, fb, update);
                     
                     if update {
                        for i in 0..local_data_ffm_len {
@@ -261,8 +261,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         } // unsafe end
     }
     
-    fn forward(&self, further_blocks: &[Box<dyn BlockTrait>], wsum: f32, fb: &feature_buffer::FeatureBuffer) -> f32 {
-        let mut wsum:f32 = wsum;
+    fn forward(&self, further_blocks: &[Box<dyn BlockTrait>], wsum_input: f32, fb: &feature_buffer::FeatureBuffer) -> f32 {
+        let mut wsum:f32 = 0.0;
         unsafe {
             let ffm_weights = &self.weights;
             specialize_k!(self.ffm_k, FFMK, wsumbuf, {                        
@@ -292,7 +292,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
             });
         }
         let (next_regressor, further_blocks) = further_blocks.split_at(1);
-        let prediction_probability = next_regressor[0].forward(further_blocks, wsum, fb);
+        let prediction_probability = next_regressor[0].forward(further_blocks, wsum + wsum_input, fb);
         prediction_probability         
                  
     }

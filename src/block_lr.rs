@@ -60,7 +60,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
     #[inline(always)]
     fn forward_backward(&mut self, 
                             further_regressors: &mut [Box<dyn BlockTrait>], 
-                            wsum_in: f32, 
+                            wsum_input: f32, 
                             fb: &feature_buffer::FeatureBuffer, 
                             update:bool) -> (f32, f32) {
         let mut wsum:f32 = 0.0;
@@ -76,7 +76,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
             }
 
             let (next_regressor, further_regressors) = further_regressors.split_at_mut(1);
-            let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_regressors, wsum_in + wsum, fb, update);
+            let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_regressors, wsum_input + wsum, fb, update);
 
             if update {
                 for hashvalue in fb.lr_buffer.iter() {
@@ -94,8 +94,9 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
     
     fn forward(&self, 
              further_blocks: &[Box<dyn BlockTrait>], 
-             wsum_in: f32, 
+             wsum_input: f32, 
              fb: &feature_buffer::FeatureBuffer) -> f32 {
+        let fbuf = &fb.lr_buffer;
         let mut wsum:f32 = 0.0;
         unsafe {
             for val in fb.lr_buffer.iter() {
@@ -105,7 +106,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
             }
         }
         let (next_regressor, further_blocks) = further_blocks.split_at(1);
-        let prediction_probability = next_regressor[0].forward(further_blocks, wsum_in + wsum, fb);
+        let prediction_probability = next_regressor[0].forward(further_blocks, wsum + wsum_input, fb);
         prediction_probability         
     }
     
