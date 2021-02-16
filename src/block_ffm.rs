@@ -162,25 +162,24 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                     let ffm_weights = &mut self.weights;
                     let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
                     let mut ifc:usize = 0;
-                    /*for i in 0..local_data_ffm_len {
-                        *local_data_ffm_values.get_unchecked_mut(i) = 0.0;
-                    }*/
-                    for left_hash in &fb.ffm_buffer {
-                        for j in 0..fc as usize {
-                            *local_data_ffm_values.get_unchecked_mut(ifc + j) = 0.0;
-                            _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(left_hash.hash as usize + j).weight), _MM_HINT_T0);  // No benefit for now
-                       }
-                       ifc += fc;
-                    }
-
                     
                     specialize_k!(self.ffm_k, FFMK, wsumbuf, {
-                   /*     for left_hash in &fb.ffm_buffer {
-                          for j in 0..fb.ffm_buffer.len() {
-                              _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(left_hash.hash as usize + j*FFMK as usize).weight), _MM_HINT_T0);  // No benefit for now
-                          }
+                     
+                        // This is a strange loop. We want to have just first cache line ready for each embedding
+                        // Plus we need to initialize to zero.
+                        let mut baddr: usize = 0;
+                        for left_hash in &fb.ffm_buffer {
+                            let mut addr = left_hash.hash as usize;
+                            for z in 0..fb.ffm_fields_count {
+                                _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(addr as usize).weight), _MM_HINT_T0);  // No benefit for now
+                                for k in 0..FFMK {
+                                    *local_data_ffm_values.get_unchecked_mut(baddr) = 0.0;
+                                    addr += 1;
+                                    baddr += 1;
+                                }
+                            }
                         }
-                     */   
+                       
                         let mut ifc:usize = 0;
                         for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
                             let mut right_local_index = left_hash.contra_field_index as usize + ifc;
@@ -203,14 +202,12 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
 
                                 specialize_1f32!(joint_value, JOINT_VALUE, {
                                     for k in 0..FFMK as usize {
-                                        let llik = (left_local_index as usize + k) as usize;
-                                        let rlik = (right_local_index as usize + k) as usize;
                                         let left_hash_weight  = ffm_weights.get_unchecked((lindex+k) as usize).weight;
                                         let right_hash_weight = ffm_weights.get_unchecked((rindex+k) as usize).weight;
                                         
                                         let right_side = right_hash_weight * JOINT_VALUE;
-                                        *local_data_ffm_values.get_unchecked_mut(llik) += right_side; // first derivate
-                                        *local_data_ffm_values.get_unchecked_mut(rlik) += left_hash_weight  * JOINT_VALUE; // first derivate
+                                        *local_data_ffm_values.get_unchecked_mut(left_local_index + k) += right_side; // first derivate
+                                        *local_data_ffm_values.get_unchecked_mut(right_local_index + k) += left_hash_weight  * JOINT_VALUE; // first derivate
                                         // We do this, so in theory Rust/LLVM could vectorize whole loop
                                         // Original: wsum += left_hash_weight * right_side;
                                         *wsumbuf.get_unchecked_mut(k) += left_hash_weight * right_side;
