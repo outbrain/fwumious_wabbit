@@ -165,7 +165,14 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                     for i in 0..local_data_ffm_len {
                         *local_data_ffm_values.get_unchecked_mut(i) = 0.0;
                     }
+                    
                     specialize_k!(self.ffm_k, FFMK, wsumbuf, {
+                        for left_hash in &fb.ffm_buffer {
+                          for j in 0..fb.ffm_buffer.len() {
+                              _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(left_hash.hash as usize + j*FFMK as usize).weight), _MM_HINT_T0);  // No benefit for now
+                          }
+                        }
+                        
                         let mut ifc:usize = 0;
                         for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
                             let mut right_local_index = left_hash.contra_field_index as usize + ifc;
