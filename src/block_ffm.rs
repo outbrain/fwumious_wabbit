@@ -154,28 +154,32 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         unsafe {
             macro_rules! core_macro {
                 (
-                $local_data_ffm_indices:ident,
                 $local_data_ffm_values:ident
                 ) => {
                  
-                    let mut local_data_ffm_indices = &mut $local_data_ffm_indices;
                     let mut local_data_ffm_values = &mut $local_data_ffm_values;
                         
                     let ffm_weights = &mut self.weights;
                     let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
                     let mut ifc:usize = 0;
-                    for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                        let base_weight_index = left_hash.hash;
-                        for j in 0..fc as usize {
-                            let addr = base_weight_index + j as u32;
-                            *local_data_ffm_indices.get_unchecked_mut(ifc + j) = addr;
-                            *local_data_ffm_values.get_unchecked_mut(ifc + j) = 0.0;
-                            _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(addr as usize).weight), _MM_HINT_T0);  // No benefit for now
-                       }
-                       ifc += fc;
-                    }
-
+                    
                     specialize_k!(self.ffm_k, FFMK, wsumbuf, {
+                     
+                        // This is a strange loop. We want to have just first cache line ready for each embedding
+                        // Plus we need to initialize to zero.
+                        let mut baddr: usize = 0;
+                        for left_hash in &fb.ffm_buffer {
+                            let mut addr = left_hash.hash as usize;
+                            for z in 0..fb.ffm_fields_count {
+                                _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(addr as usize).weight), _MM_HINT_T0);  // No benefit for now
+                                for k in 0..FFMK {
+                                    *local_data_ffm_values.get_unchecked_mut(baddr) = 0.0;
+                                    addr += 1;
+                                    baddr += 1;
+                                }
+                            }
+                        }
+                       
                         let mut ifc:usize = 0;
                         for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
                             let mut right_local_index = left_hash.contra_field_index as usize + ifc;
@@ -191,20 +195,19 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                                 // FYI this is effectively what we calculate:
             //                    let left_local_index =  i*fc + right_hash.contra_field_index as usize;
             //                    let right_local_index = (i+1+j) * fc + left_hash.contra_field_index as usize;
-                                let left_local_index = ifc + right_hash.contra_field_index as usize;
                                 let joint_value = left_hash.value * right_hash.value;
-                                let lindex = *local_data_ffm_indices.get_unchecked(left_local_index) as usize;
-                                let rindex = *local_data_ffm_indices.get_unchecked(right_local_index) as usize;
+                                let left_local_index = ifc + right_hash.contra_field_index as usize;
+                                let lindex = (left_hash.hash + right_hash.contra_field_index) as usize;
+                                let rindex = (right_hash.hash + left_hash.contra_field_index) as usize;
+
                                 specialize_1f32!(joint_value, JOINT_VALUE, {
                                     for k in 0..FFMK as usize {
-                                        let llik = (left_local_index as usize + k) as usize;
-                                        let rlik = (right_local_index as usize + k) as usize;
                                         let left_hash_weight  = ffm_weights.get_unchecked((lindex+k) as usize).weight;
                                         let right_hash_weight = ffm_weights.get_unchecked((rindex+k) as usize).weight;
                                         
                                         let right_side = right_hash_weight * JOINT_VALUE;
-                                        *local_data_ffm_values.get_unchecked_mut(llik) += right_side; // first derivate
-                                        *local_data_ffm_values.get_unchecked_mut(rlik) += left_hash_weight  * JOINT_VALUE; // first derivate
+                                        *local_data_ffm_values.get_unchecked_mut(left_local_index + k) += right_side; // first derivate
+                                        *local_data_ffm_values.get_unchecked_mut(right_local_index + k) += left_hash_weight  * JOINT_VALUE; // first derivate
                                         // We do this, so in theory Rust/LLVM could vectorize whole loop
                                         // Original: wsum += left_hash_weight * right_side;
                                         *wsumbuf.get_unchecked_mut(k) += left_hash_weight * right_side;
@@ -224,13 +227,18 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                     let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_blocks, wsum + wsum_input, fb, update);
                     
                     if update {
-                       for i in 0..local_data_ffm_len {
-                            let feature_value = *local_data_ffm_values.get_unchecked(i);
-                            let feature_index = *local_data_ffm_indices.get_unchecked(i) as usize;
-                            let gradient = general_gradient * feature_value;
-                            let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
-                            ffm_weights.get_unchecked_mut(feature_index).weight += update;
-                        }
+                       let mut local_index: usize = 0;
+                       for left_hash in &fb.ffm_buffer {
+                            let mut feature_index = left_hash.hash as usize;
+                            for j in 0..fc as usize {
+                                let feature_value = *local_data_ffm_values.get_unchecked(local_index);
+                                let gradient = general_gradient * feature_value;
+                                let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
+                                ffm_weights.get_unchecked_mut(feature_index).weight += update;
+                                local_index += 1;
+                                feature_index += 1;
+                            }
+                       } 
                     }
                     // The only exit point
                     return (prediction_probability, general_gradient)
@@ -240,22 +248,17 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
 
             if local_data_ffm_len < FFM_STACK_BUF_LEN {
                 // Fast-path - using on-stack data structures
-                let mut local_data_ffm_indices: [u32; FFM_STACK_BUF_LEN as usize] = MaybeUninit::uninit().assume_init();
                 let mut local_data_ffm_values: [f32; FFM_STACK_BUF_LEN as usize] = MaybeUninit::uninit().assume_init();//[0.0; FFM_STACK_BUF_LEN as usize];
-                core_macro!(local_data_ffm_indices, local_data_ffm_values);
+                core_macro!(local_data_ffm_values);
 
             } else {
                 // Slow-path - using heap data structures
-                if local_data_ffm_len > self.local_data_ffm_indices.len() {
-                    self.local_data_ffm_indices.reserve(local_data_ffm_len - self.local_data_ffm_indices.len() + 1024);
-                }
                 if local_data_ffm_len > self.local_data_ffm_values.len() {
                     self.local_data_ffm_values.reserve(local_data_ffm_len - self.local_data_ffm_values.len() + 1024);
                 }
-                let mut local_data_ffm_indices = &mut self.local_data_ffm_indices;
                 let mut local_data_ffm_values = &mut self.local_data_ffm_values;
             
-                core_macro!(local_data_ffm_indices, local_data_ffm_values);
+                core_macro!(local_data_ffm_values);
             }
              
         } // unsafe end
