@@ -271,26 +271,29 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
             if true {
                 let mut contra_fields: [f32; FFM_STACK_BUF_LEN] = MaybeUninit::uninit().assume_init();
                 let field_embedding_len = (self.ffm_k * fb.ffm_fields_count) as usize;
-                let scratchpad_len = fb.ffm_fields_count * fb.ffm_fields_count * self.ffm_k;
                 specialize_k!(self.ffm_k, FFMK, wsumbuf, {
                 
                     let mut last_contra_index = 1000000;
                     for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
                         let v:f32 = left_hash.value;
+                        let left_hash_hash = left_hash.hash as usize;
                         let offset = (left_hash.contra_field_index * fb.ffm_fields_count) as usize;
                         // This line is golden. Just cache the very first cache line in next iteration
-                        _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(i+1 ).hash as usize).weight), _MM_HINT_T0);  // No benefit for now
+                        _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(i+1).hash as usize).weight), _MM_HINT_T0);  // No benefit for now
+  //                      _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(i+1).hash as usize + 8).weight), _MM_HINT_T0);  // No benefit for now
+//                        _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(i+1).hash as usize + 16).weight), _MM_HINT_T0);  // No benefit for now
                         if last_contra_index != left_hash.contra_field_index {
                             for k in 0..field_embedding_len { // first time we see this field - just overwrite
-                                *contra_fields.get_unchecked_mut(offset + k) = v * ffm_weights.get_unchecked(left_hash.hash as usize + k).weight;
+                                *contra_fields.get_unchecked_mut(offset + k) = v * ffm_weights.get_unchecked(left_hash_hash + k).weight;
                             }
                         } else {
                             for k in 0..field_embedding_len { // we've seen this field before - add
-                                *contra_fields.get_unchecked_mut(offset + k) += v * ffm_weights.get_unchecked(left_hash.hash as usize + k).weight;
+                                *contra_fields.get_unchecked_mut(offset + k) += v * ffm_weights.get_unchecked(left_hash_hash + k).weight;
                             }
                         }
-                        for k in 0..FFMK { // we've seen this field before - add
-                            let ss = v * ffm_weights.get_unchecked(left_hash.hash as usize + left_hash.contra_field_index as usize + k as usize).weight;
+                        let contra_field_index = left_hash.contra_field_index as usize;
+                        for k in 0..FFMK as usize { // we've seen this field before - add
+                            let ss = v * ffm_weights.get_unchecked(left_hash_hash as usize + contra_field_index + k).weight;
                             let minus = ss * ss * 0.5;
                             /*println!("i: {}, value: {} weight: {}, contra field index {}, ss: {}, substract: {}", 
                                     i, v, ffm_weights.get_unchecked(left_hash.hash as usize + left_hash.contra_field_index as usize).weight, 
@@ -308,33 +311,31 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                         let f1_ffmk = f1 * FFMK as usize;
                         let mut f2_offset_ffmk = f1_offset + f1_ffmk;
                         let mut f1_offset_ffmk = f1_offset + f1_ffmk;
-                        for f2 in f1..fb.ffm_fields_count as usize {
-                            /*assert_eq!(f1_offset_ffmk, f1 * field_embedding_len + f2 * FFMK as usize);
-                            assert_eq!(f2_offset_ffmk, f2 * field_embedding_len + f1 * FFMK as usize);
-                            let k = 0;
+                        for k in 0..FFMK {
+                                let v = contra_fields.get_unchecked(f1_offset_ffmk + k as usize);
+                                *wsumbuf.get_unchecked_mut(k as usize) += v * v * 0.5;
+                        }
+
+                        for f2 in f1+1..fb.ffm_fields_count as usize {
+                            f2_offset_ffmk += field_embedding_len;
+                            f1_offset_ffmk += FFMK as usize;
+                            //assert_eq!(f1_offset_ffmk, f1 * field_embedding_len + f2 * FFMK as usize);
+                            //assert_eq!(f2_offset_ffmk, f2 * field_embedding_len + f1 * FFMK as usize);
+                            /*let k = 0;
                             println!("F1: {}, F2: {}, f1 offset: {}, f2 offset: {}", f1, f2, f1_offset_ffmk, f2_offset_ffmk);
                             println!("c1: {} , c2: {}, wsumadd {}",   contra_fields.get_unchecked(f1_offset_ffmk + k as usize), 
                                     contra_fields.get_unchecked(f2_offset_ffmk + k as usize),
                                     contra_fields.get_unchecked(f1_offset_ffmk + k as usize) * 
                                     contra_fields.get_unchecked(f2_offset_ffmk + k as usize)
                                     );*/
-                            if f1 == f2 {
-                                for k in 0..FFMK {
-                                    *wsumbuf.get_unchecked_mut(k as usize) += 
-                                            contra_fields.get_unchecked(f1_offset_ffmk + k as usize) * 
-                                            contra_fields.get_unchecked(f2_offset_ffmk + k as usize) * 0.5;
-                                }                                    
-                            } else {
                                 for k in 0..FFMK {
                                     *wsumbuf.get_unchecked_mut(k as usize) += 
                                             contra_fields.get_unchecked(f1_offset_ffmk + k as usize) * 
                                             contra_fields.get_unchecked(f2_offset_ffmk + k as usize);
                                             
                                 }
-                            }
-                            f2_offset_ffmk += field_embedding_len;
-                            f1_offset_ffmk += FFMK as usize;
                         }
+                        
                     }
                     for k in 0..FFMK as usize {
                         wsum += wsumbuf[k];
