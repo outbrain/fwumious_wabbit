@@ -268,31 +268,110 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         let mut wsum:f32 = 0.0;
         unsafe {
             let ffm_weights = &self.weights;
-            specialize_k!(self.ffm_k, FFMK, wsumbuf, {                        
-                for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                    for right_hash in fb.ffm_buffer.get_unchecked(i+1 ..).iter() {
-                        //if left_hash.contra_field_index == right_hash.contra_field_index {
-                        //    continue	// not combining within a field
-                        //}
-                        let joint_value = left_hash.value * right_hash.value;
-                        let lindex = (left_hash.hash + right_hash.contra_field_index) as u32;
-                        let rindex = (right_hash.hash + left_hash.contra_field_index) as u32;
-                        for k in 0..FFMK {
-                            let left_hash_weight  = ffm_weights.get_unchecked((lindex+k) as usize).weight;
-                            let right_hash_weight = ffm_weights.get_unchecked((rindex+k) as usize).weight;
-                            //wsum += left_hash_weight * right_side;
-                            // We do this, so in theory Rust/LLVM could vectorize whole loop
-                            // Unfortunately it does not happen in practice, but we will get there
-                            // Original: wsum += left_hash_weight * right_side;
-                            *wsumbuf.get_unchecked_mut(k as usize) += left_hash_weight * right_hash_weight * joint_value;                        
+            if true {
+                let mut contra_fields: [f32; FFM_STACK_BUF_LEN] = MaybeUninit::uninit().assume_init();
+                let field_embedding_len = (self.ffm_k * fb.ffm_fields_count) as usize;
+                let scratchpad_len = fb.ffm_fields_count * fb.ffm_fields_count * self.ffm_k;
+                specialize_k!(self.ffm_k, FFMK, wsumbuf, {
+                
+                    let mut last_contra_index = 1000000;
+                    for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
+                        let v:f32 = left_hash.value;
+                        let offset = (left_hash.contra_field_index * fb.ffm_fields_count) as usize;
+                        // This line is golden. Just cache the very first cache line in next iteration
+                        _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(i+1 ).hash as usize).weight), _MM_HINT_T0);  // No benefit for now
+                        if last_contra_index != left_hash.contra_field_index {
+                            for k in 0..field_embedding_len { // first time we see this field - just overwrite
+                                *contra_fields.get_unchecked_mut(offset + k) = v * ffm_weights.get_unchecked(left_hash.hash as usize + k).weight;
+                            }
+                        } else {
+                            for k in 0..field_embedding_len { // we've seen this field before - add
+                                *contra_fields.get_unchecked_mut(offset + k) += v * ffm_weights.get_unchecked(left_hash.hash as usize + k).weight;
+                            }
+                        }
+                        for k in 0..FFMK { // we've seen this field before - add
+                            let ss = v * ffm_weights.get_unchecked(left_hash.hash as usize + left_hash.contra_field_index as usize + k as usize).weight;
+                            let minus = ss * ss * 0.5;
+                            /*println!("i: {}, value: {} weight: {}, contra field index {}, ss: {}, substract: {}", 
+                                    i, v, ffm_weights.get_unchecked(left_hash.hash as usize + left_hash.contra_field_index as usize).weight, 
+                                    left_hash.contra_field_index,
+                                    ss, minus);
+                            */
+                            wsumbuf[k as usize] -= minus;
+                        }
+                        last_contra_index = left_hash.contra_field_index;
+                    }
+
+
+                    for f1 in 0..fb.ffm_fields_count as usize {
+                        let f1_offset = f1 * field_embedding_len as usize;
+                        let f1_ffmk = f1 * FFMK as usize;
+                        let mut f2_offset_ffmk = f1_offset + f1_ffmk;
+                        let mut f1_offset_ffmk = f1_offset + f1_ffmk;
+                        for f2 in f1..fb.ffm_fields_count as usize {
+                            /*assert_eq!(f1_offset_ffmk, f1 * field_embedding_len + f2 * FFMK as usize);
+                            assert_eq!(f2_offset_ffmk, f2 * field_embedding_len + f1 * FFMK as usize);
+                            let k = 0;
+                            println!("F1: {}, F2: {}, f1 offset: {}, f2 offset: {}", f1, f2, f1_offset_ffmk, f2_offset_ffmk);
+                            println!("c1: {} , c2: {}, wsumadd {}",   contra_fields.get_unchecked(f1_offset_ffmk + k as usize), 
+                                    contra_fields.get_unchecked(f2_offset_ffmk + k as usize),
+                                    contra_fields.get_unchecked(f1_offset_ffmk + k as usize) * 
+                                    contra_fields.get_unchecked(f2_offset_ffmk + k as usize)
+                                    );*/
+                            if f1 == f2 {
+                                for k in 0..FFMK {
+                                    *wsumbuf.get_unchecked_mut(k as usize) += 
+                                            contra_fields.get_unchecked(f1_offset_ffmk + k as usize) * 
+                                            contra_fields.get_unchecked(f2_offset_ffmk + k as usize) * 0.5;
+                                }                                    
+                            } else {
+                                for k in 0..FFMK {
+                                    *wsumbuf.get_unchecked_mut(k as usize) += 
+                                            contra_fields.get_unchecked(f1_offset_ffmk + k as usize) * 
+                                            contra_fields.get_unchecked(f2_offset_ffmk + k as usize);
+                                            
+                                }
+                            }
+                            f2_offset_ffmk += field_embedding_len;
+                            f1_offset_ffmk += FFMK as usize;
                         }
                     }
-                
-                }
-                for k in 0..FFMK as usize {
-                    wsum += wsumbuf[k];
-                }
-            });
+                    for k in 0..FFMK as usize {
+                        wsum += wsumbuf[k];
+                    }
+                });
+            } else {
+                let ffm_weights = &self.weights;
+                specialize_k!(self.ffm_k, FFMK, wsumbuf, {                        
+                    for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
+                        for right_hash in fb.ffm_buffer.get_unchecked(i+1 ..).iter() {
+                            //if left_hash.contra_field_index == right_hash.contra_field_index {
+                            //    continue	// not combining within a field
+                            //}
+                            let joint_value = left_hash.value * right_hash.value;
+                            let lindex = (left_hash.hash + right_hash.contra_field_index) as u32;
+                            let rindex = (right_hash.hash + left_hash.contra_field_index) as u32;
+                            for k in 0..FFMK {
+                                let left_hash_weight  = ffm_weights.get_unchecked((lindex+k) as usize).weight;
+                                let right_hash_weight = ffm_weights.get_unchecked((rindex+k) as usize).weight;
+                                //wsum += left_hash_weight * right_side;
+                                // We do this, so in theory Rust/LLVM could vectorize whole loop
+                                // Unfortunately it does not happen in practice, but we will get there
+                                // Original: wsum += left_hash_weight * right_side;
+                                println!("Left value {}, left weight {}, right value {}, right weight {}", left_hash.value, left_hash_weight,
+                                                                                            right_hash.value, right_hash_weight);
+                                println!("WsumadD: {}", left_hash_weight * right_hash_weight * joint_value);
+                                *wsumbuf.get_unchecked_mut(k as usize) += left_hash_weight * right_hash_weight * joint_value;  
+                            }
+                        }
+                    
+                    }
+                    for k in 0..FFMK as usize {
+                        wsum += wsumbuf[k];
+                    }
+                });
+                println!("-------!!!!!!!!");
+            }
         }
         let (next_regressor, further_blocks) = further_blocks.split_at(1);
         let prediction_probability = next_regressor[0].forward(further_blocks, wsum + wsum_input, fb);
