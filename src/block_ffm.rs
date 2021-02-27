@@ -269,10 +269,11 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         unsafe {
             let ffm_weights = &self.weights;
             if true {
+                _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(0).hash as usize).weight), _MM_HINT_T0);
+
                 let mut contra_fields: [f32; FFM_STACK_BUF_LEN] = MaybeUninit::uninit().assume_init();
                 let field_embedding_len = (self.ffm_k * fb.ffm_fields_count) as usize;
                 specialize_k!(self.ffm_k, FFMK, wsumbuf, {
-                
                     let mut last_contra_index = 1000000;
                     for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
                         let v:f32 = left_hash.value;
@@ -282,26 +283,28 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                         _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(i+1).hash as usize).weight), _MM_HINT_T0);  // No benefit for now
   //                      _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(i+1).hash as usize + 8).weight), _MM_HINT_T0);  // No benefit for now
 //                        _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(i+1).hash as usize + 16).weight), _MM_HINT_T0);  // No benefit for now
-                        if last_contra_index != left_hash.contra_field_index {
-                            for k in 0..field_embedding_len { // first time we see this field - just overwrite
-                                *contra_fields.get_unchecked_mut(offset + k) = v * ffm_weights.get_unchecked(left_hash_hash + k).weight;
+                        specialize_1f32!(v, V, {
+                            if last_contra_index != left_hash.contra_field_index {
+                                for k in 0..field_embedding_len { // first time we see this field - just overwrite
+                                    *contra_fields.get_unchecked_mut(offset + k) = V * ffm_weights.get_unchecked(left_hash_hash + k).weight;
+                                }
+                            } else {
+                                for k in 0..field_embedding_len { // we've seen this field before - add
+                                    *contra_fields.get_unchecked_mut(offset + k) += V * ffm_weights.get_unchecked(left_hash_hash + k).weight;
+                                }
                             }
-                        } else {
-                            for k in 0..field_embedding_len { // we've seen this field before - add
-                                *contra_fields.get_unchecked_mut(offset + k) += v * ffm_weights.get_unchecked(left_hash_hash + k).weight;
+                            let contra_field_index = left_hash.contra_field_index as usize;
+                            for k in 0..FFMK as usize { // we've seen this field before - add
+                                let ss = V * ffm_weights.get_unchecked(left_hash_hash as usize + contra_field_index + k).weight;
+                                let minus = ss * ss * 0.5;
+                                /*println!("i: {}, value: {} weight: {}, contra field index {}, ss: {}, substract: {}", 
+                                        i, v, ffm_weights.get_unchecked(left_hash.hash as usize + left_hash.contra_field_index as usize).weight, 
+                                        left_hash.contra_field_index,
+                                        AAss, minus);
+                                */
+                                wsumbuf[k as usize] -= minus;
                             }
-                        }
-                        let contra_field_index = left_hash.contra_field_index as usize;
-                        for k in 0..FFMK as usize { // we've seen this field before - add
-                            let ss = v * ffm_weights.get_unchecked(left_hash_hash as usize + contra_field_index + k).weight;
-                            let minus = ss * ss * 0.5;
-                            /*println!("i: {}, value: {} weight: {}, contra field index {}, ss: {}, substract: {}", 
-                                    i, v, ffm_weights.get_unchecked(left_hash.hash as usize + left_hash.contra_field_index as usize).weight, 
-                                    left_hash.contra_field_index,
-                                    ss, minus);
-                            */
-                            wsumbuf[k as usize] -= minus;
-                        }
+                        });
                         last_contra_index = left_hash.contra_field_index;
                     }
 
@@ -311,6 +314,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                         let f1_ffmk = f1 * FFMK as usize;
                         let mut f2_offset_ffmk = f1_offset + f1_ffmk;
                         let mut f1_offset_ffmk = f1_offset + f1_ffmk;
+                        // This is self-interaction
                         for k in 0..FFMK {
                                 let v = contra_fields.get_unchecked(f1_offset_ffmk + k as usize);
                                 *wsumbuf.get_unchecked_mut(k as usize) += v * v * 0.5;
