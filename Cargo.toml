@@ -24,7 +24,7 @@ daemonize = "0.4.1"
 lz4 = "1.23.2"
 nom = "6"
 dyn-clone = "1.0"
-funty="=1.1.0"
+#funty="=1.1.0"	# no need for pinning any more
 
 # We'll use cloudflare's zlib as it is the fastest game in town
 #flate2 = "1.0" #minz library
