@@ -17,7 +17,7 @@ use regressor::BlockTrait;
 use block_helpers::{Weight, WeightAndOptimizerData, slearn};
 
 
-const FFM_STACK_BUF_LEN:usize= 16384;
+const FFM_STACK_BUF_LEN:usize= 65536;
 
 
 
@@ -33,7 +33,6 @@ pub struct BlockFFM<L:OptimizerTrait> {
     pub local_data_ffm_indices: Vec<u32>,
     pub local_data_ffm_values: Vec<f32>,
     pub ffm_k: u32,
-    pub ffm_one_over_k_root: f32,
     pub ffm_weights_len: u32, 
     pub weights: Vec<WeightAndOptimizerData<L>>,
 }
@@ -78,13 +77,13 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
     }
 
     fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+
         let mut reg_ffm = BlockFFM::<L> {
             weights: Vec::new(),
             ffm_weights_len: 0, 
             local_data_ffm_indices: Vec::with_capacity(1024),
             local_data_ffm_values: Vec::with_capacity(1024),
             ffm_k: mi.ffm_k, 
-            ffm_one_over_k_root: 0.0, 
             optimizer_ffm: L::new(),
         };
 
@@ -93,6 +92,13 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
             // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
             reg_ffm.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * reg_ffm.ffm_k);
         }
+
+        // Verify that forward pass will have enough stack for temporary buffer
+        if reg_ffm.ffm_k as usize * mi.ffm_fields.len() * mi.ffm_fields.len() > FFM_STACK_BUF_LEN {
+            return Err(format!("FFM_STACK_BUF_LEN is {}. It needs to be at least ffm_k * number_of_fields^2. number_of_fields: {}, ffm_k: {}, please recompile with larger constant", 
+                        FFM_STACK_BUF_LEN, mi.ffm_fields.len(), reg_ffm.ffm_k))?;
+        }
+
         Ok(Box::new(reg_ffm))
     }
 
@@ -103,7 +109,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
             local_data_ffm_indices: Vec::new(),
             local_data_ffm_values: Vec::new(),
             ffm_k: self.ffm_k, 
-            ffm_one_over_k_root: self.ffm_one_over_k_root, 
             optimizer_ffm: optimizer::OptimizerSGD::new(),
         };
         
@@ -117,9 +122,9 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         if mi.ffm_k > 0 {       
             if mi.ffm_init_width == 0.0 {
                 // Initialization that has showed to work ok for us, like in ffm.pdf, but centered around zero and further divided by 50
-                self.ffm_one_over_k_root = 1.0 / (self.ffm_k as f32).sqrt() / 50.0;
+                let ffm_one_over_k_root = 1.0 / (self.ffm_k as f32).sqrt() / 50.0;
                 for i in 0..self.ffm_weights_len {
-                    self.weights[i as usize].weight = (1.0 * merand48((self.ffm_weights_len as usize+ i as usize) as u64)-0.5) * self.ffm_one_over_k_root;
+                    self.weights[i as usize].weight = (1.0 * merand48((self.ffm_weights_len as usize+ i as usize) as u64)-0.5) * ffm_one_over_k_root;
                     self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
                 }
             } else {
@@ -154,28 +159,32 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         unsafe {
             macro_rules! core_macro {
                 (
-                $local_data_ffm_indices:ident,
                 $local_data_ffm_values:ident
                 ) => {
                  
-                    let mut local_data_ffm_indices = &mut $local_data_ffm_indices;
                     let mut local_data_ffm_values = &mut $local_data_ffm_values;
                         
                     let ffm_weights = &mut self.weights;
                     let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
                     let mut ifc:usize = 0;
-                    for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                        let base_weight_index = left_hash.hash;
-                        for j in 0..fc as usize {
-                            let addr = base_weight_index + j as u32;
-                            *local_data_ffm_indices.get_unchecked_mut(ifc + j) = addr;
-                            *local_data_ffm_values.get_unchecked_mut(ifc + j) = 0.0;
-                            _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(addr as usize).weight), _MM_HINT_T0);  // No benefit for now
-                       }
-                       ifc += fc;
-                    }
-
+                    
                     specialize_k!(self.ffm_k, FFMK, wsumbuf, {
+                     
+                        // This is a strange loop. We want to have just first cache line ready for each embedding
+                        // Plus we need to initialize to zero.
+                        let mut baddr: usize = 0;
+                        for left_hash in &fb.ffm_buffer {
+                            let mut addr = left_hash.hash as usize;
+                            for z in 0..fb.ffm_fields_count {
+                                _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(addr as usize).weight), _MM_HINT_T0);  // No benefit for now
+                                for k in 0..FFMK {
+                                    *local_data_ffm_values.get_unchecked_mut(baddr) = 0.0;
+                                    addr += 1;
+                                    baddr += 1;
+                                }
+                            }
+                        }
+                       
                         let mut ifc:usize = 0;
                         for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
                             let mut right_local_index = left_hash.contra_field_index as usize + ifc;
@@ -191,20 +200,19 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                                 // FYI this is effectively what we calculate:
             //                    let left_local_index =  i*fc + right_hash.contra_field_index as usize;
             //                    let right_local_index = (i+1+j) * fc + left_hash.contra_field_index as usize;
-                                let left_local_index = ifc + right_hash.contra_field_index as usize;
                                 let joint_value = left_hash.value * right_hash.value;
-                                let lindex = *local_data_ffm_indices.get_unchecked(left_local_index) as usize;
-                                let rindex = *local_data_ffm_indices.get_unchecked(right_local_index) as usize;
+                                let left_local_index = ifc + right_hash.contra_field_index as usize;
+                                let lindex = (left_hash.hash + right_hash.contra_field_index) as usize;
+                                let rindex = (right_hash.hash + left_hash.contra_field_index) as usize;
+
                                 specialize_1f32!(joint_value, JOINT_VALUE, {
                                     for k in 0..FFMK as usize {
-                                        let llik = (left_local_index as usize + k) as usize;
-                                        let rlik = (right_local_index as usize + k) as usize;
                                         let left_hash_weight  = ffm_weights.get_unchecked((lindex+k) as usize).weight;
                                         let right_hash_weight = ffm_weights.get_unchecked((rindex+k) as usize).weight;
                                         
                                         let right_side = right_hash_weight * JOINT_VALUE;
-                                        *local_data_ffm_values.get_unchecked_mut(llik) += right_side; // first derivate
-                                        *local_data_ffm_values.get_unchecked_mut(rlik) += left_hash_weight  * JOINT_VALUE; // first derivate
+                                        *local_data_ffm_values.get_unchecked_mut(left_local_index + k) += right_side; // first derivate
+                                        *local_data_ffm_values.get_unchecked_mut(right_local_index + k) += left_hash_weight  * JOINT_VALUE; // first derivate
                                         // We do this, so in theory Rust/LLVM could vectorize whole loop
                                         // Original: wsum += left_hash_weight * right_side;
                                         *wsumbuf.get_unchecked_mut(k) += left_hash_weight * right_side;
@@ -224,13 +232,18 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                     let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_blocks, wsum + wsum_input, fb, update);
                     
                     if update {
-                       for i in 0..local_data_ffm_len {
-                            let feature_value = *local_data_ffm_values.get_unchecked(i);
-                            let feature_index = *local_data_ffm_indices.get_unchecked(i) as usize;
-                            let gradient = general_gradient * feature_value;
-                            let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
-                            ffm_weights.get_unchecked_mut(feature_index).weight += update;
-                        }
+                       let mut local_index: usize = 0;
+                       for left_hash in &fb.ffm_buffer {
+                            let mut feature_index = left_hash.hash as usize;
+                            for j in 0..fc as usize {
+                                let feature_value = *local_data_ffm_values.get_unchecked(local_index);
+                                let gradient = general_gradient * feature_value;
+                                let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
+                                ffm_weights.get_unchecked_mut(feature_index).weight += update;
+                                local_index += 1;
+                                feature_index += 1;
+                            }
+                       } 
                     }
                     // The only exit point
                     return (prediction_probability, general_gradient)
@@ -240,24 +253,18 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
 
             if local_data_ffm_len < FFM_STACK_BUF_LEN {
                 // Fast-path - using on-stack data structures
-                let mut local_data_ffm_indices: [u32; FFM_STACK_BUF_LEN as usize] = MaybeUninit::uninit().assume_init();
                 let mut local_data_ffm_values: [f32; FFM_STACK_BUF_LEN as usize] = MaybeUninit::uninit().assume_init();//[0.0; FFM_STACK_BUF_LEN as usize];
-                core_macro!(local_data_ffm_indices, local_data_ffm_values);
+                core_macro!(local_data_ffm_values);
 
             } else {
                 // Slow-path - using heap data structures
-                if local_data_ffm_len > self.local_data_ffm_indices.len() {
-                    self.local_data_ffm_indices.reserve(local_data_ffm_len - self.local_data_ffm_indices.len() + 1024);
-                }
                 if local_data_ffm_len > self.local_data_ffm_values.len() {
                     self.local_data_ffm_values.reserve(local_data_ffm_len - self.local_data_ffm_values.len() + 1024);
                 }
-                let mut local_data_ffm_indices = &mut self.local_data_ffm_indices;
                 let mut local_data_ffm_values = &mut self.local_data_ffm_values;
             
-                core_macro!(local_data_ffm_indices, local_data_ffm_values);
-            }
-             
+                core_macro!(local_data_ffm_values);
+            }             
         } // unsafe end
     }
     
@@ -265,31 +272,115 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         let mut wsum:f32 = 0.0;
         unsafe {
             let ffm_weights = &self.weights;
-            specialize_k!(self.ffm_k, FFMK, wsumbuf, {                        
-                for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                    for right_hash in fb.ffm_buffer.get_unchecked(i+1 ..).iter() {
-                        //if left_hash.contra_field_index == right_hash.contra_field_index {
-                        //    continue	// not combining within a field
-                        //}
-                        let joint_value = left_hash.value * right_hash.value;
-                        let lindex = (left_hash.hash + right_hash.contra_field_index) as u32;
-                        let rindex = (right_hash.hash + left_hash.contra_field_index) as u32;
-                        for k in 0..FFMK {
-                            let left_hash_weight  = ffm_weights.get_unchecked((lindex+k) as usize).weight;
-                            let right_hash_weight = ffm_weights.get_unchecked((rindex+k) as usize).weight;
-                            //wsum += left_hash_weight * right_side;
-                            // We do this, so in theory Rust/LLVM could vectorize whole loop
-                            // Unfortunately it does not happen in practice, but we will get there
-                            // Original: wsum += left_hash_weight * right_side;
-                            *wsumbuf.get_unchecked_mut(k as usize) += left_hash_weight * right_hash_weight * joint_value;                        
-                        }
+            if true {
+                _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(0).hash as usize).weight), _MM_HINT_T0);
+
+                let mut contra_fields: [f32; FFM_STACK_BUF_LEN] = MaybeUninit::uninit().assume_init();
+                let field_embedding_len = (self.ffm_k * fb.ffm_fields_count) as usize;
+
+                specialize_k!(self.ffm_k, FFMK, wsumbuf, {
+                    let mut last_contra_index = 1000000;
+                    for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
+                        // This line is golden. Just cache the very first cache line in next iteration
+                        _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(i+1).hash as usize).weight), _MM_HINT_T0);
+                        let left_hash_hash = left_hash.hash as usize;
+                        let contra_field_index = left_hash.contra_field_index as usize;
+                        let offset = (left_hash.contra_field_index * fb.ffm_fields_count) as usize;
+                        specialize_1f32!(left_hash.value, LEFT_HASH_VALUE, {
+                            if last_contra_index != left_hash.contra_field_index {
+                                for k in 0..field_embedding_len { // first time we see this field - just overwrite
+                                    *contra_fields.get_unchecked_mut(offset + k) = ffm_weights.get_unchecked(left_hash_hash + k).weight * LEFT_HASH_VALUE;
+                                }
+                            } else {
+                                for k in 0..field_embedding_len { // we've seen this field before - add
+                                    *contra_fields.get_unchecked_mut(offset + k) += ffm_weights.get_unchecked(left_hash_hash + k).weight * LEFT_HASH_VALUE;
+                                }
+                            }
+                            // this is part of the work to cancel-out self-interaction of a feature
+                            let vv = (0.5f32).sqrt() * LEFT_HASH_VALUE;     // To avoid one additional multiplication, we square root 0.5 into vv
+                            for k in 0..FFMK as usize {
+                                let ss = ffm_weights.get_unchecked(left_hash_hash as usize + contra_field_index + k).weight * vv;
+                                let minus = ss * ss;
+                                /*println!("i: {}, value: {} weight: {}, contra field index {}, ss: {}, substract: {}", 
+                                        i, v, ffm_weights.get_unchecked(left_hash.hash as usize + left_hash.contra_field_index as usize).weight, 
+                                        left_hash.contra_field_index,
+                                        AAss, minus);
+                                */
+                                wsumbuf[k as usize] -= minus;
+                            }
+                        });
+                        last_contra_index = left_hash.contra_field_index;
                     }
-                
-                }
-                for k in 0..FFMK as usize {
-                    wsum += wsumbuf[k];
-                }
-            });
+
+                    for f1 in 0..fb.ffm_fields_count as usize {
+                        let f1_offset = f1 * field_embedding_len as usize;
+                        let f1_ffmk = f1 * FFMK as usize;
+                        let mut f2_offset_ffmk = f1_offset + f1_ffmk;
+                        let mut f1_offset_ffmk = f1_offset + f1_ffmk;
+                        // This is self-interaction
+                        for k in 0..FFMK {
+                            let v = contra_fields.get_unchecked(f1_offset_ffmk + k as usize);
+                            *wsumbuf.get_unchecked_mut(k as usize) += v * v * 0.5;
+                        }
+
+                        for f2 in f1+1..fb.ffm_fields_count as usize {
+                            f2_offset_ffmk += field_embedding_len;
+                            f1_offset_ffmk += FFMK as usize;
+                            //assert_eq!(f1_offset_ffmk, f1 * field_embedding_len + f2 * FFMK as usize);
+                            //assert_eq!(f2_offset_ffmk, f2 * field_embedding_len + f1 * FFMK as usize);
+                            /*let k = 0;
+                            println!("F1: {}, F2: {}, f1 offset: {}, f2 offset: {}", f1, f2, f1_offset_ffmk, f2_offset_ffmk);
+                            println!("c1: {} , c2: {}, wsumadd {}",   contra_fields.get_unchecked(f1_offset_ffmk + k as usize), 
+                                    contra_fields.get_unchecked(f2_offset_ffmk + k as usize),
+                                    contra_fields.get_unchecked(f1_offset_ffmk + k as usize) * 
+                                    contra_fields.get_unchecked(f2_offset_ffmk + k as usize)
+                                    );*/
+                                for k in 0..FFMK {
+                                    *wsumbuf.get_unchecked_mut(k as usize) += 
+                                            contra_fields.get_unchecked(f1_offset_ffmk + k as usize) * 
+                                            contra_fields.get_unchecked(f2_offset_ffmk + k as usize);
+                                            
+                                }
+                        }
+                        
+                    }
+                    for k in 0..FFMK as usize {
+                        wsum += wsumbuf[k];
+                    }
+                });
+            } else {
+                // Old straight-forward method. As soon as we have multiple feature values per field, it is slower
+                let ffm_weights = &self.weights;
+                specialize_k!(self.ffm_k, FFMK, wsumbuf, {                        
+                    for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
+                        for right_hash in fb.ffm_buffer.get_unchecked(i+1 ..).iter() {
+                            //if left_hash.contra_field_index == right_hash.contra_field_index {
+                            //    continue	// not combining within a field
+                            //}
+                            let joint_value = left_hash.value * right_hash.value;
+                            let lindex = (left_hash.hash + right_hash.contra_field_index) as u32;
+                            let rindex = (right_hash.hash + left_hash.contra_field_index) as u32;
+                            for k in 0..FFMK {
+                                let left_hash_weight  = ffm_weights.get_unchecked((lindex+k) as usize).weight;
+                                let right_hash_weight = ffm_weights.get_unchecked((rindex+k) as usize).weight;
+                                //wsum += left_hash_weight * right_side;
+                                // We do this, so in theory Rust/LLVM could vectorize whole loop
+                                // Unfortunately it does not happen in practice, but we will get there
+                                // Original: wsum += left_hash_weight * right_side;
+                                //println!("Left value {}, left weight {}, right value {}, right weight {}", left_hash.value, left_hash_weight,
+                                //                                                            right_hash.value, right_hash_weight);
+                                //println!("WsumadD: {}", left_hash_weight * right_hash_weight * joint_value);
+                                *wsumbuf.get_unchecked_mut(k as usize) += left_hash_weight * right_hash_weight * joint_value;  
+                            }
+                        }
+                    
+                    }
+                    for k in 0..FFMK as usize {
+                        wsum += wsumbuf[k];
+                    }
+                });
+                println!("-------!!!!!!!!");
+            }
         }
         let (next_regressor, further_blocks) = further_blocks.split_at(1);
         let prediction_probability = next_regressor[0].forward(further_blocks, wsum + wsum_input, fb);
