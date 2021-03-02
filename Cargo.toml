@@ -9,6 +9,7 @@ edition = "2018"
 
 [dependencies]
 csv = "1.1.3"
+# we need new version to enable static builds
 #fasthash = "0.4.0"
 fasthash = { git = "https://github.com/flier/rust-fasthash" }
 serde = {version = "1.0.114" , features = ["derive"]}
@@ -49,3 +50,13 @@ crate_type = ["cdylib"]
 name = "fw"
 
 
+[profile.dev]
+opt-level = 3
+debug = true
+debug-assertions = true
+overflow-checks = true
+lto = false
+panic = 'unwind'
+incremental = false
+codegen-units = 16
+rpath = false

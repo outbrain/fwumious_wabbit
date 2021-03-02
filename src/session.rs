@@ -15,13 +15,13 @@ extern crate shell_words;
 
 pub struct FWSession {
     pub vw: vwmap::VwNamespaceMap,
-    pub re: Box<dyn regressor::RegressorTrait>,
+    pub re: regressor::Regressor,
     pub mi: model_instance::ModelInstance,
 }
 
 pub fn session_from_cl(cl: &clap::ArgMatches) -> Result<FWSession, Box<dyn Error>> {
     let vw: vwmap::VwNamespaceMap;
-    let mut re: Box<dyn regressor::RegressorTrait>;
+    let mut re: regressor::Regressor;
     let mi: model_instance::ModelInstance;
 
     let testonly = cl.is_present("testonly");
@@ -90,9 +90,9 @@ impl FWPort {
                 Err(_e) => return -1.0
        };
 
-       self.fbt.translate(buffer);
+       self.fbt.translate(buffer, 0);
        //println!("FB: {:?}", self.fbt.feature_buffer);
-       return fws.re.learn(&self.fbt.feature_buffer, update, 0 )
+       return fws.re.learn(&self.fbt.feature_buffer, update)
     }    
     
     pub fn learn(&mut self, fws: &mut FWSession, input_buffer: &str) -> f32 {

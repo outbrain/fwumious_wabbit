@@ -16,6 +16,7 @@ use std::time::Instant;
 use flate2::read::MultiGzDecoder;
 use std::env::args;
 
+
 mod vwmap;
 mod parser;
 mod model_instance;
@@ -28,7 +29,11 @@ mod serving;
 mod optimizer;
 mod version;
 mod consts;
-
+mod block_ffm;
+mod block_lr;
+mod block_loss_functions;
+mod block_helpers;
+mod multithread_helpers;
 mod session;
 
 fn main() {
@@ -46,21 +51,24 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         let filename = cl.value_of("initial_regressor").expect("Daemon mode only supports serving from --initial regressor");
         println!("initial_regressor = {}", filename);
         println!("WARNING: Command line model parameters will be ignored");
-        let (mi2, vw2, re_fixed) = persistence::new_immutable_regressor_from_filename(filename)?;
-        let mut se = serving::Serving::new(&cl, &vw2, re_fixed, &mi2)?;
+        let (mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true)?;
+        let mut se = serving::Serving::new(&cl, &vw2, Box::new(re_fixed), &mi2)?;
         se.serve()?;
+
+
     } else {
         // Where will we be putting perdictions (if at all)
         let mut predictions_file = match cl.value_of("predictions") {
             Some(filename) => Some(BufWriter::new(File::create(filename)?)),
             None => None      
-        };    
-        
+        };
+
         let testonly = cl.is_present("testonly");
         let mut fws = session::session_from_cl(&cl)?;
         let input_filename = cl.value_of("data").expect("--data expected");
         let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"), &fws.vw);
         let mut fbt = feature_buffer::FeatureBufferTranslator::new(&fws.mi);
+
 
         let final_regressor_filename = cl.value_of("final_regressor");
         match final_regressor_filename {
@@ -72,17 +80,15 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             },
             None => {}
         };
-
-
-
-        let predictions_after:u32 = match cl.value_of("predictions_after") {
+     
+        let predictions_after:u64 = match cl.value_of("predictions_after") {
             Some(examples) => examples.parse()?,
             None => 0
         };
 
-        let holdout_after_option : Option<u32> = cl.value_of("holdout_after").map(|s| s.parse().unwrap());
+        let holdout_after_option : Option<u64> = cl.value_of("holdout_after").map(|s| s.parse().unwrap());
 
-        let prediction_model_delay:u32 = match cl.value_of("prediction_model_delay") {
+        let prediction_model_delay:u64 = match cl.value_of("prediction_model_delay") {
             Some(delay) => delay.parse()?,
             None => 0
         };
@@ -125,7 +131,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
                 };
             }
             example_num += 1;
-            fbt.translate(buffer);
+            fbt.translate(buffer, example_num);
             let mut prediction: f32 = 0.0;
 
             if prediction_model_delay == 0 {
@@ -133,15 +139,15 @@ fn main2() -> Result<(), Box<dyn Error>>  {
                     Some(holdout_after) => !testonly && example_num < holdout_after,
                     None => !testonly
                 };
-                prediction = fws.re.learn(&fbt.feature_buffer, update, example_num);
+                prediction = fws.re.learn(&fbt.feature_buffer, update);
             } else {
                 if example_num > predictions_after {
-                    prediction = fws.re.learn(&fbt.feature_buffer, false, example_num);
+                    prediction = fws.re.learn(&fbt.feature_buffer, false);
                 }
                 delayed_learning_fbs.push_back(fbt.feature_buffer.clone());
                 if (prediction_model_delay as usize) < delayed_learning_fbs.len() {
                     let delayed_buffer = delayed_learning_fbs.pop_front().unwrap();
-                    fws.re.learn(&delayed_buffer, !testonly, example_num);
+                    fws.re.learn(&delayed_buffer, !testonly);
                 }
             } 
             
@@ -154,13 +160,15 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             
         }
         cache.write_finish()?;
+
+        let elapsed = now.elapsed();
+        println!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
+
         match final_regressor_filename {
             Some(filename) => persistence::save_regressor_to_filename(filename, &fws.mi, &fws.vw, fws.re).unwrap(),
             None => {}
         }
     
-        let elapsed = now.elapsed();
-        println!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
     }
 
     Ok(())
