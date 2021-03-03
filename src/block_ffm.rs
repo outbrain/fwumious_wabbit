@@ -162,7 +162,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                 ) => {
                */ {
                let mut local_data_ffm_values: [f32; FFM_STACK_BUF_LEN as usize] = MaybeUninit::uninit().assume_init();//[0.0; FFM_STACK_BUF_LEN as usize];
-                 
                  //   let mut local_data_ffm_values = &mut $local_data_ffm_values;
                         
                     let ffm_weights = &mut self.weights;
@@ -170,6 +169,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                     let mut ifc:usize = 0;
                     
                     if true {
+                        let mut wsumbuf2: [f32; 1024 as usize] = MaybeUninit::uninit().assume_init();
+                        for x in 0..fc {wsumbuf2[x] = 0.0};
                         let mut contra_fields: [f32; FFM_CONTRA_BUF_LEN] = MaybeUninit::uninit().assume_init();
                         let mut last_contra_index = 1000000;
                         specialize_k!(self.ffm_k, FFMK, wsumbuf, {
@@ -194,7 +195,9 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                                     for z in 0..fb.ffm_fields_count {
                                         _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(addr + FFMK as usize).weight), _MM_HINT_T0);
                                         
+                                        let mut cf = *(contra_fields.get_unchecked_mut(zfc..).as_ptr() as *mut [f32; 100]);
                                         for k in 0..FFMK as usize{
+                                            //*cf.get_unchecked_mut(k) = ffm_weights.get_unchecked(addr + k).weight * left_hash_value;
                                             *contra_fields.get_unchecked_mut(zfc + k) = ffm_weights.get_unchecked(addr + k).weight * left_hash_value;
                                         }
                                         zfc += fc;
@@ -206,11 +209,13 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                                     let left_hash_contra_field_index = left_hash.contra_field_index;
                                     for z in 0..fb.ffm_fields_count {
                                         _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(addr + FFMK as usize).weight), _MM_HINT_T0);
-                                        
+
+                                        let mut cf = *(contra_fields.get_unchecked_mut(zfc..).as_ptr() as *mut [f32; 100]);
                                         for k in 0..FFMK as usize{
+                                            //*cf.get_unchecked_mut(k) += ffm_weights.get_unchecked(addr + k).weight * left_hash_value;
                                             *contra_fields.get_unchecked_mut(zfc + k) += ffm_weights.get_unchecked(addr + k).weight * left_hash_value;
                                         }
-                                        /*
+                                        /* Rust way is way slower (by looking at dissasembly)...
                                         for (dest, source) in contra_fields.get_unchecked_mut(zfc..zfc+FFMK as usize).iter_mut().zip(ffm_weights.get_unchecked(addr..addr+FFMK as usize).iter()){
                                             *dest += source.weight * left_hash_value;
                                         }*/
@@ -228,33 +233,77 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                                 let left_hash_value = left_hash.value;
                                 let left_hash_contra_field_index = left_hash.contra_field_index;
                                 let mut left_hash_hash = left_hash.hash as usize;
-                                for z in 0..fb.ffm_fields_count as usize {
-                                    if vv == left_hash_contra_field_index as usize {
-                                        for k in 0..FFMK as usize {
-                                            let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + vv + k).weight;
-                                            let mut contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k) - ffm_weight * left_hash_value;
-                                            let gradient =  left_hash_value * contra_weight;
-                                            *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
-                                            *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient;
-                                        }
-                                    }  else {
-                                        for k in 0..FFMK as usize {
-                                            let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + vv + k).weight;
-                                            let mut contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k);
-                                            let gradient =  left_hash_value * contra_weight;
-                                            *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
-                                            *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient;
-                                        }
+                                /*
+                                specialize_1f32!(left_hash_value, LEFT_HASH_VALUE, {
+                                
+                                    for z in 0..left_hash.contra_field_index as usize{
+                                        let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + z).weight;
+                                        let mut contra_weight = *contra_fields.get_unchecked(contra_offset + z);
+                                        let gradient =  LEFT_HASH_VALUE * contra_weight;
+                                        *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + z) = gradient;
+//                                        *wsumbuf.get_unchecked_mut(z % FFMK as usize) += ffm_weight * gradient;
+                                        wsumbuf2[z] += ffm_weight * gradient;
+                                        //wsum += ffm_weight * gradient;
                                     }
-                                    vv += FFMK as usize;
-                                    //left_hash_hash += FFMK as usize;
-                                    //contra_offset += FFMK as usize;
-                                    ffm_values_offset += FFMK as usize;
-                                }
+                                    
+                                    for z in left_hash.contra_field_index as usize ..(left_hash.contra_field_index + FFMK) as usize {
+                                        let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + z).weight;
+                                        let mut contra_weight = *contra_fields.get_unchecked(contra_offset + z) - ffm_weight * LEFT_HASH_VALUE;
+                                        let gradient =  LEFT_HASH_VALUE * contra_weight;
+                                        *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + z) = gradient;
+                                        // *wsumbuf.get_unchecked_mut(z % FFMK) += ffm_weight * gradient;
+//                                         *wsumbuf.get_unchecked_mut(z % FFMK as usize) += ffm_weight * gradient;
+                                        wsumbuf2[z] += ffm_weight * gradient;
+                                        
+                                        //wsum += ffm_weight * gradient;
+                                    }
+                                    
+                                    for z in (left_hash.contra_field_index + FFMK) as usize..fc as usize{
+                                        let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + z).weight;
+                                        let mut contra_weight = *contra_fields.get_unchecked(contra_offset + z);
+                                        let gradient =  LEFT_HASH_VALUE * contra_weight;
+                                        *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + z) = gradient;
+                                        // *wsumbuf.get_unchecked_mut(z % FFMK as usize) += ffm_weight * gradient;
+                                        wsumbuf2[z] += ffm_weight * gradient;
+                                        //wsum += ffm_weight * gradient;
+                                    }
+                                });
+                                ffm_values_offset += fc;
+                                
+                                */
+//                                specialize_1f32!(left_hash_value, LEFT_HASH_VALUE, {
+                                    let LEFT_HASH_VALUE = left_hash_value;
+                                    for z in 0..fb.ffm_fields_count as usize {
+                                        if vv == left_hash_contra_field_index as usize {
+                                            for k in 0..FFMK as usize {
+                                                let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + vv + k).weight;
+                                                let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k) - ffm_weight * LEFT_HASH_VALUE;
+                                                let gradient =  LEFT_HASH_VALUE * contra_weight;
+                                                *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
+                                                *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient;
+                                            }
+                                        }  else {
+                                            for k in 0..FFMK as usize {
+                                                let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + vv + k).weight;
+                                                let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k);
+                                                let gradient =  LEFT_HASH_VALUE * contra_weight;
+                                                *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
+                                                *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient;
+                                            }
+                                        }
+                                        vv += FFMK as usize;
+                                        //left_hash_hash += FFMK as usize;
+                                        //contra_offset += FFMK as usize;
+                                        ffm_values_offset += FFMK as usize;
+                                    }
+  //                             });
                             }    
                             for k in 0..FFMK as usize {
                                 wsum += wsumbuf[k];
                             }
+/*                            for k in 0..fc as usize {
+                                wsum += wsumbuf2[k];
+                            }*/
                             wsum *= 0.5;
                         });
                         
@@ -327,17 +376,31 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                     
                     if update {
                        let mut local_index: usize = 0;
-                       for left_hash in &fb.ffm_buffer {
-                            let mut feature_index = left_hash.hash as usize;
-                            for j in 0..fc as usize {
-                                let feature_value = *local_data_ffm_values.get_unchecked(local_index);
-                                let gradient = general_gradient * feature_value;
-                                let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
-                                ffm_weights.get_unchecked_mut(feature_index).weight += update;
-                                local_index += 1;
-                                feature_index += 1;
-                            }
-                       } 
+                       //specialize_k!(self.ffm_k, FFMK, wsumbuf, {
+
+                           for left_hash in &fb.ffm_buffer {
+                               let mut feature_index = left_hash.hash as usize;
+                                for j in 0..fc as usize {
+                                    let feature_value = *local_data_ffm_values.get_unchecked(local_index);
+                                    let gradient = general_gradient * feature_value;
+                                    let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
+                                    ffm_weights.get_unchecked_mut(feature_index).weight += update;
+                                    local_index += 1;
+                                    feature_index += 1;
+                               }/*
+                               for z in 0..fb.ffm_fields_count as usize {
+                                   for k in 0..FFMK as usize {
+                                       let feature_value = *local_data_ffm_values.get_unchecked(local_index + k);
+                                       let gradient = general_gradient * feature_value;
+                                       let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index + k).optimizer_data);
+                                       ffm_weights.get_unchecked_mut(feature_index + k).weight += update;
+                                   }
+                                   local_index += FFMK as usize;
+                                   feature_index += FFMK as usize;
+                               }*/
+                                
+                           }
+                       //}); 
                     }
                     // The only exit point
                     return (prediction_probability, general_gradient)
