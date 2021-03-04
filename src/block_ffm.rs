@@ -311,6 +311,15 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                 let mut contra_fields: [f32; FFM_STACK_BUF_LEN] = MaybeUninit::uninit().assume_init();
 
                 specialize_k!(self.ffm_k, FFMK, wsumbuf, {
+                    /* We first prepare "contra_fields" or collapsed field embeddings, where we sum all individual feature embeddings
+                       We need to be careful to:
+                       - handle fields with zero features present
+                       - handle values on diagonal - we want to be able to exclude self-interactions later (we pre-substract from wsum)
+                       - optimize for just copying the embedding over when looking at first feature of the field, and add embeddings for the rest
+                       - optiize for very common case of value of the feature being 1.0 - avoid multiplications
+                       - 
+                    */ 
+                    
                     let mut ffm_buffer_index = 0;
                     for field_index in 0..fb.ffm_fields_count {
                         let field_index_ffmk = field_index * FFMK;
@@ -321,7 +330,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                             for z in 0..field_embedding_len as usize { // first time we see this field - just overwrite
                                 *contra_fields.get_unchecked_mut(offset + z) = 0.0;
                             }
-                            break;
+                            continue;
                         } 
                         let mut feature_num = 0;
                         while ffm_buffer_index < fb.ffm_buffer.len() && fb.ffm_buffer.get_unchecked(ffm_buffer_index).contra_field_index == field_index_ffmk {
@@ -329,20 +338,19 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                             let left_hash = fb.ffm_buffer.get_unchecked(ffm_buffer_index);
                             let left_hash_hash = left_hash.hash as usize;
                             let left_hash_value = left_hash.value;
-                            let contra_field_index = left_hash.contra_field_index as usize;
                             specialize_1f32!(left_hash_value, LEFT_HASH_VALUE, {
                                 if feature_num == 0 {
-                                    for z in 0..field_embedding_len as usize { // first time we see this field - just overwrite
+                                    for z in 0..field_embedding_len { // first feature of the field - just overwrite
                                         *contra_fields.get_unchecked_mut(offset + z) = ffm_weights.get_unchecked(left_hash_hash + z).weight * LEFT_HASH_VALUE;
                                     }
                                 } else {
-                                    for z in 0..field_embedding_len as usize { // first time we see this field - just overwrite
+                                    for z in 0..field_embedding_len { // additional features of the field - addition
                                         *contra_fields.get_unchecked_mut(offset + z) += ffm_weights.get_unchecked(left_hash_hash + z).weight * LEFT_HASH_VALUE;
                                     }
                                 }
                                 let vv = SQRT_OF_ONE_HALF * LEFT_HASH_VALUE;     // To avoid one additional multiplication, we square root 0.5 into vv
                                 for k in 0..FFMK as usize {
-                                    let ss = ffm_weights.get_unchecked(left_hash_hash as usize + contra_field_index + k).weight * vv;
+                                    let ss = ffm_weights.get_unchecked(left_hash_hash + field_index_ffmk as usize + k).weight * vv;
                                     *wsumbuf.get_unchecked_mut(k) -= ss * ss;
                                 }
                             });
@@ -368,11 +376,11 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                             f1_offset_ffmk += FFMK as usize;
                             //assert_eq!(f1_offset_ffmk, f1 * field_embedding_len + f2 * FFMK as usize);
                             //assert_eq!(f2_offset_ffmk, f2 * field_embedding_len + f1 * FFMK as usize);
-                                for k in 0..FFMK {
-                                    *wsumbuf.get_unchecked_mut(k as usize) += 
-                                            contra_fields.get_unchecked(f1_offset_ffmk + k as usize) * 
-                                            contra_fields.get_unchecked(f2_offset_ffmk + k as usize);
-                                }
+                            for k in 0..FFMK {
+                                *wsumbuf.get_unchecked_mut(k as usize) += 
+                                        contra_fields.get_unchecked(f1_offset_ffmk + k as usize) * 
+                                        contra_fields.get_unchecked(f2_offset_ffmk + k as usize);
+                            }
                         }
                         
                     }
@@ -657,7 +665,7 @@ B,featureB
         mi.bit_precision = 18;
         mi.ffm_k = 1;
         mi.ffm_bit_precision = 18;
-        mi.ffm_fields = vec![vec![], vec![]]; // This isn't really used
+        mi.ffm_fields = vec![vec![], vec![], vec![]]; // This isn't really used
         let mut lossf = BlockSigmoid::new_without_weights(&mi).unwrap();
         
         // Nothing can be learned from a single field in FFMs
@@ -673,12 +681,14 @@ B,featureB
         ffm_init::<optimizer::OptimizerAdagradFlex>(&mut re);
         let fb = ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
-                                  HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: mi.ffm_k}
-                                  ], 2);
+                                  HashAndValueAndSeq{hash:5, value: 1.0, contra_field_index: mi.ffm_k * 1},
+                                  HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: mi.ffm_k * 2}
+                                  ], 3);
 //        assert_epsilon!(spredict(&mut re, &mut lossf, &fb, true), 0.7310586); 
-        assert_eq!(slearn  (&mut re, &mut lossf, &fb, false), 0.7310586); 
+        assert_eq!(slearn  (&mut re, &mut lossf, &fb, false), 0.95257413); 
 
-        let fb = ffm_vec(vec![HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0}], 2);
+        // here we intentionally have just the middle field
+        let fb = ffm_vec(vec![HashAndValueAndSeq{hash:5, value: 1.0, contra_field_index: mi.ffm_k * 1}], 3);
         assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.5);
         assert_eq!(slearn  (&mut re, &mut lossf, &fb, true), 0.5);
 
