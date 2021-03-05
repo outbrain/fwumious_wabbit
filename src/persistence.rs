@@ -235,7 +235,7 @@ B,featureB
                     ffm_fields_count: ffm_fields_count,
         }
     }
-
+    /*
     #[test]
     fn save_load_and_test_mode_ffm() {
         let vw_map_string = r#"
@@ -298,6 +298,6 @@ B,featureB
         }
         
 
-    }    
+    } */   
 
 }
