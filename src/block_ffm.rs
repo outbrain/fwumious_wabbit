@@ -169,7 +169,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                     let ffm_weights = &mut self.weights;
                     let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
                     let mut contra_fields: [f32; FFM_CONTRA_BUF_LEN] = MaybeUninit::uninit().assume_init();
-                    let mut last_contra_index = 1000000;
+                    let field_embedding_len = self.field_embedding_len;
                     specialize_k!(self.ffm_k, FFMK, wsumbuf, {
                         /* first prepare two things:
                         - transposed contra vectors in contra_fields - 
@@ -179,48 +179,53 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                             - we will use these gradients later in backward pass
                         */
                         _mm_prefetch(mem::transmute::<&f32, &i8>(&contra_fields.get_unchecked(fb.ffm_buffer.get_unchecked(0).contra_field_index as usize)), _MM_HINT_T0);
-                        for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                            let mut addr = left_hash.hash as usize;
-                             // This line is golden. Just cache the very first cache line in next iteration
-                            _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(i+1).hash as usize).weight), _MM_HINT_T0);
-                            //_mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(i+2).hash as usize).weight), _MM_HINT_T0);
-                                    
-                            if last_contra_index != left_hash.contra_field_index {
-                                let left_hash_value = left_hash.value;
-                                let left_hash_contra_field_index = left_hash.contra_field_index;
-                                let mut zfc:usize = left_hash.contra_field_index as usize;
+                        let mut ffm_buffer_index = 0;
+                        for field_index in 0..fb.ffm_fields_count {
+                            let field_index_ffmk = field_index * FFMK;
+                            let offset = (field_index_ffmk * fb.ffm_fields_count) as usize;
+                            // first we handle fields with no features
+                            if ffm_buffer_index >= fb.ffm_buffer.len() ||
+                                fb.ffm_buffer.get_unchecked(ffm_buffer_index).contra_field_index > field_index_ffmk {
+                                let mut zfc:usize = field_index_ffmk as usize;
                                 for z in 0..fb.ffm_fields_count {
-                                    _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(addr + FFMK as usize).weight), _MM_HINT_T0);
-                                    
-                                    //let mut cf = *(contra_fields.get_unchecked_mut(zfc..).as_ptr() as *mut [f32; 100]);
                                     for k in 0..FFMK as usize{
-                                        //*cf.get_unchecked_mut(k) = ffm_weights.get_unchecked(addr + k).weight * left_hash_value;
-                                        *contra_fields.get_unchecked_mut(zfc + k) = ffm_weights.get_unchecked(addr + k).weight * left_hash_value;
+                                        *contra_fields.get_unchecked_mut(zfc + k) = 0.0;
                                     }
                                     zfc += fc;
-                                    addr += FFMK as usize
-                                }
-                            } else {
-                                let mut zfc:usize = left_hash.contra_field_index as usize;
-                                let left_hash_value = left_hash.value;
-                                let left_hash_contra_field_index = left_hash.contra_field_index;
-                                for z in 0..fb.ffm_fields_count {
-                                    _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(addr + FFMK as usize).weight), _MM_HINT_T0);
-
-                                    let mut cf = *(contra_fields.get_unchecked_mut(zfc..).as_ptr() as *mut [f32; 100]);
-                                    for k in 0..FFMK as usize{
-                                        //*cf.get_unchecked_mut(k) += ffm_weights.get_unchecked(addr + k).weight * left_hash_value;
-                                        *contra_fields.get_unchecked_mut(zfc + k) += ffm_weights.get_unchecked(addr + k).weight * left_hash_value;
+                                }                                
+                                continue;
+                            } 
+                            let mut feature_num = 0;
+                            while ffm_buffer_index < fb.ffm_buffer.len() && fb.ffm_buffer.get_unchecked(ffm_buffer_index).contra_field_index == field_index_ffmk {
+                                _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(ffm_buffer_index+1).hash as usize).weight), _MM_HINT_T0);
+                                let left_hash = fb.ffm_buffer.get_unchecked(ffm_buffer_index);
+                                let mut addr = left_hash.hash as usize;
+                                let mut zfc:usize = field_index_ffmk as usize;
+                                
+                                specialize_1f32!(left_hash.value, LEFT_HASH_VALUE, {
+                                    if feature_num == 0 {
+                                        for z in 0..fb.ffm_fields_count {
+                                            _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(addr + FFMK as usize).weight), _MM_HINT_T0);
+                                            for k in 0..FFMK as usize{
+                                                *contra_fields.get_unchecked_mut(zfc + k) = ffm_weights.get_unchecked(addr + k).weight * LEFT_HASH_VALUE;
+                                            }
+                                            zfc += fc;
+                                            addr += FFMK as usize
+                                        }
+                                    } else {
+                                        for z in 0..fb.ffm_fields_count {
+                                            _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(addr + FFMK as usize).weight), _MM_HINT_T0);
+                                            for k in 0..FFMK as usize{
+                                                *contra_fields.get_unchecked_mut(zfc + k) += ffm_weights.get_unchecked(addr + k).weight * LEFT_HASH_VALUE;
+                                            }
+                                            zfc += fc;
+                                            addr += FFMK as usize
+                                        }
                                     }
-                                    /* Rust way is way slower (by looking at dissasembly)...
-                                    for (dest, source) in contra_fields.get_unchecked_mut(zfc..zfc+FFMK as usize).iter_mut().zip(ffm_weights.get_unchecked(addr..addr+FFMK as usize).iter()){
-                                        *dest += source.weight * left_hash_value;
-                                    }*/
-                                    zfc += fc;
-                                    addr += FFMK as usize
-                                }
+                                });
+                                ffm_buffer_index += 1;
+                                feature_num += 1;
                             }
-                            last_contra_index = left_hash.contra_field_index;
                         }
                         
                         let mut ffm_values_offset = 0;
@@ -229,31 +234,34 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                             let mut vv = 0;
                             let left_hash_value = left_hash.value;
                             let left_hash_contra_field_index = left_hash.contra_field_index;
-                            let mut left_hash_hash = left_hash.hash as usize;
-                                let LEFT_HASH_VALUE = left_hash_value;
-                                for z in 0..fb.ffm_fields_count as usize {
-                                    if vv == left_hash_contra_field_index as usize {
-                                        for k in 0..FFMK as usize {
-                                            let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + vv + k).weight;
-                                            let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k) - ffm_weight * LEFT_HASH_VALUE;
-                                            let gradient =  LEFT_HASH_VALUE * contra_weight;
-                                            *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
-                                            *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient;
-                                        }
-                                    } else {
-                                        for k in 0..FFMK as usize {
-                                            let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + vv + k).weight;
-                                            let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k);
-                                            let gradient =  LEFT_HASH_VALUE * contra_weight;
-                                            *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
-                                            *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient;
-                                        }
-                                    }
-                                    vv += FFMK as usize;
-                                    //left_hash_hash += FFMK as usize;
-                                    //contra_offset += FFMK as usize;
-                                    ffm_values_offset += FFMK as usize;
-                                }
+                            let left_hash_hash = left_hash.hash as usize;
+                            //let LEFT_HASH_VALUE = left_hash_value;
+                            specialize_1f32!(left_hash_value, LEFT_HASH_VALUE, {
+
+                              for z in 0..fb.ffm_fields_count as usize {
+                                  if vv == left_hash_contra_field_index as usize {
+                                      for k in 0..FFMK as usize {
+                                          let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + vv + k).weight;
+                                          let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k) - ffm_weight * LEFT_HASH_VALUE;
+                                          let gradient =  LEFT_HASH_VALUE * contra_weight;
+                                          *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
+                                          *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient;
+                                      }
+                                  } else {
+                                      for k in 0..FFMK as usize {
+                                          let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + vv + k).weight;
+                                          let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k);
+                                          let gradient =  LEFT_HASH_VALUE * contra_weight;
+                                          *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
+                                          *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient;
+                                      }
+                                  }
+                                  vv += FFMK as usize;
+                                  //left_hash_hash += FFMK as usize;
+                                  //contra_offset += FFMK as usize;
+                                  ffm_values_offset += FFMK as usize;
+                              }
+                            }); // End of macro specialize_1f32! for LEFT_HASH_VALUE
                         }    
                         for k in 0..FFMK as usize {
                             wsum += wsumbuf[k];
@@ -294,6 +302,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                 if local_data_ffm_len > self.local_data_ffm_values.len() {
                     self.local_data_ffm_values.reserve(local_data_ffm_len - self.local_data_ffm_values.len() + 1024);
                 }
+                println!("A");
                 let mut local_data_ffm_values = &mut self.local_data_ffm_values;
             
                 core_macro!(local_data_ffm_values);
@@ -499,8 +508,8 @@ mod tests {
 
         let fb = ffm_vec(vec![HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0}], 
                         1); // saying we have 1 field isn't entirely correct
-        assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.5);
-        assert_eq!(slearn  (&mut re, &mut lossf, &fb, true), 0.5);
+        assert_epsilon!(spredict(&mut re, &mut lossf, &fb, true), 0.5);
+        assert_epsilon!(slearn  (&mut re, &mut lossf, &fb, true), 0.5);
 
         // With two fields, things start to happen
         // Since fields depend on initial randomization, these tests are ... peculiar.
@@ -657,6 +666,9 @@ B,featureB
 
     #[test]
     fn test_ffm_missing_field() {
+        // This test is useful to check if we don't by accient forget to initialize any of the collapsed
+        // embeddings for the field, when field has no instances of a feature in it
+        // We do by having three-field situation where only the middle field has features
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.learning_rate = 0.1;
         mi.ffm_learning_rate = 0.1;
@@ -684,7 +696,7 @@ B,featureB
                                   HashAndValueAndSeq{hash:5, value: 1.0, contra_field_index: mi.ffm_k * 1},
                                   HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: mi.ffm_k * 2}
                                   ], 3);
-//        assert_epsilon!(spredict(&mut re, &mut lossf, &fb, true), 0.7310586); 
+        assert_epsilon!(spredict(&mut re, &mut lossf, &fb, true), 0.95257413); 
         assert_eq!(slearn  (&mut re, &mut lossf, &fb, false), 0.95257413); 
 
         // here we intentionally have just the middle field
