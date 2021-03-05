@@ -45,6 +45,7 @@ pub trait BlockTrait {
 
     /// Sets internal state of weights based on some completely object-dependent parameters
     fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>>;
+    fn debug_output(&self);
 }
 
 
@@ -144,6 +145,13 @@ impl Regressor  {
         let prediction_probability = current[0].forward(further_blocks, 0.0, fb);
         return prediction_probability
     }
+
+    pub fn debug_output(&self) {
+        for v in &self.blocks_boxes {
+            v.debug_output();
+        }
+    }
+
     
     // Yeah, this is weird. I just didn't want to break the format compatibility at this point
     pub fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {

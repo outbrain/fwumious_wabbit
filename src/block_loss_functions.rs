@@ -122,5 +122,9 @@ impl BlockTrait for BlockSigmoid {
         Ok(())
     }
 
+    fn debug_output(&self) {
+    }
+
+
 }
 

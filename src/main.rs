@@ -184,6 +184,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         let elapsed = now.elapsed();
         println!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
 
+        re.debug_output();
         match final_regressor_filename {
             Some(filename) => persistence::save_regressor_to_filename(filename, &mi, &vw, re).unwrap(),
             None => {}

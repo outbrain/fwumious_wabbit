@@ -258,8 +258,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                                           let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + vv + k).weight;
                                           let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k) - ffm_weight * LEFT_HASH_VALUE;
                                           let gradient =  LEFT_HASH_VALUE * contra_weight;
-                                          let gradient2 = gradient * self.attention_weights.get_unchecked(z + contra_offset).weight;
-                                          *attention_gradients.get_unchecked_mut(z + contra_offset) += gradient * ffm_weight;
+                                          let gradient2 = gradient * self.attention_weights.get_unchecked(vv + contra_offset).weight;
+                                          *attention_gradients.get_unchecked_mut(vv + contra_offset) += gradient * ffm_weight;
                                           *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient2;
                                           *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient2;
                                       }
@@ -268,8 +268,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                                           let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + vv + k).weight;
                                           let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k);
                                           let gradient =  LEFT_HASH_VALUE * contra_weight;
-                                          let gradient2 = gradient * self.attention_weights.get_unchecked(z + contra_offset).weight;
-                                          *attention_gradients.get_unchecked_mut(z + contra_offset) += gradient * ffm_weight;
+                                          let gradient2 = gradient * self.attention_weights.get_unchecked(vv + contra_offset).weight;
+                                          *attention_gradients.get_unchecked_mut(vv + contra_offset) += gradient * ffm_weight;
                                           *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient2;
                                           *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient2;
                                       }
@@ -303,6 +303,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                                 feature_index += 1;
                             }
                         }
+                        
                         // Update attention
                         for z in 0..self.attention_weights_len as usize {
                             let feature_value = attention_gradients.get_unchecked(z);
@@ -455,15 +456,17 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
     }
     
     fn get_serialized_len(&self) -> usize {
-        return self.ffm_weights_len as usize;
+        return (self.ffm_weights_len + self.attention_weights_len) as usize;
     }
 
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
-        block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader)
+        block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader).unwrap();
+        block_helpers::read_weights_from_buf(&mut self.attention_weights, input_bufreader)
     }
 
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
-        block_helpers::write_weights_to_buf(&self.weights, output_bufwriter)
+        block_helpers::write_weights_to_buf(&self.weights, output_bufwriter).unwrap();
+        block_helpers::write_weights_to_buf(&self.attention_weights, output_bufwriter)
     }
 
     fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>> {
@@ -477,6 +480,20 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
         self.weights[index].optimizer_data = self.optimizer_ffm.initial_data();
         Ok(())
     }
+
+    fn debug_output(&self) {
+        let field_count = ((self.attention_weights_len / self.ffm_k) as f32).sqrt() as usize;
+        for f1 in 0..field_count {
+            for f2 in 0..field_count {
+                print!("field combo {} x {} : ", f1, f2);
+                for k in 0..self.ffm_k {
+                    print!("{}, ", self.attention_weights[(f2+f1*field_count) * self.ffm_k as usize + k as usize].weight);
+                }
+                println!("");
+            }
+        }
+    }
+
 }
 
 
