@@ -81,7 +81,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
     } else {
         let vw: vwmap::VwNamespaceMap;
         let mut re: regressor::Regressor;
-        let mi: model_instance::ModelInstance;
+        let mut mi: model_instance::ModelInstance;
 
         if let Some(filename) = cl.value_of("initial_regressor") {
             println!("initial_regressor = {}", filename);
@@ -93,8 +93,9 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             // This is one of the major differences from vowpal
             let input_filename = cl.value_of("data").expect("--data expected");
             let vw_namespace_map_filepath = Path::new(input_filename).parent().expect("Couldn't access path given by --data").join("vw_namespace_map.csv");
-            vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
+            vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath, ("".to_string(), 0))?;
             mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
+            mi.enable_audit(&vw);
             re = regressor::get_regressor(&mi);
         };
         let input_filename = cl.value_of("data").expect("--data expected");
@@ -125,7 +126,6 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         };
 
         let mut pa = parser::VowpalParser::new(&vw);
-
         let now = Instant::now();
         let mut example_num = 0;
         loop {
@@ -184,7 +184,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         let elapsed = now.elapsed();
         println!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
 
-        re.debug_output();
+        re.debug_output(&mi);
         match final_regressor_filename {
             Some(filename) => persistence::save_regressor_to_filename(filename, &mi, &vw, re).unwrap(),
             None => {}

@@ -45,7 +45,7 @@ pub trait BlockTrait {
 
     /// Sets internal state of weights based on some completely object-dependent parameters
     fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>>;
-    fn debug_output(&self);
+    fn debug_output(&self, mi: &model_instance::ModelInstance);
 }
 
 
@@ -146,9 +146,9 @@ impl Regressor  {
         return prediction_probability
     }
 
-    pub fn debug_output(&self) {
+    pub fn debug_output(&self, mi: &model_instance::ModelInstance) {
         for v in &self.blocks_boxes {
-            v.debug_output();
+            v.debug_output(mi);
         }
     }
 

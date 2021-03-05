@@ -172,7 +172,7 @@ impl VowpalParser {
                         }
                      //   print!("Only single letter namespaces are allowed, however namespace string is: {:?}\n", String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end_first_part]));
                         current_char = *p.add(i_start) as usize;
-                        current_char_index = self.vw_map.lookup_char_to_index[current_char] * NAMESPACE_DESC_LEN + HEADER_LEN;
+                        current_char_index = self.vw_map.lookup_char_to_index[current_char] as usize * NAMESPACE_DESC_LEN + HEADER_LEN;
                         current_char_num_of_features = 0;
                         bufpos_namespace_start = self.output_buffer.len(); // this is only used if we will have multiple values
                     } else { 
@@ -240,7 +240,7 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("".to_string(), 0)).unwrap();
 
         fn str_to_cursor(s: &str) -> Cursor<Vec<u8>> {
           Cursor::new(s.as_bytes().to_vec())

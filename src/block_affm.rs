@@ -29,6 +29,7 @@ use std::sync::Arc;
 
 pub struct BlockAFFM<L:OptimizerTrait> {
     pub optimizer_ffm: L,
+    pub optimizer_attention: L,
     pub local_data_ffm_values: Vec<f32>,
     pub ffm_k: u32,
     pub ffm_weights_len: u32, 
@@ -88,10 +89,12 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
             ffm_k: mi.ffm_k, 
             field_embedding_len: mi.ffm_k * mi.ffm_fields.len() as u32,
             optimizer_ffm: L::new(),
+            optimizer_attention: L::new(),
         };
 
         if mi.ffm_k > 0 {
             reg_ffm.optimizer_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
+            reg_ffm.optimizer_attention.init(0.05, 0.3, 0.0);
             // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
             reg_ffm.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * reg_ffm.ffm_k);
             reg_ffm.attention_weights_len = (mi.ffm_fields.len() * mi.ffm_fields.len() * reg_ffm.ffm_k as usize) as u32;
@@ -116,6 +119,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
             ffm_k: self.ffm_k, 
             field_embedding_len: self.field_embedding_len,
             optimizer_ffm: optimizer::OptimizerSGD::new(),
+            optimizer_attention: optimizer::OptimizerSGD::new(),
         };
         
         Ok(Box::new(forwards_only))
@@ -125,7 +129,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
         self.weights =vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_ffm.initial_data()}; self.ffm_weights_len as usize];
-        self.attention_weights =vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_ffm.initial_data()}; self.attention_weights_len as usize];
+        self.attention_weights =vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_attention.initial_data()}; self.attention_weights_len as usize];
         if mi.ffm_k > 0 {       
             if mi.ffm_init_width == 0.0 {
                 // Initialization that has showed to work ok for us, like in ffm.pdf, but centered around zero and further divided by 50
@@ -152,7 +156,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
 
             for z in 0..self.attention_weights_len as usize {
                 self.attention_weights[z].weight = 1.0; // We start with attention doing nothing
-                self.attention_weights[z].optimizer_data = self.optimizer_ffm.initial_data();
+                self.attention_weights[z].optimizer_data = self.optimizer_attention.initial_data();
             }
         }
     }
@@ -308,7 +312,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                         for z in 0..self.attention_weights_len as usize {
                             let feature_value = attention_gradients.get_unchecked(z);
                             let gradient = general_gradient * feature_value;
-                            let update = self.optimizer_ffm.calculate_update(gradient, &mut self.attention_weights.get_unchecked_mut(z).optimizer_data);
+                            let update = self.optimizer_attention.calculate_update(gradient, &mut self.attention_weights.get_unchecked_mut(z).optimizer_data);
                             self.attention_weights.get_unchecked_mut(z).weight += update;
                         }
                     }
@@ -481,15 +485,19 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
         Ok(())
     }
 
-    fn debug_output(&self) {
+    fn debug_output(&self, mi: &model_instance::ModelInstance) {
         let field_count = ((self.attention_weights_len / self.ffm_k) as f32).sqrt() as usize;
         for f1 in 0..field_count {
+            println!("Combining: {} with", mi.audit_aux_data.as_ref().unwrap().field_index_to_string[&(f1 as u32)]);
             for f2 in 0..field_count {
-                print!("field combo {} x {} : ", f1, f2);
+//                print!("    {} : \n    ",
+//                      f1, f2,
+//                      mi.audit_aux_data.as_ref().unwrap().field_index_to_string[&(f2 as u32)]);
                 for k in 0..self.ffm_k {
-                    print!("{}, ", self.attention_weights[(f2+f1*field_count) * self.ffm_k as usize + k as usize].weight);
+                    print!("{:.2}  ", self.attention_weights[(f2+f1*field_count) * self.ffm_k as usize + k as usize].weight);
                 }
-                println!("");
+                print!("     => {}", mi.audit_aux_data.as_ref().unwrap().field_index_to_string[&(f2 as u32)]);
+                println!(" ");
             }
         }
     }
@@ -644,7 +652,7 @@ mod tests {
 A,featureA
 B,featureB
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("".to_string(), 0)).unwrap();
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
@@ -681,7 +689,7 @@ B,featureB
 A,featureA
 B,featureB
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("".to_string(), 0)).unwrap();
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.ffm_k = 4;
         mi.ffm_bit_precision = 18;

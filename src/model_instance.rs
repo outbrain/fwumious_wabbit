@@ -4,17 +4,30 @@ use std::io::ErrorKind;
 
 use std::io::Read;
 use std::fs::File;
-use serde::{Serialize,Deserialize};//, Deserialize};
+use serde::{Serialize,Deserialize};
 use serde_json::{Value};
+use std::collections::HashMap;
+
 
 use crate::vwmap;
 use crate::consts;
 
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct FeatureComboDesc {
-    pub feature_indices: Vec<usize>,
+    pub feature_indices: Vec<u32>,
     pub weight:f32,
 }
+
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AuditData {
+    pub namespace_index_to_string: HashMap<u32, String>,
+    pub combo_index_to_string: HashMap<i32, String>,
+    pub field_index_to_string: HashMap<u32, String>,
+}
+
+
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Copy)]
 pub enum Optimizer {
@@ -33,7 +46,7 @@ pub struct ModelInstance {
     pub hash_mask: u32,		// DEPRECATED, UNUSED -- this is recalculated in feature_buffer.rs
     pub add_constant_feature: bool,
     pub feature_combo_descs: Vec<FeatureComboDesc>,
-    pub ffm_fields: Vec<Vec<usize>>,
+    pub ffm_fields: Vec<Vec<u32>>,
     #[serde(default = "default_u32_zero")]
     pub ffm_k: u32,
     #[serde(default = "default_u32_zero")]
@@ -64,43 +77,44 @@ pub struct ModelInstance {
     #[serde(default = "default_optimizer_adagrad")]
     pub optimizer: Optimizer,
     
- 
+    #[serde(default = "default_bool_false")]
+    pub audit_mode: bool,
+
+    #[serde(default = "default_audit_data_option")]
+    pub audit_aux_data: Option<AuditData>,
 }
+
+
+
+
 
 fn default_u32_zero() -> u32{0}
 fn default_f32_zero() -> f32{0.0}
 fn default_bool_false() -> bool{false}
 fn default_optimizer_adagrad() -> Optimizer{Optimizer::Adagrad}
-
-
-fn create_feature_combo_desc(vw: &vwmap::VwNamespaceMap, s: &str) -> Result<FeatureComboDesc, Box<dyn Error>> {
-    //let mut feature_vec: Vec<usize> = Vec::new();
-
-    let vsplit: Vec<&str> = s.split(":").collect(); // We use : as a delimiter for weight
-    let mut combo_weight: f32 = 1.0;
-    if vsplit.len() > 2 {
-        return Err(Box::new(IOError::new(ErrorKind::Other, format!("only one value parameter allowed (denoted with \":\"): \"{:?}\"", s))))
+pub fn default_audit_data() -> AuditData {
+    AuditData{
+        namespace_index_to_string: HashMap::new(),
+        combo_index_to_string: HashMap::new(),
+        field_index_to_string: HashMap::new(),
     }
-    if vsplit.len() == 2 {
-        let weight_str = vsplit[1];
-        combo_weight = weight_str.parse()?;
-    }
-
-    let namespaces_str = vsplit[0];
-    let mut feature_indices: Vec<usize> = Vec::new();
-    for char in namespaces_str.chars() {
-       // create an list of indexes dfrom list of namespace chars
-       let index = match vw.map_char_to_index.get(&char) {
-           Some(index) => *index,
-           None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown namespace char in command line: {}", char))))
-       };
-       feature_indices.push(index);
-    }
-    Ok(FeatureComboDesc {
-                         feature_indices: feature_indices,
-                          weight: combo_weight
-                        })
 }
+fn default_audit_data_option() -> Option<AuditData>{None}
+
+
+
+pub fn get_float_namespaces<'a>(cl: &clap::ArgMatches<'a>) -> Result<(String, u32), Box<dyn Error>> {
+   if let Some(in_v) = cl.value_of("float_namespaces") {
+       let prefix_skip:u32 = match cl.value_of("float_namespaces_skip_prefix") {
+           Some(prefix_skip_str) => prefix_skip_str.parse()?,
+           None => 0,
+       };
+       Ok((in_v.to_owned(), prefix_skip))
+   } else {
+       Ok(("".to_owned(), 0))
+   }
+}
+
 
 impl ModelInstance {
     pub fn new_empty() -> Result<ModelInstance, Box<dyn Error>> {
@@ -126,11 +140,70 @@ impl ModelInstance {
             ffm_init_acc_gradient: 0.0,
             init_acc_gradient: 1.0,
             optimizer: Optimizer::SGD,
+            audit_mode: false,
+            audit_aux_data: None,
         };
         Ok(mi)
     }
 
+    pub fn enable_audit(&mut self, vw: &vwmap::VwNamespaceMap) {
+        let mut audit_aux_data = default_audit_data();
+
+        for vw_entry in &vw.vw_source.entries {
+            audit_aux_data.namespace_index_to_string.insert(vw_entry.namespace_index, vw_entry.namespace_name.to_string());
+        }
+
+        for (combo_index, combo_desc) in self.feature_combo_descs.iter().enumerate() {
+            let mut names_list: Vec<String> = Vec::new();
+            for namespace_index in &combo_desc.feature_indices {
+                names_list.push(audit_aux_data.namespace_index_to_string[namespace_index].to_string());
+            }
+            
+            audit_aux_data.combo_index_to_string.insert(combo_index as i32, names_list.join(","));
+        }
+        audit_aux_data.combo_index_to_string.insert(-1, "Constant_feature".to_string());
+
+        for (field_index, field_vec) in self.ffm_fields.iter().enumerate() {
+            let mut names_list: Vec<String> = Vec::new();
+            for namespace_index in field_vec {
+                names_list.push(audit_aux_data.namespace_index_to_string[namespace_index].to_string());
+            }
+            audit_aux_data.field_index_to_string.insert(field_index as u32, names_list.join(","));
+        }
+        
+        
+        self.audit_aux_data = Some(audit_aux_data);
+    }
     
+    pub fn create_feature_combo_desc(&self, vw: &vwmap::VwNamespaceMap, s: &str) -> Result<FeatureComboDesc, Box<dyn Error>> {
+
+        let vsplit: Vec<&str> = s.split(":").collect(); // We use : as a delimiter for weight
+        let mut combo_weight: f32 = 1.0;
+        if vsplit.len() > 2 {
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("only one value parameter allowed (denoted with \":\"): \"{:?}\"", s))))
+        }
+        if vsplit.len() == 2 {
+            let weight_str = vsplit[1];
+            combo_weight = weight_str.parse()?;
+        }
+
+        let namespaces_str = vsplit[0];
+        let mut feature_indices: Vec<u32> = Vec::new();
+        for char in namespaces_str.chars() {
+           // create an list of indexes dfrom list of namespace chars
+           let index = match vw.map_char_to_index.get(&char) {
+               Some(index) => *index,
+               None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown namespace char in command line: {}", char))))
+           };
+           feature_indices.push(index);
+        }
+        Ok(FeatureComboDesc {
+                             feature_indices: feature_indices,
+                              weight: combo_weight
+                            })
+    }
+
+
     
     pub fn new_from_cmdline<'a>(cl: &clap::ArgMatches<'a>, vw: &vwmap::VwNamespaceMap) -> Result<ModelInstance, Box<dyn Error>> {
         let mut mi = ModelInstance::new_empty()?;
@@ -166,18 +239,19 @@ impl ModelInstance {
             
         
         }
-        
+
         if let Some(in_v) = cl.values_of("keep") {
             for value_str in in_v {
-                mi.feature_combo_descs.push(create_feature_combo_desc(vw, value_str)?);
+                mi.feature_combo_descs.push(mi.create_feature_combo_desc(vw, value_str)?);
             }
         }
         
         if let Some(in_v) = cl.values_of("interactions") {
             for value_str in in_v {                
-                mi.feature_combo_descs.push(create_feature_combo_desc(vw, value_str)?);
+                mi.feature_combo_descs.push(mi.create_feature_combo_desc(vw, value_str)?);
             }
         }
+
 
         if let Some(in_v) = cl.value_of("lrqfa") {
             let vsplit: Vec<&str> = in_v.split("-").collect(); // We use - as a delimiter instead of first numbers as vowpal does it
@@ -230,7 +304,7 @@ impl ModelInstance {
 
         if let Some(in_v) = cl.values_of("ffm_field") {
             for namespaces_str in in_v {          
-                let mut field: Vec<usize>= Vec::new();
+                let mut field: Vec<u32>= Vec::new();
                 for char in namespaces_str.chars() {
                     //println!("K: {}", char);
                     let index = match vw.map_char_to_index.get(&char) {
@@ -309,11 +383,10 @@ impl ModelInstance {
         }
 
         
-        
         Ok(mi)
     }
 
-
+/*
     pub fn new_from_jsonfile(input_filename: &str, vw: &vwmap::VwNamespaceMap) -> Result<ModelInstance, Box<dyn Error>> {
         let mut mi = ModelInstance::new_empty()?;
         let mut input = File::open(input_filename)?;
@@ -337,6 +410,8 @@ impl ModelInstance {
                     Some(index) => *index,
                     None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown feature name in model json: {}", primitive_feature_name))))
                 };
+                let index = mi.get_namespace_id(vw, primitive_feature_name)?;
+
                 feature_combo_desc.feature_indices.push(index);
             }
             mi.feature_combo_descs.push(feature_combo_desc);
@@ -345,6 +420,7 @@ impl ModelInstance {
 
         Ok(mi)
     }
+    */
 }
 
 
@@ -360,14 +436,16 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
-        let aa = create_feature_combo_desc(&vw, "A").unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("".to_string(), 0)).unwrap();
+        let mi = ModelInstance::new_empty().unwrap();        
+        
+        let aa = mi.create_feature_combo_desc(&vw, "A").unwrap();
         assert_eq!(aa, FeatureComboDesc {
                                 feature_indices: vec![0],
                                 weight: 1.0
                                 });
         
-        let aa = create_feature_combo_desc(&vw, "BA:1.5").unwrap();
+        let aa = mi.create_feature_combo_desc(&vw, "BA:1.5").unwrap();
         assert_eq!(aa, FeatureComboDesc {
                                 feature_indices: vec![1,0],
                                 weight: 1.5
@@ -382,8 +460,9 @@ A,featureA:2
 B,featureB:3
 "#;
         // The main point is that weight in feature names from vw_map_str is ignored
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
-        let aa = create_feature_combo_desc(&vw, "BA:1.5").unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("".to_string(), 0)).unwrap();
+        let mi = ModelInstance::new_empty().unwrap();        
+        let aa = mi.create_feature_combo_desc(&vw, "BA:1.5").unwrap();
         assert_eq!(aa, FeatureComboDesc {
                                 feature_indices: vec![1,0],
                                 weight: 1.5
@@ -395,10 +474,3 @@ B,featureB:3
 
 
 }
-
-
-
-
-
-
-

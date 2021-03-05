@@ -133,7 +133,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
         Ok(())
     }
 
-    fn debug_output(&self) {
+    fn debug_output(&self, mi: &model_instance::ModelInstance) {
     }
 
 }

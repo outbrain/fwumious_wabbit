@@ -49,7 +49,7 @@ macro_rules! feature_reader {
       $hash_data:ident, 
       $hash_value:ident, 
       $bl:block  ) => {
-        let namespace_desc = *$record_buffer.get_unchecked($feature_index_offset + parser::HEADER_LEN);
+        let namespace_desc = *$record_buffer.get_unchecked(($feature_index_offset + parser::HEADER_LEN as u32) as usize);
         if (namespace_desc & parser::IS_NOT_SINGLE_MASK) != 0 {
             let start = ((namespace_desc >> 16) & 0x7fff) as usize; 
             let end = (namespace_desc & 0xffff) as usize;
@@ -123,7 +123,7 @@ impl FeatureBufferTranslator {
             let feature_combo_weight = feature_combo_desc.weight;
             // we unroll first iteration of the loop and optimize
             let num_namespaces:usize = feature_combo_desc.feature_indices.len() ;
-            let feature_index_offset = *feature_combo_desc.feature_indices.get_unchecked(0);
+            let feature_index_offset = feature_combo_desc.feature_indices.get_unchecked(0);
             // We special case a single feature (common occurance)
             if num_namespaces == 1 {
                 feature_reader!(record_buffer, feature_index_offset, hash_data, hash_value, {

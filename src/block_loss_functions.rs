@@ -122,7 +122,7 @@ impl BlockTrait for BlockSigmoid {
         Ok(())
     }
 
-    fn debug_output(&self) {
+    fn debug_output(&self, mi: &model_instance::ModelInstance) {
     }
 
 
