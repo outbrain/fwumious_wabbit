@@ -23,6 +23,15 @@ pub struct WeightAndOptimizerData<L:OptimizerTrait> {
     pub optimizer_data: L::PerWeightStore,
 }
 
+#[macro_export]
+macro_rules! assert_epsilon {
+    ($x:expr, $y:expr) => {
+        if !($x - $y < 0.0000001 || $y - $x < 0.0000001) { panic!(); }
+    }
+}
+
+
+
 
 // It's OK! I am a limo driver!
 pub fn read_weights_from_buf<L:OptimizerTrait>(weights: &mut Vec<WeightAndOptimizerData<L>>, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
@@ -95,3 +104,23 @@ pub fn slearn<'a>(block_run: &mut Box<dyn BlockTrait>,
         return prediction_probability
     }
 }
+
+/// This function is used only in tests to run a single block with given loss function
+pub fn spredict<'a>(block_run: &mut Box<dyn BlockTrait>, 
+                    block_loss_function: &mut Box<dyn BlockTrait>,
+                    fb: &feature_buffer::FeatureBuffer, 
+                    update: bool) -> f32 {
+
+    unsafe {
+        let block_loss_function: Box<dyn BlockTrait> = mem::transmute(& *block_loss_function.deref().deref());
+        let mut further_blocks_v: Vec<Box<dyn BlockTrait>> = vec![block_loss_function];
+        let further_blocks = & further_blocks_v[..];
+        let prediction_probability = block_run.forward(further_blocks, 0.0, fb);
+        // black magic here: forget about further blocks that we got through transmute:
+        further_blocks_v.set_len(0);
+        return prediction_probability
+    }
+}
+
+
+
