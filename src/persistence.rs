@@ -130,6 +130,7 @@ mod tests {
     use regressor::Regressor;
     use regressor::BlockTrait;
     use crate::block_ffm::BlockFFM;
+    use crate::assert_epsilon;
     
     use tempfile::{tempdir};
     #[test]
@@ -234,11 +235,6 @@ B,featureB
                     ffm_fields_count: ffm_fields_count,
         }
     }
-macro_rules! assert_epsilon {
-    ($x:expr, $y:expr) => {
-        if !($x - $y < 0.0000001 || $y - $x < 0.0000001) { panic!(); }
-    }
-}
 
     #[test]
     fn save_load_and_test_mode_ffm() {
