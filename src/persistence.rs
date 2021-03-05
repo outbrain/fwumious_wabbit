@@ -149,6 +149,7 @@ mod tests {
     use regressor::Regressor;
     use regressor::BlockTrait;
     use crate::block_ffm::BlockFFM;
+    use crate::assert_epsilon;
     
     use tempfile::{tempdir};
     #[test]
@@ -245,7 +246,6 @@ B,featureB
         fb
     }
 
-
     #[test]
     fn save_load_and_test_mode_ffm() {
         let vw_map_string = r#"
@@ -277,15 +277,15 @@ B,featureB
         assert_eq!(p, 0.9933072); 
         let CONST_RESULT = 0.9395168;
         p = re.learn(fbuf, false);
-        assert_eq!(p, CONST_RESULT);
+        assert_epsilon!(p, CONST_RESULT);
         p = re.predict(fbuf);
-        assert_eq!(p, CONST_RESULT);
+        assert_epsilon!(p, CONST_RESULT);
 
         // Now we test conversion to fixed regressor 
         {
             let re_fixed = re.immutable_regressor(&mi).unwrap();
             // predict with the same feature vector
-            assert_eq!(re_fixed.predict(&fbuf), CONST_RESULT);
+            assert_epsilon!(re_fixed.predict(&fbuf), CONST_RESULT);
         }
         // Now we test saving and loading a) regular regressor, b) fixed regressor
         {
@@ -296,14 +296,14 @@ B,featureB
             // a) load as regular regressor
             let (_mi2, _vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap(), false).unwrap();
             assert_eq!(re2.get_name(), "Regressor with optimizer \"AdagradFlex\"");
-            assert_eq!(re2.learn(fbuf, false), CONST_RESULT);
-            assert_eq!(re2.predict(fbuf), CONST_RESULT);
+            assert_epsilon!(re2.learn(fbuf, false), CONST_RESULT);
+            assert_epsilon!(re2.predict(fbuf), CONST_RESULT);
 
             // b) load as regular regressor, immutable
             let (_mi2, _vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap(), true).unwrap();
             assert_eq!(re2.get_name(), "Regressor with optimizer \"SGD\"");
-            assert_eq!(re2.learn(fbuf, false), CONST_RESULT);
-            assert_eq!(re2.predict(fbuf), CONST_RESULT);
+            assert_epsilon!(re2.learn(fbuf, false), CONST_RESULT);
+            assert_epsilon!(re2.predict(fbuf), CONST_RESULT);
 
         }
     }    

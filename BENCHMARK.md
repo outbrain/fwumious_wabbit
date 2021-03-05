@@ -14,12 +14,12 @@ here are the results for 3 runs for each scenario, taking mean values:
 ![benchmark results](benchmark_results.png)
 Scenario|Runtime (seconds)|Memory (MB)|CPU %
 ----|----:|----:|----:
-vw train, no cache|98.07 | 566 | 170.43
-fw train, no cache|13.82 | 258 | 100.90
-vw train, using cache|95.84 | 565 | 161.80
-fw train, using cache|12.44 | 258 | 101.40
-vw predict, no cache|78.38 | 142 | 171.17
-fw predict, no cache|10.51 | 130 | 101.67
+vw train, no cache|93.46 | 564 | 163.90
+fw train, no cache|14.32 | 258 | 102.00
+vw train, using cache|92.66 | 559 | 159.33
+fw train, using cache|12.56 | 258 | 102.37
+vw predict, no cache|78.11 | 142 | 173.80
+fw predict, no cache|11.05 | 130 | 101.00
 
 ### Model equivalence
 loss values for the test set:
@@ -81,8 +81,8 @@ or, if you just want the numbers with less dependencies run:
 
 ### versions:
 ```
-vowpal wabbit 8.9.0 (git commit: b29f803f1)
-fwumious wabbit 1.0 (git commit: 415eca4)
+vowpal wabbit 8.9.0 (git commit: e775b2d19)
+fwumious wabbit 0.1 (git commit: 7249dc7)
 ```
 
 ### CPU Info
