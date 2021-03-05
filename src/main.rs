@@ -29,6 +29,7 @@ mod optimizer;
 mod version;
 mod consts;
 mod block_ffm;
+mod block_affm;
 mod block_lr;
 mod block_loss_functions;
 mod block_helpers;
