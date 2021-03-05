@@ -1,4 +1,7 @@
 
+# March 2020
+- Implement binning functionality; features that are floating point
+values can now be binned by customized functions
 
 # February 2020
 - much faster FFM prediction mode when using multi-value features

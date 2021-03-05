@@ -27,6 +27,19 @@ pub enum SeedNumber {
     Four = 4,
 }
 
+macro_rules! default_seeds {
+    ($to_namespace_index: expr) => 
+    {
+        // These are random numbers, i threw a dice!
+            [      murmur3::hash32(vec![$to_namespace_index as u8, 255]),
+                   murmur3::hash32(vec![3, $to_namespace_index as u8, 222, 52, 53]),
+                   murmur3::hash32(vec![6, $to_namespace_index as u8, 35, 51, 245]),
+                   murmur3::hash32(vec![24, $to_namespace_index as u8, 32, 0, 111]),
+                   murmur3::hash32(vec![76, $to_namespace_index as u8, 23, 234, 0])
+            ]    
+    }
+}
+
 #[derive(Clone)]
 pub struct ExecutorToNamespace {
     namespace_index: u32,
@@ -57,6 +70,7 @@ impl ExecutorToNamespace {
             let floor_int = floor as i32;
             let part = f - floor;
             if part != 0.0 {
+                println!("floor {} Floor_ind: {} hv {}, part {}", floor, floor_int+1, hash_value, part);
                 self.emit_i32(floor_int + 1, hash_value * part, seed_id);
             }
             let part = 1.0 - part;
@@ -90,11 +104,7 @@ impl TransformExecutor {
             namespace_index: namespace_transform.to_namespace.namespace_index,
             namespace_char: namespace_transform.to_namespace.namespace_char,
             // These are random numbers, i threw a dice!
-            namespace_seeds: [		      murmur3::hash32(vec![namespace_transform.to_namespace.namespace_index as u8, 255]),
-                                              murmur3::hash32(vec![3, namespace_transform.to_namespace.namespace_index as u8, 222, 52, 53]),
-                                              murmur3::hash32(vec![6, namespace_transform.to_namespace.namespace_index as u8, 35, 51, 245]),
-                                              murmur3::hash32(vec![24, namespace_transform.to_namespace.namespace_index as u8, 32, 0, 111]),
-                                              murmur3::hash32(vec![76, namespace_transform.to_namespace.namespace_index as u8, 23, 234, 0])],
+            namespace_seeds: default_seeds!(namespace_transform.to_namespace.namespace_index),
             tmp_data: Vec::new(),
         };
         
@@ -172,7 +182,7 @@ impl TransformExecutors {
 // Some black magic from: https://stackoverflow.com/questions/30353462/how-to-clone-a-struct-storing-a-boxed-trait-object
 // We need clone() because of serving. There is also an option of doing FeatureBufferTransform from scratch in each thread
 pub trait FunctionExecutorTrait: DynClone + Send {
-    fn execute_function(&self, record_buffer: &[u32], namespace: &mut ExecutorToNamespace);
+    fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace);
 }
 clone_trait_object!(FunctionExecutorTrait);
 
@@ -323,15 +333,170 @@ impl TransformerLogRatioBinner {
 
 
 
+mod tests {
+    // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
+    use crate::parser::{IS_NOT_SINGLE_MASK, IS_FLOAT_NAMESPACE_MASK, MASK31};
+
+    fn add_header(v2: Vec<u32>) -> Vec<u32> {
+        let mut rr: Vec<u32> = vec![100, 1, 1.0f32.to_bits()];
+        rr.extend(v2);
+        rr
+    }
+    
+    fn nd(start: u32, end: u32) -> u32 {
+        return (start << 16) + end;
+    }
 
 
 
+    #[test]
+    fn test_transformerbinner() {
+        
+        let from_namespace = ExecutorFromNamespace {
+            namespace_index: 0,
+            namespace_char: 'a',
+        };
+        let to_namespace_index = 1;
+                            
+        let to_namespace_empty = ExecutorToNamespace {
+            namespace_index: to_namespace_index,
+            namespace_char: 'b',
+            namespace_seeds: default_seeds!(to_namespace_index),	// These are precomputed namespace seeds
+            tmp_data: Vec::new(),
+        };
+        
+        let transformer = TransformerBinner::create_function(&(|x| x.sqrt()), "Blah", &vec![from_namespace], &vec![40.], false).unwrap();
+        let record_buffer = [7,	// length 
+                            0,	// label
+                            (1.0_f32).to_bits(), // Example weight 
+                            nd(4, 7) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                            // Feature triple
+                            1775699190 & MASK31,    // Hash location 
+                            2.0f32.to_bits(),       // Feature value of the feature
+                            3.0f32.to_bits()];       // Float feature value
+ 
+        let mut to_namespace = to_namespace_empty.clone();
+        transformer.execute_function(&record_buffer, &mut to_namespace);
 
+        // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
+        let mut to_namespace_comparison = to_namespace_empty.clone();
+        to_namespace_comparison.emit_i32(3, 2.0f32, SeedNumber::Default);
+        assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
+        
+        
+        // Now let's try with value> 40.0
+        let record_buffer = [7,	// length 
+                            0,	// label
+                            (1.0_f32).to_bits(), // Example weight 
+                            nd(4, 7) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                            // Feature triple
+                            1775699190 & MASK31,    // Hash location 
+                            2.0f32.to_bits(),       // Feature value of the feature
+                            300.0f32.to_bits()];       // Float feature value
 
+        let mut to_namespace = to_namespace_empty.clone();
+        transformer.execute_function(&record_buffer, &mut to_namespace);
 
+        // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
+        let mut to_namespace_comparison = to_namespace_empty.clone();
+        to_namespace_comparison.emit_i32((300.0_f32).sqrt() as i32, 2.0f32, SeedNumber::One);
+        assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);        
+    }
 
+    #[test]
+    fn test_transformerlogratiobinner() {
+        
+        let from_namespace_1 = ExecutorFromNamespace {
+            namespace_index: 0,
+            namespace_char: 'a',
+        };
 
+        let from_namespace_2 = ExecutorFromNamespace {
+            namespace_index: 1,
+            namespace_char: 'c',
+        };
+        let to_namespace_index = 1;
+                            
+        let to_namespace_empty = ExecutorToNamespace {
+            namespace_index: to_namespace_index,
+            namespace_char: 'b',
+            namespace_seeds: default_seeds!(to_namespace_index),	// These are precomputed namespace seeds
+            tmp_data: Vec::new(),
+        };
+        
+        let transformer = TransformerLogRatioBinner::create_function("Blah", &vec![from_namespace_1, from_namespace_2], &vec![40., 10.0], false).unwrap();
+        let record_buffer = [11,	// length 
+                            0,	// label
+                            (1.0_f32).to_bits(), // Example weight 
+                            nd(5, 8) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                            nd(8, 11) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                            // Feature triple
+                            1775699190 & MASK31,    // Hash location 
+                            2.0f32.to_bits(),       // Feature value of the feature
+                            3.0f32.to_bits(),
+                            // Feature triple
+                            1775699190 & MASK31,    // Hash location 
+                            3.0f32.to_bits(),       // Feature value of the feature
+                            7.0f32.to_bits(),
+                            
+                            ];       // Float feature value
+ 
+        let mut to_namespace = to_namespace_empty.clone();
+        transformer.execute_function(&record_buffer, &mut to_namespace);
 
+        // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
+        let mut to_namespace_comparison = to_namespace_empty.clone();
+        to_namespace_comparison.emit_i32_i32(3 as i32, 7 as i32, 6.0, SeedNumber::One);
+        assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
+        
+        
+        // Now let's have 30.0/60.0
 
+        let record_buffer = [11,	// length 
+                            0,	// label
+                            (1.0_f32).to_bits(), // Example weight 
+                            nd(5, 8) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                            nd(8, 11) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                            // Feature triple
+                            1775699190 & MASK31,    // Hash location 
+                            2.0f32.to_bits(),       // Feature value of the feature
+                            30.0f32.to_bits(),
+                            // Feature triple
+                            1775699190 & MASK31,    // Hash location 
+                            3.0f32.to_bits(),       // Feature value of the feature
+                            60.0f32.to_bits(),
+                            
+                            ];       // Float feature value
+ 
+        let mut to_namespace = to_namespace_empty.clone();
+        transformer.execute_function(&record_buffer, &mut to_namespace);
 
+        // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
+        let mut to_namespace_comparison = to_namespace_empty.clone();
+        to_namespace_comparison.emit_f32((30.0/60.0_f32).ln() * 10.0, 6.0, false, SeedNumber::Default);
+        assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
+
+    }
+
+    #[test]
+    fn test_interpolation() {
+        let to_namespace_empty = ExecutorToNamespace {
+                namespace_index: 1,
+                namespace_char: 'b',
+                namespace_seeds: default_seeds!(1),	// These are precomputed namespace seeds
+                tmp_data: Vec::new(),
+            };
+        let mut to_namespace = to_namespace_empty.clone();
+        to_namespace.emit_f32(5.4, 20.0, true, SeedNumber::Default);
+        let to_data_1:i32 = 6;
+        let to_data_1_value = 20.0 * (5.4 - 5.0);
+        let hash_index_1 = murmur3::hash32_with_seed(to_data_1.to_le_bytes(), to_namespace.namespace_seeds[SeedNumber::Default as usize]) & parser::MASK31;
+        let to_data_2:i32 = 5;
+        let to_data_2_value = 20.0 * (6.0 - 5.4);
+        let hash_index_2 = murmur3::hash32_with_seed(to_data_2.to_le_bytes(), to_namespace.namespace_seeds[SeedNumber::Default as usize]) & parser::MASK31;
+        assert_eq!(to_namespace.tmp_data, vec![(hash_index_1, to_data_1_value), (hash_index_2, to_data_2_value)]);            
+    } 
+    
+}
 

@@ -161,7 +161,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         unsafe {
             macro_rules! core_macro {
                 (
-                $local_data_ffm_values:expr
+                $local_data_ffm_values: expr
                 ) => {
                     let ffm_weights = &mut self.weights;
                     let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
@@ -241,7 +241,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                                           let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + vv + k).weight;
                                           let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k) - ffm_weight * LEFT_HASH_VALUE;
                                           let gradient =  LEFT_HASH_VALUE * contra_weight;
-                                          *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
+                                          *$local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
                                           *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient;
                                       }
                                   } else {
@@ -249,7 +249,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                                           let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + vv + k).weight;
                                           let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k);
                                           let gradient =  LEFT_HASH_VALUE * contra_weight;
-                                          *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
+                                          *$local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
                                           *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient;
                                       }
                                   }
@@ -264,34 +264,37 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                             wsum += wsumbuf[k];
                         }
 
-                    wsum *= 0.5;
-                    
-                    let wsum_output = wsum_input + wsum;
-                    if fb.audit_mode {
-                        self.audit_forward(wsum_input, wsum_output, fb);
-                    }
-                    
-                    });
+                        wsum *= 0.5;
                         
-                    let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
-                    let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_blocks, wsum_output, fb, update);
+                        let wsum_output = wsum_input + wsum;
+                        if fb.audit_mode {
+                            self.audit_forward(wsum_input, wsum_output, fb);
+                        }
+
+                        let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
+                        let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_blocks, wsum_output, fb, update);
                     
-                    if update {
-                        let mut local_index: usize = 0;
-                        for left_hash in &fb.ffm_buffer {
-                            let mut feature_index = left_hash.hash as usize;
-                            for j in 0..fc as usize {
-                                let feature_value = *local_data_ffm_values.get_unchecked(local_index);
-                                let gradient = general_gradient * feature_value;
-                                let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
-                                ffm_weights.get_unchecked_mut(feature_index).weight += update;
-                                local_index += 1;
-                                feature_index += 1;
+                        
+                    
+                        if update {
+                            let mut local_index: usize = 0;
+                            for left_hash in &fb.ffm_buffer {
+                                let mut feature_index = left_hash.hash as usize;
+                                for j in 0..fc as usize {
+                                    let feature_value = *$local_data_ffm_values.get_unchecked(local_index);
+                                    let gradient = general_gradient * feature_value;
+                                    let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
+                                    ffm_weights.get_unchecked_mut(feature_index).weight += update;
+                                    local_index += 1;
+                                    feature_index += 1;
+                                }
                             }
                         }
-                    }
-                    // The only exit point
-                    return (prediction_probability, general_gradient)
+                        // The only exit point
+                        return (prediction_probability, general_gradient)
+
+                    });
+
                 }
             }; // End of macro
             
@@ -306,7 +309,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                 if local_data_ffm_len > self.local_data_ffm_values.len() {
                     self.local_data_ffm_values.reserve(local_data_ffm_len - self.local_data_ffm_values.len() + 1024);
                 }
-                core_macro!(self.local_data_ffm_indices, self.local_data_ffm_values);
+                core_macro!(self.local_data_ffm_values);
             }
              
         } // unsafe end
@@ -686,7 +689,7 @@ C,featureC
 
         fb.audit_mode = true;
         fb.reset_audit_json();
-        assert_eq!(spredict(&mut re, &mut lossf, &fb), 0.98201376);
+        assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.98201376);
 //        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.98201376); 
         let audit2 = format!("{}", to_string_pretty(&fb.audit_json).unwrap());
 //        println!("audit: {}", audit2);
@@ -703,7 +706,7 @@ C,featureC
 A,featureA
 B,featureB
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("".to_string(), 0)).unwrap();
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
@@ -740,7 +743,7 @@ B,featureB
 A,featureA
 B,featureB
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("".to_string(), 0)).unwrap();
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.ffm_k = 4;
         mi.ffm_bit_precision = 18;

@@ -225,7 +225,7 @@ C,featureC
         assert_eq!(slearn(&mut re, &mut lossf, &fb, false), 0.475734);
         fb.audit_mode = true;
         fb.reset_audit_json();
-        assert_eq!(spredict(&mut re, &mut lossf, &fb), 0.475734);
+        assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.475734);
         let audit1 = format!("{}", to_string_pretty(&fb.audit_json).unwrap());
         println!("{}", audit1);
         fb.reset_audit_json();
