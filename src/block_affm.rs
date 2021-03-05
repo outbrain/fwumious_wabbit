@@ -258,8 +258,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                                           let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + vv + k).weight;
                                           let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k) - ffm_weight * LEFT_HASH_VALUE;
                                           let gradient =  LEFT_HASH_VALUE * contra_weight;
-                                          let gradient2 = gradient * self.attention_weights.get_unchecked(vv + contra_offset).weight;
-                                          *attention_gradients.get_unchecked_mut(vv + contra_offset) += gradient * ffm_weight;
+                                          let gradient2 = gradient * self.attention_weights.get_unchecked(vv + contra_offset + k).weight;
+                                          *attention_gradients.get_unchecked_mut(vv + contra_offset + k) += gradient * ffm_weight;
                                           *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient2;
                                           *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient2;
                                       }
@@ -268,8 +268,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                                           let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + vv + k).weight;
                                           let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k);
                                           let gradient =  LEFT_HASH_VALUE * contra_weight;
-                                          let gradient2 = gradient * self.attention_weights.get_unchecked(vv + contra_offset).weight;
-                                          *attention_gradients.get_unchecked_mut(vv + contra_offset) += gradient * ffm_weight;
+                                          let gradient2 = gradient * self.attention_weights.get_unchecked(vv + contra_offset + k).weight;
+                                          *attention_gradients.get_unchecked_mut(vv + contra_offset + k) += gradient * ffm_weight;
                                           *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient2;
                                           *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient2;
                                       }
