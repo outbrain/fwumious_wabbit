@@ -8,7 +8,9 @@ const CONSTANT_HASH:u32 = 11650396;
 #[derive(Clone, Debug, PartialEq)]
 pub struct HashAndValue {
     pub hash: u32,
-    pub value: f32
+    pub value: f32,
+    pub combo_index: u32,
+    
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -119,7 +121,8 @@ impl FeatureBufferTranslator {
         let mut output_len:usize = 0;
         let mut hashes_vec_in : &mut Vec<HashAndValue> = &mut self.hashes_vec_in;
         let mut hashes_vec_out : &mut Vec<HashAndValue> = &mut self.hashes_vec_out;
-        for feature_combo_desc in &self.model_instance.feature_combo_descs {
+        for (combo_index, feature_combo_desc) in self.model_instance.feature_combo_descs.iter().enumerate() {
+            let combo_index = combo_index as u32;
             let feature_combo_weight = feature_combo_desc.weight;
             // we unroll first iteration of the loop and optimize
             let num_namespaces:usize = feature_combo_desc.feature_indices.len() ;
@@ -128,13 +131,14 @@ impl FeatureBufferTranslator {
             if num_namespaces == 1 {
                 feature_reader!(record_buffer, feature_index_offset, hash_data, hash_value, {
                     lr_buffer.push(HashAndValue {hash: hash_data & self.lr_hash_mask, 
-                                                 value: hash_value * feature_combo_weight});
+                                                 value: hash_value * feature_combo_weight,
+                                                 combo_index: combo_index});
                 });
                 continue
             }
             hashes_vec_in.truncate(0);
             feature_reader!(record_buffer, feature_index_offset, hash_data, hash_value, {
-                    hashes_vec_in.push(HashAndValue {hash: hash_data, value:hash_value});
+                    hashes_vec_in.push(HashAndValue {hash: hash_data, value:hash_value, combo_index: combo_index});
                 });
             for feature_index in feature_combo_desc.feature_indices.get_unchecked(1 as usize .. num_namespaces) {
                 hashes_vec_out.truncate(0);
@@ -142,20 +146,23 @@ impl FeatureBufferTranslator {
                     let half_hash = handv.hash.overflowing_mul(VOWPAL_FNV_PRIME).0;
                     feature_reader!(record_buffer, feature_index, hash_data, hash_value, {
                         hashes_vec_out.push(HashAndValue{   hash: hash_data ^ half_hash,
-                                                            value: handv.value * hash_value});
+                                                            value: handv.value * hash_value,
+                                                            combo_index: combo_index});
                     });
                 }
                 std::mem::swap(&mut hashes_vec_in, &mut hashes_vec_out);
             }
             for handv in &(*hashes_vec_in) {
                 lr_buffer.push(HashAndValue{hash: handv.hash & self.lr_hash_mask,
-                                            value: handv.value * feature_combo_weight});
+                                            value: handv.value * feature_combo_weight,
+                                            combo_index: combo_index});
             }
         }
         // add the constant
         if self.model_instance.add_constant_feature {
                 lr_buffer.push(HashAndValue{hash: CONSTANT_HASH & self.lr_hash_mask,
-                                            value: 1.0});
+                                            value: 1.0,
+                                            combo_index: 0});
         }
 
         // FFM loops have not been optimized yet

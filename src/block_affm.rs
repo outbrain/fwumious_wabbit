@@ -94,7 +94,9 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
 
         if mi.ffm_k > 0 {
             reg_ffm.optimizer_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
-            reg_ffm.optimizer_attention.init(0.05, 0.3, 0.0);
+            // Best params till now: 0.1, 0.2, 0.0 and random weights initialization
+            //self.attention_weights[z].weight = (1.0 * merand48((self.ffm_weights_len as usize + z) as u64)-0.5) * 
+            reg_ffm.optimizer_attention.init(0.1, 0.25, 0.0);
             // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
             reg_ffm.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * reg_ffm.ffm_k);
             reg_ffm.attention_weights_len = (mi.ffm_fields.len() * mi.ffm_fields.len() * reg_ffm.ffm_k as usize) as u32;
@@ -155,7 +157,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
             }
 
             for z in 0..self.attention_weights_len as usize {
-                self.attention_weights[z].weight = 1.0; // We start with attention doing nothing
+//                self.attention_weights[z].weight = 1.0; // We start with attention doing nothing
+                self.attention_weights[z].weight = (1.0 * merand48((self.ffm_weights_len as usize + z) as u64)-0.5) * 0.5 + 1.0; // We start with attention doing nothing
                 self.attention_weights[z].optimizer_data = self.optimizer_attention.initial_data();
             }
         }
@@ -262,8 +265,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                                           let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + vv + k).weight;
                                           let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k) - ffm_weight * LEFT_HASH_VALUE;
                                           let gradient =  LEFT_HASH_VALUE * contra_weight;
-                                          let gradient2 = gradient * self.attention_weights.get_unchecked(vv + contra_offset + k).weight;
-                                          *attention_gradients.get_unchecked_mut(vv + contra_offset + k) += gradient * ffm_weight;
+                                          let gradient2 = gradient * self.attention_weights.get_unchecked(vv + contra_offset +k).weight;
+                                          *attention_gradients.get_unchecked_mut(vv + contra_offset +k) += gradient * ffm_weight;
                                           *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient2;
                                           *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient2;
                                       }
@@ -475,6 +478,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
 
     fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>> {
         let mut forward = forward.as_any().downcast_mut::<BlockAFFM<optimizer::OptimizerSGD>>().unwrap();
+        block_helpers::read_weights_only_from_buf2::<L>(self.attention_weights_len as usize, &mut forward.attention_weights, input_bufreader).unwrap();
         block_helpers::read_weights_only_from_buf2::<L>(self.ffm_weights_len as usize, &mut forward.weights, input_bufreader)
     }
 

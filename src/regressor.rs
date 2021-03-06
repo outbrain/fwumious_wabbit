@@ -18,6 +18,7 @@ use optimizer::OptimizerTrait;
 use crate::block_ffm::BlockFFM;
 use crate::block_affm::BlockAFFM;
 use crate::block_lr::BlockLR;
+use crate::block_alr::BlockALR;
 use crate::block_loss_functions::BlockSigmoid;
 
 
@@ -84,7 +85,8 @@ impl Regressor  {
         };
 
         // A bit more elaborate than necessary. Let's really make it clear what's happening
-        let mut reg_lr = BlockLR::<L>::new_without_weights(mi).unwrap();
+//        let mut reg_lr = BlockLR::<L>::new_without_weights(mi).unwrap();
+        let mut reg_lr = BlockALR::<L>::new_without_weights(mi).unwrap();
         rg.blocks_boxes.push(reg_lr);
 
         if mi.ffm_k > 0 {
