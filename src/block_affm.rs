@@ -4,6 +4,8 @@ use merand48::*;
 use core::arch::x86_64::*;
 use std::error::Error;
 use std::mem::{self, MaybeUninit};
+use std::fs;
+use std::path;
 
 
 use crate::optimizer;
@@ -25,6 +27,8 @@ const SQRT_OF_ONE_HALF:f32 = 0.70710678118;
  
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
+
+const TRUNCATE:f32 = 0.2;
 
 
 pub struct BlockAFFM<L:OptimizerTrait> {
@@ -157,9 +161,29 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
             }
 
             for z in 0..self.attention_weights_len as usize {
-//                self.attention_weights[z].weight = 1.0; // We start with attention doing nothing
-                self.attention_weights[z].weight = (1.0 * merand48((self.ffm_weights_len as usize + z) as u64)-0.5) * 0.5 + 1.0; // We start with attention doing nothing
+                self.attention_weights[z].weight = 1.0; // We start with attention doing nothing
+//                self.attention_weights[z].weight = (1.0 * merand48((self.ffm_weights_len as usize + z) as u64)-0.5) * 0.5 + 1.0; // We start with attention doing nothing
                 self.attention_weights[z].optimizer_data = self.optimizer_attention.initial_data();
+            }
+            let filename = "exweights.bin.in";
+            if path::Path::new(&filename).exists() {
+                println!("Loading initial weights from file: {}", filename);
+                let mut input_bufreader = io::BufReader::new(fs::File::open(filename).unwrap());
+                block_helpers::read_weights_from_buf(&mut self.attention_weights, &mut input_bufreader).unwrap();
+                println!("Enter limit: ");
+                let mut line = String::new();
+                let limit = std::io::stdin().read_line(&mut line).unwrap();
+                let line = line[0..line.len() - 1].to_string();
+                let limitf = line.parse().unwrap();
+                println!("Truncating to {}", limitf);
+                for z in 0..self.attention_weights_len as usize {
+                    if self.attention_weights[z].weight < limitf {
+                       self.attention_weights[z].weight = 0.0;
+                    } else {
+                       self.attention_weights[z].weight = 1.0;
+                    }
+                }
+                
             }
         }
     }
@@ -265,8 +289,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                                           let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + vv + k).weight;
                                           let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k) - ffm_weight * LEFT_HASH_VALUE;
                                           let gradient =  LEFT_HASH_VALUE * contra_weight;
-                                          let gradient2 = gradient * self.attention_weights.get_unchecked(vv + contra_offset +k).weight;
-                                          *attention_gradients.get_unchecked_mut(vv + contra_offset +k) += gradient * ffm_weight;
+                                          let gradient2 = gradient * self.attention_weights.get_unchecked(vv + contra_offset).weight;
+                                          *attention_gradients.get_unchecked_mut(vv + contra_offset) += gradient * ffm_weight;
                                           *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient2;
                                           *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient2;
                                       }
@@ -275,8 +299,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                                           let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + vv + k).weight;
                                           let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k);
                                           let gradient =  LEFT_HASH_VALUE * contra_weight;
-                                          let gradient2 = gradient * self.attention_weights.get_unchecked(vv + contra_offset + k).weight;
-                                          *attention_gradients.get_unchecked_mut(vv + contra_offset + k) += gradient * ffm_weight;
+                                          let gradient2 = gradient * self.attention_weights.get_unchecked(vv + contra_offset).weight;
+                                          *attention_gradients.get_unchecked_mut(vv + contra_offset) += gradient * ffm_weight;
                                           *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient2;
                                           *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient2;
                                       }
@@ -295,6 +319,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                     });
                         
                     let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
+                    //let wsum = wsum * (1.0/(1.0-1e-7));
                     let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_blocks, wsum + wsum_input, fb, update);
                     
                     if update {
@@ -311,12 +336,31 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                             }
                         }
                         
-                        // Update attention
+                        // Update attention 1
                         for z in 0..self.attention_weights_len as usize {
                             let feature_value = attention_gradients.get_unchecked(z);
                             let gradient = general_gradient * feature_value;
-                            let update = self.optimizer_attention.calculate_update(gradient, &mut self.attention_weights.get_unchecked_mut(z).optimizer_data);
-                            self.attention_weights.get_unchecked_mut(z).weight += update;
+                            let mut update = self.optimizer_attention.calculate_update(gradient, &mut self.attention_weights.get_unchecked_mut(z).optimizer_data);
+              //              self.attention_weights.get_unchecked_mut(z).weight += update;
+            //                if update > 0.0 {update=update*(1.0/(1.0-1e-8));}
+//                            self.attention_weights.get_unchecked_mut(z).weight = (self.attention_weights.get_unchecked_mut(z).weight) * (1.0-1e-7) + update;
+                            const REG:f32 = 1e-7;
+                            let mut oldweight = self.attention_weights.get_unchecked_mut(z).weight;
+                            /*if oldweight>REG {
+                                oldweight -= REG;
+                            } else if oldweight < -REG {
+                                oldweight += REG;
+                            }*/
+                            /*if oldweight > -0.5 && oldweight<0.5 {
+                                oldweight = 0.0; update = 0.0;
+                            }*/
+                            
+                            if oldweight < 0.9 {oldweight = oldweight * (1.0-REG);};
+//                            if oldweight < 0.1 {update  = 0.0; oldweight = 0.0;}; 
+                            
+                            self.attention_weights.get_unchecked_mut(z).weight = oldweight + update;
+                      
+                
                         }
                     }
                     // The only exit point
@@ -335,7 +379,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                 if local_data_ffm_len > self.local_data_ffm_values.len() {
                     self.local_data_ffm_values.reserve(local_data_ffm_len - self.local_data_ffm_values.len() + 1024);
                 }
-                println!("A");
                 let mut local_data_ffm_values = &mut self.local_data_ffm_values;
             
                 core_macro!(local_data_ffm_values);
@@ -468,18 +511,21 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
 
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
         block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader).unwrap();
-        block_helpers::read_weights_from_buf(&mut self.attention_weights, input_bufreader)
+        block_helpers::read_weights_from_buf(&mut self.attention_weights, input_bufreader).unwrap();
+        Ok(())
     }
 
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
         block_helpers::write_weights_to_buf(&self.weights, output_bufwriter).unwrap();
-        block_helpers::write_weights_to_buf(&self.attention_weights, output_bufwriter)
+        block_helpers::write_weights_to_buf(&self.attention_weights, output_bufwriter).unwrap();
+        Ok(())
     }
 
     fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>> {
         let mut forward = forward.as_any().downcast_mut::<BlockAFFM<optimizer::OptimizerSGD>>().unwrap();
+        block_helpers::read_weights_only_from_buf2::<L>(self.ffm_weights_len as usize, &mut forward.weights, input_bufreader).unwrap();
         block_helpers::read_weights_only_from_buf2::<L>(self.attention_weights_len as usize, &mut forward.attention_weights, input_bufreader).unwrap();
-        block_helpers::read_weights_only_from_buf2::<L>(self.ffm_weights_len as usize, &mut forward.weights, input_bufreader)
+        Ok(())
     }
 
     /// Sets internal state of weights based on some completely object-dependent parameters
@@ -504,6 +550,10 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                 println!(" ");
             }
         }
+        let filename = "exweights.bin";
+        let output_bufwriter = &mut io::BufWriter::new(fs::File::create(filename).expect(format!("Cannot open {} to save regressor to", filename).as_str()));
+        block_helpers::write_weights_to_buf(&self.attention_weights, output_bufwriter).unwrap();
+
     }
 
 }

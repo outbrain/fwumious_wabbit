@@ -108,11 +108,26 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
                     let update = self.optimizer_lr.calculate_update(gradient, &mut self.weights.get_unchecked_mut(feature_index).optimizer_data);
                     self.weights.get_unchecked_mut(feature_index).weight += update;
                 }
-                for x in 0..self.attention_weights_len as usize {
-                    let attention_gradient = attention_gradients.get_unchecked(x);
+                for z in 0..self.attention_weights_len as usize {
+                    let attention_gradient = attention_gradients.get_unchecked(z);
                     let gradient = general_gradient * attention_gradient;
-                    let update = self.optimizer_attention.calculate_update(gradient, &mut self.weights.get_unchecked_mut(x).optimizer_data);
-                    self.attention_weights.get_unchecked_mut(x).weight += update;
+                    let mut update = self.optimizer_attention.calculate_update(gradient, &mut self.weights.get_unchecked_mut(z).optimizer_data);
+//                    self.attention_weights.get_unchecked_mut(z).weight += update;
+//                    if update > 0.0 {update=update*(1.0/(1.0-1e-8));}
+                    const REG:f32 = 1e-8;
+                    let mut oldweight = self.attention_weights.get_unchecked_mut(z).weight;
+/*                   if oldweight>REG {
+                        oldweight -= REG;
+                    } else if oldweight < -REG {
+                        oldweight += REG;
+                    }*/
+                    
+                    /*if oldweight > -0.2 && oldweight<0.2 {
+                      oldweight = 0.0; update = 0.0;
+                    }*/
+                    self.attention_weights.get_unchecked_mut(z).weight = oldweight + update;
+                    
+//                    self.attention_weights.get_unchecked_mut(z).weight = (self.attention_weights.get_unchecked_mut(z).weight) * (1.0-REG) + update;
                 }
 
 
@@ -145,19 +160,19 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
     }
 
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
-        block_helpers::read_weights_from_buf(&mut self.attention_weights, input_bufreader).unwrap();
-        block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader)
+        block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader).unwrap();
+        block_helpers::read_weights_from_buf(&mut self.attention_weights, input_bufreader)
     }
 
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
-        block_helpers::write_weights_to_buf(&self.attention_weights, output_bufwriter).unwrap();
-        block_helpers::write_weights_to_buf(&self.weights, output_bufwriter)
+        block_helpers::write_weights_to_buf(&self.weights, output_bufwriter).unwrap();
+        block_helpers::write_weights_to_buf(&self.attention_weights, output_bufwriter)
     }
 
     fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>> {
         let mut forward = forward.as_any().downcast_mut::<BlockALR<optimizer::OptimizerSGD>>().unwrap();
-        block_helpers::read_weights_only_from_buf2::<L>(self.attention_weights_len as usize, &mut forward.attention_weights, input_bufreader).unwrap();
-        block_helpers::read_weights_only_from_buf2::<L>(self.weights_len as usize, &mut forward.weights, input_bufreader)
+        block_helpers::read_weights_only_from_buf2::<L>(self.weights_len as usize, &mut forward.weights, input_bufreader).unwrap();
+        block_helpers::read_weights_only_from_buf2::<L>(self.attention_weights_len as usize, &mut forward.attention_weights, input_bufreader)
     }
     /// Sets internal state of weights based on some completely object-dependent parameters
     fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {
