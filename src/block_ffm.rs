@@ -302,7 +302,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                 if local_data_ffm_len > self.local_data_ffm_values.len() {
                     self.local_data_ffm_values.reserve(local_data_ffm_len - self.local_data_ffm_values.len() + 1024);
                 }
-                println!("A");
+//                println!("A");
                 let mut local_data_ffm_values = &mut self.local_data_ffm_values;
             
                 core_macro!(local_data_ffm_values);
