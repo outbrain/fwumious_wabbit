@@ -74,6 +74,17 @@ pub struct ModelInstance {
     #[serde(default = "default_f32_zero")]
     pub ffm_power_t: f32,
 
+    #[serde(default = "default_f32_zero")]
+    pub attention_learning_rate: f32,    
+    #[serde(default = "default_f32_zero")]
+    pub attention_power_t: f32,
+    #[serde(default = "default_f32_zero")]
+    pub attention_init_acc_gradient: f32,
+    #[serde(default = "default_f32_zero")]
+    pub attention_l2: f32,
+    #[serde(default = "default_f32_zero")]
+    pub attention_snap_to_zero: f32,
+
     #[serde(default = "default_optimizer_adagrad")]
     pub optimizer: Optimizer,
     
@@ -139,6 +150,11 @@ impl ModelInstance {
             ffm_init_zero_band: 0.0,
             ffm_init_acc_gradient: 0.0,
             init_acc_gradient: 1.0,
+            attention_init_acc_gradient: 0.0,
+            attention_power_t: 0.25,
+            attention_learning_rate: 0.1,            
+            attention_l2: 0.0,            
+            attention_snap_to_zero: 0.0,            
             optimizer: Optimizer::SGD,
             audit_mode: false,
             audit_aux_data: None,
@@ -302,6 +318,14 @@ impl ModelInstance {
             mi.ffm_init_acc_gradient = mi.init_acc_gradient;
         }
 
+        if let Some(val) = cl.value_of("attention_init_acc_gradient") {
+            mi.attention_init_acc_gradient = val.parse()?;
+        } else {
+            mi.attention_init_acc_gradient = mi.init_acc_gradient;
+        }
+
+
+
         if let Some(in_v) = cl.values_of("ffm_field") {
             for namespaces_str in in_v {          
                 let mut field: Vec<u32>= Vec::new();
@@ -336,7 +360,11 @@ impl ModelInstance {
             mi.ffm_learning_rate = mi.learning_rate;
         }
 
-
+        if let Some(val) = cl.value_of("attention_learning_rate") {
+            mi.attention_learning_rate = val.parse()?;
+        } else {
+            mi.attention_learning_rate = mi.learning_rate;
+        }
 
 
         if let Some(val) = cl.value_of("minimum_learning_rate") {
@@ -346,10 +374,29 @@ impl ModelInstance {
         if let Some(val) = cl.value_of("power_t") {
             mi.power_t = val.parse()?;
         }
+        
         if let Some(val) = cl.value_of("ffm_power_t") {
             mi.ffm_power_t = val.parse()?;
         } else {
             mi.ffm_power_t = mi.power_t;
+        }
+        
+        if let Some(val) = cl.value_of("attention_power_t") {
+            mi.attention_power_t = val.parse()?;
+        } else {
+            mi.attention_power_t = mi.power_t;
+        }
+
+        if let Some(val) = cl.value_of("attention_l2") {
+            mi.attention_l2 = val.parse()?;
+        } else {
+            mi.attention_l2 = 0.0;
+        }
+
+        if let Some(val) = cl.value_of("attention_snap_to_zero") {
+            mi.attention_snap_to_zero = val.parse()?;
+        } else {
+            mi.attention_snap_to_zero = 0.0;
         }
         
         if let Some(val) = cl.value_of("link") {

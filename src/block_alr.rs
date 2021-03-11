@@ -89,7 +89,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
                 let feature_index     = hashvalue.hash;
                 let feature_value:f32 = hashvalue.value;
                 let attention_weight = self.attention_weights.get_unchecked(hashvalue.combo_index as usize).weight;
-//                println!("A: {}", attention_weight);
                 let feature_weight    = self.weights.get_unchecked(feature_index as usize).weight;
                 let wbasic = feature_weight * feature_value;
                 wsum += wbasic * attention_weight;
@@ -112,22 +111,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
                     let attention_derivative = attention_derivatives.get_unchecked(z);
                     let gradient = general_gradient * attention_derivative;
                     let mut update = self.optimizer_attention.calculate_update(gradient, &mut self.weights.get_unchecked_mut(z).optimizer_data);
-//                    self.attention_weights.get_unchecked_mut(z).weight += update;
-//                    if update > 0.0 {update=update*(1.0/(1.0-1e-8));}
-                    const REG:f32 = 1e-8;
                     let mut oldweight = self.attention_weights.get_unchecked_mut(z).weight;
-/*                   if oldweight>REG {
-                        oldweight -= REG;
-                    } else if oldweight < -REG {
-                        oldweight += REG;
-                    }*/
-                    
-                    /*if oldweight > -0.2 && oldweight<0.2 {
-                      oldweight = 0.0; update = 0.0;
-                    }*/
                     self.attention_weights.get_unchecked_mut(z).weight = oldweight + update;
-                    
-//                    self.attention_weights.get_unchecked_mut(z).weight = (self.attention_weights.get_unchecked_mut(z).weight) * (1.0-REG) + update;
                 }
 
 
