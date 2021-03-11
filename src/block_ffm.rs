@@ -29,8 +29,7 @@ use std::sync::Arc;
 
 pub struct BlockFFM<L:OptimizerTrait> {
     pub optimizer_ffm: L,
-    pub local_data_ffm_indices: Vec<u32>,
-    pub local_data_ffm_values: Vec<f32>,
+    pub local_ffm_derivatives: Vec<f32>,
     pub ffm_k: u32,
     pub ffm_weights_len: u32, 
     pub field_embedding_len: u32,
@@ -81,8 +80,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         let mut reg_ffm = BlockFFM::<L> {
             weights: Vec::new(),
             ffm_weights_len: 0, 
-            local_data_ffm_indices: Vec::with_capacity(1024),
-            local_data_ffm_values: Vec::with_capacity(1024),
+            local_ffm_derivatives: Vec::with_capacity(1024),
             ffm_k: mi.ffm_k, 
             field_embedding_len: mi.ffm_k * mi.ffm_fields.len() as u32,
             optimizer_ffm: L::new(),
@@ -107,8 +105,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         let forwards_only = BlockFFM::<optimizer::OptimizerSGD> {
             weights: Vec::new(),
             ffm_weights_len: self.ffm_weights_len, 
-            local_data_ffm_indices: Vec::new(),
-            local_data_ffm_values: Vec::new(),
+            local_ffm_derivatives: Vec::new(),
             ffm_k: self.ffm_k, 
             field_embedding_len: self.field_embedding_len,
             optimizer_ffm: optimizer::OptimizerSGD::new(),
@@ -161,10 +158,10 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         unsafe {
             macro_rules! core_macro {
                 (
-                $local_data_ffm_values:ident
+                $local_ffm_derivatives:ident
                 ) => {
-                    let mut local_data_ffm_values = $local_data_ffm_values;
-                     //   let mut local_data_ffm_values = &mut $local_data_ffm_values;
+                    let mut local_ffm_derivatives = $local_ffm_derivatives;
+                     //   let mut local_ffm_derivatives = &mut $local_ffm_derivatives;
                             
                     let ffm_weights = &mut self.weights;
                     let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
@@ -175,7 +172,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                         - transposed contra vectors in contra_fields - 
                             - for each vector we sum up all the features within a field
                             - and at the same time transpose it, so we can later directly multiply them with individual feature embeddings
-                        - cache of gradients in local_data_ffm_values 
+                        - cache of gradients in local_ffm_derivatives 
                             - we will use these gradients later in backward pass
                         */
                         _mm_prefetch(mem::transmute::<&f32, &i8>(&contra_fields.get_unchecked(fb.ffm_buffer.get_unchecked(0).contra_field_index as usize)), _MM_HINT_T0);
@@ -244,7 +241,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                                           let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + vv + k).weight;
                                           let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k) - ffm_weight * LEFT_HASH_VALUE;
                                           let gradient =  LEFT_HASH_VALUE * contra_weight;
-                                          *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
+                                          *local_ffm_derivatives.get_unchecked_mut(ffm_values_offset + k) = gradient;
                                           *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient;
                                       }
                                   } else {
@@ -252,7 +249,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                                           let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + vv + k).weight;
                                           let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k);
                                           let gradient =  LEFT_HASH_VALUE * contra_weight;
-                                          *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
+                                          *local_ffm_derivatives.get_unchecked_mut(ffm_values_offset + k) = gradient;
                                           *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient;
                                       }
                                   }
@@ -277,7 +274,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                         for left_hash in &fb.ffm_buffer {
                             let mut feature_index = left_hash.hash as usize;
                             for j in 0..fc as usize {
-                                let feature_value = *local_data_ffm_values.get_unchecked(local_index);
+                                let feature_value = *local_ffm_derivatives.get_unchecked(local_index);
                                 let gradient = general_gradient * feature_value;
                                 let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
                                 ffm_weights.get_unchecked_mut(feature_index).weight += update;
@@ -294,18 +291,18 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
 
             if local_data_ffm_len < FFM_STACK_BUF_LEN {
                 // Fast-path - using on-stack data structures
-                let mut local_data_ffm_values: [f32; FFM_STACK_BUF_LEN as usize] = MaybeUninit::uninit().assume_init();//[0.0; FFM_STACK_BUF_LEN as usize];
-                core_macro!(local_data_ffm_values);
+                let mut local_ffm_derivatives: [f32; FFM_STACK_BUF_LEN as usize] = MaybeUninit::uninit().assume_init();//[0.0; FFM_STACK_BUF_LEN as usize];
+                core_macro!(local_ffm_derivatives);
 
             } else {
                 // Slow-path - using heap data structures
-                if local_data_ffm_len > self.local_data_ffm_values.len() {
-                    self.local_data_ffm_values.reserve(local_data_ffm_len - self.local_data_ffm_values.len() + 1024);
+                if local_data_ffm_len > self.local_ffm_derivatives.len() {
+                    self.local_ffm_derivatives.reserve(local_data_ffm_len - self.local_ffm_derivatives.len() + 1024);
                 }
 //                println!("A");
-                let mut local_data_ffm_values = &mut self.local_data_ffm_values;
+                let mut local_ffm_derivatives = &mut self.local_ffm_derivatives;
             
-                core_macro!(local_data_ffm_values);
+                core_macro!(local_ffm_derivatives);
             }             
         } // unsafe end
     }

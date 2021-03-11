@@ -77,10 +77,10 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
                             update:bool) -> (f32, f32) {
         let mut wsum:f32 = 0.0;
         unsafe {
-            let mut attention_gradients: [f32; MAX_FEATURE_COMBOS] = MaybeUninit::uninit().assume_init();
+            let mut attention_derivatives: [f32; MAX_FEATURE_COMBOS] = MaybeUninit::uninit().assume_init();
 
             for x in 0..self.attention_weights_len as usize {
-                attention_gradients[x] = 0.0;
+                attention_derivatives[x] = 0.0;
             }
             
             for (i, hashvalue) in fb.lr_buffer.iter().enumerate() {
@@ -93,7 +93,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
                 let feature_weight    = self.weights.get_unchecked(feature_index as usize).weight;
                 let wbasic = feature_weight * feature_value;
                 wsum += wbasic * attention_weight;
-                *attention_gradients.get_unchecked_mut(hashvalue.combo_index as usize) += wbasic;
+                *attention_derivatives.get_unchecked_mut(hashvalue.combo_index as usize) += wbasic;
             }
 
             let (next_regressor, further_regressors) = further_regressors.split_at_mut(1);
@@ -109,8 +109,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
                     self.weights.get_unchecked_mut(feature_index).weight += update;
                 }
                 for z in 0..self.attention_weights_len as usize {
-                    let attention_gradient = attention_gradients.get_unchecked(z);
-                    let gradient = general_gradient * attention_gradient;
+                    let attention_derivative = attention_derivatives.get_unchecked(z);
+                    let gradient = general_gradient * attention_derivative;
                     let mut update = self.optimizer_attention.calculate_update(gradient, &mut self.weights.get_unchecked_mut(z).optimizer_data);
 //                    self.attention_weights.get_unchecked_mut(z).weight += update;
 //                    if update > 0.0 {update=update*(1.0/(1.0-1e-8));}
