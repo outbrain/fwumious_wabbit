@@ -106,7 +106,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
             reg_ffm.optimizer_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
             // Best params till now: 0.1, 0.2, 0.0 and random weights initialization
             //self.attention_weights[z].weight = (1.0 * merand48((self.ffm_weights_len as usize + z) as u64)-0.5) * 
-//            reg_ffm.optimizer_attention.init(0.1, 0.25, 0.0); BEST ON PROD
+//            reg_ffm.optimizer_attention.init(0.1, 0.25, 0.0); //BEST ON PROD
             reg_ffm.optimizer_attention.init(mi.attention_learning_rate, mi.attention_power_t, mi.attention_init_acc_gradient);
             // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
             reg_ffm.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * reg_ffm.ffm_k);
@@ -174,17 +174,19 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
 //                self.attention_weights[z].weight = (1.0 * merand48((self.ffm_weights_len as usize + z) as u64)-0.5) * 0.5 + 1.0; // We start with attention doing nothing
                 self.attention_weights[z].optimizer_data = self.optimizer_attention.initial_data();
             }
-            let filename = "exweights.bin.in";
+            let filename = "attention_weights.bin.in";
             if path::Path::new(&filename).exists() {
-                println!("Loading initial weights from file: {}", filename);
+                println!("Loading initial attention weights from file: {}", filename);
                 let mut input_bufreader = io::BufReader::new(fs::File::open(filename).unwrap());
                 block_helpers::read_weights_from_buf(&mut self.attention_weights, &mut input_bufreader).unwrap();
-                println!("Enter limit: ");
+                /*println!("Enter limit: ");
                 let mut line = String::new();
                 let limit = std::io::stdin().read_line(&mut line).unwrap();
                 let line = line[0..line.len() - 1].to_string();
                 let limitf = line.parse().unwrap();
-                println!("Truncating to {}", limitf);
+                */
+                let limitf = 0.0;
+                println!("Truncating at {}", limitf);
                 for z in 0..self.attention_weights_len as usize {
                     if self.attention_weights[z].weight < limitf {
                        self.attention_weights[z].weight = 0.0;
@@ -542,24 +544,24 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
         Ok(())
     }
 
-    fn debug_output(&self, mi: &model_instance::ModelInstance) {
+    fn debug_output(&self, mi: &model_instance::ModelInstance, aa: i32) {
         let field_count = mi.ffm_fields.len() as usize;
         for f1 in 0..field_count {
             println!("Combining: {} with", mi.audit_aux_data.as_ref().unwrap().field_index_to_string[&(f1 as u32)]);
             for f2 in 0..field_count {
-//                print!("    {} : \n    ",
-//                      f1, f2,
-//                      mi.audit_aux_data.as_ref().unwrap().field_index_to_string[&(f2 as u32)]);
-                //for k in 0..self.ffm_k {
-                    print!("{:.2}  ", self.attention_weights[(f2+f1*field_count) as usize].weight);
-                //}
+                print!("{:.2}  ", self.attention_weights[(f2+f1*field_count) as usize].weight);
                 print!("     => {}", mi.audit_aux_data.as_ref().unwrap().field_index_to_string[&(f2 as u32)]);
                 println!(" ");
             }
         }
-        let filename = "exweights.bin";
-        let output_bufwriter = &mut io::BufWriter::new(fs::File::create(filename).expect(format!("Cannot open {} to save regressor to", filename).as_str()));
-        block_helpers::write_weights_to_buf(&self.attention_weights, output_bufwriter).unwrap();
+        if aa == 1 {
+            let filename = "attention_weights.bin";
+            let output_bufwriter = &mut io::BufWriter::new(fs::File::create(filename).expect(format!("Cannot open {} to save regressor to", filename).as_str()));
+            block_helpers::write_weights_to_buf(&self.attention_weights, output_bufwriter).unwrap();
+            let filename = "ffm_weights.bin";
+            let output_bufwriter = &mut io::BufWriter::new(fs::File::create(filename).expect(format!("Cannot open {} to save regressor to", filename).as_str()));
+            block_helpers::write_weights_to_buf(&self.weights, output_bufwriter).unwrap();
+        }
 
     }
 

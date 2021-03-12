@@ -449,7 +449,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         self.weights[index].optimizer_data = self.optimizer_ffm.initial_data();
         Ok(())
     }
-    fn debug_output(&self, mi: &model_instance::ModelInstance) {
+    
+    fn debug_output(&self, mi: &model_instance::ModelInstance, aa: i32) {
     }
 
 }

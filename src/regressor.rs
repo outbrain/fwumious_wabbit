@@ -45,8 +45,8 @@ pub trait BlockTrait {
     fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>>;
 
     /// Sets internal state of weights based on some completely object-dependent parameters
-    fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>>;
-    fn debug_output(&self, mi: &model_instance::ModelInstance);
+    fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {Ok(())}
+    fn debug_output(&self, mi: &model_instance::ModelInstance, aa: i32) {}
 }
 
 
@@ -148,9 +148,9 @@ impl Regressor  {
         return prediction_probability
     }
 
-    pub fn debug_output(&self, mi: &model_instance::ModelInstance) {
+    pub fn debug_output(&self, mi: &model_instance::ModelInstance, aa: i32) {
         for v in &self.blocks_boxes {
-            v.debug_output(mi);
+            v.debug_output(mi, aa);
         }
     }
 

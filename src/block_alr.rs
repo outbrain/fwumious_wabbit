@@ -166,7 +166,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
         Ok(())
     }
 
-    fn debug_output(&self, mi: &model_instance::ModelInstance) {
+    fn debug_output(&self, mi: &model_instance::ModelInstance, aa: i32) {
         for x in 0..self.attention_weights_len as usize{	
             println!("{:.2}  => {}", self.attention_weights[x].weight, mi.audit_aux_data.as_ref().unwrap().combo_index_to_string[&(x as i32)]);
 
