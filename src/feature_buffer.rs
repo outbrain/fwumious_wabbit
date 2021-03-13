@@ -217,7 +217,7 @@ mod tests {
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::NULL]); // no feature
         fbt.translate(&rb, 0);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:116060, value:1.0}]); // vw compatibility - no feature is no feature
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:116060, value:1.0, combo_index: 0}]); // vw compatibility - no feature is no feature
     }
     
     
@@ -237,11 +237,11 @@ mod tests {
 
         let rb = add_header(vec![0xfea]);
         fbt.translate(&rb, 0);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0, combo_index: 0}]);
 
         let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(4,8), 0xfea, 1.0f32.to_bits(), 0xfeb, 1.0f32.to_bits()]);
         fbt.translate(&rb, 0);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}, HashAndValue {hash:0xfeb, value:1.0}]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0, combo_index: 0}, HashAndValue {hash:0xfeb, value:1.0, combo_index: 0}]);
     }
 
     #[test]
@@ -263,11 +263,11 @@ mod tests {
 
         let rb = add_header(vec![0xfea, parser::NULL]);
         fbt.translate(&rb, 0);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0, combo_index: 0}]);
 
         let rb = add_header(vec![0xfea, 0xfeb]);
         fbt.translate(&rb, 0);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}, HashAndValue {hash:0xfeb, value:1.0}]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0, combo_index: 0}, HashAndValue {hash:0xfeb, value:1.0, combo_index: 1}]);
 
     }
 
@@ -293,7 +293,7 @@ mod tests {
         let rb = add_header(vec![2988156968 & parser::MASK31, 2422381320 & parser::MASK31, parser::NULL]);
         fbt.translate(&rb, 0);
 //        println!("out {}, out mod 2^24 {}", fbt.feature_buffer.lr_buffer[1], fbt.feature_buffer.lr_buffer[1] & ((1<<24)-1));
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash: 208368, value:1.0}]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash: 208368, value:1.0, combo_index: 0}]);
         
     }
     
@@ -308,7 +308,7 @@ mod tests {
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![0xfea]);
         fbt.translate(&rb, 0);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash: 0xfea, value:2.0}]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash: 0xfea, value:2.0, combo_index: 0}]);
     }
     
     #[test]

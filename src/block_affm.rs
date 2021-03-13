@@ -188,13 +188,22 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                 let limitf = 0.0;
                 println!("Truncating at {}", limitf);
                 for z in 0..self.attention_weights_len as usize {
-                    if self.attention_weights[z].weight < limitf {
+                    self.attention_weights[z].optimizer_data = self.optimizer_attention.initial_data();
+                    println!("A {}", self.attention_weights[z].weight);
+                    /*if self.attention_weights[z].weight < limitf {
                        self.attention_weights[z].weight = 0.0;
-                    } else {
-                       self.attention_weights[z].weight = 1.0;
-                    }
+                    }*/
                 }
-                
+            }
+            let filename = "ffm_weights.bin.in";
+            if path::Path::new(&filename).exists() {
+                println!("Loading initial ffm weights from file: {}", filename);
+                let mut input_bufreader = io::BufReader::new(fs::File::open(filename).unwrap());
+                block_helpers::read_weights_from_buf(&mut self.weights, &mut input_bufreader).unwrap();
+                for z in 0..self.ffm_weights_len as usize {
+                    self.weights[z].optimizer_data = self.optimizer_ffm.initial_data();
+                    self.weights[z].weight = self.weights[z].weight;
+                }
             }
         }
     }

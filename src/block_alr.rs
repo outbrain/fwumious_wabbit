@@ -65,6 +65,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
 
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
+        println!("Al;locating {}", self.attention_weights_len);
         self.weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_lr.initial_data()}; self.weights_len as usize];
         self.attention_weights = vec![WeightAndOptimizerData::<L>{weight:1.0, optimizer_data: self.optimizer_attention.initial_data()}; self.attention_weights_len as usize];
     }
@@ -146,18 +147,21 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
 
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
         block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader).unwrap();
-        block_helpers::read_weights_from_buf(&mut self.attention_weights, input_bufreader)
+        block_helpers::read_weights_from_buf(&mut self.attention_weights, input_bufreader).unwrap();
+        Ok(())
     }
 
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
         block_helpers::write_weights_to_buf(&self.weights, output_bufwriter).unwrap();
-        block_helpers::write_weights_to_buf(&self.attention_weights, output_bufwriter)
+        block_helpers::write_weights_to_buf(&self.attention_weights, output_bufwriter).unwrap();
+        Ok(())
     }
 
     fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>> {
         let mut forward = forward.as_any().downcast_mut::<BlockALR<optimizer::OptimizerSGD>>().unwrap();
         block_helpers::read_weights_only_from_buf2::<L>(self.weights_len as usize, &mut forward.weights, input_bufreader).unwrap();
-        block_helpers::read_weights_only_from_buf2::<L>(self.attention_weights_len as usize, &mut forward.attention_weights, input_bufreader)
+        block_helpers::read_weights_only_from_buf2::<L>(self.attention_weights_len as usize, &mut forward.attention_weights, input_bufreader).unwrap();
+        Ok(())
     }
     /// Sets internal state of weights based on some completely object-dependent parameters
     fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {

@@ -177,9 +177,17 @@ B,featureB
         mi.optimizer = model_instance::Optimizer::Adagrad;
         mi.fastmath = false;
         mi.init_acc_gradient = 0.0;
+        mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
+                                                        feature_indices: vec![0], 
+                                                        weight: 1.0});
+        mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
+                                                        feature_indices: vec![1], 
+                                                        weight: 1.0});
+
+
         let mut re = regressor::get_regressor(&mi);
 
-        let fbuf = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]);
+        let fbuf = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}, HashAndValue{hash:2, value: 1.0, combo_index: 0}]);
         assert_eq!(re.learn(fbuf, true), 0.5);
         assert_eq!(re.learn(fbuf, true), 0.45016602);
         assert_eq!(re.learn(fbuf, false), 0.41731137);

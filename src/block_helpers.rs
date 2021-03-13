@@ -35,9 +35,9 @@ macro_rules! assert_epsilon {
 
 // It's OK! I am a limo driver!
 pub fn read_weights_from_buf<L:OptimizerTrait>(weights: &mut Vec<WeightAndOptimizerData<L>>, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
-    if weights.len() == 0 {
-        return Err(format!("Loading weights to unallocated weighs buffer"))?;
-    }
+/*    if weights.len() == 0 {
+        return Err(format!("Loading weights to unallocated weights buffer"))?;
+    }*/
     unsafe {
         let mut buf_view:&mut [u8] = slice::from_raw_parts_mut(weights.as_mut_ptr() as *mut u8, 
                                          weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
@@ -48,9 +48,9 @@ pub fn read_weights_from_buf<L:OptimizerTrait>(weights: &mut Vec<WeightAndOptimi
 
 
 pub fn write_weights_to_buf<L:OptimizerTrait>(weights: &Vec<WeightAndOptimizerData<L>>, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
-    if weights.len() == 0 {
+    /*if weights.len() == 0 {
         return Err(format!("Writing weights of unallocated weights buffer"))?;
-    }
+    }*/
     unsafe {
          let buf_view:&[u8] = slice::from_raw_parts(weights.as_ptr() as *const u8, 
                                           weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());

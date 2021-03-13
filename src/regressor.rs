@@ -246,8 +246,8 @@ mod tests {
         let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
         // Empty model: no matter how many features, prediction is 0.5
         assert_eq!(re.learn(&lr_vec(vec![]), false), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), false), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), false), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}]), false), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}, HashAndValue{hash:2, value: 1.0, combo_index: 0}]), false), 0.5);
     }
 
     #[test]
@@ -257,8 +257,12 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
+        mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
+                                                        feature_indices: vec![0], 
+                                                        weight: 1.0});
         
-        let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);
+        
+        let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}]);
         
         // Here learning rate mechanism does not affect the results, so let's verify three different ones
         let mut regressors: Vec<Box<Regressor>> = vec![
@@ -282,9 +286,14 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
+        mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
+                                                        feature_indices: vec![0], 
+                                                        weight: 1.0});
+
+
         
         let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
-        let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash: 1, value: 2.0}]);
+        let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}, HashAndValue{hash: 1, value: 2.0, combo_index: 0}]);
 
         assert_eq!(re.learn(vec_in, true), 0.5);
         assert_eq!(re.learn(vec_in, true), 0.38936076);
@@ -295,20 +304,28 @@ mod tests {
     #[test]
     fn test_power_t_half__() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
+                                                        feature_indices: vec![0], 
+                                                        weight: 1.0});
+        
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
         mi.init_acc_gradient = 0.0;
         
         let mut re = Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi);
         
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true), 0.4750208);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true), 0.45788094);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0, combo_index: 0}]), true), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0, combo_index: 0}]), true), 0.4750208);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0, combo_index: 0}]), true), 0.45788094);
     }
 
     #[test]
     fn test_power_t_half_fastmath() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
+                                                        feature_indices: vec![0], 
+                                                        weight: 1.0});
+        
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
         mi.fastmath = true;
@@ -318,9 +335,9 @@ mod tests {
         let mut re = get_regressor(&mi);
         let mut p: f32;
         
-        p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true);
+        p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0, combo_index: 0}]), true);
         assert_eq!(p, 0.5);
-        p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true);
+        p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0, combo_index: 0}]), true);
         if optimizer::FASTMATH_LR_LUT_BITS == 12 { 
             assert_eq!(p, 0.47539312);
         } else if optimizer::FASTMATH_LR_LUT_BITS == 11 { 
@@ -333,6 +350,10 @@ mod tests {
     #[test]
     fn test_power_t_half_two_features() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
+                                                        feature_indices: vec![0], 
+                                                        weight: 1.0});
+        
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
         mi.bit_precision = 18;
@@ -340,28 +361,36 @@ mod tests {
         
         let mut re = Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi);
         // Here we take twice two features and then once just one
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true), 0.45016602);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), true), 0.45836908);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}, HashAndValue{hash:2, value: 1.0, combo_index: 0}]), true), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}, HashAndValue{hash:2, value: 1.0, combo_index: 0}]), true), 0.45016602);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}]), true), 0.45836908);
     }
 
     #[test]
     fn test_non_one_weight() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
+                                                        feature_indices: vec![0], 
+                                                        weight: 1.0});
+        
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
         mi.bit_precision = 18;
         
         let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
         
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true), 0.45016602);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true), 0.40611085);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0, combo_index: 0}]), true), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0, combo_index: 0}]), true), 0.45016602);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0, combo_index: 0}]), true), 0.40611085);
     }
 
     #[test]
     fn test_example_importance() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
+                                                        feature_indices: vec![0], 
+                                                        weight: 1.0});
+        
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
         mi.bit_precision = 18;
@@ -370,7 +399,7 @@ mod tests {
         
         let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
         
-        let mut fb_instance = lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);
+        let mut fb_instance = lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}]);
         fb_instance.example_importance = 0.5;
         assert_eq!(re.learn(&fb_instance, true), 0.5);
         assert_eq!(re.learn(&fb_instance, true), 0.49375027);
