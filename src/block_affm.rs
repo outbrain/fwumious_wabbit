@@ -800,16 +800,10 @@ B,featureB
                                   HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: mi.ffm_k * 1}
                                   ], 2);
                                   
-/*        assert_epsilon!(spredict(&mut re, &mut lossf, &fbuf, true), 0.7310586);
-        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, true), 0.7310586);
-        assert_epsilon!(spredict(&mut re, &mut lossf, &fbuf, false), 0.8952174);
-        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, false), 0.9395168);*/
         assert_epsilon!(spredict(&mut re, &mut lossf, &fbuf, true), 0.9933072);
         assert_eq!(slearn(&mut re, &mut lossf, &fbuf, true), 0.9933072);
         assert_epsilon!(slearn(&mut re, &mut lossf, &fbuf, false), 0.90496447);
         assert_epsilon!(spredict(&mut re, &mut lossf, &fbuf, false), 0.90496447);
-/*        assert_epsilon!(spredict(&mut re, &mut lossf, &fbuf, false), 0.9395168);
-        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, false), 0.9395168);*/
     }
 
     #[test]
