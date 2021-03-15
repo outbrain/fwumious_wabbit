@@ -411,7 +411,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
         let mut wsum:f32 = 0.0;
         unsafe {
             let ffm_weights = &self.weights;
-            println!("NEW");
             if true {
                 _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(0).hash as usize).weight), _MM_HINT_T0);
                 let field_embedding_len = self.field_embedding_len as usize;
@@ -455,10 +454,11 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                                         *contra_fields.get_unchecked_mut(offset + z) += ffm_weights.get_unchecked(left_hash_hash + z).weight * LEFT_HASH_VALUE;
                                     }
                                 }
+                                let attention_value = self.attention_weights.get_unchecked((field_index * fb.ffm_fields_count + field_index) as usize).weight;
                                 let vv = SQRT_OF_ONE_HALF * LEFT_HASH_VALUE;     // To avoid one additional multiplication, we square root 0.5 into vv
                                 for k in 0..FFMK as usize {
                                     let ss = ffm_weights.get_unchecked(left_hash_hash + field_index_ffmk as usize + k).weight * vv;
-                                    *wsumbuf.get_unchecked_mut(k) -= ss * ss;
+                                    *wsumbuf.get_unchecked_mut(k) -= ss * ss * attention_value;
                                 }
                             });
                             ffm_buffer_index += 1;
@@ -478,17 +478,16 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                         println!("A: {} {}", self.attention_weights.get_unchecked(f1 + f1_attention_offset).weight, self.attention_weights.get_unchecked(f2 + f2_attention_offset).weight);*/
                         let attention_value = self.attention_weights.get_unchecked(f1 + f1_attention_offset).weight;
                         for k in 0..FFMK as usize { 
-                            let v = contra_fields.get_unchecked(f1_offset_ffmk + k) ;
+                            let v = contra_fields.get_unchecked(f1_offset_ffmk + k);
                             *wsumbuf.get_unchecked_mut(k) += v * v * 0.5 * attention_value;
                         }
 
                         for f2 in f1+1..fb.ffm_fields_count as usize {
                             let attention_value = self.attention_weights.get_unchecked(f2 + f1_attention_offset).weight;
-                            println!("Attention value: {}, {} {}", attention_value, f1,f2);
                             f2_offset_ffmk += field_embedding_len as usize;
                             f1_offset_ffmk += FFMK as usize;
                             assert_eq!(f1_offset_ffmk, f1 * field_embedding_len + f2 * FFMK as usize);
-                            assert_eq!(f2_offset_ffmk, 1 + f2 * field_embedding_len + f1 * FFMK as usize);
+                            assert_eq!(f2_offset_ffmk, f2 * field_embedding_len + f1 * FFMK as usize);
                             for k in 0..FFMK {
                                 *wsumbuf.get_unchecked_mut(k as usize) += 
                                         contra_fields.get_unchecked(f1_offset_ffmk + k as usize) * 
@@ -807,8 +806,8 @@ B,featureB
         assert_eq!(slearn(&mut re, &mut lossf, &fbuf, false), 0.9395168);*/
         assert_epsilon!(spredict(&mut re, &mut lossf, &fbuf, true), 0.9933072);
         assert_eq!(slearn(&mut re, &mut lossf, &fbuf, true), 0.9933072);
-        assert_epsilon!(spredict(&mut re, &mut lossf, &fbuf, false), 0.90496457);
-        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, false), 0.90496457);
+        assert_epsilon!(slearn(&mut re, &mut lossf, &fbuf, false), 0.90496447);
+        assert_epsilon!(spredict(&mut re, &mut lossf, &fbuf, false), 0.90496447);
 /*        assert_epsilon!(spredict(&mut re, &mut lossf, &fbuf, false), 0.9395168);
         assert_eq!(slearn(&mut re, &mut lossf, &fbuf, false), 0.9395168);*/
     }
