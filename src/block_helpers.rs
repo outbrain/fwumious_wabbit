@@ -26,7 +26,11 @@ pub struct WeightAndOptimizerData<L:OptimizerTrait> {
 #[macro_export]
 macro_rules! assert_epsilon {
     ($x:expr, $y:expr) => {
-        if !($x - $y < 0.0000001 || $y - $x < 0.0000001) { panic!(); }
+        let x:f32 = $x;
+        let y:f32 = $y;
+        if !((x-y).abs() < 0.000001) {
+            assert_eq!(x,y);
+        }
     }
 }
 

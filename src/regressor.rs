@@ -88,7 +88,6 @@ impl Regressor  {
         if mi.attention {
             let mut reg_lr = BlockALR::<L>::new_without_weights(mi).unwrap();
             rg.blocks_boxes.push(reg_lr);
-
             if mi.ffm_k > 0 {
                 let mut reg_ffm = BlockAFFM::<L>::new_without_weights(mi).unwrap();
                 rg.blocks_boxes.push(reg_ffm);

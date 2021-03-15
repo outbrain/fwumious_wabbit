@@ -177,7 +177,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
                     self.attention_weights.get_unchecked_mut(z).weight = oldweight + update;
                 }*/
                     specialize_value_f32!(self.attention_snap_to_zero, 0.0, ATTENTION_SNAP_TO_ZERO, {
-                        specialize_value_f32!(self.attention_l2, 1.0, ATTENTION_L2, {
+                        specialize_value_f32!(self.attention_l2, 0.0, ATTENTION_L2, {
                             for z in 0..self.attention_weights_len as usize {
                                 let feature_value = attention_derivatives.get_unchecked(z);
                                 let gradient = general_gradient * feature_value;
@@ -187,6 +187,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
                                 if ATTENTION_L2 != 0.0 {
                                     oldweight -= oldweight * (ATTENTION_L2 * update_scale);
                                 }
+//                                println!("A: {} {}", ATTENTION_L2, ATTENTION_SNAP_TO_ZERO);
                                 oldweight += update;
                                 if ATTENTION_SNAP_TO_ZERO != 0.0 {
                                     if oldweight < ATTENTION_SNAP_TO_ZERO {

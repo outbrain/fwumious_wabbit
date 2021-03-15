@@ -153,7 +153,7 @@ impl ModelInstance {
             ffm_init_acc_gradient: 0.0,
             init_acc_gradient: 1.0,
             attention: false,
-            attention_init_acc_gradient: 0.0,
+            attention_init_acc_gradient: 1.0,
             attention_power_t: 0.25,
             attention_learning_rate: 0.1,            
             attention_l2: 0.0,            
