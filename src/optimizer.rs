@@ -1,9 +1,10 @@
 
 use std::marker::PhantomData;
+use crate::assert_epsilon;
 
 
 pub trait OptimizerTrait : std::clone::Clone {
-    type PerWeightStore: std::clone::Clone;
+    type PerWeightStore: std::clone::Clone + Copy;
     fn new() -> Self;
     fn init(&mut self, learning_rate: f32, power_t: f32, initial_acc_gradient: f32);
     unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32;
@@ -35,7 +36,7 @@ impl OptimizerTrait for OptimizerSGD {
 
     #[inline(always)]
     unsafe fn calculate_update(&self, gradient: f32, _data: &mut Self::PerWeightStore) -> f32 {
-        return gradient * self.learning_rate;
+        return self.learning_rate;
     }
 
     fn initial_data(&self) -> Self::PerWeightStore {
@@ -78,7 +79,7 @@ impl OptimizerTrait for OptimizerAdagradFlex {
         let gradient_squared = gradient * gradient;
         let new_accumulated_gradient_squared = accumulated_gradient_squared + gradient_squared;
         *data = new_accumulated_gradient_squared;
-        let update =  gradient * self.learning_rate * (new_accumulated_gradient_squared).powf(self.minus_power_t);
+        let update = self.learning_rate * (new_accumulated_gradient_squared).powf(self.minus_power_t);
         return update;
     }
     
@@ -115,7 +116,6 @@ impl OptimizerTrait for OptimizerAdagradLUT {
     
     fn init(&mut self, learning_rate: f32, power_t: f32, initial_acc_gradient: f32) {
         println!("Calculating look-up tables for Adagrad learning rate calculation");
-        let minus_power_t = -power_t;
         for x in 0..FASTMATH_LR_LUT_SIZE {
             // accumulated gradients are always positive floating points, sign is guaranteed to be zero
             // floating point: 1 bit of sign, 7 bits of signed expontent then floating point bits (mantissa)
@@ -123,7 +123,9 @@ impl OptimizerTrait for OptimizerAdagradLUT {
             // we take two consequtive such values, so we act as if had rounding
             let float_x = (f32::from_bits((x as u32)  << (31-FASTMATH_LR_LUT_BITS))) + initial_acc_gradient;
             let float_x_plus_one = (f32::from_bits(((x+1) as u32)  << (31-FASTMATH_LR_LUT_BITS))) + initial_acc_gradient;
-            let mut val = learning_rate * ((float_x).powf(minus_power_t) + (float_x_plus_one).powf(minus_power_t)) * 0.5;
+            let p1 = 1.0/((float_x).powf(power_t));
+            let p2 = 1.0/((float_x_plus_one).powf(power_t));
+            let mut val = learning_rate * ( p1+ p2 ) * 0.5;
             // Safety measure
             if val.is_nan() || val.is_infinite(){
 //                println!("x: {} {} {} {}", x, float_x, val, initial_acc_gradient);
@@ -142,8 +144,9 @@ impl OptimizerTrait for OptimizerAdagradLUT {
         let new_accumulated_gradient_squared = accumulated_gradient_squared + gradient_squared;
         *data = new_accumulated_gradient_squared;
         let key = new_accumulated_gradient_squared.to_bits() >> (31-FASTMATH_LR_LUT_BITS);
-        let update = gradient * *self.fastmath_lr_lut.get_unchecked(key as usize);
-        return update;
+        let adjusted_learning_rate = *self.fastmath_lr_lut.get_unchecked(key as usize);
+//        let update = gradient * adjusted_learning_rate);
+        return adjusted_learning_rate;
     }
 
     fn initial_data(&self) -> Self::PerWeightStore {
@@ -168,7 +171,8 @@ mod tests {
         unsafe {
             let mut acc: PhantomData<u32> = std::marker::PhantomData{};
             let p = l.calculate_update(0.1, &mut acc);
-            assert_eq!(p, 0.1* 0.15);
+            //assert_eq!(p, 0.1* 0.15);
+            assert_eq!(p, 0.15);
         }
     }
 
@@ -180,18 +184,18 @@ mod tests {
             let mut acc: f32;
             acc = 0.9;
             let p = l.calculate_update(0.1, &mut acc);
-            assert_eq!(p, 0.015576674);
+            assert_epsilon!(p, 0.015576674 / 0.1);
             assert_eq!(acc, 0.9 + 0.1*0.1);
 
             acc = 0.0;
             let p = l.calculate_update(0.1, &mut acc);
-            assert_eq!(p, 0.09464361);
+            assert_epsilon!(p, 0.09464361 / 0.1);
             assert_eq!(acc, 0.1*0.1);
             
             acc = 0.0;
             let p = l.calculate_update(0.0, &mut acc);
             // Here we check that we get NaN back - this is not good, but it's correct
-            assert!(p.is_nan());
+            assert!(p == f32::INFINITY);
             assert_eq!(acc, 0.0);
 
         }
@@ -205,18 +209,18 @@ mod tests {
             let mut acc: f32;
             acc = 0.9;
             let p = l.calculate_update(0.1, &mut acc);
-            assert_eq!(p, 0.015607622);
+            assert_epsilon!(p, 0.015607622 / 0.1);
             assert_eq!(acc, 0.9 + 0.1*0.1);
 
             acc = 0.0;
             let p = l.calculate_update(0.1, &mut acc);
-            assert_eq!(p, 0.09375872);
+            assert_epsilon!(p, 0.09375872 / 0.1);
             assert_eq!(acc, 0.1*0.1);
 
             acc = 0.0;
             let p = l.calculate_update(0.0, &mut acc);
             // Here we check that we don't get Inf back
-            assert_eq!(p, 0.0);
+            assert_eq!(p, 0.15);
             assert_eq!(acc, 0.0);
             
         }

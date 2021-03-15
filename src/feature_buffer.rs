@@ -162,7 +162,7 @@ impl FeatureBufferTranslator {
         if self.model_instance.add_constant_feature {
                 lr_buffer.push(HashAndValue{hash: CONSTANT_HASH & self.lr_hash_mask,
                                             value: 1.0,
-                                            combo_index: 0});
+                                            combo_index: u32::MAX});       // don't do attention on the bias/constant term, signal by combo index
         }
 
         // FFM loops have not been optimized yet
@@ -217,7 +217,7 @@ mod tests {
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::NULL]); // no feature
         fbt.translate(&rb, 0);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:116060, value:1.0, combo_index: 0}]); // vw compatibility - no feature is no feature
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:116060, value:1.0, combo_index: u32::MAX}]); // vw compatibility - no feature is no feature
     }
     
     

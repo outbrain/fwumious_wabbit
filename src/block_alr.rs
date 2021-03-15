@@ -7,6 +7,8 @@ use crate::feature_buffer;
 use std::io;
 use core::arch::x86_64::*;
 use std::error::Error;
+use std::fs;
+use std::path;
 
 const MAX_FEATURE_COMBOS:usize = 255;
 
@@ -24,8 +26,26 @@ pub struct BlockALR<L:OptimizerTrait> {
     pub optimizer_attention: L,
     pub attention_weights_len: u32,
     pub attention_weights: Vec<WeightAndOptimizerData<L>>,
-    
+    pub attention_l2: f32,
+    pub attention_snap_to_zero: f32,
+
 }
+
+macro_rules! specialize_value_f32 {
+    ( $input_expr:expr,
+      $special_value: expr, 
+      $output_const:ident,
+      $code_block:block  ) => {
+          if $input_expr == $special_value {	
+              const $output_const:f32 = $special_value; 
+              $code_block
+          } else {
+              let $output_const:f32 = $input_expr; 
+              $code_block
+          }
+      };
+}
+
 
 impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L> 
 {
@@ -41,10 +61,12 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
             optimizer_attention: L::new(),
             attention_weights: Vec::new(),
             attention_weights_len: mi.feature_combo_descs.len() as u32,
-            
+            attention_l2: mi.attention_l2,
+            attention_snap_to_zero: mi.attention_snap_to_zero,
         };
         reg_lr.optimizer_lr.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
-        reg_lr.optimizer_attention.init(0.1, 0.25, 0.0);
+//        reg_lr.optimizer_attention.init(0.1, 0.25, 0.0);
+        reg_lr.optimizer_attention.init(mi.attention_learning_rate, mi.attention_power_t, mi.attention_init_acc_gradient);
         reg_lr.weights_len = 1 << mi.bit_precision;
         Ok(Box::new(reg_lr))
     }
@@ -57,6 +79,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
             optimizer_attention: optimizer::OptimizerSGD::new(),
             attention_weights: Vec::new(),
             attention_weights_len: self.attention_weights_len,
+            attention_l2: self.attention_l2,
+            attention_snap_to_zero: self.attention_snap_to_zero,
         };
         
         Ok(Box::new(forwards_only))
@@ -65,9 +89,33 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
 
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
-        println!("Al;locating {}", self.attention_weights_len);
         self.weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_lr.initial_data()}; self.weights_len as usize];
         self.attention_weights = vec![WeightAndOptimizerData::<L>{weight:1.0, optimizer_data: self.optimizer_attention.initial_data()}; self.attention_weights_len as usize];
+        /*
+        let filename = "lr_attention_weights.bin.in";
+        if path::Path::new(&filename).exists() {
+            println!("Loading primary lr attention weights from file: {}, len: {}", filename, self.attention_weights.len());
+            let mut attention_weights =vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_attention.initial_data()}; self.attention_weights.len() as usize];
+            let mut input_bufreader = io::BufReader::new(fs::File::open(filename).unwrap());
+            block_helpers::read_weights_from_buf(&mut attention_weights, &mut input_bufreader).unwrap();
+            for z in 0..self.attention_weights.len() as usize {
+                self.attention_weights[z].optimizer_data = attention_weights[z].optimizer_data;
+                self.attention_weights[z].weight = attention_weights[z].weight;
+            }
+        }
+        let filename = "lr_weights.bin.in";
+        if path::Path::new(&filename).exists() {
+            println!("Loading primary lr weights from file: {}, len: {}", filename, self.weights.len());
+            let mut weights =vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_lr.initial_data()}; self.weights.len() as usize];
+            let mut input_bufreader = io::BufReader::new(fs::File::open(filename).unwrap());
+            block_helpers::read_weights_from_buf(&mut weights, &mut input_bufreader).unwrap();
+            for z in 0..self.weights.len() as usize {
+                 self.weights[z].optimizer_data = weights[z].optimizer_data;
+                 self.weights[z].weight = weights[z].weight;
+            }
+        }
+        */
+
     }
 
     #[inline(always)]
@@ -89,11 +137,19 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
                 // _mm_prefetch(mem::transmute::<&f32, &i8>(&self.weights.get_unchecked((fb.lr_buffer.get_unchecked(i+8).hash) as usize).weight), _MM_HINT_T0);  // No benefit for now
                 let feature_index     = hashvalue.hash;
                 let feature_value:f32 = hashvalue.value;
-                let attention_weight = self.attention_weights.get_unchecked(hashvalue.combo_index as usize).weight;
+                
+                let mut attention_weight:f32;
+                if hashvalue.combo_index != u32::MAX { // No attention on bias term ...
+                    attention_weight = self.attention_weights.get_unchecked(hashvalue.combo_index as usize).weight;
+                } else {
+                    attention_weight = 1.0;
+                }
                 let feature_weight    = self.weights.get_unchecked(feature_index as usize).weight;
                 let wbasic = feature_weight * feature_value;
                 wsum += wbasic * attention_weight;
-                *attention_derivatives.get_unchecked_mut(hashvalue.combo_index as usize) += wbasic;
+                if hashvalue.combo_index != u32::MAX {
+                    *attention_derivatives.get_unchecked_mut(hashvalue.combo_index as usize) += wbasic;
+                }
             }
 
             let (next_regressor, further_regressors) = further_regressors.split_at_mut(1);
@@ -103,20 +159,44 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
                 for hashvalue in fb.lr_buffer.iter() {
                     let feature_index     = hashvalue.hash as usize;
                     let feature_value:f32 = hashvalue.value;                        
-                    let attention_weight = self.attention_weights.get_unchecked(hashvalue.combo_index as usize).weight;
+                    let attention_weight: f32;
+                    if hashvalue.combo_index != u32::MAX {
+                        attention_weight = self.attention_weights.get_unchecked(hashvalue.combo_index as usize).weight;
+                    } else {
+                        attention_weight = 1.0;
+                    }
                     let gradient = general_gradient * feature_value * attention_weight;
-                    let update = self.optimizer_lr.calculate_update(gradient, &mut self.weights.get_unchecked_mut(feature_index).optimizer_data);
+                    let update = gradient * self.optimizer_lr.calculate_update(gradient, &mut self.weights.get_unchecked_mut(feature_index).optimizer_data);
                     self.weights.get_unchecked_mut(feature_index).weight += update;
                 }
-                for z in 0..self.attention_weights_len as usize {
+/*                for z in 0..self.attention_weights_len as usize {
                     let attention_derivative = attention_derivatives.get_unchecked(z);
                     let gradient = general_gradient * attention_derivative;
                     let mut update = self.optimizer_attention.calculate_update(gradient, &mut self.weights.get_unchecked_mut(z).optimizer_data);
                     let mut oldweight = self.attention_weights.get_unchecked_mut(z).weight;
                     self.attention_weights.get_unchecked_mut(z).weight = oldweight + update;
-                }
-
-
+                }*/
+                    specialize_value_f32!(self.attention_snap_to_zero, 0.0, ATTENTION_SNAP_TO_ZERO, {
+                        specialize_value_f32!(self.attention_l2, 1.0, ATTENTION_L2, {
+                            for z in 0..self.attention_weights_len as usize {
+                                let feature_value = attention_derivatives.get_unchecked(z);
+                                let gradient = general_gradient * feature_value;
+                                let update_scale = self.optimizer_attention.calculate_update(gradient, &mut self.attention_weights.get_unchecked_mut(z).optimizer_data);
+                                let update = gradient * update_scale;
+                                let mut oldweight = self.attention_weights.get_unchecked_mut(z).weight;
+                                if ATTENTION_L2 != 0.0 {
+                                    oldweight -= oldweight * (ATTENTION_L2 * update_scale);
+                                }
+                                oldweight += update;
+                                if ATTENTION_SNAP_TO_ZERO != 0.0 {
+                                    if oldweight < ATTENTION_SNAP_TO_ZERO {
+                                        oldweight = 0.0;
+                                    }
+                                }
+                                self.attention_weights.get_unchecked_mut(z).weight = oldweight;
+                            }
+                        });
+                    });
             }
             (prediction_probability, general_gradient)
         } // end of unsafe
@@ -170,11 +250,50 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
         Ok(())
     }
 
-    fn debug_output(&self, mi: &model_instance::ModelInstance, aa: i32) {
+    fn debug_output(&mut self, mi: &model_instance::ModelInstance, aa: i32) {
         for x in 0..self.attention_weights_len as usize{	
             println!("{:.2}  => {}", self.attention_weights[x].weight, mi.audit_aux_data.as_ref().unwrap().combo_index_to_string[&(x as i32)]);
+        }
+        if aa == 1 {
+        /*
+            println!("Outputting files");
+            let filename = "lr_attention_weights.bin";
+            let output_bufwriter = &mut io::BufWriter::new(fs::File::create(filename).expect(format!("Cannot open {} to save regressor to", filename).as_str()));
+            block_helpers::write_weights_to_buf(&self.attention_weights, output_bufwriter).unwrap();
+            let filename = "lr_weights.bin";
+            let output_bufwriter = &mut io::BufWriter::new(fs::File::create(filename).expect(format!("Cannot open {} to save regressor to", filename).as_str()));
+            block_helpers::write_weights_to_buf(&self.weights, output_bufwriter).unwrap();
+*/
+/*
+            let filename = "lr_attention_weights.bin.in";
+            if path::Path::new(&filename).exists() {
+                println!("Loading secondary lr attention weights from file: {}, len: {}", filename, self.attention_weights.len());
+                let mut attention_weights =vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_attention.initial_data()}; self.attention_weights.len() as usize];
+                let mut input_bufreader = io::BufReader::new(fs::File::open(filename).unwrap());
+                block_helpers::read_weights_from_buf(&mut attention_weights, &mut input_bufreader).unwrap();
+                for z in 0..self.attention_weights.len() as usize {
+                    self.attention_weights[z].optimizer_data = attention_weights[z].optimizer_data;
+                    //self.attention_weights[z].weight = attention_weights[z].weight;
+                }
+            }
+            let filename = "lr_weights.bin.in";
+            if path::Path::new(&filename).exists() {
+                println!("Loading secondary lr weights from file: {}, len: {}", filename, self.weights.len());
+                let mut weights =vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_lr.initial_data()}; self.weights.len() as usize];
+                let mut input_bufreader = io::BufReader::new(fs::File::open(filename).unwrap());
+                block_helpers::read_weights_from_buf(&mut weights, &mut input_bufreader).unwrap();
+                for z in 0..self.weights.len() as usize {
+                     self.weights[z].optimizer_data = weights[z].optimizer_data;
+                     //self.weights[z].weight = weights[z].weight;
+                }
+            }
+*/
+
+
 
         }
+
+        
     }
 
 }

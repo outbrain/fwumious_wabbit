@@ -81,7 +81,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
                     let feature_index     = hashvalue.hash as usize;
                     let feature_value:f32 = hashvalue.value;                        
                     let gradient = general_gradient * feature_value;
-                    let update = self.optimizer_lr.calculate_update(gradient, &mut self.weights.get_unchecked_mut(feature_index).optimizer_data);
+                    let update_scale = self.optimizer_lr.calculate_update(gradient, &mut self.weights.get_unchecked_mut(feature_index).optimizer_data);
+                    let update = gradient * update_scale;
                     self.weights.get_unchecked_mut(feature_index).weight += update;
                 }
             }

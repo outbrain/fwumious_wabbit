@@ -197,7 +197,11 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .help("Attention learning rate")
                      .multiple(false)
                      .takes_value(true))
-
+                    .arg(Arg::with_name("attention")
+                     .long("attention")
+                     .help("Turns on poor-man's attention mechanism")
+                     .multiple(false)
+                     .takes_value(false))
                     .arg(Arg::with_name("attention_power_t")
                      .long("attention_power_t")
                      .help("Attention power_t")

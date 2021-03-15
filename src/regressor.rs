@@ -46,7 +46,7 @@ pub trait BlockTrait {
 
     /// Sets internal state of weights based on some completely object-dependent parameters
     fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {Ok(())}
-    fn debug_output(&self, mi: &model_instance::ModelInstance, aa: i32) {}
+    fn debug_output(&mut self, mi: &model_instance::ModelInstance, aa: i32) {}
 }
 
 
@@ -85,14 +85,21 @@ impl Regressor  {
         };
 
         // A bit more elaborate than necessary. Let's really make it clear what's happening
-//        let mut reg_lr = BlockLR::<L>::new_without_weights(mi).unwrap();
-        let mut reg_lr = BlockALR::<L>::new_without_weights(mi).unwrap();
-        rg.blocks_boxes.push(reg_lr);
+        if mi.attention {
+            let mut reg_lr = BlockALR::<L>::new_without_weights(mi).unwrap();
+            rg.blocks_boxes.push(reg_lr);
 
-        if mi.ffm_k > 0 {
-//            let mut reg_ffm = BlockFFM::<L>::new_without_weights(mi).unwrap();
-            let mut reg_ffm = BlockAFFM::<L>::new_without_weights(mi).unwrap();
-            rg.blocks_boxes.push(reg_ffm);
+            if mi.ffm_k > 0 {
+                let mut reg_ffm = BlockAFFM::<L>::new_without_weights(mi).unwrap();
+                rg.blocks_boxes.push(reg_ffm);
+            }
+        } else {
+            let mut reg_lr = BlockLR::<L>::new_without_weights(mi).unwrap();
+            rg.blocks_boxes.push(reg_lr);
+            if mi.ffm_k > 0 {
+                let mut reg_ffm = BlockFFM::<L>::new_without_weights(mi).unwrap();
+                rg.blocks_boxes.push(reg_ffm);
+            }
         }
                     
         let mut reg_sigmoid = BlockSigmoid::new_without_weights(mi).unwrap();
@@ -148,8 +155,8 @@ impl Regressor  {
         return prediction_probability
     }
 
-    pub fn debug_output(&self, mi: &model_instance::ModelInstance, aa: i32) {
-        for v in &self.blocks_boxes {
+    pub fn debug_output(&mut self, mi: &model_instance::ModelInstance, aa: i32) {
+        for v in &mut self.blocks_boxes {
             v.debug_output(mi, aa);
         }
     }

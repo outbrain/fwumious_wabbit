@@ -276,7 +276,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                             for j in 0..fc as usize {
                                 let feature_value = *local_ffm_derivatives.get_unchecked(local_index);
                                 let gradient = general_gradient * feature_value;
-                                let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
+                                let update_scale = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
+                                let update = gradient * update_scale;
                                 ffm_weights.get_unchecked_mut(feature_index).weight += update;
                                 local_index += 1;
                                 feature_index += 1;
@@ -450,9 +451,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         Ok(())
     }
     
-    fn debug_output(&self, mi: &model_instance::ModelInstance, aa: i32) {
-    }
-
 }
 
 

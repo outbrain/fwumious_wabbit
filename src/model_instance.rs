@@ -74,6 +74,8 @@ pub struct ModelInstance {
     #[serde(default = "default_f32_zero")]
     pub ffm_power_t: f32,
 
+    #[serde(default = "default_bool_false")]
+    pub attention: bool,
     #[serde(default = "default_f32_zero")]
     pub attention_learning_rate: f32,    
     #[serde(default = "default_f32_zero")]
@@ -150,6 +152,7 @@ impl ModelInstance {
             ffm_init_zero_band: 0.0,
             ffm_init_acc_gradient: 0.0,
             init_acc_gradient: 1.0,
+            attention: false,
             attention_init_acc_gradient: 0.0,
             attention_power_t: 0.25,
             attention_learning_rate: 0.1,            
@@ -379,6 +382,10 @@ impl ModelInstance {
             mi.ffm_power_t = val.parse()?;
         } else {
             mi.ffm_power_t = mi.power_t;
+        }
+
+        if cl.is_present("attention") {
+            mi.attention = true;
         }
         
         if let Some(val) = cl.value_of("attention_power_t") {
