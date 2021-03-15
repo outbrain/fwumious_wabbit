@@ -813,7 +813,7 @@ B,featureB
     }
 
     #[test]
-    fn test_ffm_multivalue_k4_nonzero_powert() {
+    fn test_affm_multivalue_k4_nonzero_powert() {
         let vw_map_string = r#"
 A,featureA
 B,featureB
@@ -838,13 +838,13 @@ B,featureB
 
         assert_eq!(spredict(&mut re, &mut lossf, &fbuf, true), 1.0);
         assert_eq!(slearn(&mut re, &mut lossf, &fbuf, true), 1.0);
-        assert_eq!(spredict(&mut re, &mut lossf, &fbuf, false), 0.9949837);
-        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, false), 0.9949837);
-        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, false), 0.9949837);
+        assert_eq!(spredict(&mut re, &mut lossf, &fbuf, false), 0.9654269);
+        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, false), 0.9654269);
+        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, false), 0.9654269);
     }
 
     #[test]
-    fn test_ffm_missing_field() {
+    fn test_affm_missing_field() {
         // This test is useful to check if we don't by accient forget to initialize any of the collapsed
         // embeddings for the field, when field has no instances of a feature in it
         // We do by having three-field situation where only the middle field has features
