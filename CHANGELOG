@@ -1,4 +1,8 @@
 
+# March 2020 
+- Implement something not entirely unlike attention, including 
+regularization for attention
+- Small fixes in FFM hashing to reduce clashes
 
 # February 2020
 - much faster FFM prediction mode when using multi-value features

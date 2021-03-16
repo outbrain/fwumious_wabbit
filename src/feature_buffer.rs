@@ -1,5 +1,6 @@
 use crate::model_instance;
 use crate::parser;
+use fasthash::murmur3;
 
 const VOWPAL_FNV_PRIME:u32 = 16777619;	// vowpal magic number
 //const CONSTANT_NAMESPACE:usize = 128;
@@ -38,6 +39,8 @@ pub struct FeatureBufferTranslator {
     // we don't want to keep allocating buffers
     hashes_vec_in: Vec<HashAndValue>,
     hashes_vec_out: Vec<HashAndValue>,
+    fields_hash_seeds: [u32; 256],     // Each field has its hash seed
+
     pub feature_buffer: FeatureBuffer,
     pub lr_hash_mask: u32,
     pub ffm_hash_mask: u32,
@@ -95,14 +98,19 @@ impl FeatureBufferTranslator {
         };
 
         // avoid doing any allocations in translate
-        let fbt = FeatureBufferTranslator{
+        let mut fbt = FeatureBufferTranslator{
                             model_instance: mi.clone(),
                             hashes_vec_in : Vec::with_capacity(100),
                             hashes_vec_out : Vec::with_capacity(100),
                             feature_buffer: fb,
                             lr_hash_mask: lr_hash_mask,
-                            ffm_hash_mask: ffm_hash_mask, 
+                            ffm_hash_mask: ffm_hash_mask,
+                            fields_hash_seeds: [0; 256],
         };
+        for i in 0..=255 as u8 {
+            fbt.fields_hash_seeds[i as usize] = murmur3::hash32(vec![i, 241, i, 2, i, 43]).overflowing_mul(VOWPAL_FNV_PRIME).0;
+        }
+
         fbt
     }
     
@@ -177,7 +185,8 @@ impl FeatureBufferTranslator {
             for (contra_field_index, ffm_field) in self.model_instance.ffm_fields.iter().enumerate() {
                 for feature_index in ffm_field {
                     feature_reader!(record_buffer, feature_index, hash_data, hash_value, {
-                            ffm_buffer.push(HashAndValueAndSeq {hash: hash_data & self.ffm_hash_mask,
+                            let hash = hash_data ^ self.fields_hash_seeds[contra_field_index];
+                            ffm_buffer.push(HashAndValueAndSeq {hash: hash & self.ffm_hash_mask,
                                                                     value: hash_value,
                                                                     contra_field_index: contra_field_index as u32 * self.model_instance.ffm_k as u32});
                     });
