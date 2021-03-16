@@ -368,7 +368,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                                     let update_scale = self.optimizer_attention.calculate_update(gradient, &mut self.attention_weights.get_unchecked_mut(z).optimizer_data);
                                     let update = gradient * update_scale;
                                     let mut oldweight = self.attention_weights.get_unchecked_mut(z).weight;
-                                    if ATTENTION_L2 != 0.0 {
+                                    if ATTENTION_L2 != 0.0 && gradient != 0.0 { // only update if the weight was present
                                         oldweight -= oldweight * (ATTENTION_L2 * update_scale);
                                     }
                                     
