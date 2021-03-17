@@ -39,7 +39,7 @@ pub struct FeatureBufferTranslator {
     // we don't want to keep allocating buffers
     hashes_vec_in: Vec<HashAndValue>,
     hashes_vec_out: Vec<HashAndValue>,
-    fields_hash_seeds: [u32; 256],     // Each field has its hash seed
+    pub fields_hash_seeds: [u32; 256],     // Each field has its hash seed
 
     pub feature_buffer: FeatureBuffer,
     pub lr_hash_mask: u32,
@@ -339,6 +339,8 @@ mod tests {
         mi.ffm_fields.push(vec![0]);   // single feature in a single fields 
         mi.ffm_k = 1;
         let mut fbt = FeatureBufferTranslator::new(&mi);
+        for f in &mut fbt.fields_hash_seeds {*f = 0;} // zero out seeds, so we have predictable mappings
+
         let rb = add_header(vec![0xfea]);
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.ffm_buffer, vec![HashAndValueAndSeq{hash: 0xfea, value: 1.0, contra_field_index:0}]);
@@ -352,6 +354,7 @@ mod tests {
         mi.ffm_fields.push(vec![0,1]);   // two namespaces in a field
         mi.ffm_k = 1;
         let mut fbt = FeatureBufferTranslator::new(&mi);
+        for f in &mut fbt.fields_hash_seeds {*f = 0;} // zero out seeds, so we have predictable mappings
         let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(5,9), 0xfec, 0xfea, 2.0f32.to_bits(), 0xfeb, 3.0f32.to_bits()]);
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.ffm_buffer, vec![     HashAndValueAndSeq{hash: 0xfea, value: 2.0, contra_field_index:0}, 
@@ -370,6 +373,7 @@ mod tests {
         mi.ffm_fields.push(vec![1]);   // single namespace in a field	      0xfec
         mi.ffm_k = 1;
         let mut fbt = FeatureBufferTranslator::new(&mi);
+        for f in &mut fbt.fields_hash_seeds {*f = 0;} // zero out seeds, so we have predictable mappings
         let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(5,9), 0x1, 0xfff, 2.0f32.to_bits(), 0xfeb, 3.0f32.to_bits()]);
         fbt.translate(&rb, 0);
         // Hashes get changed, because k = 3 means we'll be aligning hashes
@@ -383,6 +387,7 @@ mod tests {
         // Now hashes get changed, because k = 3 means we'll be aligning hashes
         mi.ffm_k = 3;
         let mut fbt = FeatureBufferTranslator::new(&mi);
+        for f in &mut fbt.fields_hash_seeds {*f = 0;} // zero out seeds, so we have predictable mappings
         let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(5,9), 0x1, 0xfff, 2.0f32.to_bits(), 0xfeb, 3.0f32.to_bits()]);
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.ffm_buffer, vec![ HashAndValueAndSeq{hash: 0xffc, value: 2.0, contra_field_index: 0}, 
