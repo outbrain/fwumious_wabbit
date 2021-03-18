@@ -20,8 +20,8 @@ use regressor::BlockTrait;
 use block_helpers::{Weight, WeightAndOptimizerData};
 
 
-const FFM_STACK_BUF_LEN:usize= 32768;
-const FFM_CONTRA_BUF_LEN:usize = 16384;
+const FFM_STACK_BUF_LEN:usize= 16384;
+const FFM_CONTRA_BUF_LEN:usize = 8196;
 
 
 const SQRT_OF_ONE_HALF:f32 = 0.70710678118;

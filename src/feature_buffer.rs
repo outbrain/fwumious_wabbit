@@ -108,7 +108,9 @@ impl FeatureBufferTranslator {
                             fields_hash_seeds: [0; 256],
         };
         for i in 0..=255 as u8 {
-            fbt.fields_hash_seeds[i as usize] = murmur3::hash32(vec![i, 241, i, 2, i, 43]).overflowing_mul(VOWPAL_FNV_PRIME).0;
+//            fbt.fields_hash_seeds[i as usize] = murmur3::hash32(vec![i, 241, i, 2, i, 43]).overflowing_mul(VOWPAL_FNV_PRIME).0; // orig
+            fbt.fields_hash_seeds[i as usize] = murmur3::hash32(vec![1, i, 41, 2, i, 203]).overflowing_mul(VOWPAL_FNV_PRIME).0; // alt
+//          fbt.fields_hash_seeds[i as usize] = murmur3::hash32(vec![1, i, 41, 2, i, 203]); // alt 2
         }
 
         fbt

@@ -23,7 +23,7 @@ pub const FLOAT32_ONE: u32 = 1065353216;  // 1.0f32.to_bits()
 pub struct VowpalParser {
     vw_map: vwmap::VwNamespaceMap,
     tmp_read_buf: Vec<u8>,
-    namespace_hash_seeds: [u32; 256],     // Each namespace has its hash seed
+    pub namespace_hash_seeds: [u32; 256],     // Each namespace has its hash seed
     pub output_buffer: Vec<u32>,
 }
 
@@ -64,7 +64,7 @@ impl VowpalParser {
                         };
         rr.output_buffer.resize(vw.num_namespaces as usize * NAMESPACE_DESC_LEN + HEADER_LEN, 0);
         for i in 0..=255 {
-            rr.namespace_hash_seeds[i as usize] = murmur3::hash32([i;1]);
+            rr.namespace_hash_seeds[i as usize] = murmur3::hash32(vec![i, i, 2, i]);
         }
         rr
     }
@@ -247,6 +247,9 @@ C,featureC
         }
 
         let mut rr = VowpalParser::new(&vw);
+        for i in 0..=255 {
+            rr.namespace_hash_seeds[i as usize] = murmur3::hash32(vec![i]);
+        }
         // we test a single record, single namespace
         let mut buf = str_to_cursor("1 |A a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6,  1, FLOAT32_ONE,  
