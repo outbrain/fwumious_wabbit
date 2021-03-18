@@ -291,7 +291,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                                 feature_num += 1;
                             }
                         }
-                        let mut attention_derivatives: [f32; FFM_CONTRA_BUF_LEN] = MaybeUninit::uninit().assume_init();
                         for z in 0..self.attention_weights_len as usize {
                             attention_derivatives[z] = 0.0;
                         }
@@ -681,8 +680,8 @@ mod tests {
 
         let fb = ffm_vec(vec![HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0}], 
                         1); // saying we have 1 field isn't entirely correct
-  //      assert_epsilon!(spredict(&mut re, &mut lossf, &fb, true), 0.5);
-    //    assert_epsilon!(slearn  (&mut re, &mut lossf, &fb, true), 0.5);
+        assert_epsilon!(spredict(&mut re, &mut lossf, &fb, true), 0.5);
+        assert_epsilon!(slearn  (&mut re, &mut lossf, &fb, true), 0.5);
 
         // With two fields, things start to happen
         // Since fields depend on initial randomization, these tests are ... peculiar.
@@ -698,12 +697,8 @@ mod tests {
         assert_epsilon!(spredict(&mut re, &mut lossf, &fb, true), 0.7310586);      
         assert_eq!(slearn  (&mut re, &mut lossf, &fb, true), 0.7310586); 
    
-   // SKYLAKE
-/*        assert_epsilon!(spredict(&mut re, &mut lossf, &fb, true), 0.69055194);
+        assert_epsilon!(spredict(&mut re, &mut lossf, &fb, true), 0.69055194);
         assert_eq!(slearn  (&mut re, &mut lossf, &fb, true), 0.69055194);
-*/
-        assert_epsilon!(spredict(&mut re, &mut lossf, &fb, true), 0.7024795);
-        assert_epsilon!(slearn  (&mut re, &mut lossf, &fb, true), 0.7024795);
 
         // Two fields, use values
         let mut re = BlockAFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
@@ -716,12 +711,8 @@ mod tests {
                                   ], 2);
         assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.98201376);
         assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.98201376);
-        /* SKYLAKE
         assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.76625353);
         assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.76625353);
-        */
-        assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.81377685);
-        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.81377685);
         
     }
 
@@ -760,12 +751,8 @@ mod tests {
                                   ], 2);
         assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.98201376); 
         assert_eq!(slearn  (&mut re, &mut lossf, &fb, true), 0.98201376); 
-        /* SKYLAKE
         assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.9320294);
         assert_eq!(slearn  (&mut re, &mut lossf, &fb, true), 0.9320294);
-*/
-        assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.96277946);
-        assert_eq!(slearn  (&mut re, &mut lossf, &fb, true), 0.96277946);
         // Two fields, use values
         let mut re = BlockAFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
         re.allocate_and_init_weights(&mi);
@@ -777,12 +764,8 @@ mod tests {
                                   ], 2);
         assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.9999999);
         assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.9999999);
-        /* SKYLAKE
         assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.9689196);
         assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.9689196);
-        */
-        assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.99685884);
-        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.99685884);
     }
 
 
@@ -818,11 +801,8 @@ B,featureB
                                   
         assert_epsilon!(spredict(&mut re, &mut lossf, &fbuf, true), 0.9933072);
         assert_eq!(slearn(&mut re, &mut lossf, &fbuf, true), 0.9933072);
-/*      SKYLAKE  assert_epsilon!(slearn(&mut re, &mut lossf, &fbuf, false), 0.90496447);
-        assert_epsilon!(spredict(&mut re, &mut lossf, &fbuf, false), 0.90496447);*/
-        
-        assert_epsilon!(slearn(&mut re, &mut lossf, &fbuf, false), 0.9395168);
-        assert_epsilon!(spredict(&mut re, &mut lossf, &fbuf, false), 0.9395168);
+        assert_epsilon!(slearn(&mut re, &mut lossf, &fbuf, false), 0.90496447);
+        assert_epsilon!(spredict(&mut re, &mut lossf, &fbuf, false), 0.90496447);
     }
 
     #[test]
@@ -852,13 +832,9 @@ B,featureB
         assert_eq!(spredict(&mut re, &mut lossf, &fbuf, true), 1.0);
         assert_eq!(slearn(&mut re, &mut lossf, &fbuf, true), 1.0);
         
-        /* SKYLAKE
         assert_eq!(spredict(&mut re, &mut lossf, &fbuf, false), 0.9654269);
         assert_eq!(slearn(&mut re, &mut lossf, &fbuf, false), 0.9654269);
-        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, false), 0.9654269);*/
-        assert_eq!(spredict(&mut re, &mut lossf, &fbuf, false), 0.9949837);
-        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, false), 0.9949837);
-        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, false), 0.9949837);        
+        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, false), 0.9654269);
     }
 
     #[test]
