@@ -1,5 +1,7 @@
 
+
 # February 2020
+- much faster FFM prediction mode when using multi-value features
 - more than 15% speedup of FFM training
 - refactored Regressor to be more easily extendable
 - added "load_hogwile" command to serving mode. Enabling in-place
