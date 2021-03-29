@@ -20,7 +20,7 @@ vw=/home/minmax/minmax_old/zgit/vowpal_wabbit/vowpalwabbit/vw
 echo "target/release/fw $namespaces $rest -c -p f $fwonly "
 
 cargo build --release --target x86_64-unknown-linux-musl --bin fw && \
-target/x86_64-unknown-linux-musl/release/fw $namespaces $rest -c -p f $fwonly -f out.fwmodel --save_resume --predictions_after 10
+target/x86_64-unknown-linux-musl/release/fw $namespaces $rest -c -p f $fwonly -f out.fwmodel --save_resume --predictions_after 10 --attention
 #cargo build --release --bin fw && \
 #target/release/fw $namespaces $rest -c -p f $fwonly 
 
