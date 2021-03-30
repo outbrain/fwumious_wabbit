@@ -326,7 +326,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                                       for k in 0..FFMK as usize {
                                           let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + vv + k).weight;
                                           let attention = self.attention_weights.get_unchecked(contra_offset + vv + k).weight;
-                                          let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k);
+                                          let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k) - ffm_weight * LEFT_HASH_VALUE;
                                           let gradient =  LEFT_HASH_VALUE * contra_weight;
                                           let gradient2 = gradient * attention;
                                           *attention_derivatives.get_unchecked_mut(contra_offset + vv + k) += gradient * ffm_weight * div;
