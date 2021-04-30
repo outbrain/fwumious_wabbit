@@ -137,7 +137,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
                 buffer = match reading_result {
                         Ok([]) => break, // EOF
                         Ok(buffer2) => buffer2,
-                        Err(_e) => return Err("Error")?
+                        Err(_e) => return Err(_e)
                 };
                 if cache.writing {
                         cache.push_record(buffer)?;
@@ -147,7 +147,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
                 buffer = match reading_result {
                         Ok([]) => break, // EOF
                         Ok(buffer) => buffer,
-                        Err(_e) => return Err("Error")?
+                        Err(_e) => return Err(_e)
                 };
             }
             example_num += 1;
