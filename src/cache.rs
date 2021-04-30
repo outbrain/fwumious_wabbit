@@ -16,9 +16,10 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use crate::vwmap;
 
 const CACHE_HEADER_MAGIC_STRING: &[u8; 4] = b"FWCA";    // Fwumious Wabbit CAche
-const CACHE_HEADER_VERSION:u32 = 8;
+const CACHE_HEADER_VERSION:u32 = 9;
 /*
 Version incompatibilites:
+8->9: enabled multi-byte feature names in vw files
 7->8: add example importance to the parsed buffer format
 */
 

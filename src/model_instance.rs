@@ -91,7 +91,7 @@ fn create_feature_combo_desc(vw: &vwmap::VwNamespaceMap, s: &str) -> Result<Feat
     let mut feature_indices: Vec<usize> = Vec::new();
     for char in namespaces_str.chars() {
        // create an list of indexes dfrom list of namespace chars
-       let index = match vw.map_char_to_index.get(&char) {
+       let index = match vw.map_vwname_to_index.get(&vec![char as u8]) {
            Some(index) => *index,
            None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown namespace char in command line: {}", char))))
        };
@@ -266,7 +266,7 @@ impl ModelInstance {
                 let mut field: Vec<usize>= Vec::new();
                 for char in namespaces_str.chars() {
                     //println!("K: {}", char);
-                    let index = match vw.map_char_to_index.get(&char) {
+                    let index = match vw.map_vwname_to_index.get(&vec![char as u8]) {
                         Some(index) => *index,
                         None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown namespace char in command line: {}", char))))
                     };

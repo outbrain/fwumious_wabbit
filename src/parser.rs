@@ -63,8 +63,9 @@ impl VowpalParser {
                             namespace_hash_seeds: [0; 256],
                         };
         rr.output_buffer.resize(vw.num_namespaces as usize * NAMESPACE_DESC_LEN + HEADER_LEN, 0);
-        for i in 0..=255 {
-            rr.namespace_hash_seeds[i as usize] = murmur3::hash32([i;1]);
+        for i in 0..vw.num_namespaces {
+            let namespace_vwname_str = &vw.vw_source.entries[i].namespace_vwname;
+            rr.namespace_hash_seeds[i] = murmur3::hash32(namespace_vwname_str);
         }
         rr
     }
@@ -142,8 +143,9 @@ impl VowpalParser {
                 // Then we look for first namespace
                 while *p.add(i_end) != 0x7c && i_end < rowlen { i_end += 1;};
                 
-                let mut current_char:usize = 0;
-                let mut current_char_index:usize = HEADER_LEN;
+                let mut current_namespace_hash_seed:u32 = 0;
+                let mut current_namespace_index_offset:usize = HEADER_LEN;
+                
                 let mut bufpos_namespace_start = 0;
                 let mut current_namespace_weight:f32 = 1.0;
 //                print!("AAAAAAAA\n");
@@ -171,8 +173,10 @@ impl VowpalParser {
                             current_namespace_weight = 1.0;
                         }
                      //   print!("Only single letter namespaces are allowed, however namespace string is: {:?}\n", String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end_first_part]));
-                        current_char = *p.add(i_start) as usize;
-                        current_char_index = self.vw_map.lookup_char_to_index[current_char] * NAMESPACE_DESC_LEN + HEADER_LEN;
+                        let current_vwname = &self.tmp_read_buf[i_start..i_end_first_part];
+                        let current_namespace_index = self.vw_map.map_vwname_to_index[current_vwname];
+                        current_namespace_hash_seed = *self.namespace_hash_seeds.get_unchecked(current_namespace_index);
+                        current_namespace_index_offset =  current_namespace_index * NAMESPACE_DESC_LEN + HEADER_LEN;
                         current_char_num_of_features = 0;
                         bufpos_namespace_start = self.output_buffer.len(); // this is only used if we will have multiple values
                     } else { 
@@ -180,7 +184,7 @@ impl VowpalParser {
                         // println!("item out {:?}", std::str::from_utf8(&rr.tmp_read_buf[i_start..i_end]));
                      //   print!("F {:?}\n", String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end_first_part]));
                         let h = murmur3::hash32_with_seed(&self.tmp_read_buf[i_start..i_end_first_part], 
-                                                          *self.namespace_hash_seeds.get_unchecked(current_char)) & MASK31;  
+                                                          current_namespace_hash_seed) & MASK31;  
 
                         let feature_weight:f32 = match i_end - i_end_first_part {
                             0 => 1.0,
@@ -193,16 +197,16 @@ impl VowpalParser {
                         // -- and then just add feature to the end of the buffer
                         
                         if current_namespace_weight == 1.0 && feature_weight == 1.0 && current_char_num_of_features == 0 {
-                            *buf.add(current_char_index) = h;
+                            *buf.add(current_namespace_index_offset) = h;
                         } else {
-                            if (current_char_num_of_features == 1) && (*buf.add(current_char_index) & IS_NOT_SINGLE_MASK) == 0 {
+                            if (current_char_num_of_features == 1) && (*buf.add(current_namespace_index_offset) & IS_NOT_SINGLE_MASK) == 0 {
                                 // We need to promote feature currently written in-place to out of place
-                                self.output_buffer.push(*buf.add(current_char_index));
+                                self.output_buffer.push(*buf.add(current_namespace_index_offset));
                                 self.output_buffer.push(FLOAT32_ONE);
                             }
                             self.output_buffer.push(h);
                             self.output_buffer.push((current_namespace_weight * feature_weight).to_bits());
-                            *buf.add(current_char_index) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
+                            *buf.add(current_namespace_index_offset) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
                         }
                         current_char_num_of_features += 1;
                     }
