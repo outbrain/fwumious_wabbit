@@ -155,7 +155,7 @@ impl VowpalParser {
                     // First skip spaces
                     while *p.add(i_end) == 0x20 && i_end < rowlen {i_end += 1;}
                     i_start = i_end;
-                    while *p.add(i_end) != 0x20 && *p.add(i_end) != 0x3a && i_end < rowlen {i_end += 1;}
+                    while *p.add(i_end) != 0x20 && *p.add(i_end) != 0x3a && i_end < rowlen {i_end += 1;}     // 0x3a = ":"
                     let i_end_first_part = i_end;
                     while *p.add(i_end) != 0x20 && i_end < rowlen {i_end += 1; }
                     
@@ -163,18 +163,19 @@ impl VowpalParser {
                     if *p.add(i_start) == 0x7c { // "|"
                         // new namespace index
                         i_start += 1;
-                        if i_end - i_start != 1 {
-                            // Namespace that has more than one character is either an error, or it defines the 
-                            if i_end_first_part - i_start != 1 {
-                                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Only single letter namespaces are allowed, however namespace string is: {:?}", String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end_first_part])))));
-                            }
+                        if i_end_first_part != i_end {
+                            // Non-empty part after ":" is namespace weight
                             current_namespace_weight = self.parse_float_or_error(i_end_first_part+1, i_end, "Failed parsing namespace weight")?;
                         } else {
                             current_namespace_weight = 1.0;
                         }
                      //   print!("Only single letter namespaces are allowed, however namespace string is: {:?}\n", String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end_first_part]));
                         let current_vwname = &self.tmp_read_buf[i_start..i_end_first_part];
-                        let current_namespace_index = self.vw_map.map_vwname_to_index[current_vwname];
+//                        println!("Current: {:?}", current_vwname);
+                        let current_namespace_index = match self.vw_map.map_vwname_to_index.get(current_vwname) {
+                            Some(v) => *v,
+                            None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Feature name was not predeclared in vw_namespace_map.csv: {}", String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end_first_part])))))
+                        };
                         current_namespace_hash_seed = *self.namespace_hash_seeds.get_unchecked(current_namespace_index);
                         current_namespace_index_offset =  current_namespace_index * NAMESPACE_DESC_LEN + HEADER_LEN;
                         current_char_num_of_features = 0;
@@ -311,14 +312,10 @@ C,featureC
                                                         2422381320 & MASK31, 
                                                         NULL]);
         
-        // only single letter namespaces are allowed
-        let mut buf = str_to_cursor("1 |MORE_THAN_A_LETTER a\n");
-        assert!(rr.next_vowpal(&mut buf).is_err());
-
-        let mut buf = str_to_cursor("1 |MORE_THAN_A_LETTER a\n");
+        let mut buf = str_to_cursor("1 |UNDECLARED_NAMESPACE a\n");
         let result = rr.next_vowpal(&mut buf);
         assert!(result.is_err());
-        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Only single letter namespaces are allowed, however namespace string is: \\\"MORE_THAN_A_LETTER\\\"\" })");
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Feature name was not predeclared in vw_namespace_map.csv: UNDECLARED_NAMESPACE\" })");
  
         // namespace weight test
         let mut buf = str_to_cursor("1 |A:1.0 a\n");
@@ -448,8 +445,43 @@ C,featureC
                                                         2988156968 & MASK31, 
                                                         NULL, 
                                                         NULL]);
- 
- 
- 
+  
     }
+    
+    #[test]
+    fn test_multibyte_namespaces() {
+        // Test for perfect vowpal-compatible hashing
+        let vw_map_string = r#"
+AA,featureA
+BB,featureB
+CC,featureC
+"#;
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+
+        fn str_to_cursor(s: &str) -> Cursor<Vec<u8>> {
+          Cursor::new(s.as_bytes().to_vec())
+        }
+
+        let mut rr = VowpalParser::new(&vw);
+        // we test a single record, single namespace
+        let mut buf = str_to_cursor("1 |AA a\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6,  1, FLOAT32_ONE,  
+                                                        292540976 & MASK31, 
+                                                        NULL, 
+                                                        NULL]);
+ 
+        // feature weight + namespace weight
+        let mut buf = str_to_cursor("1 |AA:3 a:2.0\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [8, 1, FLOAT32_ONE, 
+                                                        nd(6, 8) | IS_NOT_SINGLE_MASK, 
+                                                        NULL, 
+                                                        NULL, 
+                                                        292540976 & MASK31, 6.0f32.to_bits()]);
+
+
+    }
+
+
+
+
 }
