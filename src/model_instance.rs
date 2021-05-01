@@ -25,6 +25,8 @@ pub enum Optimizer {
     Adagrad = 2,
 }
 
+pub type FieldDesc = Vec<u32>;
+
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ModelInstance {
@@ -36,7 +38,7 @@ pub struct ModelInstance {
     pub hash_mask: u32,		// DEPRECATED, UNUSED -- this is recalculated in feature_buffer.rs
     pub add_constant_feature: bool,
     pub feature_combo_descs: Vec<FeatureComboDesc>,
-    pub ffm_fields: Vec<Vec<u32>>,
+    pub ffm_fields: Vec<FieldDesc>,
     #[serde(default = "default_u32_zero")]
     pub ffm_k: u32,
     #[serde(default = "default_u32_zero")]
@@ -77,16 +79,75 @@ fn default_bool_false() -> bool{false}
 fn default_optimizer_adagrad() -> Optimizer{Optimizer::Adagrad}
 
 
-pub fn get_float_namespaces<'a>(cl: &clap::ArgMatches<'a>) -> Result<(String, u32), Box<dyn Error>> {
+pub fn get_float_namespaces<'a>(cl: &clap::ArgMatches<'a>) -> Result<(Vec<String>, u32), Box<dyn Error>> {
    if let Some(in_v) = cl.value_of("float_namespaces") {
        let prefix_skip:u32 = match cl.value_of("float_namespaces_skip_prefix") {
            Some(prefix_skip_str) => prefix_skip_str.parse()?,
            None => 0,
        };
-       Ok((in_v.to_owned(), prefix_skip))
+       let namespaces_verbose: Vec<String> = in_v.split(",").map(|x| x.to_string()).collect();  // verbose names are separated by comma
+       Ok((namespaces_verbose, prefix_skip))
    } else {
-       Ok(("".to_owned(), 0))
+       Ok((vec![], 0))
    }
+}
+
+fn create_feature_combo_desc(vw: &vwmap::VwNamespaceMap, s: &str) -> Result<FeatureComboDesc, Box<dyn Error>> {
+
+    let vsplit: Vec<&str> = s.split(":").collect(); // We use : as a delimiter for weight
+    let mut combo_weight: f32 = 1.0;
+    if vsplit.len() == 2 {
+        let weight_str = vsplit[1];
+        combo_weight = weight_str.parse().expect(&format!("Cannot parse value \"{}\". Weights after \":\" can only be passed at the end of the feature combo", weight_str));
+    } else if vsplit.len() > 2 {
+        return Err(Box::new(IOError::new(ErrorKind::Other, format!("only one value parameter allowed (denoted with \":\"): \"{:?}\"", s))))
+    }
+
+
+    let namespaces_str = vsplit[0];
+    let mut feature_indices: Vec<u32> = Vec::new();
+    for char in namespaces_str.chars() {
+       // create an list of indexes dfrom list of namespace chars
+       let index = match vw.map_vwname_to_index.get(&vec![char as u8]) {
+           Some(index) => *index as u32,
+           None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown namespace char in command line: {}", char))))
+       };
+       feature_indices.push(index);
+    }
+    Ok(FeatureComboDesc {
+                          feature_indices: feature_indices,
+                          weight: combo_weight
+                        })
+}
+
+fn create_feature_combo_desc_from_verbose(vw: &vwmap::VwNamespaceMap, s: &str) -> Result<FeatureComboDesc, Box<dyn Error>> {
+    let vsplit: Vec<&str> = s.split(":").collect(); // We use : as a delimiter for weight
+    let mut combo_weight: f32 = 1.0;
+    
+    if vsplit.len() == 2 {
+        let weight_str = vsplit[1];
+        combo_weight = match weight_str.parse() {
+           Ok(x) => x,  
+           Err(y) => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Could not parse the value of a feature combination: {}", weight_str))))
+        }
+    } else if vsplit.len() > 2 {
+        return Err(Box::new(IOError::new(ErrorKind::Other, format!("Verbose features cannot have \":\" as part of their names: \"{:?}\"", s))))
+    }
+    
+    let namespaces_verbose: Vec<&str> = vsplit[0].split(",").collect();  // verbose names are separated by comma
+    let mut feature_indices: Vec<u32> = Vec::new();
+    for namespace_verbose in namespaces_verbose {
+       // create an list of indexes dfrom list of namespace chars
+       let index = match vw.map_name_to_index.get(namespace_verbose) {
+           Some(index) => *index as u32,
+           None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown verbose namespace command line: {}", namespace_verbose))))
+       };
+       feature_indices.push(index);
+    }
+    Ok(FeatureComboDesc {
+                          feature_indices: feature_indices,
+                          weight: combo_weight
+                        })
 }
 
 
@@ -146,6 +207,19 @@ impl ModelInstance {
                             })
     }
 
+    fn create_field_desc_from_verbose(&self, vw: &vwmap::VwNamespaceMap, s: &str) -> Result<FieldDesc, Box<dyn Error>> {
+        let vsplit: Vec<&str> = s.split(":").collect(); // We use : as a delimiter for weight
+        if vsplit.len() > 1 {
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Fields currently do not support passing a value via : {:?}", s))))
+        }
+        let namespaces_verbose: Vec<&str> = s.split(",").collect();  // verbose names are separated by comma
+        let mut field: FieldDesc = Vec::new();
+        for namespace_verbose in namespaces_verbose {
+            let index = feature_transform_parser::get_namespace_id_verbose(&self.transform_namespaces, vw, namespace_verbose)?;
+            field.push(index);
+        }
+        Ok(field)
+    }
 
     
     pub fn new_from_cmdline<'a>(cl: &clap::ArgMatches<'a>, vw: &vwmap::VwNamespaceMap) -> Result<ModelInstance, Box<dyn Error>> {
@@ -202,23 +276,9 @@ impl ModelInstance {
             }
         }
 
-
-
-        if let Some(in_v) = cl.value_of("lrqfa") {
-            let vsplit: Vec<&str> = in_v.split("-").collect(); // We use - as a delimiter instead of first numbers as vowpal does it
-            if vsplit.len() != 2 {
-                return Err(Box::new(IOError::new(ErrorKind::Other, format!("--lrqfa takes namespaces-k, example: \"ABC-12\", your string was: \"{}\"", in_v))))
-            }
-            let namespaces_str = vsplit[0];
-            let k_str = vsplit[1];
-            for char in namespaces_str.chars() {
-                // create an list of indexes dfrom list of namespace chars
-                let index = feature_transform_parser::get_namespace_id(&mi.transform_namespaces, vw, char)?;
-                mi.ffm_fields.push(vec![index]);
-            }
-            mi.ffm_k = k_str.parse().expect("Number expected");
-            if mi.ffm_k > consts::FFM_MAX_K as u32{
-                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Maximum ffm_k is: {}, passed: {}", consts::FFM_MAX_K, mi.ffm_k))))
+        if let Some(in_v) = cl.values_of("linear") {
+            for value_str in in_v {                
+                mi.feature_combo_descs.push(create_feature_combo_desc_from_verbose(vw, value_str)?);
             }
         }
 
@@ -256,9 +316,20 @@ impl ModelInstance {
                 for char in namespaces_str.chars() {
                     //println!("K: {}", char);
                     let index = feature_transform_parser::get_namespace_id(&mi.transform_namespaces, vw, char)?;
+/*                    let index = match vw.map_vwname_to_index.get(&vec![char as u8]) {
+                        Some(index) => *index,
+                        None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown namespace char in command line: {}", char))))
+                    };
+*/
                     field.push(index);
                 }
                 mi.ffm_fields.push(field);
+            }
+        }
+
+        if let Some(in_v) = cl.values_of("ffm_field_verbose") {
+            for value_str in in_v {
+                mi.ffm_fields.push(mi.create_field_desc_from_verbose(vw, value_str)?);
             }
         }
         
@@ -382,17 +453,17 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("".to_string(), 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
         let mi = ModelInstance::new_empty().unwrap();        
         
-        let aa = mi.create_feature_combo_desc(&vw, "A").unwrap();
-        assert_eq!(aa, FeatureComboDesc {
+        let result = mi.create_feature_combo_desc(&vw, "A").unwrap();
+        assert_eq!(result, FeatureComboDesc {
                                 feature_indices: vec![0],
                                 weight: 1.0
                                 });
         
-        let aa = mi.create_feature_combo_desc(&vw, "BA:1.5").unwrap();
-        assert_eq!(aa, FeatureComboDesc {
+        let result = mi.create_feature_combo_desc(&vw, "BA:1.5").unwrap();
+        assert_eq!(result, FeatureComboDesc {
                                 feature_indices: vec![1,0],
                                 weight: 1.5
                                 });
@@ -406,14 +477,63 @@ A,featureA:2
 B,featureB:3
 "#;
         // The main point is that weight in feature names from vw_map_str is ignored
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("".to_string(), 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
         let mi = ModelInstance::new_empty().unwrap();        
-        let aa = mi.create_feature_combo_desc(&vw, "BA:1.5").unwrap();
-        assert_eq!(aa, FeatureComboDesc {
+        let result = mi.create_feature_combo_desc(&vw, "BA:1.5").unwrap();
+        assert_eq!(result, FeatureComboDesc {
                                 feature_indices: vec![1,0],
                                 weight: 1.5
                                 });
                                 
+    }
+
+    #[test]
+    fn test_feature_combo_verbose_parsing() {
+        let vw_map_string = r#"
+A,featureA
+B,featureB
+C,featureC
+"#;
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let result = create_feature_combo_desc_from_verbose(&vw, "featureA").unwrap();
+        assert_eq!(result, FeatureComboDesc {
+                                feature_indices: vec![0],
+                                weight: 1.0
+                                });
+        
+        let result = create_feature_combo_desc_from_verbose(&vw, "featureB,featureA:1.5").unwrap();
+        assert_eq!(result, FeatureComboDesc {
+                                feature_indices: vec![1,0],
+                                weight: 1.5
+                                });
+
+        let result = create_feature_combo_desc_from_verbose(&vw, "featureB:1.5,featureA");
+        assert!(result.is_err());
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Could not parse the value of a feature combination: 1.5,featureA\" })");
+                                
+    }
+
+    #[test]
+    fn test_field_verbose_parsing() {
+        let vw_map_string = r#"
+A,featureA
+B,featureB
+C,featureC
+"#;
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let mi = ModelInstance::new_empty().unwrap();        
+
+        let result = mi.create_field_desc_from_verbose(&vw, "featureA").unwrap();
+        assert_eq!(result, vec![0]);
+
+        let result = mi.create_field_desc_from_verbose(&vw, "featureA,featureC").unwrap();
+        assert_eq!(result, vec![0,2]);
+
+
+        let result = mi.create_field_desc_from_verbose(&vw, "featureA,featureC:3");
+        assert!(result.is_err());
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Fields currently do not support passing a value via : \\\"featureA,featureC:3\\\"\" })");
+        
     }
 
 

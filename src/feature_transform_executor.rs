@@ -43,7 +43,7 @@ macro_rules! default_seeds {
 #[derive(Clone)]
 pub struct ExecutorToNamespace {
     namespace_index: u32,
-    namespace_char: char,
+    namespace_verbose: String,
     namespace_seeds: [u32; 5],	// These are precomputed namespace seeds
     tmp_data: Vec<(u32, f32)>,
 }
@@ -51,7 +51,7 @@ pub struct ExecutorToNamespace {
 #[derive(Clone)]
 pub struct ExecutorFromNamespace {
     namespace_index: u32,
-    namespace_char: char,
+    namespace_verbose: String,
 }
 
 
@@ -102,7 +102,7 @@ impl TransformExecutor {
         
         let namespace_to = ExecutorToNamespace {
             namespace_index: namespace_transform.to_namespace.namespace_index,
-            namespace_char: namespace_transform.to_namespace.namespace_char,
+            namespace_verbose: namespace_transform.to_namespace.namespace_verbose.to_owned(),
             // These are random numbers, i threw a dice!
             namespace_seeds: default_seeds!(namespace_transform.to_namespace.namespace_index),
             tmp_data: Vec::new(),
@@ -120,7 +120,7 @@ impl TransformExecutor {
     pub fn get_executor(function_name: &str, namespaces_from: &Vec<feature_transform_parser::Namespace>, function_params: &Vec<f32>) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
         let mut executor_namespaces_from: Vec<ExecutorFromNamespace> = Vec::new();
         for namespace in namespaces_from {
-            executor_namespaces_from.push(ExecutorFromNamespace{namespace_index: namespace.namespace_index, namespace_char: namespace.namespace_char});
+            executor_namespaces_from.push(ExecutorFromNamespace{namespace_index: namespace.namespace_index, namespace_verbose: namespace.namespace_verbose.to_owned()});
         }
         if function_name == "BinnerMinSqrt" {
             TransformerBinner::create_function(&(|x| x.sqrt()), function_name, &executor_namespaces_from, function_params, false)
@@ -355,13 +355,13 @@ mod tests {
         
         let from_namespace = ExecutorFromNamespace {
             namespace_index: 0,
-            namespace_char: 'a',
+            namespace_verbose: "a".to_string(),
         };
         let to_namespace_index = 1;
                             
         let to_namespace_empty = ExecutorToNamespace {
             namespace_index: to_namespace_index,
-            namespace_char: 'b',
+            namespace_verbose: "b".to_string(),
             namespace_seeds: default_seeds!(to_namespace_index),	// These are precomputed namespace seeds
             tmp_data: Vec::new(),
         };
@@ -409,18 +409,18 @@ mod tests {
         
         let from_namespace_1 = ExecutorFromNamespace {
             namespace_index: 0,
-            namespace_char: 'a',
+            namespace_verbose: "a".to_string(),
         };
 
         let from_namespace_2 = ExecutorFromNamespace {
             namespace_index: 1,
-            namespace_char: 'c',
+            namespace_verbose: "c".to_string(),
         };
         let to_namespace_index = 1;
                             
         let to_namespace_empty = ExecutorToNamespace {
             namespace_index: to_namespace_index,
-            namespace_char: 'b',
+            namespace_verbose: "b".to_string(),
             namespace_seeds: default_seeds!(to_namespace_index),	// These are precomputed namespace seeds
             tmp_data: Vec::new(),
         };
@@ -483,7 +483,7 @@ mod tests {
     fn test_interpolation() {
         let to_namespace_empty = ExecutorToNamespace {
                 namespace_index: 1,
-                namespace_char: 'b',
+                namespace_verbose: "b".to_string(),
                 namespace_seeds: default_seeds!(1),	// These are precomputed namespace seeds
                 tmp_data: Vec::new(),
             };

@@ -3,6 +3,7 @@
 #![allow(unused_variables)]
 #![allow(unused_mut)]
 #![allow(non_snake_case)]
+#![allow(redundant_semicolons)]
 use std::error::Error;
 use std::path::Path;
 use std::fs::File;
@@ -143,7 +144,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
                 buffer = match reading_result {
                         Ok([]) => break, // EOF
                         Ok(buffer2) => buffer2,
-                        Err(_e) => return Err(_e)?
+                        Err(_e) => return Err(_e)
                 };
                 if cache.writing {
                         cache.push_record(buffer)?;
@@ -153,7 +154,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
                 buffer = match reading_result {
                         Ok([]) => break, // EOF
                         Ok(buffer) => buffer,
-                        Err(_e) => return Err(_e)?
+                        Err(_e) => return Err(_e)
                 };
             }
             example_num += 1;

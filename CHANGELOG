@@ -1,14 +1,17 @@
 
-# March 2020
+# April 2021
+- introduce --linear and --ffm_field_verbose for passing verbose names of features for linear combo terms and fields
+
+# March 2021
 - Implement binning functionality; features that are floating point
 values can now be binned by customized functions
 
-# February 2020
+# February 2021
 - much faster FFM prediction mode when using multi-value features
 - more than 15% speedup of FFM training
 - refactored Regressor to be more easily extendable
 - added "load_hogwile" command to serving mode. Enabling in-place
 replacement of the models
 
-# January 2020
+# January 2021
 - fix truncated model when saving large >1Gb models

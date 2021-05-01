@@ -20,7 +20,7 @@ pub const TRANSFORM_NAMESPACE_MARK: u32 = 1<< 31;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Namespace {
     pub namespace_index: u32,
-    pub namespace_char: char,
+    pub namespace_verbose: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -46,31 +46,29 @@ impl NamespaceTransforms {
         if rr.is_err() {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("Error parsing {}\n{:?}", s, rr))));            
         }
-        let (_, (to_namespace_char, function_name, from_namespaces_chars, function_parameters)) = rr.unwrap();
+        let (_, (to_namespace_verbose, function_name, from_namespaces_verbose, function_parameters)) = rr.unwrap();
 
-        let to_namespace_index = get_namespace_id(self, vw, to_namespace_char);
+        let to_namespace_index = get_namespace_id_verbose(self, vw, &to_namespace_verbose);
         if to_namespace_index.is_ok() {
-            return Err(Box::new(IOError::new(ErrorKind::Other, format!("To namespace of {} already exists: {:?}", s, to_namespace_char))));
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("To namespace of {} already exists: {:?}", s, to_namespace_verbose))));
         }
         let to_namespace = Namespace {
             namespace_index: self.v.len() as u32 | TRANSFORM_NAMESPACE_MARK, // mark it as special transformed namespace
-            namespace_char: to_namespace_char,
+            namespace_verbose: to_namespace_verbose,
         };
         
         let mut from_namespaces: Vec<Namespace> = Vec::new();
-        for from_namespace_char in &from_namespaces_chars {
-            if !from_namespace_char.is_ascii() {
-                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Issue in parsing {}: From namespace ({}) has to be an ascii character", s, from_namespace_char))));
-            }
-            let from_namespace_index = get_namespace_id(self, vw, *from_namespace_char)?;
-            println!("from namespace char: {} from namespace index: {}",  from_namespace_char, from_namespace_index);
+        for from_namespace_verbose in &from_namespaces_verbose {
+            let from_namespace_index = get_namespace_id_verbose(self, vw, from_namespace_verbose)?;
+            println!("from namespace verbose: {} from namespace index: {}",  from_namespace_verbose, from_namespace_index);
             if from_namespace_index & TRANSFORM_NAMESPACE_MARK != 0 {
-                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Issue in parsing {}: From namespace ({}) cannot be an already transformed namespace", s, from_namespace_char))));
+                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Issue in parsing {}: From namespace ({}) cannot be an already transformed namespace", s, from_namespace_verbose))));
             }
-            if !vw.lookup_char_to_save_as_float[*from_namespace_char as usize] {
-                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Issue in parsing {}: From namespace ({}) has to be defined as --float_namespaces", s, from_namespace_char))));
+            if !vw.map_index_to_save_as_float[from_namespace_index as usize] {
+                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Issue in parsing {}: From namespace ({}) has to be defined as --float_namespaces", s, from_namespace_verbose))));
             }
-            from_namespaces.push(Namespace{namespace_index: from_namespace_index, namespace_char: *from_namespace_char});
+            from_namespaces.push(Namespace{ namespace_index: from_namespace_index, 
+                                            namespace_verbose: from_namespace_verbose.to_string() });
          }
 
         let nt = NamespaceTransform {
@@ -90,12 +88,20 @@ impl NamespaceTransforms {
 }
 
 pub fn get_namespace_id(transform_namespaces: &NamespaceTransforms, vw: &vwmap::VwNamespaceMap, namespace_char: char) -> Result<u32, Box<dyn Error>> {
-   let index = match vw.map_char_to_index.get(&namespace_char) {
+   // Does not support transformed names
+   let index = match vw.map_vwname_to_index.get(&vec![namespace_char as u8]) {
+       Some(index) => return Ok(*index as u32),
+       None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown namespace char in command line: {}", namespace_char))))
+   };   
+}
+
+pub fn get_namespace_id_verbose(transform_namespaces: &NamespaceTransforms, vw: &vwmap::VwNamespaceMap, namespace_verbose: &str) -> Result<u32, Box<dyn Error>> {
+   let index = match vw.map_name_to_index.get(namespace_verbose) {
        Some(index) => return Ok(*index as u32),
        None => {
-           let f:Vec<&NamespaceTransform> = transform_namespaces.v.iter().filter(|x| x.to_namespace.namespace_char == namespace_char).collect();
+           let f:Vec<&NamespaceTransform> = transform_namespaces.v.iter().filter(|x| x.to_namespace.namespace_verbose == namespace_verbose).collect();
            if f.len() == 0 {
-               return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown namespace char in command line: {}", namespace_char))));
+               return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown namespace char in command line: {}", namespace_verbose))));
            } else {
                return Ok(f[0].to_namespace.namespace_index as u32);
            }
@@ -118,13 +124,13 @@ use nom::multi;
 use nom::combinator::complete;
 
 
-pub fn parse_namespace_char(input: &str) -> IResult<&str, char>{
+/*pub fn parse_namespace(input: &str) -> IResult<&str, char>{
     let take_char = complete::one_of("abcdefghijklmnopqrstuvzxyABCDEFGHIJKLMNOPQRSTUVZXY0123456789");
     let (input, output) = take_char(input)?;
     Ok((input, output))
-}
+}*/
 
-pub fn parse_namespace_quoted_char(input: &str) -> IResult<&str, char> {
+/*pub fn parse_namespace_quoted_char(input: &str) -> IResult<&str, char> {
     // TODO: What about quoted ' char ... so parsing '\''
     let (input, (_, namespace_char, _)) = tuple ((
                                             complete::char('\''), 
@@ -132,19 +138,22 @@ pub fn parse_namespace_quoted_char(input: &str) -> IResult<&str, char> {
                                             complete::char('\'')
                                         ))(input)?;
     Ok((input, namespace_char))
-}
+}*/
 
-pub fn parse_namespace(input: &str) -> IResult<&str, char> {
+pub fn parse_namespace(input: &str) -> IResult<&str, String> {
     // TODO add ability to escape namespaces like \0x32 ?
-    
-    let (input, (_, namespace_char, _)) = tuple((character::complete::space0, 
-                                            branch::alt((complete(parse_namespace_char), complete(parse_namespace_quoted_char))),
-                                            character::complete::space0,
-                                          ))(input)?;
-    Ok((input, namespace_char))
+    let (input, (_, letter1, rest, _)) = tuple((
+                                                character::complete::space0,
+                                                complete::one_of("abcdefghijklmnopqrstuvzxyABCDEFGHIJKLMNOPQRSTUVZXY"),
+                                                take_while(AsChar::is_alphanum), 
+                                                character::complete::space0
+                                                ))(input)?;
+    let mut s = letter1.to_string();
+    s.push_str(rest);
+    Ok((input, s))
 }
 
-pub fn parse_function_params_namespaces(input: &str) -> IResult<&str, Vec<char>> {
+pub fn parse_function_params_namespaces(input: &str) -> IResult<&str, Vec<String>> {
     let take_open = complete::char('('); 
     let take_close = complete::char(')'); 
     let take_separator = complete::char(','); 
@@ -181,9 +190,9 @@ pub fn parse_function_name(input: &str) -> IResult<&str, String> {
 }
 
 
-pub fn parse_namespace_statement(input: &str) -> IResult<&str, (char, String, Vec<char>, Vec<f32>)> {
+pub fn parse_namespace_statement(input: &str) -> IResult<&str, (String, String, Vec<String>, Vec<f32>)> {
 
-    let (input, (to_namespace_char, _, function_name, from_namespace_chars, parameters)) = 
+    let (input, (to_namespace_verbose, _, function_name, from_namespace_verbose, parameters)) = 
         tuple((
             parse_namespace,
             complete::char('='),
@@ -192,7 +201,7 @@ pub fn parse_namespace_statement(input: &str) -> IResult<&str, (char, String, Ve
             parse_function_params_floats
             ))(input)?;
     
-    Ok((input, (to_namespace_char, function_name, from_namespace_chars, parameters)))
+    Ok((input, (to_namespace_verbose, function_name, from_namespace_verbose, parameters)))
 }
 
 
@@ -205,33 +214,33 @@ mod tests {
 
     #[test]
     fn test_parser1() {
-        let r = parse_namespace_char("a");
-        assert_eq!(r.unwrap().1, 'a');
-        let r = parse_namespace_char("ab");
-        assert_eq!(r.unwrap().1, 'a');
-        let r = parse_namespace_char("#");
+        let r = parse_namespace("a");
+        assert_eq!(r.unwrap().1, "a");
+        let r = parse_namespace("ab");
+        assert_eq!(r.unwrap().1, "ab");
+        let r = parse_namespace("#");
         assert_eq!(r.is_err(), true);
-
+/*
         let r = parse_namespace_quoted_char("a");
         assert_eq!(r.is_err(), true);
         let r = parse_namespace_quoted_char("'a'");
         assert_eq!(r.unwrap().1, 'a');
     
-    
+  
         let r = parse_namespace("a");
         assert_eq!(r.unwrap().1, 'a');
         let r = parse_namespace("'a'");
         assert_eq!(r.unwrap().1, 'a');
         let r = parse_namespace(" a ");
         assert_eq!(r.unwrap().1, 'a');
-        
+  */      
         
         let r = parse_function_params_namespaces("(a)");
-        assert_eq!(r.unwrap().1, vec!['a']);
+        assert_eq!(r.unwrap().1, vec!["a"]);
         let r = parse_function_params_namespaces("(a,b)");
-        assert_eq!(r.unwrap().1, vec!['a', 'b']);
+        assert_eq!(r.unwrap().1, vec!["a", "b"]);
         let r = parse_function_params_namespaces("( a ,  b )");
-        assert_eq!(r.unwrap().1, vec!['a', 'b']);
+        assert_eq!(r.unwrap().1, vec!["a", "b"]);
         let r = parse_function_params_namespaces("((a)");
         assert_eq!(r.is_err(), true);
         let r = parse_function_params_namespaces("()"); // empty list of namespaces is not allowed
@@ -267,9 +276,9 @@ mod tests {
 
         let r = parse_namespace_statement("a=sqrt(B)(3,1,2.0)");
         let (o, rw) = r.unwrap();
-        assert_eq!(rw.0, 'a');
+        assert_eq!(rw.0, "a");
         assert_eq!(rw.1, "sqrt");
-        assert_eq!(rw.2, vec!['B']);
+        assert_eq!(rw.2, vec!["B"]);
         assert_eq!(rw.3, vec![3f32, 1f32, 2.0]);
         
         
