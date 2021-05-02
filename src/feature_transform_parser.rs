@@ -281,6 +281,13 @@ mod tests {
         assert_eq!(rw.2, vec!["B"]);
         assert_eq!(rw.3, vec![3f32, 1f32, 2.0]);
         
+        let r = parse_namespace_statement("abc=sqrt(BDE,CG)(3,1,2.0)");
+        let (o, rw) = r.unwrap();
+        assert_eq!(rw.0, "abc");
+        assert_eq!(rw.1, "sqrt");
+        assert_eq!(rw.2, vec!["BDE", "CG"]);
+        assert_eq!(rw.3, vec![3f32, 1f32, 2.0]);
+        
         
     
     }
