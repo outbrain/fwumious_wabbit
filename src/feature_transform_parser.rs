@@ -125,16 +125,6 @@ use nom::multi;
 use nom::combinator::complete;
 
 
-/*pub fn parse_namespace_quoted_char(input: &str) -> IResult<&str, char> {
-    // TODO: What about quoted ' char ... so parsing '\''
-    let (input, (_, namespace_char, _)) = tuple ((
-                                            complete::char('\''), 
-                                            complete::none_of("\'"), 
-                                            complete::char('\'')
-                                        ))(input)?;
-    Ok((input, namespace_char))
-}*/
-
 pub fn name_char(c:char) -> bool {
     if AsChar::is_alphanum(c) || c == '_' {
         return true;
@@ -146,7 +136,6 @@ pub fn name_char(c:char) -> bool {
 
 // identifier = namespace or function name
 pub fn parse_identifier(input: &str) -> IResult<&str, String> {
-    // TODO add ability to escape namespaces like \0x32 ?
     let (input, (_, first_char, rest, _)) = tuple((
                                                 character::complete::space0,
                                                 complete::one_of("abcdefghijklmnopqrstuvzxyABCDEFGHIJKLMNOPQRSTUVZXY_"),
@@ -212,22 +201,12 @@ mod tests {
         assert_eq!(r.unwrap().1, "a");
         let r = parse_identifier("ab");
         assert_eq!(r.unwrap().1, "ab");
+        let r = parse_identifier("_a_b3_");
+        assert_eq!(r.unwrap().1, "_a_b3_");
         let r = parse_identifier("#");
         assert_eq!(r.is_err(), true);
-/*
-        let r = parse_namespace_quoted_char("a");
+        let r = parse_identifier("3a");  // they have to start with alphabetic character or underscore
         assert_eq!(r.is_err(), true);
-        let r = parse_namespace_quoted_char("'a'");
-        assert_eq!(r.unwrap().1, 'a');
-    
-  
-        let r = parse_identifier("a");
-        assert_eq!(r.unwrap().1, 'a');
-        let r = parse_identifier("'a'");
-        assert_eq!(r.unwrap().1, 'a');
-        let r = parse_identifier(" a ");
-        assert_eq!(r.unwrap().1, 'a');
-  */      
         
         let r = parse_function_params_namespaces("(a)");
         assert_eq!(r.unwrap().1, vec!["a"]);
