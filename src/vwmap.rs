@@ -11,7 +11,7 @@ use std::io::Error as IOError;
 #[derive(Clone)]
 pub struct VwNamespaceMap {
     pub num_namespaces: usize,
-    pub map_name_to_index: HashMap <std::string::String, usize>,
+    pub map_verbose_to_index: HashMap <std::string::String, usize>,
     pub map_vwname_to_name: HashMap <Vec<u8>, std::string::String>,
     pub map_vwname_to_index: HashMap <Vec<u8>, usize>,
     pub map_index_to_save_as_float: [bool; 256],
@@ -22,7 +22,7 @@ pub struct VwNamespaceMap {
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct VwNamespaceMapEntry {
     pub namespace_vwname: std::string::String,
-    namespace_name: std::string::String,
+    namespace_verbose: std::string::String,
     namespace_index: u32,
     namespace_save_as_float: bool, 
 }
@@ -37,7 +37,7 @@ impl VwNamespaceMap {
     pub fn new_from_source(vw_source: VwNamespaceMapSource)  -> Result<VwNamespaceMap, Box<dyn Error>> {
         let mut vw = VwNamespaceMap {
                                 num_namespaces:0, 
-                                map_name_to_index:HashMap::new(),
+                                map_verbose_to_index:HashMap::new(),
                                 map_index_to_save_as_float: [false;256],
                                 map_vwname_to_index: HashMap::new(),
                                 map_vwname_to_name: HashMap::new(),
@@ -46,11 +46,11 @@ impl VwNamespaceMap {
 
         for vw_entry in &vw.vw_source.entries {
             //let record = result?;
-            let name_str = &vw_entry.namespace_name;
+            let name_str = &vw_entry.namespace_verbose;
             let vwname_str = &vw_entry.namespace_vwname;
             let i = &vw_entry.namespace_index;
             
-            vw.map_name_to_index.insert(String::from(name_str), *i as usize);
+            vw.map_verbose_to_index.insert(String::from(name_str), *i as usize);
             vw.map_vwname_to_index.insert(vwname_str.as_bytes().to_vec(), *i as usize);
             vw.map_vwname_to_name.insert(vwname_str.as_bytes().to_vec(), String::from(name_str));
             vw.map_index_to_save_as_float[*i as usize] = vw_entry.namespace_save_as_float;
@@ -84,21 +84,20 @@ impl VwNamespaceMap {
             
             vw_source.entries.push(VwNamespaceMapEntry {
                 namespace_vwname: vwname_str.to_string(),
-                namespace_name: name_str.to_string(),
+                namespace_verbose: name_str.to_string(),
                 namespace_index: i as u32,
                 namespace_save_as_float: false,
             });
-//            println!("Char: {}, name: {}, index: {}", char, name_str, i);
         }
 
         // It is a bit fugly that we need this passed out-of-band from command line parameters
         // But we need to know which input params to mark with 'save_as_float' flag
         for float_namespace_verbose in float_namespaces.0 {
-            // create an list of indexes dfrom list of namespace chars
+            // create an list of indexes from list of verbose namespaces
             // Find index:
-            let from_index:Vec<&VwNamespaceMapEntry> = vw_source.entries.iter().filter(|e| e.namespace_name == float_namespace_verbose).collect(); 
+            let from_index:Vec<&VwNamespaceMapEntry> = vw_source.entries.iter().filter(|e| e.namespace_verbose == float_namespace_verbose).collect(); 
             if from_index.len() != 1 {
-                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown or ambigious namespace char passed by --float_namespaces: {}", float_namespace_verbose))))
+                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown or ambigious verbose namespace passed by --float_namespaces: {}", float_namespace_verbose))))
             }
             let from_index = from_index[0].namespace_index;
             //println!("From index {}", from_index);

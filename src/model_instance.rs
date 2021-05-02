@@ -138,7 +138,7 @@ fn create_feature_combo_desc_from_verbose(vw: &vwmap::VwNamespaceMap, s: &str) -
     let mut feature_indices: Vec<u32> = Vec::new();
     for namespace_verbose in namespaces_verbose {
        // create an list of indexes dfrom list of namespace chars
-       let index = match vw.map_name_to_index.get(namespace_verbose) {
+       let index = match vw.map_verbose_to_index.get(namespace_verbose) {
            Some(index) => *index as u32,
            None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown verbose namespace command line: {}", namespace_verbose))))
        };
