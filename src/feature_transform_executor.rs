@@ -174,13 +174,13 @@ impl TransformExecutors {
 
     pub fn get_transformations<'a>(&self, record_buffer: &[u32], feature_index_offset: u32) -> u32  {
         let executor_index = feature_index_offset & !feature_transform_parser::TRANSFORM_NAMESPACE_MARK; // remove transform namespace mark
-        //println!("Fi {}", feature_index_offset);
         let executor = &self.executors[executor_index as usize];
-        executor.namespace_to.borrow_mut().tmp_data.truncate(0);
         
-        executor.function_executor.execute_function(record_buffer, &mut executor.namespace_to.borrow_mut(), &self);
+        let mut namespace_to = executor.namespace_to.borrow_mut();
+        namespace_to.tmp_data.truncate(0);
+        
+        executor.function_executor.execute_function(record_buffer, &mut namespace_to, &self);
         executor_index
-//        &executor.namespace_to.borrow().tmp_data
     }
 
 
