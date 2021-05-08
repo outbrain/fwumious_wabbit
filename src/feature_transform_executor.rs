@@ -172,10 +172,12 @@ impl TransformExecutors {
         TransformExecutors {executors: executors}
     }
 
+    #[inline(always)]
     pub fn get_transformations<'a>(&self, record_buffer: &[u32], feature_index_offset: u32) -> u32  {
         let executor_index = feature_index_offset & !feature_transform_parser::TRANSFORM_NAMESPACE_MARK; // remove transform namespace mark
         let executor = &self.executors[executor_index as usize];
         
+        // If we have a cyclic defintion (which is a bug), this will panic!
         let mut namespace_to = executor.namespace_to.borrow_mut();
         namespace_to.tmp_data.truncate(0);
         
