@@ -426,7 +426,27 @@ mod tests {
         return (start << 16) + end;
     }
 
+    #[test]
+    fn test_transformerbinner_fail() {
+        // this fails because input namespace is not float namespace    
+        let from_namespace = ExecutorFromNamespace {
+            namespace_index: 0,
+            namespace_verbose: "a".to_string(),
+            namespace_is_float: false,
+        };
+        let to_namespace_index = 1;
+                            
+        let to_namespace_empty = ExecutorToNamespace {
+            namespace_index: to_namespace_index,
+            namespace_verbose: "b".to_string(),
+            namespace_seeds: default_seeds!(to_namespace_index),	// These are precomputed namespace seeds
+            tmp_data: Vec::new(),
+        };
+        
+        let result = TransformerBinner::create_function(&(|x| x.sqrt()), "Blah", &vec![from_namespace], &vec![40.], false);
+        assert!(result.is_err());
 
+    }
 
     #[test]
     fn test_transformerbinner() {
