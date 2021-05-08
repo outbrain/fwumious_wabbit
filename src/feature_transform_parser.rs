@@ -21,6 +21,7 @@ pub const TRANSFORM_NAMESPACE_MARK: u32 = 1<< 31;
 pub struct Namespace {
     pub namespace_index: u32,
     pub namespace_verbose: String,
+    pub namespace_is_float: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -55,6 +56,7 @@ impl NamespaceTransforms {
         let to_namespace = Namespace {
             namespace_index: self.v.len() as u32 | TRANSFORM_NAMESPACE_MARK, // mark it as special transformed namespace
             namespace_verbose: to_namespace_verbose,
+            namespace_is_float: false,
         };
         
         let mut from_namespaces: Vec<Namespace> = Vec::new();
@@ -64,11 +66,9 @@ impl NamespaceTransforms {
             if from_namespace_index & TRANSFORM_NAMESPACE_MARK != 0 {
                 return Err(Box::new(IOError::new(ErrorKind::Other, format!("Issue in parsing {}: From namespace ({}) cannot be an already transformed namespace", s, from_namespace_verbose))));
             }
-            if !vw.map_index_to_save_as_float[from_namespace_index as usize] {
-                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Issue in parsing {}: From namespace ({}) has to be defined as --float_namespaces", s, from_namespace_verbose))));
-            }
             from_namespaces.push(Namespace{ namespace_index: from_namespace_index, 
-                                            namespace_verbose: from_namespace_verbose.to_string() });
+                                            namespace_verbose: from_namespace_verbose.to_string(),
+                                            namespace_is_float: vw.map_index_to_save_as_float[from_namespace_index as usize] });
          }
 
         let nt = NamespaceTransform {
