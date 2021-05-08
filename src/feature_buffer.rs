@@ -52,20 +52,21 @@ pub struct FeatureBufferTranslator {
 macro_rules! feature_reader {
     ( $record_buffer:ident, 
       $transform_executors:expr,
-      $namespace_index:ident, 
+      $namespace_index:expr, 
       $hash_index:ident, 
       $hash_value:ident, 
       $bl:block  ) => {
         if $namespace_index & feature_transform_parser::TRANSFORM_NAMESPACE_MARK != 0 {
             // This is super-unoptimized
-            for (hash_index1, hash_value1) in $transform_executors.get_transformations($record_buffer, *$namespace_index) {
+            let executor_index = $transform_executors.get_transformations($record_buffer, $namespace_index);
+            for (hash_index1, hash_value1) in &$transform_executors.executors[executor_index as usize].namespace_to.borrow().tmp_data {
                 let $hash_index = *hash_index1;
                 let $hash_value = *hash_value1;
 //                println!("{} SSSSSSS {}", $hash_value, $hash_index);
                 $bl
             }
         } else {
-            let namespace_desc = *$record_buffer.get_unchecked(($namespace_index + parser::HEADER_LEN) as usize);
+            let namespace_desc = unsafe {*$record_buffer.get_unchecked(($namespace_index + parser::HEADER_LEN) as usize)};
             if (namespace_desc & parser::IS_NOT_SINGLE_MASK) == 0 {
                 let $hash_index = namespace_desc;
                 let $hash_value: f32 = 1.0;
@@ -75,16 +76,16 @@ macro_rules! feature_reader {
                     let start = ((namespace_desc >> 16) & 0x3fff) as usize; 
                     let end = (namespace_desc & 0xffff) as usize;
                     for hash_offset in (start..end).step_by(2) {
-                        let $hash_index = *$record_buffer.get_unchecked(hash_offset);
-                        let $hash_value = f32::from_bits(*$record_buffer.get_unchecked(hash_offset+1));
+                        let $hash_index = unsafe {*$record_buffer.get_unchecked(hash_offset)};
+                        let $hash_value = unsafe {f32::from_bits(*$record_buffer.get_unchecked(hash_offset+1))};
                         $bl
                     }
                 } else {
                     let start = ((namespace_desc >> 16) & 0x3fff) as usize; 
                     let end = (namespace_desc & 0xffff) as usize;
                     for hash_offset in (start..end).step_by(3) {
-                        let $hash_index = *$record_buffer.get_unchecked(hash_offset);
-                        let $hash_value = f32::from_bits(*$record_buffer.get_unchecked(hash_offset+1));
+                        let $hash_index = unsafe {*$record_buffer.get_unchecked(hash_offset)};
+                        let $hash_value = unsafe {f32::from_bits(*$record_buffer.get_unchecked(hash_offset+1))};
                         $bl
                     }
                 }
@@ -164,7 +165,7 @@ impl FeatureBufferTranslator {
     
     
     pub fn translate(&mut self, record_buffer: &[u32], example_number: u64) -> () {
-        unsafe {
+        {
             let lr_buffer = &mut self.feature_buffer.lr_buffer;
             lr_buffer.truncate(0);
             self.feature_buffer.label = record_buffer[parser::LABEL_OFFSET] as f32;  // copy label
@@ -177,7 +178,7 @@ impl FeatureBufferTranslator {
                 let feature_combo_weight = feature_combo_desc.weight;
                 // we unroll first iteration of the loop and optimize
                 let num_namespaces:usize = feature_combo_desc.feature_indices.len() ;
-                let namespace_index = feature_combo_desc.feature_indices.get_unchecked(0);
+                let namespace_index = unsafe{*feature_combo_desc.feature_indices.get_unchecked(0)};
                 // We special case a single feature (common occurance)
                 if num_namespaces == 1 {
                     feature_reader!(record_buffer, self.transform_executors, namespace_index, hash_index, hash_value, {
@@ -189,11 +190,11 @@ impl FeatureBufferTranslator {
                     feature_reader!(record_buffer, self.transform_executors, namespace_index, hash_index, hash_value, {
                             hashes_vec_in.push(HashAndValue {hash: hash_index, value: hash_value});
                         });
-                    for namespace_index in feature_combo_desc.feature_indices.get_unchecked(1 as usize .. num_namespaces) {
+                    for namespace_index in unsafe{feature_combo_desc.feature_indices.get_unchecked(1 as usize .. num_namespaces)} {
                         hashes_vec_out.truncate(0);
                         for handv in &(*hashes_vec_in) {
                             let half_hash = handv.hash.overflowing_mul(VOWPAL_FNV_PRIME).0;
-                            feature_reader!(record_buffer, self.transform_executors, namespace_index, hash_index, hash_value, {
+                            feature_reader!(record_buffer, self.transform_executors, *namespace_index, hash_index, hash_value, {
                                 hashes_vec_out.push(HashAndValue{   hash: hash_index ^ half_hash,
                                                                     value: handv.value * hash_value});
                             });
@@ -223,7 +224,7 @@ impl FeatureBufferTranslator {
                 //let feature_len = self.feature_buffer.ffm_fields_count * self.model_instance.ffm_k;
                 for (contra_field_index, ffm_field) in self.model_instance.ffm_fields.iter().enumerate() {
                     for namespace_index in ffm_field {
-                        feature_reader!(record_buffer, self.transform_executors, namespace_index, hash_index, hash_value, {
+                        feature_reader!(record_buffer, self.transform_executors, *namespace_index, hash_index, hash_value, {
                                 ffm_buffer.push(HashAndValueAndSeq {hash: hash_index & self.ffm_hash_mask,
                                                                         value: hash_value,
                                                                         contra_field_index: contra_field_index as u32 * self.model_instance.ffm_k as u32});

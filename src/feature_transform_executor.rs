@@ -5,6 +5,8 @@ use std::error::Error;
 use std::io::Error as IOError;
 use std::io::ErrorKind;
 
+use std::cell::RefCell;
+
 use fasthash::murmur3;
 use serde::{Serialize,Deserialize};
 use dyn_clone::{clone_trait_object, DynClone};
@@ -30,7 +32,7 @@ pub enum SeedNumber {
 macro_rules! default_seeds {
     ($to_namespace_index: expr) => 
     {
-        // These are random numbers, i threw a dice!
+        // These are random numbers, i threw a dice! https://xkcd.com/221/
             [      murmur3::hash32(vec![$to_namespace_index as u8, 255]),
                    murmur3::hash32(vec![3, $to_namespace_index as u8, 222, 52, 53]),
                    murmur3::hash32(vec![6, $to_namespace_index as u8, 35, 51, 245]),
@@ -45,7 +47,7 @@ pub struct ExecutorToNamespace {
     namespace_index: u32,
     namespace_verbose: String,
     namespace_seeds: [u32; 5],	// These are precomputed namespace seeds
-    tmp_data: Vec<(u32, f32)>,
+    pub tmp_data: Vec<(u32, f32)>,
 }
 
 #[derive(Clone)]
@@ -63,6 +65,7 @@ impl ExecutorToNamespace {
         self.tmp_data.push((hash_index, hash_value));
     } 
 
+
     #[inline(always)]
     fn emit_f32(&mut self, f:f32, hash_value:f32, interpolated: bool, seed_id: SeedNumber) {
         if interpolated {
@@ -70,7 +73,6 @@ impl ExecutorToNamespace {
             let floor_int = floor as i32;
             let part = f - floor;
             if part != 0.0 {
-                println!("floor {} Floor_ind: {} hv {}, part {}", floor, floor_int+1, hash_value, part);
                 self.emit_i32(floor_int + 1, hash_value * part, seed_id);
             }
             let part = 1.0 - part;
@@ -92,8 +94,8 @@ impl ExecutorToNamespace {
 
 #[derive(Clone)]
 pub struct TransformExecutor {
-    namespace_to: ExecutorToNamespace,
 //    namespaces_from: Vec<ExecutorFromNamespace>, // from namespaces data resides in function_executor
+    pub namespace_to: RefCell<ExecutorToNamespace>,
     function_executor: Box<dyn FunctionExecutorTrait>,
 }
 
@@ -109,7 +111,7 @@ impl TransformExecutor {
         };
         
         let te = TransformExecutor {
-            namespace_to: namespace_to,
+            namespace_to: RefCell::new(namespace_to),
             function_executor: Self::get_executor(&namespace_transform.function_name, 
                                                     &namespace_transform.from_namespaces, 
                                                     &namespace_transform.function_parameters)?,
@@ -154,25 +156,31 @@ impl TransformExecutor {
 #[derive(Clone)]
 pub struct TransformExecutors {
     pub executors: Vec<TransformExecutor>,
+
 }
 
 impl TransformExecutors {
     pub fn from_namespace_transforms(namespace_transforms: &feature_transform_parser::NamespaceTransforms) -> TransformExecutors{
         let mut executors:Vec<TransformExecutor> = Vec::new();
+        let mut namespaces_to: Vec<ExecutorToNamespace> = Vec::new();
         for transformed_namespace in &namespace_transforms.v {
             let transformed_namespace_executor = TransformExecutor::from_namespace_transform(&transformed_namespace).unwrap();
             executors.push(transformed_namespace_executor);
+//            namespaces_to.push(tmp_data: Vec::new());
+
         }
         TransformExecutors {executors: executors}
     }
 
-    pub fn get_transformations<'a>(&mut self, record_buffer: &[u32], feature_index_offset: u32) -> &Vec<(u32, f32)> {
-        let feature_index_offset = feature_index_offset & !feature_transform_parser::TRANSFORM_NAMESPACE_MARK; // remove transform namespace mark
+    pub fn get_transformations<'a>(&self, record_buffer: &[u32], feature_index_offset: u32) -> u32  {
+        let executor_index = feature_index_offset & !feature_transform_parser::TRANSFORM_NAMESPACE_MARK; // remove transform namespace mark
         //println!("Fi {}", feature_index_offset);
-        let executor = &mut self.executors[feature_index_offset as usize];
-        executor.namespace_to.tmp_data.truncate(0);
-        executor.function_executor.execute_function(record_buffer, &mut executor.namespace_to);
-        &mut executor.namespace_to.tmp_data
+        let executor = &self.executors[executor_index as usize];
+        executor.namespace_to.borrow_mut().tmp_data.truncate(0);
+        
+        executor.function_executor.execute_function(record_buffer, &mut executor.namespace_to.borrow_mut(), &self);
+        executor_index
+//        &executor.namespace_to.borrow().tmp_data
     }
 
 
@@ -182,7 +190,7 @@ impl TransformExecutors {
 // Some black magic from: https://stackoverflow.com/questions/30353462/how-to-clone-a-struct-storing-a-boxed-trait-object
 // We need clone() because of serving. There is also an option of doing FeatureBufferTransform from scratch in each thread
 pub trait FunctionExecutorTrait: DynClone + Send {
-    fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace);
+    fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace, transform_executors: &TransformExecutors);
 }
 clone_trait_object!(FunctionExecutorTrait);
 
@@ -195,7 +203,7 @@ struct FunctionExampleSqrt {
 }
 
 impl FunctionExecutorTrait for FunctionExampleSqrt {
-    fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace) {
+    fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace, transform_executors: &TransformExecutors) {
         feature_reader_float_namespace!(record_buffer, self.from_namespace.namespace_index, hash_index, hash_value, float_value, {
             let transformed_float = float_value.sqrt();
             let transformed_int = transformed_float as i32;
@@ -233,7 +241,7 @@ struct TransformerBinner {
 }
 
 impl FunctionExecutorTrait for TransformerBinner {
-    fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace) {
+    fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace, transform_executors: &TransformExecutors) {
         feature_reader_float_namespace!(record_buffer, self.from_namespace.namespace_index, hash_index, hash_value, float_value, {
             if float_value <= self.greater_than {
                 to_namespace.emit_i32(float_value as i32, hash_value, SeedNumber::Default);
@@ -268,12 +276,11 @@ impl TransformerBinner {
 }   
 
 
-
-
-
-
-
-
+// LogRatio Binner
+//
+//
+//
+//
 
 #[derive(Clone)]
 struct TransformerLogRatioBinner {
@@ -285,7 +292,7 @@ struct TransformerLogRatioBinner {
 }
 
 impl FunctionExecutorTrait for TransformerLogRatioBinner {
-    fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace) {
+    fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace, transform_executors: &TransformExecutors) {
         feature_reader_float_namespace!(record_buffer, self.from_namespace1.namespace_index, hash_index1, hash_value1, float_value1, {
             feature_reader_float_namespace!(record_buffer, self.from_namespace2.namespace_index, hash_index2, hash_value2, float_value2, {
 
@@ -329,6 +336,55 @@ impl TransformerLogRatioBinner {
                         }))
     }
 }   
+
+
+
+// Value multiplier transformer
+// -------------------------------------------------------------------
+// TransformerWeightMultiplier - A basic weight multiplier transformer
+// Example of use: if you want to multiply whole namespace with certain factor and thus increase its learning rate (let's say 2.0)
+// In that case you would call MutliplyWeight(document_id)(2.0)
+// Important - document_id does not need to be float and isnt really changed 
+
+
+#[derive(Clone)]
+struct TransformerWeightMultiplier {
+    from_namespace: ExecutorFromNamespace,
+    multiplier: f32,
+}
+
+impl FunctionExecutorTrait for TransformerWeightMultiplier {
+    fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace, transform_executors: &TransformExecutors) {
+        feature_reader!(record_buffer, transform_executors, self.from_namespace.namespace_index, hash_index, hash_value, {
+            to_namespace.emit_i32(hash_index as i32, hash_value * self.multiplier, SeedNumber::Default);
+        });
+    }
+}
+
+
+impl TransformerWeightMultiplier {
+    fn create_function(function_pointer: &'static (dyn Fn(f32) -> f32 +'static + Sync), 
+                        function_name: &str, 
+                        from_namespaces: &Vec<ExecutorFromNamespace>, 
+                        function_params: &Vec<f32>,
+                        interpolated: bool,
+                        ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
+        if function_params.len() != 1 {
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes exactly one float argument, example {}(A)(2.0)", function_name, function_name))));            
+        }
+        if from_namespaces.len() != 1 {
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes exactly one namespace argument, example {}(A)(2.0)", function_name, function_name))));            
+        }
+        Ok(Box::new(Self{from_namespace: from_namespaces[0].clone(),
+                        multiplier: function_params[0], 
+                        }))
+    }
+}   
+
+
+
+
+
 
 
 
@@ -377,7 +433,9 @@ mod tests {
                             3.0f32.to_bits()];       // Float feature value
  
         let mut to_namespace = to_namespace_empty.clone();
-        transformer.execute_function(&record_buffer, &mut to_namespace);
+        let mut transform_executors = TransformExecutors {executors: vec![]}; // not used
+
+        transformer.execute_function(&record_buffer, &mut to_namespace, &mut transform_executors);
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
@@ -396,7 +454,7 @@ mod tests {
                             300.0f32.to_bits()];       // Float feature value
 
         let mut to_namespace = to_namespace_empty.clone();
-        transformer.execute_function(&record_buffer, &mut to_namespace);
+        transformer.execute_function(&record_buffer, &mut to_namespace, &mut transform_executors);
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
@@ -443,7 +501,8 @@ mod tests {
                             ];       // Float feature value
  
         let mut to_namespace = to_namespace_empty.clone();
-        transformer.execute_function(&record_buffer, &mut to_namespace);
+        let mut transform_executors = TransformExecutors {executors: vec![]}; // not used
+        transformer.execute_function(&record_buffer, &mut to_namespace, &mut transform_executors);
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
@@ -470,7 +529,8 @@ mod tests {
                             ];       // Float feature value
  
         let mut to_namespace = to_namespace_empty.clone();
-        transformer.execute_function(&record_buffer, &mut to_namespace);
+        let mut transform_executors = TransformExecutors {executors: vec![]}; // not used
+        transformer.execute_function(&record_buffer, &mut to_namespace, &mut transform_executors);
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
