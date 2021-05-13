@@ -10,23 +10,22 @@ use serde::{Serialize,Deserialize};//, Deserialize};
 pub struct VwNamespaceMap {
     pub num_namespaces: usize,
     pub map_name_to_index: HashMap <std::string::String, usize>,
-    pub map_char_to_name: HashMap <char, std::string::String>,
-    pub map_char_to_index: HashMap <char, usize>,
-    pub lookup_char_to_index: [usize; 256], 
+    pub map_vwname_to_name: HashMap <Vec<u8>, std::string::String>,
+    pub map_vwname_to_index: HashMap <Vec<u8>, usize>,
     pub vw_source: VwNamespaceMapSource,    // this is the source from which VwNamespaceMap can be constructed - for persistence
 }
 
 // this is serializible source from which VwNamespaceMap can be constructed
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct VwNamespaceMapEntry {
-    namespace_char: char,
+    pub namespace_vwname: std::string::String,
     namespace_name: std::string::String,
     namespace_index: usize,
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct VwNamespaceMapSource {
-    entries: Vec<VwNamespaceMapEntry>,
+    pub entries: Vec<VwNamespaceMapEntry>,
 }
 
 impl VwNamespaceMap {
@@ -34,21 +33,19 @@ impl VwNamespaceMap {
         let mut vw = VwNamespaceMap {
                                 num_namespaces:0, 
                                 map_name_to_index:HashMap::new(),
-                                map_char_to_index:HashMap::new(),
-                                map_char_to_name:HashMap::new(),
-                                lookup_char_to_index: [0; 256],
+                                map_vwname_to_index:HashMap::new(),
+                                map_vwname_to_name:HashMap::new(),
                                 vw_source: vw_source,
                                 };
         for vw_entry in &vw.vw_source.entries {
             //let record = result?;
             let name_str = &vw_entry.namespace_name;
-            let char = &vw_entry.namespace_char;
+            let vwname_str = &vw_entry.namespace_vwname;
             let i = &vw_entry.namespace_index;
             
             vw.map_name_to_index.insert(String::from(name_str), *i as usize);
-            vw.map_char_to_index.insert(*char, *i as usize);
-            vw.map_char_to_name.insert(*char, String::from(name_str));
-            vw.lookup_char_to_index[*char as usize] = *i as usize;
+            vw.map_vwname_to_index.insert(vwname_str.as_bytes().to_vec(), *i as usize);
+            vw.map_vwname_to_name.insert(vwname_str.as_bytes().to_vec(), String::from(name_str));
             if *i > vw.num_namespaces {
                 vw.num_namespaces = *i;
             } 
@@ -71,15 +68,14 @@ impl VwNamespaceMap {
         let mut vw_source = VwNamespaceMapSource { entries: vec![]};
         for (i, record_w) in rdr.records().enumerate() {
             let record = record_w?;
-            let char_str = &record[0];
+            let vwname_str = &record[0];
             let name_str = &record[1];
-            if char_str.len() != 1 {
-                panic!("Can't decode {:?}", record);
+            if vwname_str.as_bytes().len() != 1 {
+                println!("Warning: multi-byte namespace names are not compatible with old style namespace arguments");
             }
-            let char = char_str.chars().next().unwrap();
             
             vw_source.entries.push(VwNamespaceMapEntry {
-                namespace_char: char,
+                namespace_vwname: vwname_str.to_string(),
                 namespace_name: name_str.to_string(),
                 namespace_index: i,
             });
