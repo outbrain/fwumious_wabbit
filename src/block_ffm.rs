@@ -29,7 +29,6 @@ use std::sync::Arc;
 
 pub struct BlockFFM<L:OptimizerTrait> {
     pub optimizer_ffm: L,
-    pub local_data_ffm_indices: Vec<u32>,
     pub local_data_ffm_values: Vec<f32>,
     pub ffm_k: u32,
     pub ffm_weights_len: u32, 
@@ -81,7 +80,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         let mut reg_ffm = BlockFFM::<L> {
             weights: Vec::new(),
             ffm_weights_len: 0, 
-            local_data_ffm_indices: Vec::with_capacity(1024),
             local_data_ffm_values: Vec::with_capacity(1024),
             ffm_k: mi.ffm_k, 
             field_embedding_len: mi.ffm_k * mi.ffm_fields.len() as u32,
@@ -107,7 +105,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         let forwards_only = BlockFFM::<optimizer::OptimizerSGD> {
             weights: Vec::new(),
             ffm_weights_len: self.ffm_weights_len, 
-            local_data_ffm_indices: Vec::new(),
             local_data_ffm_values: Vec::new(),
             ffm_k: self.ffm_k, 
             field_embedding_len: self.field_embedding_len,
