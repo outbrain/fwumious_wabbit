@@ -92,63 +92,6 @@ pub fn get_float_namespaces<'a>(cl: &clap::ArgMatches<'a>) -> Result<(Vec<String
    }
 }
 
-fn create_feature_combo_desc(vw: &vwmap::VwNamespaceMap, s: &str) -> Result<FeatureComboDesc, Box<dyn Error>> {
-
-    let vsplit: Vec<&str> = s.split(":").collect(); // We use : as a delimiter for weight
-    let mut combo_weight: f32 = 1.0;
-    if vsplit.len() == 2 {
-        let weight_str = vsplit[1];
-        combo_weight = weight_str.parse().expect(&format!("Cannot parse value \"{}\". Weights after \":\" can only be passed at the end of the feature combo", weight_str));
-    } else if vsplit.len() > 2 {
-        return Err(Box::new(IOError::new(ErrorKind::Other, format!("only one value parameter allowed (denoted with \":\"): \"{:?}\"", s))))
-    }
-
-
-    let namespaces_str = vsplit[0];
-    let mut feature_indices: Vec<u32> = Vec::new();
-    for char in namespaces_str.chars() {
-       // create an list of indexes dfrom list of namespace chars
-       let index = match vw.map_vwname_to_index.get(&vec![char as u8]) {
-           Some(index) => *index as u32,
-           None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown namespace char in command line: {}", char))))
-       };
-       feature_indices.push(index);
-    }
-    Ok(FeatureComboDesc {
-                          feature_indices: feature_indices,
-                          weight: combo_weight
-                        })
-}
-
-fn create_feature_combo_desc_from_verbose(vw: &vwmap::VwNamespaceMap, s: &str) -> Result<FeatureComboDesc, Box<dyn Error>> {
-    let vsplit: Vec<&str> = s.split(":").collect(); // We use : as a delimiter for weight
-    let mut combo_weight: f32 = 1.0;
-    
-    if vsplit.len() == 2 {
-        let weight_str = vsplit[1];
-        combo_weight = match weight_str.parse() {
-           Ok(x) => x,  
-           Err(y) => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Could not parse the value of a feature combination: {}", weight_str))))
-        }
-    } else if vsplit.len() > 2 {
-        return Err(Box::new(IOError::new(ErrorKind::Other, format!("Verbose features cannot have \":\" as part of their names: \"{:?}\"", s))))
-    }
-    
-    let namespaces_verbose: Vec<&str> = vsplit[0].split(",").collect();  // verbose names are separated by comma
-    let mut feature_indices: Vec<u32> = Vec::new();
-    for namespace_verbose in namespaces_verbose {
-       // create an list of indexes dfrom list of namespace chars
-       let index = match vw.map_verbose_to_index.get(namespace_verbose) {
-           Some(index) => *index as u32,
-           None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown verbose namespace command line: {}", namespace_verbose))))
-       };
-       feature_indices.push(index);
-    }
-    Ok(FeatureComboDesc {
-                          feature_indices: feature_indices,
-                          weight: combo_weight
-                        })
-}
 
 
 impl ModelInstance {
@@ -196,13 +139,37 @@ impl ModelInstance {
         let namespaces_str = vsplit[0];
         let mut feature_indices: Vec<u32> = Vec::new();
         for char in namespaces_str.chars() {
-           // create an list of indexes dfrom list of namespace chars
-           
            let index = feature_transform_parser::get_namespace_id(&self.transform_namespaces, vw, char)?;
            feature_indices.push(index);
         }
         Ok(FeatureComboDesc {
                              feature_indices: feature_indices,
+                              weight: combo_weight
+                            })
+    }
+
+    fn create_feature_combo_desc_from_verbose(&self, vw: &vwmap::VwNamespaceMap, s: &str) -> Result<FeatureComboDesc, Box<dyn Error>> {
+        let vsplit: Vec<&str> = s.split(":").collect(); // We use : as a delimiter for weight
+        let mut combo_weight: f32 = 1.0;
+        
+        if vsplit.len() == 2 {
+            let weight_str = vsplit[1];
+            combo_weight = match weight_str.parse() {
+               Ok(x) => x,  
+               Err(y) => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Could not parse the value of a feature combination: {}", weight_str))))
+            }
+        } else if vsplit.len() > 2 {
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Verbose features cannot have \":\" as part of their names: \"{:?}\"", s))))
+        }
+        
+        let namespaces_verbose: Vec<&str> = vsplit[0].split(",").collect();  // verbose names are separated by comma
+        let mut feature_indices: Vec<u32> = Vec::new();
+        for namespace_verbose in namespaces_verbose {
+           let index = feature_transform_parser::get_namespace_id_verbose(&self.transform_namespaces, vw, namespace_verbose)?;
+           feature_indices.push(index);
+        }
+        Ok(FeatureComboDesc {
+                              feature_indices: feature_indices,
                               weight: combo_weight
                             })
     }
@@ -278,7 +245,7 @@ impl ModelInstance {
 
         if let Some(in_v) = cl.values_of("linear") {
             for value_str in in_v {                
-                mi.feature_combo_descs.push(create_feature_combo_desc_from_verbose(vw, value_str)?);
+                mi.feature_combo_descs.push(mi.create_feature_combo_desc_from_verbose(vw, value_str)?);
             }
         }
 
@@ -495,19 +462,20 @@ B,featureB
 C,featureC
 "#;
         let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
-        let result = create_feature_combo_desc_from_verbose(&vw, "featureA").unwrap();
+        let mi = ModelInstance::new_empty().unwrap();        
+        let result = mi.create_feature_combo_desc_from_verbose(&vw, "featureA").unwrap();
         assert_eq!(result, FeatureComboDesc {
                                 feature_indices: vec![0],
                                 weight: 1.0
                                 });
         
-        let result = create_feature_combo_desc_from_verbose(&vw, "featureB,featureA:1.5").unwrap();
+        let result = mi.create_feature_combo_desc_from_verbose(&vw, "featureB,featureA:1.5").unwrap();
         assert_eq!(result, FeatureComboDesc {
                                 feature_indices: vec![1,0],
                                 weight: 1.5
                                 });
 
-        let result = create_feature_combo_desc_from_verbose(&vw, "featureB:1.5,featureA");
+        let result = mi.create_feature_combo_desc_from_verbose(&vw, "featureB:1.5,featureA");
         assert!(result.is_err());
         assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Could not parse the value of a feature combination: 1.5,featureA\" })");
                                 
