@@ -66,7 +66,6 @@ impl ExecutorToNamespace {
         self.tmp_data.push((hash_index, hash_value));
     } 
 
-
     #[inline(always)]
     fn emit_f32(&mut self, f:f32, hash_value:f32, interpolated: bool, seed_id: SeedNumber) {
         if interpolated {
@@ -113,14 +112,14 @@ impl TransformExecutor {
         
         let te = TransformExecutor {
             namespace_to: RefCell::new(namespace_to),
-            function_executor: Self::get_executor(&namespace_transform.function_name, 
+            function_executor: Self::create_executor(&namespace_transform.function_name, 
                                                     &namespace_transform.from_namespaces, 
                                                     &namespace_transform.function_parameters)?,
         };
         Ok(te)
     }
 
-    pub fn get_executor(function_name: &str, namespaces_from: &Vec<feature_transform_parser::Namespace>, function_params: &Vec<f32>) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
+    pub fn create_executor(function_name: &str, namespaces_from: &Vec<feature_transform_parser::Namespace>, function_params: &Vec<f32>) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
         let mut executor_namespaces_from: Vec<ExecutorFromNamespace> = Vec::new();
         for namespace in namespaces_from {
             executor_namespaces_from.push(ExecutorFromNamespace{namespace_index: namespace.namespace_index, 
@@ -221,12 +220,10 @@ impl FunctionExecutorTrait for FunctionExampleSqrt {
 
 impl FunctionExampleSqrt {
     fn create_function(function_name: &str, from_namespaces: &Vec<ExecutorFromNamespace>, function_params: &Vec<f32>) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
+        // For simplicity of example, we just assert instead of full error reporting
         assert!(function_params.len() == 0);
         assert!(from_namespaces.len() == 1);
         assert!(from_namespaces[0].namespace_is_float == true);
-//        if ![from_namespace_index as usize] {
-  //              return Err(Box::new(IOError::new(ErrorKind::Other, format!("Issue in parsing {}: From namespace ({}) has to be defined as --float_namespaces", s, from_namespace_verbose))));
-    //        }        
         Ok(Box::new(Self{from_namespace: from_namespaces[0].clone()}))
     }   
 }
