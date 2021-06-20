@@ -395,6 +395,9 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                                             oldweight = 0.0;
                                         }
                                     }
+//                                    if oldweight > 1.95 {	// snap to 2.0 and stay there
+  //                                    oldweight = 2.0;
+    //                                }
                                     
                                     self.attention_weights.get_unchecked_mut(z).weight = oldweight;
                                 }
