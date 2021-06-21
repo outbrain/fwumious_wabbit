@@ -110,7 +110,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
             reg_ffm.optimizer_attention.init(mi.attention_learning_rate, mi.attention_power_t, mi.attention_init_acc_gradient);
             // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
             reg_ffm.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * reg_ffm.ffm_k);
-            reg_ffm.attention_weights_len = (mi.ffm_fields.len() * mi.ffm_fields.len() * reg_ffm.ffm_k as usize) as u32;
+            reg_ffm.attention_weights_len = (mi.ffm_fields.len() * mi.ffm_fields.len()) as u32;
         }
 
         // Verify that forward pass will have enough stack for temporary buffer
@@ -295,25 +295,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                             attention_derivatives[z] = 0.0;
                         }
                         let mut ffm_values_offset = 0;
-                        let mut last_contra_field_index = 100000;
-                        let mut vs:u32 = 0;
-                        let mut div: f32 = 0.0;
                         for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                            
                             let mut contra_offset = (left_hash.contra_field_index * fb.ffm_fields_count) as usize;
-                            
-                            if left_hash.contra_field_index != last_contra_field_index {
-                                vs = 1;
-                                last_contra_field_index = left_hash.contra_field_index; 
-                                for (j, left_hash2) in fb.ffm_buffer.get_unchecked(i+1..fb.ffm_buffer.len()).iter().enumerate() {
-                                    if left_hash2.contra_field_index != last_contra_field_index {
-                                        break;
-                                    }
-                                    vs += 1;
-                                }
-                                div = 1.0 / vs as f32;
-                                //println!("AAA: {}", vs);
-                            }
                             let contra_pure_index = contra_offset / FFMK as usize; // super not nice, but division gets optimized away
                             let mut vv = 0;
                             let left_hash_value = left_hash.value;
@@ -322,25 +305,24 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                             //let LEFT_HASH_VALUE = left_hash_value;
                             specialize_value_f32!(left_hash_value, 1.0_f32, LEFT_HASH_VALUE, {
                               for z in 0..fb.ffm_fields_count as usize {
+                                  let attention = self.attention_weights.get_unchecked(z + contra_pure_index).weight;
                                   if vv == left_hash_contra_field_index as usize {
                                       for k in 0..FFMK as usize {
                                           let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + vv + k).weight;
-                                          let attention = self.attention_weights.get_unchecked(contra_offset + vv + k).weight;
                                           let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k) - ffm_weight * LEFT_HASH_VALUE;
                                           let gradient =  LEFT_HASH_VALUE * contra_weight;
                                           let gradient2 = gradient * attention;
-                                          *attention_derivatives.get_unchecked_mut(contra_offset + vv + k) += gradient * ffm_weight * div;
+                                          *attention_derivatives.get_unchecked_mut(z + contra_pure_index) += gradient * ffm_weight;
                                           *local_ffm_derivatives.get_unchecked_mut(ffm_values_offset + k) = gradient2;
                                           *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient2;
                                       }
                                   } else {
                                       for k in 0..FFMK as usize {
                                           let ffm_weight = ffm_weights.get_unchecked(left_hash_hash + vv + k).weight;
-                                          let attention = self.attention_weights.get_unchecked(contra_offset + vv + k).weight;
                                           let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k);
                                           let gradient =  LEFT_HASH_VALUE * contra_weight;
                                           let gradient2 = gradient * attention;
-                                          *attention_derivatives.get_unchecked_mut(contra_offset + vv + k) += gradient * ffm_weight * div;
+                                          *attention_derivatives.get_unchecked_mut(z + contra_pure_index) += gradient * ffm_weight;
                                           *local_ffm_derivatives.get_unchecked_mut(ffm_values_offset + k) = gradient2;
                                           *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient2;
                                       }
@@ -395,9 +377,10 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                                             oldweight = 0.0;
                                         }
                                     }
-//                                    if oldweight > 1.95 {	// snap to 2.0 and stay there
-  //                                    oldweight = 2.0;
-    //                                }
+                                    
+                                    if oldweight > 1.95 {
+                                      oldweight = 2.0;
+                                    }
                                     
                                     self.attention_weights.get_unchecked_mut(z).weight = oldweight;
                                 }
