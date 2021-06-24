@@ -183,7 +183,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
                                 let gradient = general_gradient * feature_value;
                                 let update_scale = self.optimizer_attention.calculate_update(gradient, &mut self.attention_weights.get_unchecked_mut(z).optimizer_data);
                                 let update = gradient * update_scale;
-                                let mut oldweight = self.attention_weights.get_unchecked_mut(z).weight;
+                                let mut oldweight = self.attention_weights.get_unchecked(z).weight;
                                 if ATTENTION_L2 != 0.0 && gradient != 0.0 {
                                     oldweight -= oldweight * (ATTENTION_L2 * update_scale);
                                 }
@@ -253,7 +253,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
 
     fn debug_output(&mut self, mi: &model_instance::ModelInstance, aa: i32) {
         for x in 0..self.attention_weights_len as usize{	
-            println!("{:.2}  => {}", self.attention_weights[x].weight, mi.audit_aux_data.as_ref().unwrap().combo_index_to_string[&(x as i32)]);
+            println!("{:.2}  => {}, squared gradient acc: {}", self.attention_weights[x].weight, mi.audit_aux_data.as_ref().unwrap().combo_index_to_string[&(x as i32)],
+                                           L::format_data(&self.attention_weights[x].optimizer_data));
         }
         if aa == 1 {
         /*

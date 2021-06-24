@@ -366,7 +366,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                                     let gradient = general_gradient * feature_value;
                                     let update_scale = self.optimizer_attention.calculate_update(gradient, &mut self.attention_weights.get_unchecked_mut(z).optimizer_data);
                                     let update = gradient * update_scale;
-                                    let mut oldweight = self.attention_weights.get_unchecked_mut(z).weight;
+                                    let mut oldweight = self.attention_weights.get_unchecked(z).weight;
                                     if ATTENTION_L2 != 0.0 && gradient != 0.0 { // only update if the weight was present
                                         oldweight -= oldweight * (ATTENTION_L2 * update_scale);
                                     }
@@ -378,9 +378,9 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                                         }
                                     }
                                     
-                                    if oldweight > 1.95 {
+                                    /*if oldweight > 1.95 {
                                       oldweight = 2.0;
-                                    }
+                                    }*/
                                     
                                     self.attention_weights.get_unchecked_mut(z).weight = oldweight;
                                 }
@@ -572,10 +572,11 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
     fn debug_output(&mut self, mi: &model_instance::ModelInstance, aa: i32) {
         let field_count = mi.ffm_fields.len() as usize;
         for f1 in 0..field_count {
-            println!("Combining: {} with", mi.audit_aux_data.as_ref().unwrap().field_index_to_string[&(f1 as u32)]);
+            println!("Combining: {} with field", mi.audit_aux_data.as_ref().unwrap().field_index_to_string[&(f1 as u32)]);
             for f2 in 0..field_count {
                 print!("{:.2}  ", self.attention_weights[(f2+f1*field_count) as usize].weight);
-                print!("     => {}", mi.audit_aux_data.as_ref().unwrap().field_index_to_string[&(f2 as u32)]);
+                print!("     => {}, squared gradient acc: {}", mi.audit_aux_data.as_ref().unwrap().field_index_to_string[&(f2 as u32)], 
+                                                              L::format_data(&self.attention_weights[(f2+f1*field_count) as usize].optimizer_data));
                 println!(" ");
             }
         }

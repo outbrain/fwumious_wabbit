@@ -10,6 +10,7 @@ pub trait OptimizerTrait : std::clone::Clone {
     unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32;
     fn initial_data(&self) -> Self::PerWeightStore;
     fn get_name() -> &'static str;
+    fn format_data(data: &Self::PerWeightStore) -> String;
 }
 
 /******************* SGD **************************/
@@ -42,6 +43,11 @@ impl OptimizerTrait for OptimizerSGD {
     fn initial_data(&self) -> Self::PerWeightStore {
         std::marker::PhantomData{}
     }
+    
+    fn format_data(data: &Self::PerWeightStore) -> String {
+        "".to_owned()
+    }
+    
 }
 
 
@@ -86,6 +92,11 @@ impl OptimizerTrait for OptimizerAdagradFlex {
     fn initial_data(&self) -> Self::PerWeightStore {
         self.initial_acc_gradient
     }
+
+    fn format_data(data: &Self::PerWeightStore) -> String {
+        format!("{:.2}", data).to_owned()
+    }
+
     
 }
 
@@ -153,6 +164,11 @@ impl OptimizerTrait for OptimizerAdagradLUT {
         // We took it into account when calcualting lookup table, so look at init()
         0.0
     }
+
+    fn format_data(data: &Self::PerWeightStore) -> String {
+        format!("{:.2}", data).to_owned()
+    }
+
 
 }
 

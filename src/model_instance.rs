@@ -326,6 +326,7 @@ impl ModelInstance {
         } else {
             mi.attention_init_acc_gradient = mi.init_acc_gradient;
         }
+        println!("attention init acc gradient {}", mi.attention_init_acc_gradient);
 
 
 
