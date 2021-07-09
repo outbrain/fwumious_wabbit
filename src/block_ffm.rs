@@ -459,8 +459,9 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                     let mut optimizer_data_vec: Vec<Value> = Vec::new();
                     
                     for k in 0..self.ffm_k as usize{
-                        weights_vec.push(f32_to_json(self.weights[feature_hash_index as usize + contra_field_index * self.ffm_k as usize + k].weight));
-                        optimizer_data_vec.push(self.optimizer_ffm.get_audit_data(&self.weights[feature_hash_index as usize + contra_field_index * self.ffm_k as usize + k].optimizer_data));
+                        let weight = &self.weights[feature_hash_index as usize + contra_field_index * self.ffm_k as usize + k];
+                        weights_vec.push(f32_to_json(weight.weight));
+                        optimizer_data_vec.push(self.optimizer_ffm.get_audit_data(&weight.optimizer_data));
                     }
                     contra_fields.push(json!({
                     "contra_field": fb.audit_aux_data.field_index_to_string[&(contra_field_index as u32)],
@@ -691,7 +692,12 @@ C,featureC
         assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.98201376);
 //        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.98201376); 
         let audit2 = format!("{}", to_string_pretty(&fb.audit_json).unwrap());
-//        println!("audit: {}", audit2);
+        println!("audit: {}", audit2);
+        fb.reset_audit_json();
+        assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.98201376);
+//        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.98201376); 
+        let audit2 = format!("{}", to_string_pretty(&fb.audit_json).unwrap());
+        println!("audit@22222222222222222: {}", audit2);
         
     }
 
