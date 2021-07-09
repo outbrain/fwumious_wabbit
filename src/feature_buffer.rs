@@ -277,6 +277,9 @@ impl FeatureBufferTranslator {
                 // but in theory we could support also combo features
                 let ffm_buffer = &mut self.feature_buffer.ffm_buffer;
                 ffm_buffer.truncate(0);
+                if self.model_instance.audit_mode {
+                    self.feature_buffer.ffm_buffer_audit.truncate(0);
+                }
                 self.feature_buffer.ffm_fields_count = self.model_instance.ffm_fields.len() as u32;    
                 //let feature_len = self.feature_buffer.ffm_fields_count * self.model_instance.ffm_k;
                 for (contra_field_index, ffm_field) in self.model_instance.ffm_fields.iter().enumerate() {
