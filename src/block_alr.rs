@@ -18,6 +18,7 @@ use regressor::BlockTrait;
 use crate::block_helpers;
 use block_helpers::{Weight, WeightAndOptimizerData};
 
+use crate::consts::AFFM_FOR;
 
 pub struct BlockALR<L:OptimizerTrait> {
     pub weights: Vec<WeightAndOptimizerData<L>>,
@@ -176,6 +177,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
                     let mut oldweight = self.attention_weights.get_unchecked_mut(z).weight;
                     self.attention_weights.get_unchecked_mut(z).weight = oldweight + update;
                 }*/
+                    if fb.example_number < AFFM_FOR {
                     specialize_value_f32!(self.attention_snap_to_zero, 0.0, ATTENTION_SNAP_TO_ZERO, {
                         specialize_value_f32!(self.attention_l2, 0.0, ATTENTION_L2, {
                             for z in 0..self.attention_weights_len as usize {
@@ -194,10 +196,14 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
                                         oldweight = 0.0;
                                     }
                                 }
+                                if oldweight > 1.2 {
+                                    oldweight = 1.2;
+                                }
                                 self.attention_weights.get_unchecked_mut(z).weight = oldweight;
                             }
                         });
                     });
+                }
             }
             (prediction_probability, general_gradient)
         } // end of unsafe

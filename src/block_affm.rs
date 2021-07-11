@@ -19,6 +19,7 @@ use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 use block_helpers::{Weight, WeightAndOptimizerData};
 
+use crate::consts::AFFM_FOR;
 
 const FFM_STACK_BUF_LEN:usize= 16384;
 const FFM_CONTRA_BUF_LEN:usize = 8196;
@@ -359,6 +360,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                         }
                         
                         // Update attention
+                        if fb.example_number < AFFM_FOR {
+                    
                         specialize_value_f32!(self.attention_snap_to_zero, 0.0, ATTENTION_SNAP_TO_ZERO, {
                             specialize_value_f32!(self.attention_l2, 0.0, ATTENTION_L2, {
                                 for z in 0..self.attention_weights_len as usize {
@@ -381,11 +384,16 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                                     /*if oldweight > 1.95 {
                                       oldweight = 2.0;
                                     }*/
+                                    if oldweight > 1.2 {
+                                        oldweight = 1.2;
+                                    }
+
                                     
                                     self.attention_weights.get_unchecked_mut(z).weight = oldweight;
                                 }
                             });
                         });
+                        }
                     }
                     // The only exit point
                     return (prediction_probability, general_gradient)
