@@ -14,7 +14,8 @@ use std::f32;
 use std::collections::VecDeque;
 use std::time::Instant;
 use flate2::read::MultiGzDecoder;
-
+use coredump::register_panic_handler;
+use human_panic::setup_panic;
 
 mod vwmap;
 mod parser;
@@ -35,6 +36,13 @@ mod block_helpers;
 mod multithread_helpers;
 
 fn main() {
+    match register_panic_handler() {
+        Err(e) => {println!("failed registering coredump panic handler")},
+        Ok(()) => {}
+    }
+
+    setup_panic!();
+
     match main2() {
         Err(e) => {println!("Global error: {:?}", e); std::process::exit(1)},
         Ok(()) => {}
