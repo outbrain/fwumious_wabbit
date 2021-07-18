@@ -85,12 +85,15 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
             field_embedding_len: mi.ffm_k * mi.ffm_fields.len() as u32,
             optimizer_ffm: L::new(),
         };
+        // println!("reg_ffm field_embedding_len {:?}", reg_ffm.field_embedding_len);
 
         if mi.ffm_k > 0 {
             reg_ffm.optimizer_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
             // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
             reg_ffm.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * reg_ffm.ffm_k);
+            // println!("1 << mi.ffm_bit_precision {:?}", 1 << mi.ffm_bit_precision);
         }
+        // println!("reg_ffm ffm_weights_len {:?}", reg_ffm.ffm_weights_len);
 
         // Verify that forward pass will have enough stack for temporary buffer
         if reg_ffm.ffm_k as usize * mi.ffm_fields.len() * mi.ffm_fields.len() > FFM_CONTRA_BUF_LEN {
@@ -117,32 +120,32 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
 
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
-        self.weights =vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_ffm.initial_data()}; self.ffm_weights_len as usize];
-        if mi.ffm_k > 0 {       
-            if mi.ffm_init_width == 0.0 {
-                // Initialization that has showed to work ok for us, like in ffm.pdf, but centered around zero and further divided by 50
-                let ffm_one_over_k_root = 1.0 / (self.ffm_k as f32).sqrt() / 50.0;
-                for i in 0..self.ffm_weights_len {
-                    self.weights[i as usize].weight = (1.0 * merand48((self.ffm_weights_len as usize+ i as usize) as u64)-0.5) * ffm_one_over_k_root;
-                    self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
-                }
-            } else {
-                let zero_half_band_width = mi.ffm_init_width * mi.ffm_init_zero_band * 0.5;
-                let band_width = mi.ffm_init_width * (1.0 - mi.ffm_init_zero_band);
-                for i in 0..self.ffm_weights_len {
-                    let mut w = merand48(i as u64) * band_width - band_width * 0.5;
-                    if w > 0.0 { 
-                        w += zero_half_band_width ;
-                    } else {
-                        w -= zero_half_band_width;
-                    }
-                    w += mi.ffm_init_center;
-                    self.weights[i as usize].weight = w; 
-                    self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
-                }
-
-            }
-        }
+        self.weights =vec![WeightAndOptimizerData::<L>{weight:0.002, optimizer_data: self.optimizer_ffm.initial_data()}; self.ffm_weights_len as usize];
+        // if mi.ffm_k > 0 {
+        //     if mi.ffm_init_width == 0.0 {
+        //         // Initialization that has showed to work ok for us, like in ffm.pdf, but centered around zero and further divided by 50
+        //         let ffm_one_over_k_root = 1.0 / (self.ffm_k as f32).sqrt() / 50.0;
+        //         for i in 0..self.ffm_weights_len {
+        //             self.weights[i as usize].weight = (1.0 * merand48((self.ffm_weights_len as usize+ i as usize) as u64)-0.5) * ffm_one_over_k_root;
+        //             self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
+        //         }
+        //     } else {
+        //         let zero_half_band_width = mi.ffm_init_width * mi.ffm_init_zero_band * 0.5;
+        //         let band_width = mi.ffm_init_width * (1.0 - mi.ffm_init_zero_band);
+        //         for i in 0..self.ffm_weights_len {
+        //             let mut w = merand48(i as u64) * band_width - band_width * 0.5;
+        //             if w > 0.0 {
+        //                 w += zero_half_band_width ;
+        //             } else {
+        //                 w -= zero_half_band_width;
+        //             }
+        //             w += mi.ffm_init_center;
+        //             self.weights[i as usize].weight = w;
+        //             self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
+        //         }
+        //
+        //     }
+        // }
     }
 
 
@@ -154,6 +157,9 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                         update:bool) -> (f32, f32) {
         let mut wsum = 0.0;
         let local_data_ffm_len = fb.ffm_buffer.len() * (self.ffm_k * fb.ffm_fields_count) as usize;
+        // println!("local_data_ffm_len {:?}", local_data_ffm_len);
+        // println!("fb.ffm_fields_count {:?}", fb.ffm_fields_count);
+        // println!("fb.ffm_buffer {:?}", fb.ffm_buffer);
 
         unsafe {
             macro_rules! core_macro {
@@ -383,12 +389,12 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                             //assert_eq!(f1_offset_ffmk, f1 * field_embedding_len + f2 * FFMK as usize);
                             //assert_eq!(f2_offset_ffmk, f2 * field_embedding_len + f1 * FFMK as usize);
                             for k in 0..FFMK {
-                                *wsumbuf.get_unchecked_mut(k as usize) += 
-                                        contra_fields.get_unchecked(f1_offset_ffmk + k as usize) * 
+                                *wsumbuf.get_unchecked_mut(k as usize) +=
+                                        contra_fields.get_unchecked(f1_offset_ffmk + k as usize) *
                                         contra_fields.get_unchecked(f2_offset_ffmk + k as usize);
                             }
                         }
-                        
+
                     }
                     for k in 0..FFMK as usize {
                         wsum += wsumbuf[k];

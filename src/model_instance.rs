@@ -166,7 +166,7 @@ impl ModelInstance {
             ffm_k: 0,
             ffm_bit_precision: 18,
             ffm_separate_vectors: false, // DEPRECATED, UNUSED
-            fastmath: true,
+            fastmath: false,
             ffm_k_threshold: 0.0,
             ffm_init_center: 0.0,
             ffm_init_width: 0.0,
