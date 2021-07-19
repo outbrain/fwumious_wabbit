@@ -172,8 +172,8 @@ impl Serving {
         println!("Number of threads {}", num_children);
 
         if !s.foreground {
-             let stdout = File::create("/tmp/daemon.out").unwrap();
-             let stderr = File::create("/tmp/daemon.err").unwrap();
+            let stdout = File::create("/tmp/daemon.out").unwrap();
+            let stderr = File::create("/tmp/daemon.err").unwrap();
             let daemonize = Daemonize::new()
             .stdout(stdout)  // Redirect stdout to `/tmp/daemon.out`.
             .stderr(stderr);  // Redirect stderr to `/tmp/daemon.err`.;
