@@ -17,7 +17,7 @@ use crate::model_instance;
 use crate::optimizer;
 use crate::regressor::Regressor;
 use crate::multithread_helpers::{BoxedRegressorTrait};
-
+use std::fs::File;
 
 
 pub struct Serving {
@@ -54,9 +54,9 @@ pub enum ConnectionEnd {
 
 impl WorkerThread {
     pub fn new(
-        id: u32, 
-        re_fixed: BoxedRegressorTrait, 
-        fbt: feature_buffer::FeatureBufferTranslator, 
+        id: u32,
+        re_fixed: BoxedRegressorTrait,
+        fbt: feature_buffer::FeatureBufferTranslator,
         pa: parser::VowpalParser,
         receiver: Arc<Mutex<mpsc::Receiver<net::TcpStream>>>,
     ) -> Result<thread::JoinHandle<u32>, Box<dyn Error>> {
@@ -73,7 +73,7 @@ impl WorkerThread {
         Ok(thread)
     }
 
-    pub fn handle_connection(&mut self, 
+    pub fn handle_connection(&mut self,
                              reader: &mut (impl io::BufRead + IsEmpty),
                              writer: &mut impl io::Write,
                              ) -> ConnectionEnd
@@ -126,7 +126,7 @@ impl WorkerThread {
             i += 1;
         }
     }
-    
+
     pub fn start(&mut self, receiver: Arc<Mutex<mpsc::Receiver<net::TcpStream>>>) -> () {
         // Simple endless serving loop: receive new connection and serve it
         // when handle_connection exits, the connection is dropped
@@ -137,7 +137,7 @@ impl WorkerThread {
             self.handle_connection(&mut reader, &mut writer);
         }
     }
-    
+
 }
 
 
@@ -172,11 +172,11 @@ impl Serving {
         println!("Number of threads {}", num_children);
 
         if !s.foreground {
-            //  let stdout = File::create("/tmp/daemon.out").unwrap();
-            //  let stderr = File::create("/tmp/daemon.err").unwrap();
-            let daemonize = Daemonize::new();
-            //.stdout(stdout)  // Redirect stdout to `/tmp/daemon.out`.
-            //.stderr(stderr);  // Redirect stderr to `/tmp/daemon.err`.;
+             let stdout = File::create("/tmp/daemon.out").unwrap();
+             let stderr = File::create("/tmp/daemon.err").unwrap();
+            let daemonize = Daemonize::new()
+            .stdout(stdout)  // Redirect stdout to `/tmp/daemon.out`.
+            .stderr(stderr);  // Redirect stderr to `/tmp/daemon.err`.;
             match daemonize.start() {
                 Ok(_) => println!("Success, daemonized"),
                 Err(e) => return Err(e)?,
@@ -238,7 +238,7 @@ B,featureB
 C,featureC
 "#;
         let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
-        let mi = model_instance::ModelInstance::new_empty().unwrap();        
+        let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut re = regressor::Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
         let re_fixed = BoxedRegressorTrait::new(Box::new(re.immutable_regressor(&mi).unwrap()));
         let fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
@@ -274,10 +274,10 @@ C,featureC
             assert_eq!(ConnectionEnd::ParseError, newt.handle_connection(&mut reader, &mut writer));
             let x = mocked_stream.pop_bytes_written();
             assert_eq!(&x[..] == &b"ERR: Unknown first character of the label: ascii 33\n"[..], true);
-        } 
-        
+        }
+
         // Non Working stream test
-        
+
         {
             let mut mocked_stream_ok = SharedMockStream::new();
             let mocked_stream_error = FailingMockStream::new(ErrorKind::Other, "Failing", 3);
@@ -293,11 +293,11 @@ C,featureC
 
 
         }
-    //    println!("Return value {:?}", std::str::from_utf8(&x).unwrap());    
+    //    println!("Return value {:?}", std::str::from_utf8(&x).unwrap());
 
 
 
-                                 
+
     }
 
 
