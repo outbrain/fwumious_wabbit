@@ -248,7 +248,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                     // The only exit point
                     return (prediction_probability, general_gradient)
                 }; 
-            }; // End of macro
+            } // End of macro
             
 
             if local_data_ffm_len < FFM_STACK_BUF_LEN {
