@@ -136,7 +136,6 @@ impl VowpalParser {
 
             unsafe {
                 let p = self.tmp_read_buf.as_ptr();
-                let buf = self.output_buffer.as_mut_ptr();
                 let mut i_start:usize;
                 let mut i_end:usize = 0;
 
