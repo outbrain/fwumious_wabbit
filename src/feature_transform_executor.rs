@@ -312,9 +312,15 @@ impl FunctionExecutorTrait for TransformerLogRatioBinner {
             feature_reader_float_namespace!(record_buffer, self.from_namespace2.namespace_index, hash_index2, hash_value2, float_value2, {
 
                 let joint_value = hash_value1 * hash_value2;
-                let val1 = float_value1;
-                let val2 = float_value2;
-                
+                let mut val1 = 0.0;
+                let mut val2 = 0.0;
+                if !float_value1.is_nan() {
+                    val1 = float_value1;
+                }
+                if !float_value2.is_nan() {
+                    val2 = float_value2;
+                }
+
                 if val2 + val1 < self.greater_than {
                     to_namespace.emit_i32_i32(val1 as i32, val2 as i32, joint_value, SeedNumber::One);    
                 } else if val1 == 0.0 {
