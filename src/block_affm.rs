@@ -360,6 +360,9 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                         }
                         
                         // Update attention
+                        if fb.example_number == AFFM_FOR {
+                          println!("example number {} reached, stopping attention learning", fb.example_number);
+                        } else 
                         if fb.example_number < AFFM_FOR {
                     
                         specialize_value_f32!(self.attention_snap_to_zero, 0.0, ATTENTION_SNAP_TO_ZERO, {
@@ -370,21 +373,21 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                                     let update_scale = self.optimizer_attention.calculate_update(gradient, &mut self.attention_weights.get_unchecked_mut(z).optimizer_data);
                                     let update = gradient * update_scale;
                                     let mut oldweight = self.attention_weights.get_unchecked(z).weight;
+                                    if oldweight == 1.2 {
+                                      continue
+                                    }
                                     if ATTENTION_L2 != 0.0 && gradient != 0.0 { // only update if the weight was present
                                         oldweight -= oldweight * (ATTENTION_L2 * update_scale);
                                     }
                                     
                                     oldweight += update;
                                     if ATTENTION_SNAP_TO_ZERO != 0.0 {
-                                        if oldweight < ATTENTION_SNAP_TO_ZERO {
+                                        if oldweight < ATTENTION_SNAP_TO_ZERO && fb.example_number > 1000000 {
                                             oldweight = 0.0;
                                         }
                                     }
                                     
-                                    /*if oldweight > 1.95 {
-                                      oldweight = 2.0;
-                                    }*/
-                                    if oldweight > 1.2 {
+                                    if oldweight > 1.2 && fb.example_number > 1000000 {
                                         oldweight = 1.2;
                                     }
 
