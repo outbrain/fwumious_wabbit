@@ -26,7 +26,7 @@ pub enum SeedNumber {
     One = 1,
     Two = 2,
     Three = 3,
-    Four = 4,
+    Four = 4
 }
 
 macro_rules! default_seeds {
@@ -76,9 +76,7 @@ impl ExecutorToNamespace {
                 self.emit_i32(floor_int + 1, hash_value * part, seed_id);
             }
             let part = 1.0 - part;
-            if part != 0.0 {
-                self.emit_i32(floor_int, hash_value * part, seed_id);
-            }
+            self.emit_i32(floor_int, hash_value * part, seed_id);
         } else {
             self.emit_i32(f as i32, hash_value, seed_id);
         }
@@ -312,21 +310,17 @@ impl FunctionExecutorTrait for TransformerLogRatioBinner {
             feature_reader_float_namespace!(record_buffer, self.from_namespace2.namespace_index, hash_index2, hash_value2, float_value2, {
 
                 let joint_value = hash_value1 * hash_value2;
-                let mut val1 = 0.0;
-                let mut val2 = 0.0;
-                if !float_value1.is_nan() {
-                    val1 = float_value1;
-                }
-                if !float_value2.is_nan() {
-                    val2 = float_value2;
-                }
+                let val1 = float_value1;
+                let val2 = float_value2;
 
                 if val2 + val1 < self.greater_than {
                     to_namespace.emit_i32_i32(val1 as i32, val2 as i32, joint_value, SeedNumber::One);    
                 } else if val1 == 0.0 {
                     to_namespace.emit_f32(val2.sqrt(), joint_value, self.interpolated, SeedNumber::Two);    
                 } else if val2 == 0.0 {
-                    to_namespace.emit_i32(val1 as i32, joint_value, SeedNumber::Three);    
+                    to_namespace.emit_i32(val1 as i32, joint_value, SeedNumber::Three);
+                } else if val1.is_nan() || val2.is_nan() {
+                    to_namespace.emit_i32(i32::MAX-1, joint_value, SeedNumber::Four);
                 } else {
                     let o = (val1/val2).ln()*self.resolution;
                     to_namespace.emit_f32(o, joint_value, self.interpolated, SeedNumber::Default);
