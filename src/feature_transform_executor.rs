@@ -26,7 +26,7 @@ pub enum SeedNumber {
     One = 1,
     Two = 2,
     Three = 3,
-    Four = 4
+    Four = 4,
 }
 
 macro_rules! default_seeds {
@@ -63,12 +63,17 @@ impl ExecutorToNamespace {
     #[inline(always)]
     fn emit_i32(&mut self, to_data:i32, hash_value:f32, seed_id: SeedNumber) {
         let hash_index = murmur3::hash32_with_seed(to_data.to_le_bytes(), self.namespace_seeds[seed_id as usize]) & parser::MASK31;
+        println!("hash_index: {}", hash_index);
         self.tmp_data.push((hash_index, hash_value));
     } 
 
     #[inline(always)]
     fn emit_f32(&mut self, f:f32, hash_value:f32, interpolated: bool, seed_id: SeedNumber) {
-        if interpolated {
+        if f.is_nan() {
+            println!("im here");
+            self.emit_i32(f as i32, hash_value, SeedNumber::Four);
+        }
+        else if interpolated {
             let floor = f.floor();
             let floor_int = floor as i32;
             let part = f - floor;
@@ -76,7 +81,9 @@ impl ExecutorToNamespace {
                 self.emit_i32(floor_int + 1, hash_value * part, seed_id);
             }
             let part = 1.0 - part;
-            self.emit_i32(floor_int, hash_value * part, seed_id);
+            if part != 0.0 {
+                self.emit_i32(floor_int, hash_value * part, seed_id);
+            }
         } else {
             self.emit_i32(f as i32, hash_value, seed_id);
         }
@@ -312,17 +319,16 @@ impl FunctionExecutorTrait for TransformerLogRatioBinner {
                 let joint_value = hash_value1 * hash_value2;
                 let val1 = float_value1;
                 let val2 = float_value2;
-
+                println!("{}, {}", val1, val2);
                 if val2 + val1 < self.greater_than {
                     to_namespace.emit_i32_i32(val1 as i32, val2 as i32, joint_value, SeedNumber::One);    
                 } else if val1 == 0.0 {
                     to_namespace.emit_f32(val2.sqrt(), joint_value, self.interpolated, SeedNumber::Two);    
                 } else if val2 == 0.0 {
                     to_namespace.emit_i32(val1 as i32, joint_value, SeedNumber::Three);
-                } else if val1.is_nan() || val2.is_nan() {
-                    to_namespace.emit_i32(i32::MAX-1, joint_value, SeedNumber::Four);
                 } else {
                     let o = (val1/val2).ln()*self.resolution;
+                    println!("{}", o);
                     to_namespace.emit_f32(o, joint_value, self.interpolated, SeedNumber::Default);
                 }
             });
