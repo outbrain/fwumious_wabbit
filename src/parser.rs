@@ -99,7 +99,6 @@ impl VowpalParser {
 
             unsafe {
                 let p = self.tmp_read_buf.as_ptr();
-                let buf = self.output_buffer.as_mut_ptr();
                 let mut i_start:usize;
                 let mut i_end:usize = 0;
 
@@ -193,16 +192,16 @@ impl VowpalParser {
                         // -- and then just add feature to the end of the buffer
                         
                         if current_namespace_weight == 1.0 && feature_weight == 1.0 && current_char_num_of_features == 0 {
-                            *buf.add(current_char_index) = h;
+                            *self.output_buffer.get_unchecked_mut(current_char_index) = h;
                         } else {
-                            if (current_char_num_of_features == 1) && (*buf.add(current_char_index) & IS_NOT_SINGLE_MASK) == 0 {
+                            if (current_char_num_of_features == 1) && (*self.output_buffer.get_unchecked(current_char_index) & IS_NOT_SINGLE_MASK) == 0 {
                                 // We need to promote feature currently written in-place to out of place
-                                self.output_buffer.push(*buf.add(current_char_index));
+                                self.output_buffer.push(*self.output_buffer.get_unchecked(current_char_index));
                                 self.output_buffer.push(FLOAT32_ONE);
                             }
                             self.output_buffer.push(h);
                             self.output_buffer.push((current_namespace_weight * feature_weight).to_bits());
-                            *buf.add(current_char_index) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
+                            *self.output_buffer.get_unchecked_mut(current_char_index) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
                         }
                         current_char_num_of_features += 1;
                     }
