@@ -686,7 +686,7 @@ mod tests {
             block_ffm.attention_weights[i].optimizer_data = block_ffm.optimizer_attention.initial_data();
         }
     }
-
+/*
     #[test]
     fn test_affm_k1() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
@@ -904,7 +904,7 @@ B,featureB
         assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.5);
         assert_eq!(slearn  (&mut re, &mut lossf, &fb, true), 0.5);
 
-    }
+    }*/
 }
 
 
