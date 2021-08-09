@@ -317,7 +317,6 @@ impl FunctionExecutorTrait for TransformerLogRatioBinner {
                 let joint_value = hash_value1 * hash_value2;
                 let val1 = float_value1;
                 let val2 = float_value2;
-                println!("{}, {}", val1, val2);
                 if val2 + val1 < self.greater_than {
                     to_namespace.emit_i32_i32(val1 as i32, val2 as i32, joint_value, SeedNumber::One);    
                 } else if val1 == 0.0 {
@@ -326,7 +325,6 @@ impl FunctionExecutorTrait for TransformerLogRatioBinner {
                     to_namespace.emit_i32(val1 as i32, joint_value, SeedNumber::Three);
                 } else {
                     let o = (val1/val2).ln()*self.resolution;
-                    println!("{}", o);
                     to_namespace.emit_f32(o, joint_value, self.interpolated, SeedNumber::Default);
                 }
             });
