@@ -63,14 +63,12 @@ impl ExecutorToNamespace {
     #[inline(always)]
     fn emit_i32(&mut self, to_data:i32, hash_value:f32, seed_id: SeedNumber) {
         let hash_index = murmur3::hash32_with_seed(to_data.to_le_bytes(), self.namespace_seeds[seed_id as usize]) & parser::MASK31;
-        println!("hash_index: {}", hash_index);
         self.tmp_data.push((hash_index, hash_value));
     } 
 
     #[inline(always)]
     fn emit_f32(&mut self, f:f32, hash_value:f32, interpolated: bool, seed_id: SeedNumber) {
         if f.is_nan() {
-            println!("im here");
             self.emit_i32(f as i32, hash_value, SeedNumber::Four);
         }
         else if interpolated {
