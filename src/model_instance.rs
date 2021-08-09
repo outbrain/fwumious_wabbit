@@ -95,6 +95,12 @@ pub struct ModelInstance {
 
     #[serde(default = "default_audit_data_option")]
     pub audit_aux_data: Option<AuditData>,
+    
+    #[serde(default = "default_f32_zero")]
+    pub l2: f32,
+    
+    
+    
 }
 
 
@@ -161,6 +167,7 @@ impl ModelInstance {
             optimizer: Optimizer::SGD,
             audit_mode: false,
             audit_aux_data: None,
+            l2: 0.0,
         };
         Ok(mi)
     }
@@ -406,6 +413,8 @@ impl ModelInstance {
         } else {
             mi.attention_snap_to_zero = 0.0;
         }
+
+
         
         if let Some(val) = cl.value_of("link") {
             if val != "logistic" {
@@ -417,11 +426,11 @@ impl ModelInstance {
                 return Err(Box::new(IOError::new(ErrorKind::Other, format!("--loss_function only supports 'logistic'"))))
             }            
         }
+
         if let Some(val) = cl.value_of("l2") {
-            let v2:f32 = val.parse()?;
-            if v2.abs() > 0.00000001 {
-                return Err(Box::new(IOError::new(ErrorKind::Other, format!("--l2 can only be 0.0"))))
-            }
+            mi.l2 = val.parse()?;
+        } else {
+            mi.l2 = 0.0;
         }
 
         if cl.is_present("noconstant") {

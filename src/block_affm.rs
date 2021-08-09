@@ -45,6 +45,7 @@ pub struct BlockAFFM<L:OptimizerTrait> {
     pub attention_snap_to_zero: f32,
     pub weights: Vec<WeightAndOptimizerData<L>>,
     pub attention_weights: Vec<WeightAndOptimizerData<L>>,
+    pub l2: f32,
 }
 
 
@@ -101,6 +102,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
             field_embedding_len: mi.ffm_k * mi.ffm_fields.len() as u32,
             optimizer_ffm: L::new(),
             optimizer_attention: L::new(),
+            l2: mi.l2,
         };
 
         if mi.ffm_k > 0 {
@@ -136,6 +138,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
             field_embedding_len: self.field_embedding_len,
             optimizer_ffm: optimizer::OptimizerSGD::new(),
             optimizer_attention: optimizer::OptimizerSGD::new(),
+            l2: self.l2,
         };
         
         Ok(Box::new(forwards_only))
@@ -233,6 +236,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                     let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
                     let mut contra_fields: [f32; FFM_CONTRA_BUF_LEN] = MaybeUninit::uninit().assume_init();
                     let mut attention_derivatives: [f32; FFM_CONTRA_BUF_LEN] = MaybeUninit::uninit().assume_init();
+                    let mut attention_derivatives_count: [u32; FFM_CONTRA_BUF_LEN] = MaybeUninit::uninit().assume_init();
                     
                     let field_embedding_len = self.field_embedding_len;
                     specialize_k!(self.ffm_k, FFMK, wsumbuf, {
@@ -294,6 +298,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                         }
                         for z in 0..self.attention_weights_len as usize {
                             attention_derivatives[z] = 0.0;
+                            attention_derivatives_count[z] = 0;
+                            
                         }
                         let mut ffm_values_offset = 0;
                         for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
@@ -328,6 +334,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                                           *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient2;
                                       }
                                   }
+                                  *attention_derivatives_count.get_unchecked_mut(z + contra_pure_index) += FFMK; 
                                   vv += FFMK as usize;
                                   //left_hash_hash += FFMK as usize;
                                   //contra_offset += FFMK as usize;
@@ -346,57 +353,61 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                     
                     if update {
                         let mut local_index: usize = 0;
-                        for left_hash in &fb.ffm_buffer {
-                            let mut feature_index = left_hash.hash as usize;
-                            for j in 0..fc as usize {
-                                let feature_value = *local_ffm_derivatives.get_unchecked(local_index);
-                                let gradient = general_gradient * feature_value;
-                                let update_scale = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
-                                let update = gradient * update_scale;
-                                ffm_weights.get_unchecked_mut(feature_index).weight += update;
-                                local_index += 1;
-                                feature_index += 1;
-                            }
-                        }
+                        specialize_value_f32!(self.l2, 0.0, L2, {
+
+                            for left_hash in &fb.ffm_buffer {
+                                let mut feature_index = left_hash.hash as usize;
+                                for j in 0..fc as usize {
+                                    let feature_value = *local_ffm_derivatives.get_unchecked(local_index);
+                                    let gradient = general_gradient * feature_value;
+                                    let update_scale = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
+                                    let update = gradient * update_scale;
+                                    let mut oldweight = ffm_weights.get_unchecked(feature_index).weight + update;
                         
+                                    if L2 != 0.0 { // only update if the weight was present
+                                        oldweight -= L2 * oldweight * update_scale;
+                                    }
+
+                                    ffm_weights.get_unchecked_mut(feature_index).weight = oldweight;
+                                    local_index += 1;
+                                    feature_index += 1;
+                                }
+                            }
+                        });
                         // Update attention
-                        if fb.example_number == AFFM_FOR {
+                        /*if fb.example_number == AFFM_FOR {
                           println!("example number {} reached, stopping attention learning", fb.example_number);
                         } else 
                         if fb.example_number < AFFM_FOR {
-                    
+                    */
+//                        if fb.example_number % 64 == 0 {
+                        
                         specialize_value_f32!(self.attention_snap_to_zero, 0.0, ATTENTION_SNAP_TO_ZERO, {
                             specialize_value_f32!(self.attention_l2, 0.0, ATTENTION_L2, {
                                 for z in 0..self.attention_weights_len as usize {
-                                    let feature_value = attention_derivatives.get_unchecked(z);
+//                                    let feature_value = attention_derivatives.get_unchecked(z);
+                                    let feature_value = attention_derivatives.get_unchecked(z) / *attention_derivatives_count.get_unchecked(z) as f32;
                                     let gradient = general_gradient * feature_value;
                                     let update_scale = self.optimizer_attention.calculate_update(gradient, &mut self.attention_weights.get_unchecked_mut(z).optimizer_data);
                                     let update = gradient * update_scale;
-                                    let mut oldweight = self.attention_weights.get_unchecked(z).weight;
-                                    if oldweight == 1.2 {
-                                      continue
-                                    }
+                                    let mut oldweight = self.attention_weights.get_unchecked(z).weight + update;
                                     if ATTENTION_L2 != 0.0 && gradient != 0.0 { // only update if the weight was present
-                                        oldweight -= oldweight * (ATTENTION_L2 * update_scale);
+                                        oldweight -= ATTENTION_L2 * oldweight * update_scale;
                                     }
                                     
-                                    oldweight += update;
-                                    if ATTENTION_SNAP_TO_ZERO != 0.0 {
-                                        if oldweight < ATTENTION_SNAP_TO_ZERO && fb.example_number > 1000000 {
+                                    if oldweight > 1.01 {
+                                        oldweight = 1.01;
+                                    } else {
+                                        if ATTENTION_SNAP_TO_ZERO != 0.0  && oldweight < ATTENTION_SNAP_TO_ZERO {
                                             oldweight = 0.0;
                                         }
                                     }
-                                    
-                                    if oldweight > 1.2 && fb.example_number > 1000000 {
-                                        oldweight = 1.2;
-                                    }
-
                                     
                                     self.attention_weights.get_unchecked_mut(z).weight = oldweight;
                                 }
                             });
                         });
-                        }
+                 //       }
                     }
                     // The only exit point
                     return (prediction_probability, general_gradient)

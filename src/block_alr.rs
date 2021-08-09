@@ -29,6 +29,7 @@ pub struct BlockALR<L:OptimizerTrait> {
     pub attention_weights: Vec<WeightAndOptimizerData<L>>,
     pub attention_l2: f32,
     pub attention_snap_to_zero: f32,
+    pub l2: f32,
 
 }
 
@@ -64,6 +65,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
             attention_weights_len: mi.feature_combo_descs.len() as u32,
             attention_l2: mi.attention_l2,
             attention_snap_to_zero: mi.attention_snap_to_zero,
+            l2: mi.l2,
         };
         reg_lr.optimizer_lr.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
 //        reg_lr.optimizer_attention.init(0.1, 0.25, 0.0);
@@ -82,6 +84,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
             attention_weights_len: self.attention_weights_len,
             attention_l2: self.attention_l2,
             attention_snap_to_zero: self.attention_snap_to_zero,
+            l2: self.l2,
         };
         
         Ok(Box::new(forwards_only))
@@ -128,9 +131,11 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
         let mut wsum:f32 = 0.0;
         unsafe {
             let mut attention_derivatives: [f32; MAX_FEATURE_COMBOS] = MaybeUninit::uninit().assume_init();
+            let mut attention_derivatives_count: [u32; MAX_FEATURE_COMBOS] = MaybeUninit::uninit().assume_init();
 
             for x in 0..self.attention_weights_len as usize {
                 attention_derivatives[x] = 0.0;
+                attention_derivatives_count[x] = 0;
             }
             
             for (i, hashvalue) in fb.lr_buffer.iter().enumerate() {
@@ -150,6 +155,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
                 wsum += wbasic * attention_weight;
                 if hashvalue.combo_index != u32::MAX {
                     *attention_derivatives.get_unchecked_mut(hashvalue.combo_index as usize) += wbasic;
+                    *attention_derivatives_count.get_unchecked_mut(hashvalue.combo_index as usize) += 1;
                 }
             }
 
@@ -157,19 +163,30 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
             let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_regressors, wsum_input + wsum, fb, update);
 
             if update {
-                for hashvalue in fb.lr_buffer.iter() {
-                    let feature_index     = hashvalue.hash as usize;
-                    let feature_value:f32 = hashvalue.value;                        
-                    let attention_weight: f32;
-                    if hashvalue.combo_index != u32::MAX {
-                        attention_weight = self.attention_weights.get_unchecked(hashvalue.combo_index as usize).weight;
-                    } else {
-                        attention_weight = 1.0;
+                specialize_value_f32!(self.l2, 0.0, L2, {
+                    for hashvalue in fb.lr_buffer.iter() {
+                        let feature_index     = hashvalue.hash as usize;
+                        let feature_value:f32 = hashvalue.value;                        
+                        let attention_weight: f32;
+                        if hashvalue.combo_index != u32::MAX {
+                            attention_weight = self.attention_weights.get_unchecked(hashvalue.combo_index as usize).weight;
+                        } else {
+                            attention_weight = 1.0;
+                        }
+                        let gradient = general_gradient * feature_value * attention_weight;
+                        let update_scale = self.optimizer_lr.calculate_update(gradient, &mut self.weights.get_unchecked_mut(feature_index).optimizer_data);
+                        let update = gradient * update_scale;
+                        let mut oldweight = self.weights.get_unchecked(feature_index).weight + update;
+                        if L2 != 0.0 { // only update if the weight was present
+                            if hashvalue.combo_index != u32::MAX {
+                                oldweight -= L2 * oldweight * update_scale;
+                            }
+                        }
+
+
+                        self.weights.get_unchecked_mut(feature_index).weight = oldweight;
                     }
-                    let gradient = general_gradient * feature_value * attention_weight;
-                    let update = gradient * self.optimizer_lr.calculate_update(gradient, &mut self.weights.get_unchecked_mut(feature_index).optimizer_data);
-                    self.weights.get_unchecked_mut(feature_index).weight += update;
-                }
+                });
 /*                for z in 0..self.attention_weights_len as usize {
                     let attention_derivative = attention_derivatives.get_unchecked(z);
                     let gradient = general_gradient * attention_derivative;
@@ -177,38 +194,33 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockALR<L>
                     let mut oldweight = self.attention_weights.get_unchecked_mut(z).weight;
                     self.attention_weights.get_unchecked_mut(z).weight = oldweight + update;
                 }*/
-                    if fb.example_number < AFFM_FOR {
+ //                   if fb.example_number < AFFM_FOR {
                     specialize_value_f32!(self.attention_snap_to_zero, 0.0, ATTENTION_SNAP_TO_ZERO, {
                         specialize_value_f32!(self.attention_l2, 0.0, ATTENTION_L2, {
                             for z in 0..self.attention_weights_len as usize {
-                                let feature_value = attention_derivatives.get_unchecked(z);
+                                let feature_value = attention_derivatives.get_unchecked(z) / *attention_derivatives_count.get_unchecked(z) as f32;
                                 let gradient = general_gradient * feature_value;
                                 let update_scale = self.optimizer_attention.calculate_update(gradient, &mut self.attention_weights.get_unchecked_mut(z).optimizer_data);
                                 let update = gradient * update_scale;
-                                let mut oldweight = self.attention_weights.get_unchecked(z).weight;
-                                if oldweight == 1.2 {
-                                  continue
-                                }
+                                let mut oldweight = self.attention_weights.get_unchecked(z).weight + update;
                                 if ATTENTION_L2 != 0.0 && gradient != 0.0 { // only update if the weight was present
-                                    oldweight -= oldweight * (ATTENTION_L2 * update_scale);
+                                    oldweight -= ATTENTION_L2 * oldweight * update_scale;
+                                
                                 }
                                 
-                                oldweight += update;
-                                if ATTENTION_SNAP_TO_ZERO != 0.0 {
-                                    if oldweight < ATTENTION_SNAP_TO_ZERO && fb.example_number > 1000000 {
+                                if oldweight > 1.01 {
+                                    oldweight = 1.01;
+                                } else {
+                                    if ATTENTION_SNAP_TO_ZERO != 0.0  && oldweight < ATTENTION_SNAP_TO_ZERO {
                                         oldweight = 0.0;
                                     }
                                 }
                                 
-                                if oldweight > 1.2 && fb.example_number > 1000000 {
-                                    oldweight = 1.2;
-                                }
-
                                 self.attention_weights.get_unchecked_mut(z).weight = oldweight;
                             }
                         });
                     });
-                }
+                //}
             }
             (prediction_probability, general_gradient)
         } // end of unsafe
