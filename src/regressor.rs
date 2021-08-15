@@ -135,10 +135,10 @@ impl Regressor  {
             panic!("This regressor is immutable, you cannot call learn() with update = true");
         }
         let update:bool = update && (fb.example_importance != 0.0);
-        if !update { // Fast-path for no-update case
+/*        if !update { // Fast-path for no-update case
             return self.predict(fb);
         }
-
+*/
         let blocks_list = &mut self.blocks_boxes[..];
         let (current, further_blocks) = &mut blocks_list.split_at_mut(1);
         let (prediction_probability, general_gradient) = current[0].forward_backward(further_blocks, 0.0, fb, update);
@@ -148,6 +148,8 @@ impl Regressor  {
     
     pub fn predict(&self, fb: &feature_buffer::FeatureBuffer) -> f32 {
         // TODO: we should find a way of not using unsafe
+        //return self.learn(fb, false);
+        
         let blocks_list = &self.blocks_boxes[..];
         let (current, further_blocks) = blocks_list.split_at(1);
         let prediction_probability = current[0].forward(further_blocks, 0.0, fb);

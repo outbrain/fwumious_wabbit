@@ -86,7 +86,7 @@ impl WorkerThread {
                 Ok([]) => return ConnectionEnd::EndOfStream, // EOF
                 Ok(buffer2) => {
                     self.fbt.translate(buffer2, i);
-                    let p = self.re_fixed.predict(&(self.fbt.feature_buffer));
+                    let p = self.re_fixed.learn(&self.fbt.feature_buffer, false);
                     let p_res = format!("{:.6}\n", p);
                     match writer.write_all(p_res.as_bytes()) {
                         Ok(_) => {},

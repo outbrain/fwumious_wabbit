@@ -778,8 +778,8 @@ mod tests {
                                   ], 2);
         assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.98201376); 
         assert_eq!(slearn  (&mut re, &mut lossf, &fb, true), 0.98201376); 
-        assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.9320294);
-        assert_eq!(slearn  (&mut re, &mut lossf, &fb, true), 0.9320294);
+        assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.95180625);
+        assert_eq!(slearn  (&mut re, &mut lossf, &fb, true), 0.95180625);
         // Two fields, use values
         let mut re = BlockAFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
         re.allocate_and_init_weights(&mi);
@@ -791,8 +791,8 @@ mod tests {
                                   ], 2);
         assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.9999999);
         assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.9999999);
-        assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.9689196);
-        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.9689196);
+        assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.9902111);
+        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.9902111);
     }
 
 
