@@ -136,7 +136,6 @@ impl VowpalParser {
 
             unsafe {
                 let p = self.tmp_read_buf.as_ptr();
-                let buf = self.output_buffer.as_mut_ptr();
                 let mut i_start:usize;
                 let mut i_end:usize = 0;
 
@@ -251,11 +250,11 @@ impl VowpalParser {
                             feature_weight == 1.0 && 
                             current_namespace_num_of_features == 0 && 
                             current_namespace_is_float_namespace == false {
-                            *buf.add(current_namespace_index_offset) = h;
+                            *self.output_buffer.get_unchecked_mut(current_namespace_index_offset) = h;
                         } else {
-                            if (current_namespace_num_of_features == 1) && (*buf.add(current_namespace_index_offset) & IS_NOT_SINGLE_MASK) == 0 {
+                            if (current_namespace_num_of_features == 1) && (*self.output_buffer.get_unchecked(current_namespace_index_offset) & IS_NOT_SINGLE_MASK) == 0 {
                                 // We need to promote feature currently written in-place to out of place
-                                self.output_buffer.push(*buf.add(current_namespace_index_offset));
+                                self.output_buffer.push(*self.output_buffer.get_unchecked(current_namespace_index_offset));
                                 self.output_buffer.push(FLOAT32_ONE);
                                 debug_assert_eq!(current_namespace_is_float_namespace, false);
                             }
@@ -269,9 +268,9 @@ impl VowpalParser {
                                     _ => self.parse_float_or_error(float_start, i_end_first_part, "Failed parsing feature value to float (for float namespace)")?
                                 };
                                 self.output_buffer.push(float_value.to_bits());
-                                *buf.add(current_namespace_index_offset) = IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
+                                *self.output_buffer.get_unchecked_mut(current_namespace_index_offset) = IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
                             } else {
-                                *buf.add(current_namespace_index_offset) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
+                                *self.output_buffer.get_unchecked_mut(current_namespace_index_offset) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
                             }
                         }
                         current_namespace_num_of_features += 1;
