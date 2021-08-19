@@ -9,15 +9,18 @@ use std::string::String;
 use crate::vwmap;
 
 const RECBUF_LEN:usize = 2048;
-pub const HEADER_LEN:usize = 3;
-pub const NAMESPACE_DESC_LEN:usize = 1;
+pub const HEADER_LEN:u32 = 3;
+pub const NAMESPACE_DESC_LEN:u32 = 1;
 pub const LABEL_OFFSET:usize = 1;
 pub const EXAMPLE_IMPORTANCE_OFFSET:usize = 2;
 pub const IS_NOT_SINGLE_MASK : u32 = 1u32 << 31;
+pub const IS_FLOAT_NAMESPACE_MASK : u32 = 1u32 << 30;
 pub const MASK31: u32 = !IS_NOT_SINGLE_MASK;
-pub const NULL: u32= IS_NOT_SINGLE_MASK; // null is just an exact IS_NOT_SINGLE_MASK
+pub const NO_FEATURES: u32= IS_NOT_SINGLE_MASK; // null is just an exact IS_NOT_SINGLE_MASK
 pub const NO_LABEL: u32 = 0xff;
 pub const FLOAT32_ONE: u32 = 1065353216;  // 1.0f32.to_bits()
+
+
 
 #[derive (Clone)]
 pub struct VowpalParser {
@@ -30,10 +33,23 @@ pub struct VowpalParser {
 
 #[derive(Debug)]
 pub struct FlushCommand;  // Parser returns FlushCommand to signal flush message
+#[derive(Debug)]
+pub struct HogwildLoadCommand { // Parser returns Hogwild Load as a command  
+    pub filename: String,
+}
+
+
 impl Error for FlushCommand {}
 impl fmt::Display for FlushCommand {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Not really an error: a flush command from client")
+        write!(f, "Not really an error: a \"flush\" command from client")
+    }
+}
+
+impl Error for HogwildLoadCommand {}
+impl fmt::Display for HogwildLoadCommand {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Not really an error: a \"hogwild_load\" command from client to load: {}", self.filename)
     }
 }
 
@@ -49,9 +65,12 @@ organization of records buffer
             - bits 1-31 are a feature hash
             - feature value is assumed to be 1.0
     -- if the most significant bit is one
-            - 15 next bits are the start offset, and lower 16 bits are the end offset of features beyond initial map
-            - the dynamic buffer consists of (hash of the feature name, f32 value of the feature) 
-[dynamic buffer of (u32 hash, f32 value of the feature]
+            - the second most significant bit indicates if this is "float namespace", which means that 
+                there are tripels instead of tuples in dynamic buffer
+            - 14 next bits are the start offset, and lower 16 bits are the end offset of features beyond initial map
+            - the dynamic buffer consists of (hash of the feature name, f32 value of the feature)
+            - or (hash of the fature name, 32 value of the feature, f32 parse of the feature name) 
+[dynamic buffer (of u32/f32 types, exact layout depends on the above bits)]
 */
 
 impl VowpalParser {
@@ -62,7 +81,7 @@ impl VowpalParser {
                             output_buffer: Vec::with_capacity(RECBUF_LEN*2),
                             namespace_hash_seeds: [0; 256],
                         };
-        rr.output_buffer.resize(vw.num_namespaces as usize * NAMESPACE_DESC_LEN + HEADER_LEN, 0);
+        rr.output_buffer.resize((vw.num_namespaces as u32 * NAMESPACE_DESC_LEN + HEADER_LEN) as usize, 0);
         for i in 0..vw.num_namespaces {
             let namespace_vwname_str = &vw.vw_source.entries[i].namespace_vwname;
             rr.namespace_hash_seeds[i] = murmur3::hash32(namespace_vwname_str);
@@ -84,6 +103,23 @@ impl VowpalParser {
         };
     }
 
+    // This is a very very slow implementation, but it's ok, this is called extremely infrequently to decode a command
+    pub fn parse_cmd(&self, i_start: usize, rowlen :usize) -> Result<Vec<Vec<u8>>, Box<dyn Error>> {
+        let mut o: Vec<Vec<u8>> = Vec::new();
+        let mut i_end = i_start;
+        while i_end < rowlen {
+            let mut out_vec : Vec<u8> = Vec::new();
+            while i_end < rowlen && self.tmp_read_buf[i_end] != 0x20 {
+                out_vec.push(self.tmp_read_buf[i_end]);
+                i_end += 1;
+            }
+            o.push(out_vec);
+            while i_end < rowlen && self.tmp_read_buf[i_end] == 0x20 {i_end += 1;}
+
+        }
+        Ok(o)
+    }
+
     pub fn next_vowpal(&mut self, input_bufread: &mut impl BufRead) -> Result<&[u32], Box<dyn Error>> {
             self.tmp_read_buf.truncate(0);
             let rowlen1 = match input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
@@ -92,11 +128,11 @@ impl VowpalParser {
                 Err(e) => Err(e)?
             };
 
-            let bufpos: usize = (self.vw_map.num_namespaces as usize) + HEADER_LEN;
+            let bufpos: usize = (self.vw_map.num_namespaces + HEADER_LEN as usize) as usize;
             self.output_buffer.truncate(bufpos);
-            for i in &mut self.output_buffer[0..bufpos] { *i = NULL };
+            for i in &mut self.output_buffer[0..bufpos] { *i = NO_FEATURES };
 
-            let mut current_char_num_of_features = 0;
+            let mut current_namespace_num_of_features = 0;
 
             unsafe {
                 let p = self.tmp_read_buf.as_ptr();
@@ -112,8 +148,22 @@ impl VowpalParser {
                         // "flush" ascii 66, 6C, 75, 73, 68
                         if rowlen1 >= 5 && *p.add(0) == 0x66  && *p.add(1) == 0x6C && *p.add(2) == 0x75 && *p.add(3) == 0x73 && *p.add(4) == 0x68 {
                             return Err(Box::new(FlushCommand))
+                        } else if rowlen1 >= "hogwild_load ".len() {
+                            // THIS IS SLOW, BUT IT IS CALLED VERY RARELY
+                            // IF WE WILL AVE COMMANDS CALLED MORE FREQUENTLY, WE WILL NEED A FASTER IMPLEMENTATION
+                            let vecs = self.parse_cmd(0, rowlen1)?;
+                            if vecs.len() == 2 {
+                                let command = String::from_utf8_lossy(&vecs[0]) ;
+                                if command == "hogwild_load" {
+                                    let filename = String::from_utf8_lossy(&vecs[1]);
+                                    return Err(Box::new(HogwildLoadCommand{filename: filename.to_string()}));
+                                }                            
+                            } else {
+                                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Cannot parse an example"))))
+                            }
                         } else {
-                            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown first character of the label: ascii {:?}", *p.add(0)))))
+                            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Cannot parse an example"))))
+//                            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown first character of the label: ascii {:?}", *p.add(0)))))
                         }
                     }
                 };
@@ -143,11 +193,11 @@ impl VowpalParser {
                 while *p.add(i_end) != 0x7c && i_end < rowlen { i_end += 1;};
                 
                 let mut current_namespace_hash_seed:u32 = 0;
-                let mut current_namespace_index_offset:usize = HEADER_LEN;
-                
+                let mut current_namespace_index_offset:usize = HEADER_LEN as usize;
+                let mut current_namespace_is_float_namespace = false;
+
                 let mut bufpos_namespace_start = 0;
                 let mut current_namespace_weight:f32 = 1.0;
-//                print!("AAAAAAAA\n");
                 while i_end < rowlen {
                     // <letter>[:<weight>]
                     
@@ -176,8 +226,9 @@ impl VowpalParser {
                             None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Feature name was not predeclared in vw_namespace_map.csv: {}", String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end_first_part])))))
                         };
                         current_namespace_hash_seed = *self.namespace_hash_seeds.get_unchecked(current_namespace_index);
-                        current_namespace_index_offset =  current_namespace_index * NAMESPACE_DESC_LEN + HEADER_LEN;
-                        current_char_num_of_features = 0;
+                        current_namespace_index_offset =  current_namespace_index * NAMESPACE_DESC_LEN as usize + HEADER_LEN as usize;
+                        current_namespace_num_of_features = 0;
+                        current_namespace_is_float_namespace = self.vw_map.map_index_to_save_as_float[current_namespace_index];
                         bufpos_namespace_start = self.output_buffer.len(); // this is only used if we will have multiple values
                     } else { 
                         // We have a feature! Let's hash it and write it to the buffer
@@ -195,20 +246,34 @@ impl VowpalParser {
                         // - first feature, no weights -> put it in-place
                         // - if it's second feature and first one was "simple", then promote it
                         // -- and then just add feature to the end of the buffer
-                        
-                        if current_namespace_weight == 1.0 && feature_weight == 1.0 && current_char_num_of_features == 0 {
+                        if current_namespace_weight == 1.0 && 
+                            feature_weight == 1.0 && 
+                            current_namespace_num_of_features == 0 && 
+                            current_namespace_is_float_namespace == false {
                             *self.output_buffer.get_unchecked_mut(current_namespace_index_offset) = h;
                         } else {
-                            if (current_char_num_of_features == 1) && (self.output_buffer.get_unchecked(current_namespace_index_offset) & IS_NOT_SINGLE_MASK) == 0 {
+                            if (current_namespace_num_of_features == 1) && (*self.output_buffer.get_unchecked(current_namespace_index_offset) & IS_NOT_SINGLE_MASK) == 0 {
                                 // We need to promote feature currently written in-place to out of place
                                 self.output_buffer.push(*self.output_buffer.get_unchecked(current_namespace_index_offset));
                                 self.output_buffer.push(FLOAT32_ONE);
+                                debug_assert_eq!(current_namespace_is_float_namespace, false);
                             }
                             self.output_buffer.push(h);
                             self.output_buffer.push((current_namespace_weight * feature_weight).to_bits());
-                            *self.output_buffer.get_unchecked_mut(current_namespace_index_offset) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
+                            if current_namespace_is_float_namespace == true {
+                                // The float_namespaces_skip_prefix allows us to parse a value A100, where A is one byte prefix which gets ignored
+                                let float_start = i_start + self.vw_map.vw_source.float_namespaces_skip_prefix as usize;
+                                let float_value:f32 = match i_end_first_part - float_start {
+                                    0 => f32::NAN,
+                                    _ => self.parse_float_or_error(float_start, i_end_first_part, "Failed parsing feature value to float (for float namespace)")?
+                                };
+                                self.output_buffer.push(float_value.to_bits());
+                                *self.output_buffer.get_unchecked_mut(current_namespace_index_offset) = IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
+                            } else {
+                                *self.output_buffer.get_unchecked_mut(current_namespace_index_offset) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
+                            }
                         }
-                        current_char_num_of_features += 1;
+                        current_namespace_num_of_features += 1;
                     }
                     i_end += 1;
                     
@@ -244,7 +309,7 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
 
         fn str_to_cursor(s: &str) -> Cursor<Vec<u8>> {
           Cursor::new(s.as_bytes().to_vec())
@@ -255,30 +320,30 @@ C,featureC
         let mut buf = str_to_cursor("1 |A a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6,  1, FLOAT32_ONE,  
                                                         2988156968 & MASK31, 
-                                                        NULL, 
-                                                        NULL]);
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES]);
  
         // we test a single record, single namespace, space at the end
         let mut buf = str_to_cursor("1 |A a \n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6,  1, FLOAT32_ONE,  
                                                         2988156968 & MASK31, 
-                                                        NULL, 
-                                                        NULL]);
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES]);
                                                         
 
         // we test a single record, single namespace, space after label
         let mut buf = str_to_cursor("1  |A a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6,  1, FLOAT32_ONE,  
                                                         2988156968 & MASK31, 
-                                                        NULL, 
-                                                        NULL]);
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES]);
                                                         
         // we test a single record, single namespace, space between namespace and label
         let mut buf = str_to_cursor("1 |A  a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6,  1, FLOAT32_ONE,  
                                                         2988156968 & MASK31, 
-                                                        NULL, 
-                                                        NULL]);
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES]);
                                                         
                                                         
                                                         
@@ -286,15 +351,15 @@ C,featureC
                                                         
         let mut buf = str_to_cursor("-1 |B b\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 0, FLOAT32_ONE,
-                                                        NULL, 
+                                                        NO_FEATURES, 
                                                         2422381320 & MASK31, 
-                                                        NULL]);
+                                                        NO_FEATURES]);
         // single namespace with two features
         let mut buf = str_to_cursor("1 |A a b\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [10, 1, FLOAT32_ONE,  
                                                         nd(6,10) | IS_NOT_SINGLE_MASK, 	// |A
-                                                        NULL, 				// |B 
-                                                        NULL, 				// |C
+                                                        NO_FEATURES, 				// |B 
+                                                        NO_FEATURES, 				// |C
                                                         2988156968 & MASK31, FLOAT32_ONE,   // |A a
                                                         3529656005 & MASK31, FLOAT32_ONE]); // |A b
         // two namespaces
@@ -302,14 +367,14 @@ C,featureC
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 0, FLOAT32_ONE,
                                                         2988156968 & MASK31, 
                                                         2422381320 & MASK31, 
-                                                        NULL]);
+                                                        NO_FEATURES]);
 
         // two namespaces, double space
         let mut buf = str_to_cursor("-1 |A a  |B b\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 0, FLOAT32_ONE,
                                                         2988156968 & MASK31, 
                                                         2422381320 & MASK31, 
-                                                        NULL]);
+                                                        NO_FEATURES]);
         
         let mut buf = str_to_cursor("1 |UNDECLARED_NAMESPACE a\n");
         let result = rr.next_vowpal(&mut buf);
@@ -320,8 +385,8 @@ C,featureC
         let mut buf = str_to_cursor("1 |A:1.0 a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 1, FLOAT32_ONE,
                                                         2988156968 & MASK31, 
-                                                        NULL, 
-                                                        NULL]);
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES]);
         // not a parsable number
         let mut buf = str_to_cursor("1 |A:not_a_parsable_number a\n");
         let result = rr.next_vowpal(&mut buf);
@@ -338,23 +403,23 @@ C,featureC
         let mut buf = str_to_cursor("1 |A:2.0 a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [8, 1, FLOAT32_ONE, 
                                                         nd(6, 8) | IS_NOT_SINGLE_MASK, 
-                                                        NULL, 
-                                                        NULL, 
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES, 
                                                         2988156968 & MASK31, 2.0f32.to_bits()]);
        // feature weight
         let mut buf = str_to_cursor("1 |A a:2.0\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [8, 1, FLOAT32_ONE, 
                                                         nd(6, 8) | IS_NOT_SINGLE_MASK, 
-                                                        NULL, 
-                                                        NULL, 
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES, 
                                                         2988156968 & MASK31, 2.0f32.to_bits()]);
 
        // two feature weights
         let mut buf = str_to_cursor("1 |A a:2.0 b:3.0\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [10, 1, FLOAT32_ONE, 
                                                         nd(6, 10) | IS_NOT_SINGLE_MASK, 
-                                                        NULL, 
-                                                        NULL, 
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES, 
                                                         2988156968 & MASK31, 2.0f32.to_bits(),
                                                         3529656005 & MASK31, 3.0f32.to_bits(),
                                                         ]);
@@ -363,8 +428,8 @@ C,featureC
         let mut buf = str_to_cursor("1 |A:3 a:2.0\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [8, 1, FLOAT32_ONE, 
                                                         nd(6, 8) | IS_NOT_SINGLE_MASK, 
-                                                        NULL, 
-                                                        NULL, 
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES, 
                                                         2988156968 & MASK31, 6.0f32.to_bits()]);
 
        // bad feature weight
@@ -378,8 +443,8 @@ C,featureC
         let mut buf = str_to_cursor("1 |A a b:2.0 c:3.0\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [12, 1, FLOAT32_ONE, 
                                                         nd(6, 12) | IS_NOT_SINGLE_MASK, 
-                                                        NULL, 
-                                                        NULL, 
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES, 
                                                         2988156968 & MASK31, 1.0f32.to_bits(),
                                                         3529656005 & MASK31, 2.0f32.to_bits(),
                                                         906509 & MASK31, 3.0f32.to_bits(),
@@ -393,15 +458,15 @@ C,featureC
         let mut buf = str_to_cursor("|A a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, NO_LABEL, FLOAT32_ONE,
                                                         2988156968 & MASK31, 
-                                                        NULL, 
-                                                        NULL]);
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES]);
 
         /* Should we support this ? 
         let mut buf = str_to_cursor(" |A a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, NO_LABEL, FLOAT32_ONE,
                                                         2988156968 & MASK31, 
-                                                        NULL, 
-                                                        NULL]);
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES]);
         */
                 
         //println!("{:?}", rr.output_buffer);
@@ -417,7 +482,7 @@ C,featureC
         let mut buf = str_to_cursor("$1");
         let result = rr.next_vowpal(&mut buf);
         assert!(result.is_err());
-        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Unknown first character of the label: ascii 36\" })");
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Cannot parse an example\" })");
 
         // Example importance is negative -> Error
         let mut buf = str_to_cursor("1 -0.1 |A a\n");
@@ -435,17 +500,131 @@ C,featureC
         let mut buf = str_to_cursor("1 0.1 |A a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 1, 0.1f32.to_bits(),
                                                         2988156968 & MASK31, 
-                                                        NULL, 
-                                                        NULL]);
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES]);
 
         // Example importance with bunch of spaces
         let mut buf = str_to_cursor("1  0.1  |A  a \n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 1, 0.1f32.to_bits(),
                                                         2988156968 & MASK31, 
-                                                        NULL, 
-                                                        NULL]);
-  
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES]);
+ 
+ 
+ 
+        // flush should return FlushCommand
+        let mut buf = str_to_cursor("flush");
+        assert_eq!(rr.next_vowpal(&mut buf).err().unwrap().is::<FlushCommand>(), true);
+
+        // flush should return FlushCommand
+        let mut buf = str_to_cursor("hogwild_load /path/to/filename");
+        let result = rr.next_vowpal(&mut buf).err().unwrap();
+        assert_eq!(result.is::<HogwildLoadCommand>(), true);
+        let hogwild_command = result.downcast_ref::<HogwildLoadCommand>().unwrap();
+        assert_eq!(hogwild_command.filename, "/path/to/filename");
+
+        // flush should return FlushCommand
+        let mut buf = str_to_cursor("hogwild_load   /path/to/filename");
+        let result = rr.next_vowpal(&mut buf).err().unwrap();
+        assert_eq!(result.is::<HogwildLoadCommand>(), true);
+        let hogwild_command = result.downcast_ref::<HogwildLoadCommand>().unwrap();
+        assert_eq!(hogwild_command.filename, "/path/to/filename");
+ 
+
+        // flush should return FlushCommand
+        let mut buf = str_to_cursor("hogwild_load   /path/to/filename  ");
+        let result = rr.next_vowpal(&mut buf).err().unwrap();
+        assert_eq!(result.is::<HogwildLoadCommand>(), true);
+        let hogwild_command = result.downcast_ref::<HogwildLoadCommand>().unwrap();
+        assert_eq!(hogwild_command.filename, "/path/to/filename");
+
+        // Check for two pathological cases - command without space, and command with a space but no file
+        let mut buf = str_to_cursor("hogwild_load");
+        let result = rr.next_vowpal(&mut buf);
+        assert!(result.is_err());
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Cannot parse an example\" })");
+
+        let mut buf = str_to_cursor("hogwild_load ");
+        let result = rr.next_vowpal(&mut buf);
+        assert!(result.is_err());
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Cannot parse an example\" })");
+ 
     }
+
+
+    #[test]
+    fn test_float_namespaces() {
+        fn str_to_cursor(s: &str) -> Cursor<Vec<u8>> {
+          Cursor::new(s.as_bytes().to_vec())
+        }
+
+        // Test for perfect vowpal-compatible hashing
+        let vw_map_string = r#"
+A,featureA
+B,featureB
+C,featureC
+"#;
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let mut rr = VowpalParser::new(&vw);
+        // we test a single record, single namespace, with string value "3"
+        let mut buf = str_to_cursor("-1 |B 3\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6, 0, FLOAT32_ONE,
+                                                        NO_FEATURES, 
+                                                        1775699190 & MASK31, 
+                                                        NO_FEATURES]);
+
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec!["featureB".to_string()], 0)).unwrap();
+        let mut rr = VowpalParser::new(&vw);
+        // we test a single record, single namespace, with string value "3" with weight "2"
+        let mut buf = str_to_cursor("-1 |B 3:2\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [9, 0, FLOAT32_ONE,
+                                                        NO_FEATURES, 
+                                                        nd(6, 9) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                                                        NO_FEATURES, 
+                                                        1775699190 & MASK31, 2.0f32.to_bits(), 3.0f32.to_bits()]);
+
+        let mut buf = str_to_cursor("-1 |B 3:2 4\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [12, 0, FLOAT32_ONE,
+                                                        NO_FEATURES, 
+                                                        nd(6, 12) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                                                        NO_FEATURES, 
+                                                        1775699190 & MASK31, 2.0f32.to_bits(), 3.0f32.to_bits(),
+                                                        382082293 & MASK31, 1.0f32.to_bits(), 4.0f32.to_bits(),
+                                                        
+                                                        ]);
+        let mut buf = str_to_cursor("-1 |B not_a_number\n");
+        let result = rr.next_vowpal(&mut buf);
+        assert!(result.is_err());
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Failed parsing feature value to float (for float namespace): not_a_number\" })");
+ 
+
+        // Now test with skip_prefix = 1 
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec!["featureB".to_string()], 1)).unwrap();
+        let mut rr = VowpalParser::new(&vw);
+        // we test a single record, single namespace, with string value "3" with weight "2"
+        let mut buf = str_to_cursor("-1 |B B3:2\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [9, 0, FLOAT32_ONE,
+                                                        NO_FEATURES, 
+                                                        nd(6, 9) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                                                        NO_FEATURES, 
+                                                        1416737454 & MASK31, 2.0f32.to_bits(), 3.0f32.to_bits()]);
+
+        // Because we skip one char, the float value of B is the float value of "" which is NAN
+        let mut buf = str_to_cursor("-1 |B B:2\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [9, 0, FLOAT32_ONE,
+                                                        NO_FEATURES, 
+                                                        nd(6, 9) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                                                        NO_FEATURES, 
+                                                        25602353 & MASK31, 2.0f32.to_bits(), f32::NAN.to_bits()]);
+
+
+        
+
+
+
+
+
+    } 
     
     #[test]
     fn test_multibyte_namespaces() {
@@ -455,7 +634,7 @@ AA,featureA
 BB,featureB
 CC,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
 
         fn str_to_cursor(s: &str) -> Cursor<Vec<u8>> {
           Cursor::new(s.as_bytes().to_vec())
@@ -466,15 +645,15 @@ CC,featureC
         let mut buf = str_to_cursor("1 |AA a\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [6,  1, FLOAT32_ONE,  
                                                         292540976 & MASK31, 
-                                                        NULL, 
-                                                        NULL]);
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES]);
  
         // feature weight + namespace weight
         let mut buf = str_to_cursor("1 |AA:3 a:2.0\n");
         assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [8, 1, FLOAT32_ONE, 
                                                         nd(6, 8) | IS_NOT_SINGLE_MASK, 
-                                                        NULL, 
-                                                        NULL, 
+                                                        NO_FEATURES, 
+                                                        NO_FEATURES, 
                                                         292540976 & MASK31, 6.0f32.to_bits()]);
 
 

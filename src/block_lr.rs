@@ -65,8 +65,9 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
                             update:bool) -> (f32, f32) {
         let mut wsum:f32 = 0.0;
         unsafe {
-            for (i, hashvalue) in fb.lr_buffer.iter().enumerate() {
+            for hashvalue in fb.lr_buffer.iter() {
                 // Prefetch couple of indexes from the future to prevent pipeline stalls due to memory latencies
+//            for (i, hashvalue) in fb.lr_buffer.iter().enumerate() {
                 // _mm_prefetch(mem::transmute::<&f32, &i8>(&self.weights.get_unchecked((fb.lr_buffer.get_unchecked(i+8).hash) as usize).weight), _MM_HINT_T0);  // No benefit for now
                 let feature_index     = hashvalue.hash;
                 let feature_value:f32 = hashvalue.value;
@@ -101,7 +102,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
             for val in fbuf {
                 let hash = val.hash as usize;
                 let feature_value:f32 = val.value;
-                wsum += self.weights.get_unchecked(hash).weight * feature_value;    
+                wsum += self.weights.get_unchecked(hash).weight * feature_value;
             }
         }
         let (next_regressor, further_blocks) = further_blocks.split_at(1);

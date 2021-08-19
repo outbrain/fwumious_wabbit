@@ -16,9 +16,10 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use crate::vwmap;
 
 const CACHE_HEADER_MAGIC_STRING: &[u8; 4] = b"FWCA";    // Fwumious Wabbit CAche
-const CACHE_HEADER_VERSION:u32 = 9;
+const CACHE_HEADER_VERSION:u32 = 10; 
 /*
 Version incompatibilites:
+9->10: enable binning
 8->9: enabled multi-byte feature names in vw files
 7->8: add example importance to the parsed buffer format
 */
@@ -27,7 +28,6 @@ Version incompatibilites:
 // 4 bytes: Magic bytes
 // u32: Version of the cache format
 // u_size + blob: json encoding of vw_source
-// u_size + blob: json encoding of model_instance
 // ...cached examples
 
 
@@ -98,6 +98,7 @@ impl RecordCache {
                     }
                 }
             }
+            
             if !rc.reading {
                 rc.writing = true;
                 println!("creating cache file = {}", final_filename );
