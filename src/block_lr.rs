@@ -99,7 +99,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
         let fbuf = &fb.lr_buffer;
         let mut wsum:f32 = 0.0;
         unsafe {
-            for val in fb.lr_buffer.iter() {
+            for val in fbuf {
                 let hash = val.hash as usize;
                 let feature_value:f32 = val.value;
                 wsum += self.weights.get_unchecked(hash).weight * feature_value;
