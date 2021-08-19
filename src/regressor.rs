@@ -16,7 +16,9 @@ use crate::feature_buffer;
 use crate::optimizer;
 use optimizer::OptimizerTrait;
 use crate::block_ffm::BlockFFM;
+use crate::block_affm::BlockAFFM;
 use crate::block_lr::BlockLR;
+use crate::block_alr::BlockALR;
 use crate::block_loss_functions::BlockSigmoid;
 
 
@@ -44,6 +46,7 @@ pub trait BlockTrait {
 
     /// Sets internal state of weights based on some completely object-dependent parameters
     fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>>;
+    fn debug_output(&mut self, mi: &model_instance::ModelInstance, aa: i32) {}
 }
 
 
@@ -82,13 +85,22 @@ impl Regressor  {
         };
 
         // A bit more elaborate than necessary. Let's really make it clear what's happening
-        let mut reg_lr = BlockLR::<L>::new_without_weights(mi).unwrap();
-        rg.blocks_boxes.push(reg_lr);
-
-        if mi.ffm_k > 0 {
-            let mut reg_ffm = BlockFFM::<L>::new_without_weights(mi).unwrap();
-            rg.blocks_boxes.push(reg_ffm);
+        if mi.attention {
+            let mut reg_lr = BlockALR::<L>::new_without_weights(mi).unwrap();
+            rg.blocks_boxes.push(reg_lr);
+            if mi.ffm_k > 0 {
+                let mut reg_ffm = BlockAFFM::<L>::new_without_weights(mi).unwrap();
+                rg.blocks_boxes.push(reg_ffm);
+            }
+        } else {
+            let mut reg_lr = BlockLR::<L>::new_without_weights(mi).unwrap();
+            rg.blocks_boxes.push(reg_lr);
+            if mi.ffm_k > 0 {
+                let mut reg_ffm = BlockFFM::<L>::new_without_weights(mi).unwrap();
+                rg.blocks_boxes.push(reg_ffm);
+            }
         }
+                    
                     
         let mut reg_sigmoid = BlockSigmoid::new_without_weights(mi).unwrap();
         rg.blocks_boxes.push(reg_sigmoid);
@@ -142,6 +154,13 @@ impl Regressor  {
         let prediction_probability = current[0].forward(further_blocks, 0.0, fb);
         return prediction_probability
     }
+
+    pub fn debug_output(&mut self, mi: &model_instance::ModelInstance, aa: i32) {
+        for v in &mut self.blocks_boxes {
+            v.debug_output(mi, aa);
+        }
+    }
+
     
     // Yeah, this is weird. I just didn't want to break the format compatibility at this point
     pub fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
@@ -238,8 +257,8 @@ mod tests {
         let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
         // Empty model: no matter how many features, prediction is 0.5
         assert_eq!(re.learn(&lr_vec(vec![]), false), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), false), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), false), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}]), false), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}, HashAndValue{hash:2, value: 1.0, combo_index: 0}]), false), 0.5);
     }
 
     #[test]
@@ -250,7 +269,7 @@ mod tests {
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
         
-        let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);
+        let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}]);
         
         // Here learning rate mechanism does not affect the results, so let's verify three different ones
         let mut regressors: Vec<Box<Regressor>> = vec![
@@ -276,7 +295,7 @@ mod tests {
         mi.power_t = 0.0;
         
         let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
-        let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash: 1, value: 2.0}]);
+        let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}, HashAndValue{hash: 1, value: 2.0, combo_index: 0}]);
 
         assert_eq!(re.learn(vec_in, true), 0.5);
         assert_eq!(re.learn(vec_in, true), 0.38936076);
@@ -293,9 +312,9 @@ mod tests {
         
         let mut re = Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi);
         
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true), 0.4750208);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true), 0.45788094);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0, combo_index: 0}]), true), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0, combo_index: 0}]), true), 0.4750208);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0, combo_index: 0}]), true), 0.45788094);
     }
 
     #[test]
@@ -310,9 +329,9 @@ mod tests {
         let mut re = get_regressor_with_weights(&mi);
         let mut p: f32;
         
-        p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true);
+        p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0, combo_index: 0}]), true);
         assert_eq!(p, 0.5);
-        p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true);
+        p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0, combo_index: 0}]), true);
         if optimizer::FASTMATH_LR_LUT_BITS == 12 { 
             assert_eq!(p, 0.47539312);
         } else if optimizer::FASTMATH_LR_LUT_BITS == 11 { 
@@ -332,9 +351,9 @@ mod tests {
         
         let mut re = Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi);
         // Here we take twice two features and then once just one
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true), 0.45016602);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), true), 0.45836908);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}, HashAndValue{hash:2, value: 1.0, combo_index: 0}]), true), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}, HashAndValue{hash:2, value: 1.0, combo_index: 0}]), true), 0.45016602);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}]), true), 0.45836908);
     }
 
     #[test]
@@ -346,9 +365,9 @@ mod tests {
         
         let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
         
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true), 0.45016602);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true), 0.40611085);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0, combo_index: 0}]), true), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0, combo_index: 0}]), true), 0.45016602);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0, combo_index: 0}]), true), 0.40611085);
     }
 
     #[test]
@@ -362,7 +381,7 @@ mod tests {
         
         let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
         
-        let mut fb_instance = lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);
+        let mut fb_instance = lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}]);
         fb_instance.example_importance = 0.5;
         assert_eq!(re.learn(&fb_instance, true), 0.5);
         assert_eq!(re.learn(&fb_instance, true), 0.49375027);
@@ -370,4 +389,3 @@ mod tests {
     }
 
 }
-

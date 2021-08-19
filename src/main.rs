@@ -33,7 +33,9 @@ mod optimizer;
 mod version;
 mod consts;
 mod block_ffm;
+mod block_affm;
 mod block_lr;
+mod block_alr;
 mod block_loss_functions;
 mod block_helpers;
 mod multithread_helpers;
@@ -178,6 +180,11 @@ fn main2() -> Result<(), Box<dyn Error>>  {
                 }
             } 
             
+            // AFFM DEBUG
+            if example_num == predictions_after {
+                re.debug_output(&mi, 1);
+            }
+            
             if example_num > predictions_after {
                 match predictions_file.as_mut() {
                     Some(file) =>  write!(file, "{:.6}\n", prediction)?,
@@ -191,6 +198,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         let elapsed = now.elapsed();
         println!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
 
+        re.debug_output(&mi, 0); // AFFM
         match final_regressor_filename {
             Some(filename) => persistence::save_regressor_to_filename(filename, &mi, &vw, re).unwrap(),
             None => {}

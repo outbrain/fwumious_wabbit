@@ -66,6 +66,23 @@ pub struct ModelInstance {
     #[serde(default = "default_f32_zero")]
     pub ffm_power_t: f32,
 
+    #[serde(default = "default_bool_false")]
+    pub attention: bool,
+    #[serde(default = "default_f32_zero")]
+    pub attention_learning_rate: f32,    
+    #[serde(default = "default_f32_zero")]
+    pub attention_power_t: f32,
+    #[serde(default = "default_f32_zero")]
+    pub attention_init_acc_gradient: f32,
+    #[serde(default = "default_f32_zero")]
+    pub attention_l2: f32,
+    #[serde(default = "default_f32_zero")]
+    pub attention_snap_to_zero: f32,
+
+    #[serde(default = "default_f32_zero")]
+    pub l2: f32,
+
+
     #[serde(default = "default_optimizer_adagrad")]
     pub optimizer: Optimizer,
     
@@ -117,8 +134,15 @@ impl ModelInstance {
             ffm_init_zero_band: 0.0,
             ffm_init_acc_gradient: 0.0,
             init_acc_gradient: 1.0,
+            attention: false,
+            attention_init_acc_gradient: 1.0,
+            attention_power_t: 0.25,
+            attention_learning_rate: 0.1,            
+            attention_l2: 0.0,            
+            attention_snap_to_zero: 0.0,            
             optimizer: Optimizer::SGD,
             transform_namespaces: feature_transform_parser::NamespaceTransforms::new(),
+            l2: 0.0,
         };
         Ok(mi)
     }
@@ -270,6 +294,14 @@ impl ModelInstance {
             }
             mi.init_acc_gradient = val.parse()?;
         }
+
+        if let Some(val) = cl.value_of("attention_init_acc_gradient") {
+            mi.attention_init_acc_gradient = val.parse()?;
+        } else {
+            mi.attention_init_acc_gradient = mi.init_acc_gradient;
+        }
+        println!("attention init acc gradient {}", mi.attention_init_acc_gradient);
+
         
         if let Some(val) = cl.value_of("ffm_init_acc_gradient") {
             mi.ffm_init_acc_gradient = val.parse()?;
@@ -320,6 +352,12 @@ impl ModelInstance {
         }
 
 
+        if let Some(val) = cl.value_of("attention_learning_rate") {
+            mi.attention_learning_rate = val.parse()?;
+        } else {
+            mi.attention_learning_rate = mi.learning_rate;
+        }
+
 
 
         if let Some(val) = cl.value_of("minimum_learning_rate") {
@@ -335,6 +373,28 @@ impl ModelInstance {
             mi.ffm_power_t = mi.power_t;
         }
         
+        if cl.is_present("attention") {
+            mi.attention = true;
+        }
+        
+        if let Some(val) = cl.value_of("attention_power_t") {
+            mi.attention_power_t = val.parse()?;
+        } else {
+            mi.attention_power_t = mi.power_t;
+        }
+
+        if let Some(val) = cl.value_of("attention_l2") {
+            mi.attention_l2 = val.parse()?;
+        } else {
+            mi.attention_l2 = 0.0;
+        }
+
+        if let Some(val) = cl.value_of("attention_snap_to_zero") {
+            mi.attention_snap_to_zero = val.parse()?;
+        } else {
+            mi.attention_snap_to_zero = 0.0;
+        }
+
         if let Some(val) = cl.value_of("link") {
             if val != "logistic" {
                 return Err(Box::new(IOError::new(ErrorKind::Other, format!("--link only supports 'logistic'"))))
