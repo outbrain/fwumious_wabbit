@@ -3,8 +3,6 @@ use std::any::Any;
 use std::mem;
 use std::slice;
 use std::sync::Arc;
-use core::arch::x86_64::*;
-use merand48::*;
 use std::io;
 use std::io::Cursor;
 use std::error::Error;
@@ -18,7 +16,7 @@ use optimizer::OptimizerTrait;
 use crate::block_ffm::BlockFFM;
 use crate::block_lr::BlockLR;
 use crate::block_loss_functions::BlockSigmoid;
-
+use serde_json::Value;
 
 
 pub trait BlockTrait {
@@ -33,6 +31,11 @@ pub trait BlockTrait {
                          further_blocks: &[Box<dyn BlockTrait>], 
                          wsum: f32, 
                          fb: &feature_buffer::FeatureBuffer) -> f32;
+    fn audit_forward(&self, 
+                         wsum_input: f32, 
+                         output: f32,
+                         fb: &feature_buffer::FeatureBuffer);
+
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance);
     fn get_serialized_len(&self) -> usize;
@@ -123,6 +126,7 @@ impl Regressor  {
             // Important to know: learn() functions in blocks aren't guaranteed to be thread-safe
             panic!("This regressor is immutable, you cannot call learn() with update = true");
         }
+        fb.reset_audit_json();
         let update:bool = update && (fb.example_importance != 0.0);
         if !update { // Fast-path for no-update case
             return self.predict(fb);
@@ -137,6 +141,7 @@ impl Regressor  {
     
     pub fn predict(&self, fb: &feature_buffer::FeatureBuffer) -> f32 {
         // TODO: we should find a way of not using unsafe
+        fb.reset_audit_json();
         let blocks_list = &self.blocks_boxes[..];
         let (current, further_blocks) = blocks_list.split_at(1);
         let prediction_probability = current[0].forward(further_blocks, 0.0, fb);
@@ -221,14 +226,9 @@ mod tests {
 
     /* LR TESTS */
     fn lr_vec(v:Vec<feature_buffer::HashAndValue>) -> feature_buffer::FeatureBuffer {
-        feature_buffer::FeatureBuffer {
-                    label: 0.0,
-                    example_importance: 1.0,
-                    example_number: 0,
-                    lr_buffer: v,
-                    ffm_buffer: Vec::new(),
-                    ffm_fields_count: 0,
-        }
+        let mut fb = feature_buffer::FeatureBuffer::new();
+        fb.lr_buffer = v;
+        fb
     }
 
 
