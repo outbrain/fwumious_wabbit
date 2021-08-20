@@ -4,6 +4,8 @@
 #![allow(unused_mut)]
 #![allow(non_snake_case)]
 #![allow(redundant_semicolons)]
+
+
 use std::error::Error;
 use std::path::Path;
 use std::fs::File;
@@ -15,6 +17,9 @@ use std::f32;
 use std::collections::VecDeque;
 use std::time::Instant;
 use flate2::read::MultiGzDecoder;
+use std::io::Error as IOError;
+use std::io::ErrorKind;
+use serde_json::to_string_pretty;
 
 
 #[macro_use]
@@ -88,7 +93,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
     } else {
         let vw: vwmap::VwNamespaceMap;
         let mut re: regressor::Regressor;
-        let mi: model_instance::ModelInstance;
+        let mut mi: model_instance::ModelInstance; // The only reason mi is mutable is to enable audit_mode... we might want to have it immutable
 
         if let Some(filename) = cl.value_of("initial_regressor") {
             println!("initial_regressor = {}", filename);
@@ -106,6 +111,11 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             re = regressor::get_regressor_with_weights(&mi);
         };
         
+        // We want to enable audit based on a command line irrespecitve of loading a model or starting from scratch
+        if cl.is_present("audit") {
+            mi.enable_audit(&vw);
+        }
+        
         let input_filename = cl.value_of("data").expect("--data expected");
         let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"), &vw);
         let mut fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
@@ -121,6 +131,10 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             Some(delay) => delay.parse()?,
             None => 0
         };
+        if prediction_model_delay > 0 && mi.audit_mode {
+            println!("Audit mode is incompatible with prediction model delay, exiting!"); // We just didn't write the code
+            return Err(Box::new(IOError::new(ErrorKind::Other, "Incompatible command line parameters")));
+        }
         
         let mut delayed_learning_fbs: VecDeque<feature_buffer::FeatureBuffer> = VecDeque::with_capacity(prediction_model_delay as usize);
 
@@ -169,11 +183,15 @@ fn main2() -> Result<(), Box<dyn Error>>  {
                     None => !testonly
                 };
                 prediction = re.learn(&fbt.feature_buffer, update);
+                if mi.audit_mode {
+                    println!("{}", to_string_pretty(&fbt.feature_buffer.audit_json).unwrap());
+
+                }
             } else {
                 if example_num > predictions_after {
                     prediction = re.learn(&fbt.feature_buffer, false);
                 }
-                delayed_learning_fbs.push_back(fbt.feature_buffer.clone());
+                delayed_learning_fbs.push_back(fbt.feature_buffer.clone());          // TODO - this is now a pretty bad idea as FeatureBuffer got really fat
                 if (prediction_model_delay as usize) < delayed_learning_fbs.len() {
                     let delayed_buffer = delayed_learning_fbs.pop_front().unwrap();
                     re.learn(&delayed_buffer, !testonly);

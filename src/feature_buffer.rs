@@ -1,8 +1,12 @@
+use serde_json::{Value, Map};
 use crate::model_instance;
 use crate::parser;
 use crate::feature_transform_executor;
 use crate::feature_transform_parser;
 use fasthash::murmur3;
+use std::cell::RefCell;
+use std::sync::Arc;
+
 
 const VOWPAL_FNV_PRIME:u32 = 16777619;	// vowpal magic number
 //const CONSTANT_NAMESPACE:usize = 128;
@@ -31,8 +35,14 @@ pub struct FeatureBuffer {
     pub lr_buffer: Vec<HashAndValue>,
     pub ffm_buffer: Vec<HashAndValueAndSeq>,
     pub ffm_fields_count: u32,
-}
 
+    // Maybe all these should be moved out and then having a composable
+    pub audit_json: RefCell<Value>,
+    pub audit_mode: bool,
+    pub audit_aux_data: model_instance::AuditData,
+    pub lr_buffer_audit: Vec<i32>, // Corresponding ids of feature combos from lr_buffer
+    pub ffm_buffer_audit: Vec<u32>, // Corresponding ids of namespace indexes
+}
 
 
 
@@ -48,6 +58,40 @@ pub struct FeatureBufferTranslator {
     pub ffm_hash_mask: u32,
     pub transform_executors: feature_transform_executor::TransformExecutors,
 }
+
+impl FeatureBuffer {
+    pub fn new() -> FeatureBuffer {
+        FeatureBuffer {
+            label: 0.0,
+            example_importance: 1.0,
+            example_number: 0,
+            lr_buffer: Vec::new(),
+            ffm_buffer: Vec::new(),
+            ffm_fields_count: 0,
+            audit_json: RefCell::new(Value::Null),
+            audit_mode: false,
+            audit_aux_data: model_instance::default_audit_data(),
+            lr_buffer_audit: Vec::new(),
+            ffm_buffer_audit: Vec::new(),
+        }
+    }
+
+    pub fn add_audit_json(&self, mut audit_json: Map<String, Value>) {
+        let old_value = self.audit_json.replace(Value::Null);
+        audit_json.insert("predcessor".to_string(), old_value);
+        self.audit_json.replace(Value::Object(audit_json));
+    }
+    pub fn reset_audit_json(&self) {
+        self.audit_json.replace(Value::Null);
+    }
+
+}
+
+
+
+
+
+
 
 // A macro that takes care of decoding the individual feature - which can have two different encodings
 // this simplifies a lot of the code, as it is used often
@@ -139,14 +183,11 @@ impl FeatureBufferTranslator {
         let ffm_hash_mask = ((1 << mi.ffm_bit_precision) -1) ^ dimensions_mask;
 
 
-        let mut fb = FeatureBuffer {
-            label: 0.0,
-            example_importance: 1.0,
-            example_number: 0,
-            lr_buffer: Vec::new(),
-            ffm_buffer: Vec::new(),
-            ffm_fields_count: 0,
-        };      
+        let mut fb = FeatureBuffer::new();
+        if mi.audit_mode {
+            fb.audit_aux_data = mi.audit_aux_data.as_ref().unwrap().clone();
+            fb.audit_mode = true;
+        }
         
 
         // avoid doing any allocations in translate
@@ -179,7 +220,7 @@ impl FeatureBufferTranslator {
             let lr_buffer = &mut self.feature_buffer.lr_buffer;
             lr_buffer.truncate(0);
             self.feature_buffer.label = record_buffer[parser::LABEL_OFFSET] as f32;  // copy label
-            self.feature_buffer.example_importance = f32::from_bits(record_buffer[parser::EXAMPLE_IMPORTANCE_OFFSET]);    
+            self.feature_buffer.example_importance = f32::from_bits(record_buffer[parser::EXAMPLE_IMPORTANCE_OFFSET]);
             self.feature_buffer.example_number = example_number;
             let mut output_len:usize = 0;
             let mut hashes_vec_in : &mut Vec<HashAndValue> = &mut self.hashes_vec_in;
@@ -198,6 +239,11 @@ impl FeatureBufferTranslator {
                                                      value: hash_value * feature_combo_weight,
                                                      combo_index: combo_index});
                     });
+                    if self.model_instance.audit_mode {
+                        while lr_buffer.len() > self.feature_buffer.lr_buffer_audit.len() {
+                            self.feature_buffer.lr_buffer_audit.push(combo_index as i32);
+                        }
+                    }
                 } else {
                     hashes_vec_in.truncate(0);
                     feature_reader!(record_buffer, self.transform_executors, namespace_index, hash_index, hash_value, {
@@ -220,6 +266,12 @@ impl FeatureBufferTranslator {
                                                     value: handv.value * feature_combo_weight,
                                                     combo_index: combo_index});
                     }
+                    if self.model_instance.audit_mode {
+                        while lr_buffer.len() > self.feature_buffer.lr_buffer_audit.len() {
+                            self.feature_buffer.lr_buffer_audit.push(combo_index as i32);
+                        }
+                    }
+
                 }
             }
             // add the constant
@@ -227,6 +279,11 @@ impl FeatureBufferTranslator {
                     lr_buffer.push(HashAndValue{hash: CONSTANT_HASH & self.lr_hash_mask,
                                                 value: 1.0,
                                                 combo_index: u32::MAX});
+                    if self.model_instance.audit_mode {
+                        while lr_buffer.len() > self.feature_buffer.lr_buffer_audit.len() {
+                            self.feature_buffer.lr_buffer_audit.push(-1);   // -1 denotes the constant
+                        }
+                    }
             }
 
             // FFM loops have not been optimized yet
@@ -236,6 +293,9 @@ impl FeatureBufferTranslator {
                 // but in theory we could support also combo features
                 let ffm_buffer = &mut self.feature_buffer.ffm_buffer;
                 ffm_buffer.truncate(0);
+                if self.model_instance.audit_mode {
+                    self.feature_buffer.ffm_buffer_audit.truncate(0);
+                }
                 self.feature_buffer.ffm_fields_count = self.model_instance.ffm_fields.len() as u32;    
                 //let feature_len = self.feature_buffer.ffm_fields_count * self.model_instance.ffm_k;
                 for (contra_field_index, ffm_field) in self.model_instance.ffm_fields.iter().enumerate() {
@@ -246,6 +306,11 @@ impl FeatureBufferTranslator {
                                                                         value: hash_value,
                                                                         contra_field_index: contra_field_index as u32 * self.model_instance.ffm_k as u32});
                         });
+                        if self.model_instance.audit_mode {
+                            while ffm_buffer.len() > self.feature_buffer.ffm_buffer_audit.len() {
+                                self.feature_buffer.ffm_buffer_audit.push(*namespace_index);
+                            }
+                        }
                     }
                 }
             }

@@ -4,8 +4,10 @@ use std::io::ErrorKind;
 
 use std::io::Read;
 use std::fs::File;
-use serde::{Serialize,Deserialize};//, Deserialize};
+use serde::{Serialize,Deserialize};
 use serde_json::{Value};
+use std::collections::HashMap;
+
 
 use crate::vwmap;
 use crate::consts;
@@ -17,6 +19,15 @@ pub struct FeatureComboDesc {
     pub feature_indices: Vec<u32>,
     pub weight:f32,
 }
+
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AuditData {
+    pub namespace_index_to_string: HashMap<u32, String>,
+    pub combo_index_to_string: HashMap<i32, String>,
+    pub field_index_to_string: HashMap<u32, String>,
+}
+
 
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Copy)]
@@ -88,12 +99,31 @@ pub struct ModelInstance {
     
     pub transform_namespaces: feature_transform_parser::NamespaceTransforms,
     
+    
+    #[serde(default = "default_bool_false")]
+    pub audit_mode: bool,
+
+    #[serde(default = "default_audit_data_option")]
+    pub audit_aux_data: Option<AuditData>,
 }
+
+
+
+
 
 fn default_u32_zero() -> u32{0}
 fn default_f32_zero() -> f32{0.0}
 fn default_bool_false() -> bool{false}
 fn default_optimizer_adagrad() -> Optimizer{Optimizer::Adagrad}
+pub fn default_audit_data() -> AuditData {
+    AuditData{
+        namespace_index_to_string: HashMap::new(),
+        combo_index_to_string: HashMap::new(),
+        field_index_to_string: HashMap::new(),
+    }
+}
+fn default_audit_data_option() -> Option<AuditData>{None}
+
 
 
 pub fn get_float_namespaces<'a>(cl: &clap::ArgMatches<'a>) -> Result<(Vec<String>, u32), Box<dyn Error>> {
@@ -143,10 +173,41 @@ impl ModelInstance {
             optimizer: Optimizer::SGD,
             transform_namespaces: feature_transform_parser::NamespaceTransforms::new(),
             l2: 0.0,
+            audit_mode: false,
+            audit_aux_data: None,
         };
         Ok(mi)
     }
 
+    pub fn enable_audit(&mut self, vw: &vwmap::VwNamespaceMap) {
+        let mut audit_aux_data = default_audit_data();
+
+        for vw_entry in &vw.vw_source.entries {
+            audit_aux_data.namespace_index_to_string.insert(vw_entry.namespace_index, vw_entry.namespace_verbose.to_string());
+        }
+
+        for (combo_index, combo_desc) in self.feature_combo_descs.iter().enumerate() {
+            let mut names_list: Vec<String> = Vec::new();
+            for namespace_index in &combo_desc.feature_indices {
+                names_list.push(audit_aux_data.namespace_index_to_string[namespace_index].to_string());
+            }
+            
+            audit_aux_data.combo_index_to_string.insert(combo_index as i32, names_list.join(","));
+        }
+        audit_aux_data.combo_index_to_string.insert(-1, "Constant_feature".to_string());
+
+        for (field_index, field_vec) in self.ffm_fields.iter().enumerate() {
+            let mut names_list: Vec<String> = Vec::new();
+            for namespace_index in field_vec {
+                names_list.push(audit_aux_data.namespace_index_to_string[namespace_index].to_string());
+            }
+            audit_aux_data.field_index_to_string.insert(field_index as u32, names_list.join(","));
+        }
+        
+        
+        self.audit_aux_data = Some(audit_aux_data);
+        self.audit_mode = true;
+    }
     
     pub fn create_feature_combo_desc(&self, vw: &vwmap::VwNamespaceMap, s: &str) -> Result<FeatureComboDesc, Box<dyn Error>> {
 
@@ -426,7 +487,6 @@ impl ModelInstance {
         }
 
         
-        
         Ok(mi)
     }
 
@@ -568,10 +628,3 @@ C,featureC
 
 
 }
-
-
-
-
-
-
-

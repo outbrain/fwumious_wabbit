@@ -329,14 +329,11 @@ C,featureC
     }
 
     fn lr_and_ffm_vec(v1:Vec<feature_buffer::HashAndValue>, v2:Vec<feature_buffer::HashAndValueAndSeq>, ffm_fields_count:u32) -> feature_buffer::FeatureBuffer {
-        feature_buffer::FeatureBuffer {
-                    label: 0.0,
-                    example_importance: 1.0,
-                    example_number: 0,
-                    lr_buffer: v1,
-                    ffm_buffer: v2,
-                    ffm_fields_count: ffm_fields_count,
-        }
+        let mut fb = feature_buffer::FeatureBuffer::new();
+        fb.lr_buffer = v1;
+        fb.ffm_buffer = v2;
+        fb.ffm_fields_count = ffm_fields_count;
+        fb
     }
 
 
