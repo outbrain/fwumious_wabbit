@@ -21,8 +21,8 @@ pub struct VwNamespaceMap {
 // this is serializible source from which VwNamespaceMap can be constructed
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct VwNamespaceMapEntry {
-    namespace_char: char,
-    pub namespace_name: std::string::String,
+    pub namespace_vwname: std::string::String,
+    pub namespace_verbose: std::string::String,
     pub namespace_index: u32,
     namespace_save_as_float: bool, 
 }

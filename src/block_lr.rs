@@ -203,7 +203,7 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("".to_string(), 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
 
         mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
                                                         feature_indices: vec![0, 2], 

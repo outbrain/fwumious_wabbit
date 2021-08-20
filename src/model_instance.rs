@@ -159,7 +159,7 @@ impl ModelInstance {
         let mut audit_aux_data = default_audit_data();
 
         for vw_entry in &vw.vw_source.entries {
-            audit_aux_data.namespace_index_to_string.insert(vw_entry.namespace_index, vw_entry.namespace_name.to_string());
+            audit_aux_data.namespace_index_to_string.insert(vw_entry.namespace_index, vw_entry.namespace_verbose.to_string());
         }
 
         for (combo_index, combo_desc) in self.feature_combo_descs.iter().enumerate() {

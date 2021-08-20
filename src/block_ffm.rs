@@ -657,7 +657,7 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, ("".to_string(), 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
 
         mi.ffm_fields = vec![vec![0], vec![1,2]]; // we need this in the test in order to know which fields to output
         
