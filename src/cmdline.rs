@@ -251,7 +251,6 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .help("After how many examples start printing predictions")
                      .takes_value(true))
                     .arg(Arg::with_name("holdout_after")
-                     .conflicts_with("predictions_after")
                      .conflicts_with("testonly")
                      .required(false)
                      .long("holdout_after")
