@@ -63,12 +63,17 @@ impl NamespaceTransforms {
         for from_namespace_verbose in &from_namespaces_verbose {
             let from_namespace_index = get_namespace_id_verbose(self, vw, from_namespace_verbose)?;
             println!("from namespace verbose: {} from namespace index: {}",  from_namespace_verbose, from_namespace_index);
+            let mut namespace_is_float:bool;
             if from_namespace_index & TRANSFORM_NAMESPACE_MARK != 0 {
-                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Issue in parsing {}: From namespace ({}) cannot be an already transformed namespace", s, from_namespace_verbose))));
+                // Currently if the namespace is a transformed namespace, it cannot be float
+                namespace_is_float = false;
+            } else {
+                namespace_is_float= vw.map_index_to_save_as_float[from_namespace_index as usize]
             }
+            
             from_namespaces.push(Namespace{ namespace_index: from_namespace_index, 
                                             namespace_verbose: from_namespace_verbose.to_string(),
-                                            namespace_is_float: vw.map_index_to_save_as_float[from_namespace_index as usize] });
+                                            namespace_is_float: namespace_is_float });
          }
 
         let nt = NamespaceTransform {
@@ -138,7 +143,7 @@ pub fn name_char(c:char) -> bool {
 pub fn parse_identifier(input: &str) -> IResult<&str, String> {
     let (input, (_, first_char, rest, _)) = tuple((
                                                 character::complete::space0,
-                                                complete::one_of("abcdefghijklmnopqrstuvzxyABCDEFGHIJKLMNOPQRSTUVZXY_"),
+                                                complete::one_of("abcdefghijklmnopqrstuvwzxyABCDEFGHIJKLMNOPQRSTUVWZXY_"),
                                                 take_while(name_char), 
                                                 character::complete::space0
                                                 ))(input)?;
@@ -252,9 +257,9 @@ mod tests {
         assert_eq!(rw.2, vec!["BDE", "CG"]);
         assert_eq!(rw.3, vec![3f32, 1f32, 2.0]);
 
-        let r = parse_namespace_statement("a_bc=s_qrt(_BD_E_,C_G)(3,1,2.0)");
+        let r = parse_namespace_statement("a_bcw=s_qrt(_BD_E_,C_G)(3,1,2.0)");
         let (o, rw) = r.unwrap();
-        assert_eq!(rw.0, "a_bc");
+        assert_eq!(rw.0, "a_bcw");
         assert_eq!(rw.1, "s_qrt");
         assert_eq!(rw.2, vec!["_BD_E_", "C_G"]);
         assert_eq!(rw.3, vec![3f32, 1f32, 2.0]);

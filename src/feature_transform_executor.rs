@@ -53,7 +53,7 @@ pub struct ExecutorToNamespace {
 #[derive(Clone)]
 pub struct ExecutorFromNamespace {
     namespace_index: u32,
-    namespace_verbose: String,
+    namespace_verbose: String,	// This is actually not needed as we could just do a lookup each time
     namespace_is_float: bool,
 }
 
@@ -149,6 +149,8 @@ impl TransformExecutor {
             TransformerLogRatioBinner::create_function(function_name, &executor_namespaces_from, function_params, false)
         } else if function_name == "BinnerInterpolatedLogRatio" {
             TransformerLogRatioBinner::create_function(function_name, &executor_namespaces_from, function_params, true)
+        } else if function_name == "Combine" {
+            TransformerCombine::create_function(function_name, &executor_namespaces_from, function_params)
         } else if function_name == "MultiplyWeight" {
             TransformerMultiplyWeight::create_function(function_name, &executor_namespaces_from, function_params)
         } else {
@@ -273,15 +275,17 @@ impl TransformerBinner {
                         function_params: &Vec<f32>,
                         interpolated: bool,
                         ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
+
         if function_params.len() != 1 {
-            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes exactly one float argument, example {}(A)(2.0)", function_name, function_name))));            
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes exactly one float argument, example {}(A)(2.0)", function_name, function_name))));
         }
         if from_namespaces.len() != 1 {
-            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes exactly one namespace argument, example {}(A)(2.0)", function_name, function_name))));            
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes exactly one namespace argument, example {}(A)(2.0)", function_name, function_name))));
         }
+
         for namespace in from_namespaces.iter() {
             if !namespace.namespace_is_float {
-                return Err(Box::new(IOError::new(ErrorKind::Other, format!("All namespaces of function {} have to be flaot: From namespace ({}) has to be defined as --float_namespaces", function_name, namespace.namespace_verbose))));
+                return Err(Box::new(IOError::new(ErrorKind::Other, format!("All namespaces of function {} have to be float: From namespace ({}) has to be defined as --float_namespaces", function_name, namespace.namespace_verbose))));
             }
         }
 
@@ -347,7 +351,7 @@ impl TransformerLogRatioBinner {
         }
         for namespace in from_namespaces.iter() {
             if !namespace.namespace_is_float {
-                return Err(Box::new(IOError::new(ErrorKind::Other, format!("All namespaces of function {} have to be flaot: From namespace ({}) has to be defined as --float_namespaces", function_name, namespace.namespace_verbose))));
+                return Err(Box::new(IOError::new(ErrorKind::Other, format!("All namespaces of function {} have to be float: From namespace ({}) has to be defined as --float_namespaces", function_name, namespace.namespace_verbose))));
             }
         }
 
@@ -396,12 +400,102 @@ impl TransformerMultiplyWeight {
         if from_namespaces.len() != 1 {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes exactly one namespace argument, example {}(A)(2.0)", function_name, function_name))));            
         }
+        // We do not check if input namespace is float, MultiplyWeight does not require float namespace as input
+        
         Ok(Box::new(Self{from_namespace: from_namespaces[0].clone(),
                         multiplier: function_params[0], 
                         }))
     }
 }   
 
+
+
+// Combine Binner
+// Supporting max 5 input namespaces. Because 5 ought to be enough for everybody!
+//
+//
+
+#[derive(Clone)]
+struct TransformerCombine {
+    from_namespaces: [ExecutorFromNamespace; 5],
+    n_namespaces: u8,
+}
+
+impl FunctionExecutorTrait for TransformerCombine {
+    fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace, transform_executors: &TransformExecutors) {
+        // Sure this could have been written with either using:
+        //   - Stack machine: I didn't want to introduce another dynamic layer
+        //   - Automatic code generation: Didn't have time to learn macros that well
+        // So we are left with good old "spaghetti technique"
+        match self.n_namespaces {
+            2 =>    feature_reader!(record_buffer, transform_executors, self.from_namespaces[0].namespace_index, hash_index0, hash_value0, {
+                        feature_reader!(record_buffer, transform_executors, self.from_namespaces[1].namespace_index, hash_index1, hash_value1, {
+                            to_namespace.emit_i32((hash_index0 ^ hash_index1) as i32, hash_value0 * hash_value1, SeedNumber::Default);
+                        });
+                    }),
+            3 =>    feature_reader!(record_buffer, transform_executors, self.from_namespaces[0].namespace_index, hash_index0, hash_value0, {
+                        feature_reader!(record_buffer, transform_executors, self.from_namespaces[1].namespace_index, hash_index1, hash_value1, {
+                            feature_reader!(record_buffer, transform_executors, self.from_namespaces[2].namespace_index, hash_index2, hash_value2, {
+                                to_namespace.emit_i32((hash_index0 ^ hash_index1 ^ hash_index2) as i32, hash_value0 * hash_value1 * hash_value2, SeedNumber::Default);
+                            });
+                        });
+                    }),
+            4 =>    feature_reader!(record_buffer, transform_executors, self.from_namespaces[0].namespace_index, hash_index0, hash_value0, {
+                        feature_reader!(record_buffer, transform_executors, self.from_namespaces[1].namespace_index, hash_index1, hash_value1, {
+                            feature_reader!(record_buffer, transform_executors, self.from_namespaces[2].namespace_index, hash_index2, hash_value2, {
+                                feature_reader!(record_buffer, transform_executors, self.from_namespaces[3].namespace_index, hash_index3, hash_value3, {
+                                    to_namespace.emit_i32((hash_index0 ^ hash_index1 ^ hash_index2 ^ hash_index3) as i32, 
+                                                            hash_value0 * hash_value1 * hash_value2 * hash_value3, SeedNumber::Default);
+                                });
+                            });
+                        });
+                    }),
+            5 =>    feature_reader!(record_buffer, transform_executors, self.from_namespaces[0].namespace_index, hash_index0, hash_value0, {
+                        feature_reader!(record_buffer, transform_executors, self.from_namespaces[1].namespace_index, hash_index1, hash_value1, {
+                            feature_reader!(record_buffer, transform_executors, self.from_namespaces[2].namespace_index, hash_index2, hash_value2, {
+                                feature_reader!(record_buffer, transform_executors, self.from_namespaces[3].namespace_index, hash_index3, hash_value3, {
+                                    feature_reader!(record_buffer, transform_executors, self.from_namespaces[4].namespace_index, hash_index4, hash_value4, {
+                                        to_namespace.emit_i32((hash_index0 ^ hash_index1 ^ hash_index2 ^ hash_index3 ^ hash_index4) as i32, 
+                                                                hash_value0 * hash_value1 * hash_value2 * hash_value3 * hash_value4, SeedNumber::Default);
+                                    });                                                                
+                                });
+                            });
+                        });
+                    }),
+            _ => {
+                panic!("Impossible number of from_namespaces in function TransformCombine - this should have been caught at parsing stage")
+            } 
+                    
+        }
+    }
+}
+
+impl TransformerCombine {
+    fn create_function(
+                        function_name: &str, 
+                        from_namespaces: &Vec<ExecutorFromNamespace>, 
+                        function_params: &Vec<f32>,
+                        ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
+        if function_params.len() != 0 {
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes no float arguments {}(A)()", function_name, function_name))));
+        }
+        if from_namespaces.len() <2 || from_namespaces.len() >5 {
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes between two and five namespace arguments, example {}(A,B)()", function_name, function_name))));
+        }
+        // We do not check if input namespace is float, Combine does not require float namespace as input        
+
+        // We use fixed arrays, so we need to fill the array with defaults first
+        let c = ExecutorFromNamespace{namespace_index: 0, namespace_verbose: "dummy_name".to_owned(), namespace_is_float: false};
+        let mut executor_from_namespaces: [ExecutorFromNamespace;5] = [c.clone(),c.clone(),c.clone(),c.clone(),c.clone()];
+        for (x, namespace) in from_namespaces.iter().enumerate() {
+            executor_from_namespaces[x] = namespace.clone();
+        }
+
+        Ok(Box::new(Self{from_namespaces: executor_from_namespaces,
+                        n_namespaces: from_namespaces.len() as u8, 
+                        }))
+    }
+}   
 
 
 
@@ -670,21 +764,58 @@ mod tests {
     }
 
 
+    #[test]
+    fn test_transformercombine() {
+        
+        let from_namespace_1 = ExecutorFromNamespace {
+            namespace_index: 0,
+            namespace_verbose: "a".to_string(),
+            namespace_is_float: true,
+        };
 
 
+        let from_namespace_2 = ExecutorFromNamespace {
+            namespace_index: 1,
+            namespace_verbose: "b".to_string(),
+            namespace_is_float: false,
+        };
 
+        let to_namespace_index = 2;
+                            
+        let to_namespace_empty = ExecutorToNamespace {
+            namespace_index: to_namespace_index,
+            namespace_verbose: "c".to_string(),
+            namespace_seeds: default_seeds!(to_namespace_index),	// These are precomputed namespace seeds
+            tmp_data: Vec::new(),
+        };
+        
+        let transformer = TransformerCombine::create_function("Blah", &vec![from_namespace_1, from_namespace_2], &vec![]).unwrap();
 
+        let record_buffer = [10,	// length 
+                            0,	// label
+                            (1.0_f32).to_bits(), // Example weight 
+                            nd(5, 8) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                            nd(8, 10) | IS_NOT_SINGLE_MASK, 
+                            // Feature triple
+                            1775699190 & MASK31,    // Hash location 
+                            2.0f32.to_bits(),       // Feature value of the feature
+                            3.0f32.to_bits(),
+                            // Feature triple
+                            1775699190 & MASK31,    // Hash location 
+                            3.0f32.to_bits(),       // Feature value of the feature
+                            
+                            ];      
 
+        let mut to_namespace = to_namespace_empty.clone();
+        let mut transform_executors = TransformExecutors {executors: vec![]}; // not used
 
+        transformer.execute_function(&record_buffer, &mut to_namespace, &mut transform_executors);
 
-
-
-
-
-
-
-
-
+        // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
+        let mut to_namespace_comparison = to_namespace_empty.clone();
+        to_namespace_comparison.emit_i32((1775699190 ^ 1775699190) as i32, 6.0f32, SeedNumber::Default);
+        assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
+    }
 
 
 }
