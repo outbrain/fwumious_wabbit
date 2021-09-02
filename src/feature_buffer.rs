@@ -75,9 +75,11 @@ impl FeatureBufferTranslator {
         let lr_hash_mask = (1 << mi.bit_precision) -1;
         // Calculate ffm_hash_mask
         let mut ffm_bits_for_dimensions = 0;
-        while mi.ffm_k > (1 << (ffm_bits_for_dimensions)) {
+        let feature_weights_len = mi.ffm_k * (mi.ffm_fields.len() as u32);
+        while feature_weights_len > (1 << (ffm_bits_for_dimensions)) {
             ffm_bits_for_dimensions += 1;
         }
+
         let dimensions_mask = (1 << ffm_bits_for_dimensions) - 1;
         // in ffm we will simply mask the lower bits, so we spare them for k
         let ffm_hash_mask = ((1 << mi.ffm_bit_precision) -1) ^ dimensions_mask;
