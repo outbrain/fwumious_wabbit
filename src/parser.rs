@@ -96,6 +96,15 @@ impl VowpalParser {
     #[inline(always)]
     pub fn parse_float_or_error(&self, i_start: usize, i_end :usize, error_str: &str) -> Result<f32, Box<dyn Error>> {
         unsafe {
+//            println!("{}", str::from_utf8_unchecked(&self.tmp_read_buf[i_start..i_end]));
+            if i_end - i_start == 4 && 
+                self.tmp_read_buf[i_start + 0] == 'N' as u8 &&
+                self.tmp_read_buf[i_start + 1] == 'O' as u8 &&
+                self.tmp_read_buf[i_start + 2] == 'N' as u8 &&
+                self.tmp_read_buf[i_start + 3] == 'E' as u8 {
+                return Ok(f32::NAN)
+            } 
+                
             match str::from_utf8_unchecked(&self.tmp_read_buf[i_start..i_end]).parse::<f32>() {
                 Ok(f) => return Ok(f),
                 Err(_e) => return Err(Box::new(IOError::new(ErrorKind::Other, format!("{}: {}", error_str, String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end])))))
@@ -596,6 +605,8 @@ C,featureC
         let result = rr.next_vowpal(&mut buf);
         assert!(result.is_err());
         assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Failed parsing feature value to float (for float namespace): not_a_number\" })");
+
+        let mut buf = str_to_cursor("-1 |B NONE\n");
  
 
         // Now test with skip_prefix = 1 
@@ -616,6 +627,14 @@ C,featureC
                                                         nd(6, 9) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
                                                         NO_FEATURES, 
                                                         25602353 & MASK31, 2.0f32.to_bits(), f32::NAN.to_bits()]);
+
+        let mut buf = str_to_cursor("-1 |B BNONE:2\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [9, 0, FLOAT32_ONE,
+                                                        NO_FEATURES, 
+                                                        nd(6, 9) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                                                        NO_FEATURES, 
+                                                        1846432377 & MASK31, 2.0f32.to_bits(), f32::NAN.to_bits()]);
+
 
 
         

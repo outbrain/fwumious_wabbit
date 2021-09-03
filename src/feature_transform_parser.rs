@@ -59,10 +59,11 @@ impl NamespaceTransforms {
             namespace_is_float: false,
         };
         
+        
         let mut from_namespaces: Vec<Namespace> = Vec::new();
         for from_namespace_verbose in &from_namespaces_verbose {
             let from_namespace_index = get_namespace_id_verbose(self, vw, from_namespace_verbose)?;
-            println!("from namespace verbose: {} from namespace index: {}",  from_namespace_verbose, from_namespace_index);
+         //   println!("from namespace verbose: {} from namespace index: {}",  from_namespace_verbose, from_namespace_index);
             let mut namespace_is_float:bool;
             if from_namespace_index & TRANSFORM_NAMESPACE_MARK != 0 {
                 // Currently if the namespace is a transformed namespace, it cannot be float
@@ -74,7 +75,17 @@ impl NamespaceTransforms {
             from_namespaces.push(Namespace{ namespace_index: from_namespace_index, 
                                             namespace_verbose: from_namespace_verbose.to_string(),
                                             namespace_is_float: namespace_is_float });
-         }
+        }
+        
+        // Quadratic for loop... this never goes wrong! 
+        for (i, from_namespace_1) in from_namespaces.iter().enumerate() {
+            for from_namespace_2 in &from_namespaces[i+1..] {
+                if from_namespace_1.namespace_index == from_namespace_2.namespace_index {
+                    return Err(Box::new(IOError::new(ErrorKind::Other, format!("Using the same from namespace in multiple arguments to a function is not supported: {:?}", from_namespace_1.namespace_verbose))));
+                }
+            }
+        }
+
 
         let nt = NamespaceTransform {
             from_namespaces: from_namespaces,

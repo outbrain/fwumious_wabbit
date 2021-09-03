@@ -129,32 +129,24 @@ impl TransformExecutor {
                                                                 namespace_verbose: namespace.namespace_verbose.to_owned(),
                                                                 namespace_is_float: namespace.namespace_is_float});
        }
-        if function_name == "BinnerMinSqrt" {
-            TransformerBinner::create_function(&(|x| x.sqrt()), function_name, &executor_namespaces_from, function_params, false)
-        } else if function_name == "BinnerMinLn" {
-            TransformerBinner::create_function(&(|x| x.ln()), function_name, &executor_namespaces_from, function_params, false)
-        } else if function_name == "BinnerMinLog20" {
-            TransformerBinner::create_function(&(|x| x.log(2.0)), function_name, &executor_namespaces_from, function_params, false)
-        } else if function_name == "BinnerMinLog15" {
-            TransformerBinner::create_function(&(|x| x.log(1.5)), function_name, &executor_namespaces_from, function_params, false)
-        } else if function_name == "BinnerMinInterpolatedSqrt" {
-            TransformerBinner::create_function(&(|x| x.sqrt()), function_name, &executor_namespaces_from, function_params, true)
-        } else if function_name == "BinnerMinInterpolatedLn" {
-            TransformerBinner::create_function(&(|x| x.ln()), function_name, &executor_namespaces_from, function_params, true)
-        } else if function_name == "BinnerMinInterpolatedLog20" {
-            TransformerBinner::create_function(&(|x| x.log(2.0)), function_name, &executor_namespaces_from, function_params, true)
-        } else if function_name == "BinnerMinInterpolatedLog15" {
-            TransformerBinner::create_function(&(|x| x.log(1.5)), function_name, &executor_namespaces_from, function_params, true)
-        } else if function_name == "BinnerLogRatio" {
+        if        function_name == "BinnerSqrtPlain" {
+            TransformerBinner::create_function(&(|x, resolution| x.sqrt() * resolution), function_name, &executor_namespaces_from, function_params, false)
+        } else if function_name == "BinnerSqrt" {
+            TransformerBinner::create_function(&(|x, resolution| x.sqrt() * resolution), function_name, &executor_namespaces_from, function_params, true)
+        } else if function_name == "BinnerLogPlain" {
+            TransformerBinner::create_function(&(|x, resolution| x.ln() * resolution), function_name, &executor_namespaces_from, function_params, false)
+        } else if function_name == "BinnerLog" {
+            TransformerBinner::create_function(&(|x, resolution| x.ln() * resolution), function_name, &executor_namespaces_from, function_params, true)
+        } else if function_name == "BinnerLogRatioPlain" {
             TransformerLogRatioBinner::create_function(function_name, &executor_namespaces_from, function_params, false)
-        } else if function_name == "BinnerInterpolatedLogRatio" {
+        } else if function_name == "BinnerLogRatio" {
             TransformerLogRatioBinner::create_function(function_name, &executor_namespaces_from, function_params, true)
         } else if function_name == "Combine" {
             TransformerCombine::create_function(function_name, &executor_namespaces_from, function_params)
-        } else if function_name == "MultiplyWeight" {
-            TransformerMultiplyWeight::create_function(function_name, &executor_namespaces_from, function_params)
+        } else if function_name == "Weight" {
+            TransformerWeight::create_function(function_name, &executor_namespaces_from, function_params)
         } else {
-            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown transformer function: {}", function_name))));            
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown transformer function: {}", function_name))));
         
         }
     }
@@ -237,12 +229,12 @@ impl FunctionExampleSqrt {
 // TransformerBinner - A basic binner
 // It can take any function as a binning function f32 -> f32. Then output is rounded to integer 
 // However if output is smaller than floating parameter (greater_than), then output is custom encoded with that value
-// Example of use: you want to bin number of pageviews per user, so you generally want to do sqrt on it, but not do binning when pageviews <= 10
-// In that case you would call BinnerMinSqrt(A)(10.0)
+// Example of use: you want to bin number of pageviews per user, so you generally want to do sqrt on it, but only do floor binning when pageviews <= 10
+// In that case you would call BinnerMinSqrt(A)(1.0, 10.0)
 
 // What does interpolated mean?
-// Example: BinnerMinSqrt(X)(10.0)
-// let's assume X is 150. sqrt(150) = 12.247
+// Example: BinnerSqrt(X)(10.0, 1.0)
+// let's assume X is 150. sqrt(150) * 1.0 = 12.247 
 // You now want two values emitted - 12 at value 0.247 and 13 at value (1-0.247)
 
 
@@ -250,8 +242,9 @@ impl FunctionExampleSqrt {
 struct TransformerBinner {
     from_namespace: ExecutorFromNamespace,
     greater_than: f32,
+    resolution: f32,
     interpolated: bool,
-    function_pointer: &'static (dyn Fn(f32) -> f32 +'static + Sync), 
+    function_pointer: &'static (dyn Fn(f32, f32) -> f32 +'static + Sync), 
 }
 
 impl FunctionExecutorTrait for TransformerBinner {
@@ -260,7 +253,7 @@ impl FunctionExecutorTrait for TransformerBinner {
             if float_value <= self.greater_than {
                 to_namespace.emit_i32(float_value as i32, hash_value, SeedNumber::Default);
             } else {
-                let transformed_float = (self.function_pointer)(float_value);
+                let transformed_float = (self.function_pointer)(float_value, self.resolution);
                 to_namespace.emit_f32(transformed_float, hash_value, self.interpolated, SeedNumber::One);
             }
         });
@@ -269,16 +262,31 @@ impl FunctionExecutorTrait for TransformerBinner {
 
 
 impl TransformerBinner {
-    fn create_function(function_pointer: &'static (dyn Fn(f32) -> f32 +'static + Sync), 
+    fn create_function(function_pointer: &'static (dyn Fn(f32, f32) -> f32 +'static + Sync), 
                         function_name: &str, 
                         from_namespaces: &Vec<ExecutorFromNamespace>, 
                         function_params: &Vec<f32>,
                         interpolated: bool,
                         ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
 
-        if function_params.len() != 1 {
-            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes exactly one float argument, example {}(A)(2.0)", function_name, function_name))));
+        if function_params.len() > 2 {
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes up to two float arguments, example {}(A)(2.0, 3.5). Both are optional.\nFirst parameter is the resolution (default 0), second parameter is minimum value to apply the function (default -MAX)", function_name, function_name))));
         }
+        
+        let resolution: f32;
+        if function_params.len() >= 1 {
+            resolution = function_params[0]
+        } else {
+            resolution = 1.0;
+        }
+
+        let greater_than: f32;
+        if function_params.len() >= 2 {
+            greater_than = function_params[1]
+        } else {
+            greater_than = f32::MIN;
+        }
+        
         if from_namespaces.len() != 1 {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes exactly one namespace argument, example {}(A)(2.0)", function_name, function_name))));
         }
@@ -290,7 +298,8 @@ impl TransformerBinner {
         }
 
         Ok(Box::new(Self{from_namespace: from_namespaces[0].clone(), 
-                        greater_than: function_params[0],
+                        resolution: resolution,
+                        greater_than: greater_than,
                         function_pointer: function_pointer,
                         interpolated: interpolated,
                         }))
@@ -368,19 +377,19 @@ impl TransformerLogRatioBinner {
 
 // Value multiplier transformer
 // -------------------------------------------------------------------
-// TransformerMultiplyWeight - A basic weight multiplier transformer
+// TransformerWeight - A basic weight multiplier transformer
 // Example of use: if you want to multiply whole namespace with certain factor and thus increase its learning rate (let's say 2.0)
 // In that case you would call MutliplyWeight(document_id)(2.0)
 // Important - document_id does not need to be float and isnt really changed 
 
 
 #[derive(Clone)]
-struct TransformerMultiplyWeight {
+struct TransformerWeight {
     from_namespace: ExecutorFromNamespace,
     multiplier: f32,
 }
 
-impl FunctionExecutorTrait for TransformerMultiplyWeight {
+impl FunctionExecutorTrait for TransformerWeight {
     fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace, transform_executors: &TransformExecutors) {
         feature_reader!(record_buffer, transform_executors, self.from_namespace.namespace_index, hash_index, hash_value, {
             to_namespace.emit_i32(hash_index as i32, hash_value * self.multiplier, SeedNumber::Default);
@@ -389,7 +398,7 @@ impl FunctionExecutorTrait for TransformerMultiplyWeight {
 }
 
 
-impl TransformerMultiplyWeight {
+impl TransformerWeight {
     fn create_function( function_name: &str, 
                         from_namespaces: &Vec<ExecutorFromNamespace>, 
                         function_params: &Vec<f32>,
@@ -400,7 +409,7 @@ impl TransformerMultiplyWeight {
         if from_namespaces.len() != 1 {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes exactly one namespace argument, example {}(A)(2.0)", function_name, function_name))));            
         }
-        // We do not check if input namespace is float, MultiplyWeight does not require float namespace as input
+        // We do not check if input namespace is float, Weight does not require float namespace as input
         
         Ok(Box::new(Self{from_namespace: from_namespaces[0].clone(),
                         multiplier: function_params[0], 
@@ -536,7 +545,7 @@ mod tests {
             tmp_data: Vec::new(),
         };
         
-        let result = TransformerBinner::create_function(&(|x| x.sqrt()), "Blah", &vec![from_namespace], &vec![40.], false);
+        let result = TransformerBinner::create_function(&(|x, y| x.sqrt() * y), "Blah", &vec![from_namespace], &vec![40., 1.4], false);
         assert!(result.is_err());
 
     }
@@ -558,7 +567,7 @@ mod tests {
             tmp_data: Vec::new(),
         };
         
-        let transformer = TransformerBinner::create_function(&(|x| x.sqrt()), "Blah", &vec![from_namespace], &vec![40.], false).unwrap();
+        let transformer = TransformerBinner::create_function(&(|x, y| x.sqrt() * y), "Blah", &vec![from_namespace], &vec![1.0, 40.0], false).unwrap();
         let record_buffer = [7,	// length 
                             0,	// label
                             (1.0_f32).to_bits(), // Example weight 
@@ -713,7 +722,7 @@ mod tests {
             tmp_data: Vec::new(),
         };
         
-        let transformer = TransformerMultiplyWeight::create_function("Blah", &vec![from_namespace_float], &vec![40.]).unwrap();
+        let transformer = TransformerWeight::create_function("Blah", &vec![from_namespace_float], &vec![40.]).unwrap();
         let record_buffer = [7,	// length 
                             0,	// label
                             (1.0_f32).to_bits(), // Example weight 
@@ -740,7 +749,7 @@ mod tests {
             namespace_is_float: false,
         };
 
-        let transformer = TransformerMultiplyWeight::create_function("Blah", &vec![from_namespace_nonfloat], &vec![40.]).unwrap();
+        let transformer = TransformerWeight::create_function("Blah", &vec![from_namespace_nonfloat], &vec![40.]).unwrap();
         let record_buffer = [7,	// length 
                             0,	// label
                             (1.0_f32).to_bits(), // Example weight 
