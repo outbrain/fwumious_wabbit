@@ -35,6 +35,7 @@ const READBUF_LEN:usize = 1024*100;
 
 // This is super ugly hack around the fact that we need to call finish() before closing the lz4 stream
 // Effectively lz4 implementation we're using is kind of bad
+// More info (and where workaround comes from): https://github.com/bozaro/lz4-rs/issues/9
 struct Wrapper<W: Write> {
     s: Option<lz4::Encoder<W>>,
 }
