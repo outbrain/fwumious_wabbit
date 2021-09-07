@@ -421,7 +421,7 @@ impl TransformerWeight {
 
 // Combine Binner
 // Supporting max 5 input namespaces. Because 5 ought to be enough for everybody!
-//
+// There is an issue that compilation time here is immense
 //
 
 #[derive(Clone)]
