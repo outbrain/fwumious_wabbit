@@ -24,7 +24,7 @@ impl FunctionExecutorTrait for FunctionExampleSqrt {
         feature_reader_float_namespace!(record_buffer, self.from_namespace.namespace_index, hash_index, hash_value, float_value, {
             let transformed_float = float_value.sqrt();
             let transformed_int = transformed_float as i32;
-            to_namespace.emit_i32(transformed_int, hash_value, SeedNumber::Default);
+            to_namespace.emit_i32::<{SeedNumber::Default as usize}>(transformed_int, hash_value);
         });
     }
 }
@@ -75,10 +75,10 @@ impl FunctionExecutorTrait for TransformerBinner {
     fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace, transform_executors: &TransformExecutors) {
         feature_reader_float_namespace!(record_buffer, self.from_namespace.namespace_index, hash_index, hash_value, float_value, {
             if float_value < self.greater_than {
-                to_namespace.emit_i32(float_value as i32, hash_value, SeedNumber::Default);
+                to_namespace.emit_i32::<{SeedNumber::Default as usize}>(float_value as i32, hash_value);
             } else {
                 let transformed_float = (self.function_pointer)(float_value - self.greater_than, self.resolution);
-                to_namespace.emit_f32(transformed_float, hash_value, self.interpolated, SeedNumber::One);
+                to_namespace.emit_f32::<{SeedNumber::One as usize}>(transformed_float, hash_value, self.interpolated);
             }
         });
     }
@@ -157,16 +157,16 @@ impl FunctionExecutorTrait for TransformerLogRatioBinner {
                 let val1 = float_value1;
                 let val2 = float_value2;
                 if val2 + val1 < self.greater_than {
-                    to_namespace.emit_i32_i32(val1 as i32, val2 as i32, joint_value, SeedNumber::One);    
+                    to_namespace.emit_i32_i32::<{SeedNumber::One as usize}>(val1 as i32, val2 as i32, joint_value);    
                 } else if val1 == 0.0 {
                     // val2 has to be greater or equal to self.greater_than (if it wasn't we'd take the first if branch
-                    to_namespace.emit_f32((val2 - self.greater_than).ln(), joint_value, self.interpolated, SeedNumber::Two);    
+                    to_namespace.emit_f32::<{SeedNumber::Two as usize}>((val2 - self.greater_than).ln(), joint_value, self.interpolated);    
                 } else if val2 == 0.0 {
                     // val1 has to be greater or equal to self.greater_than (if it wasn't we'd take the first if branch
-                    to_namespace.emit_f32((val1 - self.greater_than).ln(), joint_value, self.interpolated, SeedNumber::Three);    
+                    to_namespace.emit_f32::<{SeedNumber::Three as usize}>((val1 - self.greater_than).ln(), joint_value, self.interpolated);    
                 } else {
                     let o = (val1/val2).ln()*self.resolution;
-                    to_namespace.emit_f32(o, joint_value, self.interpolated, SeedNumber::Default);
+                    to_namespace.emit_f32::<{SeedNumber::Default as usize}>(o, joint_value, self.interpolated);
                 }
             });
         });
@@ -235,7 +235,7 @@ pub struct TransformerWeight {
 impl FunctionExecutorTrait for TransformerWeight {
     fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace, transform_executors: &TransformExecutors) {
         feature_reader!(record_buffer, transform_executors, self.from_namespace.namespace_index, hash_index, hash_value, {
-            to_namespace.emit_i32(hash_index as i32, hash_value * self.multiplier, SeedNumber::Default);
+            to_namespace.emit_i32::<{SeedNumber::Default as usize}>(hash_index as i32, hash_value * self.multiplier);
         });
     }
 }
@@ -282,13 +282,13 @@ impl FunctionExecutorTrait for TransformerCombine {
         match self.n_namespaces {
             2 =>    feature_reader!(record_buffer, transform_executors, self.from_namespaces[0].namespace_index, hash_index0, hash_value0, {
                         feature_reader!(record_buffer, transform_executors, self.from_namespaces[1].namespace_index, hash_index1, hash_value1, {
-                            to_namespace.emit_i32((hash_index0 ^ hash_index1) as i32, hash_value0 * hash_value1, SeedNumber::Default);
+                            to_namespace.emit_i32::<{SeedNumber::Default as usize}>((hash_index0 ^ hash_index1) as i32, hash_value0 * hash_value1);
                         });
                     }),
             3 =>    feature_reader!(record_buffer, transform_executors, self.from_namespaces[0].namespace_index, hash_index0, hash_value0, {
                         feature_reader!(record_buffer, transform_executors, self.from_namespaces[1].namespace_index, hash_index1, hash_value1, {
                             feature_reader!(record_buffer, transform_executors, self.from_namespaces[2].namespace_index, hash_index2, hash_value2, {
-                                to_namespace.emit_i32((hash_index0 ^ hash_index1 ^ hash_index2) as i32, hash_value0 * hash_value1 * hash_value2, SeedNumber::Default);
+                                to_namespace.emit_i32::<{SeedNumber::Default as usize}>((hash_index0 ^ hash_index1 ^ hash_index2) as i32, hash_value0 * hash_value1 * hash_value2);
                             });
                         });
                     }),
@@ -296,8 +296,8 @@ impl FunctionExecutorTrait for TransformerCombine {
                         feature_reader!(record_buffer, transform_executors, self.from_namespaces[1].namespace_index, hash_index1, hash_value1, {
                             feature_reader!(record_buffer, transform_executors, self.from_namespaces[2].namespace_index, hash_index2, hash_value2, {
                                 feature_reader!(record_buffer, transform_executors, self.from_namespaces[3].namespace_index, hash_index3, hash_value3, {
-                                    to_namespace.emit_i32((hash_index0 ^ hash_index1 ^ hash_index2 ^ hash_index3) as i32, 
-                                                            hash_value0 * hash_value1 * hash_value2 * hash_value3, SeedNumber::Default);
+                                    to_namespace.emit_i32::<{SeedNumber::Default as usize}>((hash_index0 ^ hash_index1 ^ hash_index2 ^ hash_index3) as i32, 
+                                                            hash_value0 * hash_value1 * hash_value2 * hash_value3);
                                 });
                             });
                         });
@@ -308,8 +308,8 @@ impl FunctionExecutorTrait for TransformerCombine {
                             feature_reader!(record_buffer, transform_executors, self.from_namespaces[2].namespace_index, hash_index2, hash_value2, {
                                 feature_reader!(record_buffer, transform_executors, self.from_namespaces[3].namespace_index, hash_index3, hash_value3, {
                                     feature_reader!(record_buffer, transform_executors, self.from_namespaces[4].namespace_index, hash_index4, hash_value4, {
-                                        to_namespace.emit_i32((hash_index0 ^ hash_index1 ^ hash_index2 ^ hash_index3 ^ hash_index4) as i32, 
-                                                                hash_value0 * hash_value1 * hash_value2 * hash_value3 * hash_value4, SeedNumber::Default);
+                                        to_namespace.emit_i32::<{SeedNumber::Default as usize}>((hash_index0 ^ hash_index1 ^ hash_index2 ^ hash_index3 ^ hash_index4) as i32, 
+                                                                hash_value0 * hash_value1 * hash_value2 * hash_value3 * hash_value4);
                                     });                                                                
                                 });
                             });
@@ -429,7 +429,7 @@ mod tests {
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
-        to_namespace_comparison.emit_i32(3, 2.0f32, SeedNumber::Default);
+        to_namespace_comparison.emit_i32::<{SeedNumber::Default as usize}>(3, 2.0f32);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
         
         
@@ -448,7 +448,7 @@ mod tests {
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
-        to_namespace_comparison.emit_i32((300.0_f32 - 40.0_f32).sqrt() as i32, 2.0f32, SeedNumber::One);
+        to_namespace_comparison.emit_i32::<{SeedNumber::One as usize}>((300.0_f32 - 40.0_f32).sqrt() as i32, 2.0f32);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);        
     }
 
@@ -498,7 +498,7 @@ mod tests {
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
-        to_namespace_comparison.emit_i32_i32(3 as i32, 7 as i32, 6.0, SeedNumber::One);
+        to_namespace_comparison.emit_i32_i32::<{SeedNumber::One as usize}>(3 as i32, 7 as i32, 6.0);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
         
         
@@ -526,7 +526,7 @@ mod tests {
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
-        to_namespace_comparison.emit_f32((30.0/60.0_f32).ln() * 10.0, 6.0, false, SeedNumber::Default);
+        to_namespace_comparison.emit_f32::<{SeedNumber::Default as usize}>((30.0/60.0_f32).ln() * 10.0, 6.0, false);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
 
 
@@ -553,7 +553,7 @@ mod tests {
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
-        to_namespace_comparison.emit_i32_i32(30, 0, 6.0, SeedNumber::One);
+        to_namespace_comparison.emit_i32_i32::<{SeedNumber::One as usize}>(30, 0, 6.0);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
 
         // Now let's have 0.0/50.0
@@ -579,7 +579,7 @@ mod tests {
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
-        to_namespace_comparison.emit_f32((50_f32 - 40_f32).ln(), 6.0, false, SeedNumber::Two);
+        to_namespace_comparison.emit_f32::<{SeedNumber::Two as usize}>((50_f32 - 40_f32).ln(), 6.0, false);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
 
 
@@ -607,7 +607,7 @@ mod tests {
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
-        to_namespace_comparison.emit_f32((50_f32 - 40_f32).ln(), 6.0, false, SeedNumber::Three);
+        to_namespace_comparison.emit_f32::<{SeedNumber::Three as usize}>((50_f32 - 40_f32).ln(), 6.0, false);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
 
 
@@ -649,7 +649,7 @@ mod tests {
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
-        to_namespace_comparison.emit_i32((1775699190 & MASK31) as i32, 2.0f32 * 40., SeedNumber::Default);
+        to_namespace_comparison.emit_i32::<{SeedNumber::Default as usize}>((1775699190 & MASK31) as i32, 2.0f32 * 40.);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
         
         // But weightmultiplier can take non-float namespaces
@@ -675,7 +675,7 @@ mod tests {
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
-        to_namespace_comparison.emit_i32((1775699190 & MASK31) as i32, 2.0f32 * 40., SeedNumber::Default);
+        to_namespace_comparison.emit_i32::<{SeedNumber::Default as usize}>((1775699190 & MASK31) as i32, 2.0f32 * 40.);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
         
         
@@ -732,7 +732,7 @@ mod tests {
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
-        to_namespace_comparison.emit_i32((1775699190 ^ 1775699190) as i32, 6.0f32, SeedNumber::Default);
+        to_namespace_comparison.emit_i32::<{SeedNumber::Default as usize}>((1775699190 ^ 1775699190) as i32, 6.0f32);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
     }
 

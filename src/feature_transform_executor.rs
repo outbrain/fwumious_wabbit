@@ -27,7 +27,7 @@ pub fn default_seeds(to_namespace_index: u32) -> [u32; 5] {
             ]    
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SeedNumber {
     Default = 0,
     One = 1,
@@ -58,16 +58,16 @@ pub struct ExecutorFromNamespace {
 impl ExecutorToNamespace {
 
     #[inline(always)]
-    pub fn emit_i32(&mut self, to_data:i32, hash_value:f32, seed_id: SeedNumber) {
-        let hash_index = murmur3::hash32_with_seed(to_data.to_le_bytes(), self.namespace_seeds[seed_id as usize]) & parser::MASK31;
+    pub fn emit_i32<const SEED_ID: usize>(&mut self, to_data:i32, hash_value:f32) {
+        let hash_index = murmur3::hash32_with_seed(to_data.to_le_bytes(), *unsafe{self.namespace_seeds.get_unchecked(SEED_ID)}) & parser::MASK31;
 //        println!("Emitting {} {}", hash_index, hash_value);
         self.tmp_data.push((hash_index, hash_value));
     } 
 
     #[inline(always)]
-    pub fn emit_f32(&mut self, f:f32, hash_value:f32, interpolated: bool, seed_id: SeedNumber) {
+    pub fn emit_f32<const SEED_ID: usize>(&mut self, f:f32, hash_value:f32, interpolated: bool) {
         if !f.is_finite() { // these handle INF, -INF and NAN
-            self.emit_i32(f.to_bits() as i32, hash_value, seed_id);
+            self.emit_i32::<SEED_ID>(f.to_bits() as i32, hash_value);
         } else {
 //            println!("F: {}, hash_value: {}", f, hash_value);
             if interpolated {
@@ -75,21 +75,21 @@ impl ExecutorToNamespace {
                 let floor_int = floor as i32;
                 let part = f - floor;
                 if part != 0.0 {
-                    self.emit_i32(floor_int + 1, hash_value * part, seed_id);
+                    self.emit_i32::<SEED_ID>(floor_int + 1, hash_value * part);
                 }
                 let part = 1.0 - part;
                 if part != 0.0 {
-                    self.emit_i32(floor_int, hash_value * part, seed_id);
+                    self.emit_i32::<SEED_ID>(floor_int, hash_value * part);
                 }
             } else {
-                self.emit_i32(f as i32, hash_value, seed_id);
+                self.emit_i32::<SEED_ID>(f as i32, hash_value);
             }
         }
     } 
 
     #[inline(always)]
-    pub fn emit_i32_i32(&mut self, to_data1:i32, to_data2:i32, hash_value:f32, seed_id: SeedNumber) {
-        let hash_index = murmur3::hash32_with_seed(to_data1.to_le_bytes(), self.namespace_seeds[seed_id as usize]);
+    pub fn emit_i32_i32<const SEED_ID: usize>(&mut self, to_data1:i32, to_data2:i32, hash_value:f32) {
+        let hash_index = murmur3::hash32_with_seed(to_data1.to_le_bytes(), unsafe{*self.namespace_seeds.get_unchecked(SEED_ID)});
         let hash_index = murmur3::hash32_with_seed(to_data2.to_le_bytes(), hash_index) & parser::MASK31;
         self.tmp_data.push((hash_index, hash_value));
     } 
@@ -212,7 +212,7 @@ mod tests {
                 tmp_data: Vec::new(),
             };
         let mut to_namespace = to_namespace_empty.clone();
-        to_namespace.emit_f32(5.4, 20.0, true, SeedNumber::Default);
+        to_namespace.emit_f32::<{SeedNumber::Default as usize}>(5.4, 20.0, true);
         let to_data_1:i32 = 6;
         let to_data_1_value = 20.0 * (5.4 - 5.0);
         let hash_index_1 = murmur3::hash32_with_seed(to_data_1.to_le_bytes(), to_namespace.namespace_seeds[SeedNumber::Default as usize]) & parser::MASK31;
