@@ -75,7 +75,7 @@ pub struct TransformerBinner {
 impl FunctionExecutorTrait for TransformerBinner {
     fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace, transform_executors: &TransformExecutors) {
         feature_reader_float_namespace!(record_buffer, self.from_namespace.namespace_index, hash_index, hash_value, float_value, {
-            if float_value <= self.greater_than {
+            if float_value < self.greater_than {
                 to_namespace.emit_i32(float_value as i32, hash_value, SeedNumber::Default);
             } else {
                 let transformed_float = (self.function_pointer)(float_value - self.greater_than, self.resolution);
@@ -100,14 +100,17 @@ impl TransformerBinner {
         
         let greater_than: f32;
         if function_params.len() >= 1 {
-            greater_than = function_params[0]
+            greater_than = function_params[0];
+            if greater_than < 0.0 {
+                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} parameter greater_than cannot be negative (passed : {}))", function_name, greater_than))));
+            }
         } else {
-            greater_than = f32::MIN;
+            greater_than = 0.0;
         }
 
         let resolution: f32;
         if function_params.len() >= 2 {
-            resolution = function_params[1]
+            resolution = function_params[1];
         } else {
             resolution = 1.0;
         }
@@ -159,9 +162,11 @@ impl FunctionExecutorTrait for TransformerLogRatioBinner {
                 if val2 + val1 < self.greater_than {
                     to_namespace.emit_i32_i32(val1 as i32, val2 as i32, joint_value, SeedNumber::One);    
                 } else if val1 == 0.0 {
-                    to_namespace.emit_f32(val2.sqrt(), joint_value, self.interpolated, SeedNumber::Two);    
+                    // val2 has to be greater or equal to self.greater_than (if it wasn't we'd take the first if branch
+                    to_namespace.emit_f32((val2 - self.greater_than).ln(), joint_value, self.interpolated, SeedNumber::Two);    
                 } else if val2 == 0.0 {
-                    to_namespace.emit_i32(val1 as i32, joint_value, SeedNumber::Three);
+                    // val1 has to be greater or equal to self.greater_than (if it wasn't we'd take the first if branch
+                    to_namespace.emit_f32((val1 - self.greater_than).ln(), joint_value, self.interpolated, SeedNumber::Three);    
                 } else {
                     let o = (val1/val2).ln()*self.resolution;
                     to_namespace.emit_f32(o, joint_value, self.interpolated, SeedNumber::Default);
@@ -185,14 +190,17 @@ impl TransformerLogRatioBinner {
         
         let greater_than: f32;
         if function_params.len() >= 1 {
-            greater_than = function_params[0]
+            greater_than = function_params[0];
+            if greater_than < 0.0 {
+                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} parameter greater_than cannot be negative (passed : {}))", function_name, greater_than))));
+            }
         } else {
-            greater_than = f32::MIN;
+            greater_than = 0.0;
         }
 
         let resolution: f32;
         if function_params.len() >= 2 {
-            resolution = function_params[1]
+            resolution = function_params[1];
         } else {
             resolution = 1.0;
         }
@@ -501,8 +509,8 @@ mod tests {
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
         
         
-        // Now let's have 30.0/60.0
 
+        // Now let's have 30.0/60.0
         let record_buffer = [11,	// length 
                             0,	// label
                             (1.0_f32).to_bits(), // Example weight 
@@ -527,6 +535,89 @@ mod tests {
         let mut to_namespace_comparison = to_namespace_empty.clone();
         to_namespace_comparison.emit_f32((30.0/60.0_f32).ln() * 10.0, 6.0, false, SeedNumber::Default);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
+
+
+        // Now let's have 30.0/0.0
+        let record_buffer = [11,	// length 
+                            0,	// label
+                            (1.0_f32).to_bits(), // Example weight 
+                            nd(5, 8) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                            nd(8, 11) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                            // Feature triple
+                            1775699190 & MASK31,    // Hash location 
+                            2.0f32.to_bits(),       // Feature value of the feature
+                            30.0f32.to_bits(),
+                            // Feature triple
+                            1775699190 & MASK31,    // Hash location 
+                            3.0f32.to_bits(),       // Feature value of the feature
+                            0.0f32.to_bits(),
+                            
+                            ];       // Float feature value
+ 
+        let mut to_namespace = to_namespace_empty.clone();
+        let mut transform_executors = TransformExecutors {executors: vec![]}; // not used
+        transformer.execute_function(&record_buffer, &mut to_namespace, &mut transform_executors);
+
+        // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
+        let mut to_namespace_comparison = to_namespace_empty.clone();
+        to_namespace_comparison.emit_i32_i32(30, 0, 6.0, SeedNumber::One);
+        assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
+
+        // Now let's have 0.0/50.0
+        let record_buffer = [11,	// length 
+                            0,	// label
+                            (1.0_f32).to_bits(), // Example weight 
+                            nd(5, 8) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                            nd(8, 11) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                            // Feature triple
+                            1775699190 & MASK31,    // Hash location 
+                            2.0f32.to_bits(),       // Feature value of the feature
+                            0.0f32.to_bits(),
+                            // Feature triple
+                            1775699190 & MASK31,    // Hash location 
+                            3.0f32.to_bits(),       // Feature value of the feature
+                            50.0f32.to_bits(),
+                            
+                            ];       // Float feature value
+ 
+        let mut to_namespace = to_namespace_empty.clone();
+        let mut transform_executors = TransformExecutors {executors: vec![]}; // not used
+        transformer.execute_function(&record_buffer, &mut to_namespace, &mut transform_executors);
+
+        // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
+        let mut to_namespace_comparison = to_namespace_empty.clone();
+        to_namespace_comparison.emit_f32((50_f32 - 40_f32).ln(), 6.0, false, SeedNumber::Two);
+        assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
+
+
+
+        // Now let's have 50.0/0.0
+        let record_buffer = [11,	// length 
+                            0,	// label
+                            (1.0_f32).to_bits(), // Example weight 
+                            nd(5, 8) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                            nd(8, 11) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                            // Feature triple
+                            1775699190 & MASK31,    // Hash location 
+                            2.0f32.to_bits(),       // Feature value of the feature
+                            50.0f32.to_bits(),
+                            // Feature triple
+                            1775699190 & MASK31,    // Hash location 
+                            3.0f32.to_bits(),       // Feature value of the feature
+                            0.0f32.to_bits(),
+                            
+                            ];       // Float feature value
+ 
+        let mut to_namespace = to_namespace_empty.clone();
+        let mut transform_executors = TransformExecutors {executors: vec![]}; // not used
+        transformer.execute_function(&record_buffer, &mut to_namespace, &mut transform_executors);
+
+        // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
+        let mut to_namespace_comparison = to_namespace_empty.clone();
+        to_namespace_comparison.emit_f32((50_f32 - 40_f32).ln(), 6.0, false, SeedNumber::Three);
+        assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
+
+
 
     }
 
