@@ -84,7 +84,7 @@ macro_rules! feature_reader {
             } else {
                 let start = ((namespace_desc >> 16) & 0x3fff) as usize; 
                 let end = (namespace_desc & 0xffff) as usize;
-                if (namespace_desc & parser::IS_FLOAT_NAMESPACE_MASK) == 0 {
+                if $namespace_descriptor.namespace_type != NamespaceType::F32 {
                     for hash_offset in (start..end).step_by(2) {
                         let $hash_index = unsafe {*$record_buffer.get_unchecked(hash_offset)};
                         let $hash_value = unsafe {f32::from_bits(*$record_buffer.get_unchecked(hash_offset+1))};
@@ -266,6 +266,10 @@ mod tests {
 
     fn ns_desc(i: u16) -> NamespaceDescriptor {
         NamespaceDescriptor {namespace_index: i, namespace_type: NamespaceType::Default}
+    }
+
+    fn ns_desc_f32(i: u16) -> NamespaceDescriptor {
+        NamespaceDescriptor {namespace_index: i, namespace_type: NamespaceType::F32}
     }
 
 
@@ -468,7 +472,7 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
         mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
-                                                        namespace_descriptors: vec![ns_desc(1)],
+                                                        namespace_descriptors: vec![ns_desc_f32(1)],
                                                         weight: 1.0});
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
