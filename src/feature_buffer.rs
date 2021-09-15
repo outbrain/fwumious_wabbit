@@ -58,8 +58,17 @@ macro_rules! feature_reader {
       $bl:block  ) => {
         if $namespace_index & feature_transform_parser::TRANSFORM_NAMESPACE_MARK != 0 {
             // This is super-unoptimized
-            let executor_index = $transform_executors.get_transformations($record_buffer, $namespace_index);
-            for (hash_index1, hash_value1) in &$transform_executors.executors[executor_index as usize].namespace_to.borrow().tmp_data {
+//            let executor = $transform_executors.get_transformations($record_buffer, $namespace_index);
+            let executor_index = $namespace_index & !feature_transform_parser::TRANSFORM_NAMESPACE_MARK; // remove transform namespace mark
+            let executor = unsafe {$transform_executors.executors.get_unchecked(executor_index as usize)};
+            
+            // If we have a cyclic defintion (which is a bug), this will panic!
+            let mut namespace_to = executor.namespace_to.borrow_mut();
+            namespace_to.tmp_data.truncate(0);
+            
+            executor.function_executor.execute_function($record_buffer, &mut namespace_to, &$transform_executors);
+
+            for (hash_index1, hash_value1) in &namespace_to.tmp_data {
                 let $hash_index = *hash_index1;
                 let $hash_value = *hash_value1;
 //                println!("{} SSSSSSS {}", $hash_value, $hash_index);
@@ -72,17 +81,15 @@ macro_rules! feature_reader {
                 let $hash_value: f32 = 1.0;
                 $bl
             } else {
+                let start = ((namespace_desc >> 16) & 0x3fff) as usize; 
+                let end = (namespace_desc & 0xffff) as usize;
                 if (namespace_desc & parser::IS_FLOAT_NAMESPACE_MASK) == 0 {
-                    let start = ((namespace_desc >> 16) & 0x3fff) as usize; 
-                    let end = (namespace_desc & 0xffff) as usize;
                     for hash_offset in (start..end).step_by(2) {
                         let $hash_index = unsafe {*$record_buffer.get_unchecked(hash_offset)};
                         let $hash_value = unsafe {f32::from_bits(*$record_buffer.get_unchecked(hash_offset+1))};
                         $bl
                     }
                 } else {
-                    let start = ((namespace_desc >> 16) & 0x3fff) as usize; 
-                    let end = (namespace_desc & 0xffff) as usize;
                     for hash_offset in (start..end).step_by(3) {
                         let $hash_index = unsafe {*$record_buffer.get_unchecked(hash_offset)};
                         let $hash_value = unsafe {f32::from_bits(*$record_buffer.get_unchecked(hash_offset+1))};

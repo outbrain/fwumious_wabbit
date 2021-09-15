@@ -98,7 +98,7 @@ impl ExecutorToNamespace {
 #[derive(Clone)]
 pub struct TransformExecutor {
     pub namespace_to: RefCell<ExecutorToNamespace>,
-    function_executor: Box<dyn FunctionExecutorTrait>,
+    pub function_executor: Box<dyn FunctionExecutorTrait>,
 }
 
 impl TransformExecutor {
@@ -171,19 +171,19 @@ impl TransformExecutors {
         TransformExecutors {executors: executors}
     }
 
-    #[inline(always)]
-    pub fn get_transformations<'a>(&self, record_buffer: &[u32], feature_index_offset: u32) -> u32  {
+/*    #[inline(always)]
+    pub fn get_transformations<'a>(&self, record_buffer: &[u32], feature_index_offset: u32) -> &TransformExecutor  {
         let executor_index = feature_index_offset & !feature_transform_parser::TRANSFORM_NAMESPACE_MARK; // remove transform namespace mark
-        let executor = &self.executors[executor_index as usize];
+        let executor = unsafe {&self.executors.get_unchecked(executor_index as usize)};
         
         // If we have a cyclic defintion (which is a bug), this will panic!
         let mut namespace_to = executor.namespace_to.borrow_mut();
         namespace_to.tmp_data.truncate(0);
         
         executor.function_executor.execute_function(record_buffer, &mut namespace_to, &self);
-        executor_index
+        executor
     }
-
+*/
 
 }
 

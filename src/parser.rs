@@ -271,7 +271,7 @@ impl VowpalParser {
                             self.output_buffer.push((current_namespace_weight * feature_weight).to_bits());
                             if current_namespace_is_float_namespace == true {
                                 // The float_namespaces_skip_prefix allows us to parse a value A100, where A is one byte prefix which gets ignored
-                                let float_start = i_start + self.vw_map.vw_source.float_namespaces_skip_prefix as usize;
+                                let float_start = i_start + self.vw_map.vw_source.namespace_skip_prefix as usize;
                                 let float_value:f32 = match i_end_first_part - float_start {
                                     0 => f32::NAN,
                                     _ => self.parse_float_or_error(float_start, i_end_first_part, "Failed parsing feature value to float (for float namespace)")?
@@ -318,7 +318,7 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
 
         fn str_to_cursor(s: &str) -> Cursor<Vec<u8>> {
           Cursor::new(s.as_bytes().to_vec())
@@ -567,13 +567,12 @@ C,featureC
           Cursor::new(s.as_bytes().to_vec())
         }
 
-        // Test for perfect vowpal-compatible hashing
         let vw_map_string = r#"
 A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mut rr = VowpalParser::new(&vw);
         // we test a single record, single namespace, with string value "3"
         let mut buf = str_to_cursor("-1 |B 3\n");
@@ -582,7 +581,13 @@ C,featureC
                                                         1775699190 & MASK31, 
                                                         NO_FEATURES]);
 
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec!["featureB".to_string()], 0)).unwrap();
+        let vw_map_string = r#"
+A,featureA
+B,featureB,f32
+C,featureC
+"#;
+
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mut rr = VowpalParser::new(&vw);
         // we test a single record, single namespace, with string value "3" with weight "2"
         let mut buf = str_to_cursor("-1 |B 3:2\n");
@@ -610,7 +615,14 @@ C,featureC
  
 
         // Now test with skip_prefix = 1 
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec!["featureB".to_string()], 1)).unwrap();
+        let vw_map_string = r#"
+A,featureA
+B,featureB,f32
+C,featureC
+_namespace_skip_prefix,1
+"#;
+
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mut rr = VowpalParser::new(&vw);
         // we test a single record, single namespace, with string value "3" with weight "2"
         let mut buf = str_to_cursor("-1 |B B3:2\n");
@@ -653,7 +665,7 @@ AA,featureA
 BB,featureB
 CC,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
 
         fn str_to_cursor(s: &str) -> Cursor<Vec<u8>> {
           Cursor::new(s.as_bytes().to_vec())

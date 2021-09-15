@@ -79,20 +79,6 @@ fn default_bool_false() -> bool{false}
 fn default_optimizer_adagrad() -> Optimizer{Optimizer::Adagrad}
 
 
-pub fn get_float_namespaces<'a>(cl: &clap::ArgMatches<'a>) -> Result<(Vec<String>, u32), Box<dyn Error>> {
-   if let Some(in_v) = cl.value_of("float_namespaces") {
-       let prefix_skip:u32 = match cl.value_of("float_namespaces_skip_prefix") {
-           Some(prefix_skip_str) => prefix_skip_str.parse()?,
-           None => 0,
-       };
-       let namespaces_verbose: Vec<String> = in_v.split(",").map(|x| x.to_string()).collect();  // verbose names are separated by comma
-       Ok((namespaces_verbose, prefix_skip))
-   } else {
-       Ok((vec![], 0))
-   }
-}
-
-
 
 impl ModelInstance {
     pub fn new_empty() -> Result<ModelInstance, Box<dyn Error>> {
@@ -420,7 +406,7 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mi = ModelInstance::new_empty().unwrap();        
         
         let result = mi.create_feature_combo_desc(&vw, "A").unwrap();
@@ -444,7 +430,7 @@ A,featureA:2
 B,featureB:3
 "#;
         // The main point is that weight in feature names from vw_map_str is ignored
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mi = ModelInstance::new_empty().unwrap();        
         let result = mi.create_feature_combo_desc(&vw, "BA:1.5").unwrap();
         assert_eq!(result, FeatureComboDesc {
@@ -461,7 +447,7 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mi = ModelInstance::new_empty().unwrap();        
         let result = mi.create_feature_combo_desc_from_verbose(&vw, "featureA").unwrap();
         assert_eq!(result, FeatureComboDesc {
@@ -488,7 +474,7 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mi = ModelInstance::new_empty().unwrap();        
 
         let result = mi.create_field_desc_from_verbose(&vw, "featureA").unwrap();
