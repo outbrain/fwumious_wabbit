@@ -39,6 +39,7 @@ mod block_helpers;
 mod multithread_helpers;
 mod feature_transform_parser;
 mod feature_transform_executor;
+mod feature_transform_implementations;
 
 fn main() {
     match main2() {
