@@ -60,27 +60,30 @@ impl ExecutorToNamespace {
     #[inline(always)]
     pub fn emit_i32(&mut self, to_data:i32, hash_value:f32, seed_id: SeedNumber) {
         let hash_index = murmur3::hash32_with_seed(to_data.to_le_bytes(), self.namespace_seeds[seed_id as usize]) & parser::MASK31;
+//        println!("Emitting {} {}", hash_index, hash_value);
         self.tmp_data.push((hash_index, hash_value));
     } 
 
     #[inline(always)]
     pub fn emit_f32(&mut self, f:f32, hash_value:f32, interpolated: bool, seed_id: SeedNumber) {
-        if f.is_nan() {
-            self.emit_i32(f as i32, hash_value, SeedNumber::Four);
-        }
-        else if interpolated {
-            let floor = f.floor();
-            let floor_int = floor as i32;
-            let part = f - floor;
-            if part != 0.0 {
-                self.emit_i32(floor_int + 1, hash_value * part, seed_id);
-            }
-            let part = 1.0 - part;
-            if part != 0.0 {
-                self.emit_i32(floor_int, hash_value * part, seed_id);
-            }
+        if !f.is_finite() { // these handle INF, -INF and NAN
+            self.emit_i32(f.to_bits() as i32, hash_value, seed_id);
         } else {
-            self.emit_i32(f as i32, hash_value, seed_id);
+//            println!("F: {}, hash_value: {}", f, hash_value);
+            if interpolated {
+                let floor = f.floor();
+                let floor_int = floor as i32;
+                let part = f - floor;
+                if part != 0.0 {
+                    self.emit_i32(floor_int + 1, hash_value * part, seed_id);
+                }
+                let part = 1.0 - part;
+                if part != 0.0 {
+                    self.emit_i32(floor_int, hash_value * part, seed_id);
+                }
+            } else {
+                self.emit_i32(f as i32, hash_value, seed_id);
+            }
         }
     } 
 

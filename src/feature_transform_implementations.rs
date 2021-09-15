@@ -13,7 +13,6 @@ use crate::feature_transform_parser;
 
 
 
-// BASIC EXAMPLE    
 // Basic example of a "full blown" simple FunctionExecutorTrait
 #[derive(Clone)]
 struct FunctionExampleSqrt {
@@ -111,6 +110,7 @@ impl TransformerBinner {
             None => 1.0
         };
 
+//        println!("Greater than : {}, resolution: {}", greater_than, resolution);
         
         if from_namespaces.len() != 1 {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes exactly one namespace argument, example {}(A)(2.0)", function_name, function_name))));
@@ -132,6 +132,7 @@ impl TransformerBinner {
 }   
 
 
+// -------------------------------------------------------------------
 // LogRatio Binner
 //
 //
