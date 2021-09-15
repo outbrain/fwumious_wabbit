@@ -144,7 +144,7 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .takes_value(false))
 
                     .arg(Arg::with_name("transform")
-                     .long("transform_namespace")
+                     .long("transform")
                      .value_name("target_namespace=func(source_namespaces)(parameters)")
                      .help("Create new namespace by transforming one or more other namespaces")
                      .multiple(true)

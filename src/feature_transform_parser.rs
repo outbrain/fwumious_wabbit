@@ -116,9 +116,13 @@ pub fn get_namespace_id_verbose(transform_namespaces: &NamespaceTransforms, vw: 
        Some(index) => return Ok(*index as u32),
        None => {
            // Yes, we do linear search, we only call this couple of times. It's fast enough
+/*           println!("Searching");
+           for x in transform_namespaces.v.iter() {
+               println!("NS: {:?}", x);
+           }*/
            let f:Vec<&NamespaceTransform> = transform_namespaces.v.iter().filter(|x| x.to_namespace.namespace_verbose == namespace_verbose).collect();
            if f.len() == 0 {
-               return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown namespace char in command line: {}", namespace_verbose))));
+               return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown verbose namespace in command line: {}", namespace_verbose))));
            } else {
                return Ok(f[0].to_namespace.namespace_index as u32);
            }

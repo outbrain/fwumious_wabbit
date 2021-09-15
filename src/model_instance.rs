@@ -211,7 +211,7 @@ impl ModelInstance {
         }
 
         // we first need transform namespaces, before processing keep or interactions
-        if let Some(in_v) = cl.values_of("transform_namespace") {
+        if let Some(in_v) = cl.values_of("transform") {
             for value_str in in_v {                
                 mi.transform_namespaces.add_transform_namespace(vw, value_str)?;
             }
