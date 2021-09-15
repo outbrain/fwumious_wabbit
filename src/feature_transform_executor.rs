@@ -228,14 +228,24 @@ impl FunctionExampleSqrt {
 // -------------------------------------------------------------------
 // TransformerBinner - A basic binner
 // It can take any function as a binning function f32 -> f32. Then output is rounded to integer 
-// However if output is smaller than floating parameter (greater_than), then output is custom encoded with that value
+
+// What does greater_than do? 
+// If output is smaller than the first floating parameter (greater_than), then output is rounded to integer
+// If the output is larger than the first floating point parameter (greater_than) then we first substract greater_than from the input and apply transform function
 // Example of use: you want to bin number of pageviews per user, so you generally want to do sqrt on it, but only do floor binning when pageviews <= 10
-// In that case you would call BinnerMinSqrt(A)(1.0, 10.0)
+// In that case you would call BinnerMinSqrt(A)(10.0, 1.0)
+
+// What does resolution mean?
+// Example: BinnerSqrt(X)(10.0, 2.0)
+// let's assume X is 150. sqrt(150) * 1.0 = 12.247 
+// Since reslution is 2.0, we will first mutiply 12.247 by 2 and get to 24.5. We then round that to integer = 24
 
 // What does interpolated mean?
 // Example: BinnerSqrt(X)(10.0, 1.0)
 // let's assume X is 150. sqrt(150) * 1.0 = 12.247 
 // You now want two values emitted - 12 at value 0.247 and 13 at value (1-0.247)
+
+
 
 
 #[derive(Clone)]
@@ -253,7 +263,7 @@ impl FunctionExecutorTrait for TransformerBinner {
             if float_value <= self.greater_than {
                 to_namespace.emit_i32(float_value as i32, hash_value, SeedNumber::Default);
             } else {
-                let transformed_float = (self.function_pointer)(float_value, self.resolution);
+                let transformed_float = (self.function_pointer)(float_value - self.greater_than, self.resolution);
                 to_namespace.emit_f32(transformed_float, hash_value, self.interpolated, SeedNumber::One);
             }
         });
@@ -270,22 +280,23 @@ impl TransformerBinner {
                         ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
 
         if function_params.len() > 2 {
-            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes up to two float arguments, example {}(A)(2.0, 3.5). Both are optional.\nFirst parameter is the resolution (default 0), second parameter is minimum value to apply the function (default -MAX)", function_name, function_name))));
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes up to two float arguments, example {}(A)(2.0, 3.5). Both are optional.\nFirst parameter is the minimum parameter to apply function at (default: -MAX), second parameter is resolution (default: 1.0))", function_name, function_name))));
         }
         
-        let resolution: f32;
+        let greater_than: f32;
         if function_params.len() >= 1 {
-            resolution = function_params[0]
+            greater_than = function_params[0]
+        } else {
+            greater_than = f32::MIN;
+        }
+
+        let resolution: f32;
+        if function_params.len() >= 2 {
+            resolution = function_params[1]
         } else {
             resolution = 1.0;
         }
 
-        let greater_than: f32;
-        if function_params.len() >= 2 {
-            greater_than = function_params[1]
-        } else {
-            greater_than = f32::MIN;
-        }
         
         if from_namespaces.len() != 1 {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes exactly one namespace argument, example {}(A)(2.0)", function_name, function_name))));
@@ -352,9 +363,25 @@ impl TransformerLogRatioBinner {
                         function_params: &Vec<f32>,
                         interpolated: bool,
                         ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
-        if function_params.len() != 2 {
-            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes exactly one float argument, example {}(A)(2.0)", function_name, function_name))));            
+
+        if function_params.len() > 2 {
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes up to two float arguments, example {}(A)(2.0, 3.5). Both are optional.\nFirst parameter is the minimum parameter to apply function at (default: -MAX), second parameter is resolution (default: 1.0))", function_name, function_name))));
         }
+        
+        let greater_than: f32;
+        if function_params.len() >= 1 {
+            greater_than = function_params[0]
+        } else {
+            greater_than = f32::MIN;
+        }
+
+        let resolution: f32;
+        if function_params.len() >= 2 {
+            resolution = function_params[1]
+        } else {
+            resolution = 1.0;
+        }
+
         if from_namespaces.len() != 2 {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes exactly two namespace arguments, example {}(A,B)(2.0)", function_name, function_name))));            
         }
@@ -366,8 +393,8 @@ impl TransformerLogRatioBinner {
 
         Ok(Box::new(Self{from_namespace1: from_namespaces[0].clone(), 
                         from_namespace2: from_namespaces[1].clone(), 
-                        greater_than: function_params[0],
-                        resolution: function_params[1],
+                        resolution: resolution,
+                        greater_than: greater_than,
                         interpolated: interpolated,
                         }))
     }
@@ -426,7 +453,7 @@ impl TransformerWeight {
 
 #[derive(Clone)]
 struct TransformerCombine {
-    from_namespaces: [ExecutorFromNamespace; 5],
+    from_namespaces: [ExecutorFromNamespace; 4],
     n_namespaces: u8,
 }
 
@@ -459,7 +486,8 @@ impl FunctionExecutorTrait for TransformerCombine {
                             });
                         });
                     }),
-            5 =>    feature_reader!(record_buffer, transform_executors, self.from_namespaces[0].namespace_index, hash_index0, hash_value0, {
+/* Disabled since we have compilation time issues */
+/*            5 =>    feature_reader!(record_buffer, transform_executors, self.from_namespaces[0].namespace_index, hash_index0, hash_value0, {
                         feature_reader!(record_buffer, transform_executors, self.from_namespaces[1].namespace_index, hash_index1, hash_value1, {
                             feature_reader!(record_buffer, transform_executors, self.from_namespaces[2].namespace_index, hash_index2, hash_value2, {
                                 feature_reader!(record_buffer, transform_executors, self.from_namespaces[3].namespace_index, hash_index3, hash_value3, {
@@ -470,7 +498,7 @@ impl FunctionExecutorTrait for TransformerCombine {
                                 });
                             });
                         });
-                    }),
+                    }),*/
             _ => {
                 panic!("Impossible number of from_namespaces in function TransformCombine - this should have been caught at parsing stage")
             } 
@@ -488,14 +516,14 @@ impl TransformerCombine {
         if function_params.len() != 0 {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes no float arguments {}(A)()", function_name, function_name))));
         }
-        if from_namespaces.len() <2 || from_namespaces.len() >5 {
-            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes between two and five namespace arguments, example {}(A,B)()", function_name, function_name))));
+        if from_namespaces.len() < 2 || from_namespaces.len() > 4 {
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes between 2 and 4 namespace arguments, example {}(A,B)()", function_name, function_name))));
         }
-        // We do not check if input namespace is float, Combine does not require float namespace as input        
+        // We do not need to check if the input namespace is float, Combine does not require float namespace as input        
 
         // We use fixed arrays, so we need to fill the array with defaults first
         let c = ExecutorFromNamespace{namespace_index: 0, namespace_verbose: "dummy_name".to_owned(), namespace_is_float: false};
-        let mut executor_from_namespaces: [ExecutorFromNamespace;5] = [c.clone(),c.clone(),c.clone(),c.clone(),c.clone()];
+        let mut executor_from_namespaces: [ExecutorFromNamespace;4] = [c.clone(),c.clone(),c.clone(),c.clone()];
         for (x, namespace) in from_namespaces.iter().enumerate() {
             executor_from_namespaces[x] = namespace.clone();
         }
@@ -567,7 +595,7 @@ mod tests {
             tmp_data: Vec::new(),
         };
         
-        let transformer = TransformerBinner::create_function(&(|x, y| x.sqrt() * y), "Blah", &vec![from_namespace], &vec![1.0, 40.0], false).unwrap();
+        let transformer = TransformerBinner::create_function(&(|x, y| x.sqrt() * y), "Blah", &vec![from_namespace], &vec![40.0, 1.], false).unwrap();
         let record_buffer = [7,	// length 
                             0,	// label
                             (1.0_f32).to_bits(), // Example weight 
@@ -603,7 +631,7 @@ mod tests {
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
-        to_namespace_comparison.emit_i32((300.0_f32).sqrt() as i32, 2.0f32, SeedNumber::One);
+        to_namespace_comparison.emit_i32((300.0_f32 - 40.0_f32).sqrt() as i32, 2.0f32, SeedNumber::One);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);        
     }
 
@@ -630,7 +658,7 @@ mod tests {
             tmp_data: Vec::new(),
         };
         
-        let transformer = TransformerLogRatioBinner::create_function("Blah", &vec![from_namespace_1, from_namespace_2], &vec![40., 10.0], false).unwrap();
+        let transformer = TransformerLogRatioBinner::create_function("Blah", &vec![from_namespace_1, from_namespace_2], &vec![40.0, 10.], false).unwrap();
         let record_buffer = [11,	// length 
                             0,	// label
                             (1.0_f32).to_bits(), // Example weight 
