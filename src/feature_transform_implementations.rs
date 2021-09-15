@@ -98,22 +98,18 @@ impl TransformerBinner {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes up to two float arguments, example {}(A)(2.0, 3.5). Both are optional.\nFirst parameter is the minimum parameter to apply function at (default: -MAX), second parameter is resolution (default: 1.0))", function_name, function_name))));
         }
         
-        let greater_than: f32;
-        if function_params.len() >= 1 {
-            greater_than = function_params[0];
-            if greater_than < 0.0 {
-                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} parameter greater_than cannot be negative (passed : {}))", function_name, greater_than))));
-            }
-        } else {
-            greater_than = 0.0;
+        let greater_than = match function_params.get(0) {
+            Some(&greater_than) => greater_than, 
+            None => 0.0
+        };
+        if greater_than < 0.0 {
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} parameter greater_than cannot be negative (passed : {}))", function_name, greater_than))));
         }
 
-        let resolution: f32;
-        if function_params.len() >= 2 {
-            resolution = function_params[1];
-        } else {
-            resolution = 1.0;
-        }
+        let resolution = match function_params.get(1) {
+            Some(&resolution) => resolution, 
+            None => 1.0
+        };
 
         
         if from_namespaces.len() != 1 {
@@ -188,22 +184,18 @@ impl TransformerLogRatioBinner {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes up to two float arguments, example {}(A)(2.0, 3.5). Both are optional.\nFirst parameter is the minimum parameter to apply function at (default: -MAX), second parameter is resolution (default: 1.0))", function_name, function_name))));
         }
         
-        let greater_than: f32;
-        if function_params.len() >= 1 {
-            greater_than = function_params[0];
-            if greater_than < 0.0 {
-                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} parameter greater_than cannot be negative (passed : {}))", function_name, greater_than))));
-            }
-        } else {
-            greater_than = 0.0;
+        let greater_than = match function_params.get(0) {
+            Some(&greater_than) => greater_than, 
+            None => 0.0
+        };
+        if greater_than < 0.0 {
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} parameter greater_than cannot be negative (passed : {}))", function_name, greater_than))));
         }
 
-        let resolution: f32;
-        if function_params.len() >= 2 {
-            resolution = function_params[1];
-        } else {
-            resolution = 1.0;
-        }
+        let resolution = match function_params.get(1) {
+            Some(&resolution) => resolution, 
+            None => 1.0
+        };
 
         if from_namespaces.len() != 2 {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes exactly two namespace arguments, example {}(A,B)(2.0)", function_name, function_name))));            
