@@ -56,7 +56,8 @@ pub struct ExecutorFromNamespace {
 
 
 impl ExecutorToNamespace {
-
+    
+    // We use const generics here as an experiment to see if they would be useful elsewhere to specialize functions
     #[inline(always)]
     pub fn emit_i32<const SEED_ID: usize>(&mut self, to_data:i32, hash_value:f32) {
         let hash_index = murmur3::hash32_with_seed(to_data.to_le_bytes(), *unsafe{self.namespace_seeds.get_unchecked(SEED_ID)}) & parser::MASK31;
