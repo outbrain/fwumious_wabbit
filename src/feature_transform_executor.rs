@@ -27,7 +27,7 @@ pub fn default_seeds(to_namespace_index: u32) -> [u32; 5] {
             ]    
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy)]
 pub enum SeedNumber {
     Default = 0,
     One = 1,
@@ -41,7 +41,7 @@ pub enum SeedNumber {
 
 #[derive(Clone)]
 pub struct ExecutorToNamespace {
-    pub namespace_index: u32,
+    pub namespace_descriptor: vwmap::NamespaceDescriptor,
     pub namespace_verbose: String,
     pub namespace_seeds: [u32; 5],	// These are precomputed namespace seeds
     pub tmp_data: Vec<(u32, f32)>,
@@ -49,9 +49,8 @@ pub struct ExecutorToNamespace {
 
 #[derive(Clone)]
 pub struct ExecutorFromNamespace {
-    pub namespace_index: u32,
+    pub namespace_descriptor: vwmap::NamespaceDescriptor,
     pub namespace_verbose: String,	// This is actually not needed as we could just do a lookup each time
-    pub namespace_is_float: bool,
 }
 
 
@@ -106,10 +105,10 @@ impl TransformExecutor {
     pub fn from_namespace_transform(namespace_transform: &feature_transform_parser::NamespaceTransform) -> Result<TransformExecutor, Box<dyn Error>> {
         
         let namespace_to = ExecutorToNamespace {
-            namespace_index: namespace_transform.to_namespace.namespace_index,
+            namespace_descriptor: namespace_transform.to_namespace.namespace_descriptor,
             namespace_verbose: namespace_transform.to_namespace.namespace_verbose.to_owned(),
             // These are random numbers, i threw a dice!
-            namespace_seeds: default_seeds(namespace_transform.to_namespace.namespace_index),
+            namespace_seeds: default_seeds(namespace_transform.to_namespace.namespace_descriptor.namespace_index as u32),
             tmp_data: Vec::new(),
         };
         
@@ -125,9 +124,9 @@ impl TransformExecutor {
     pub fn create_executor(function_name: &str, namespaces_from: &Vec<feature_transform_parser::Namespace>, function_params: &Vec<f32>) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
         let mut executor_namespaces_from: Vec<ExecutorFromNamespace> = Vec::new();
         for namespace in namespaces_from {
-            executor_namespaces_from.push(ExecutorFromNamespace{namespace_index: namespace.namespace_index, 
+            executor_namespaces_from.push(ExecutorFromNamespace{namespace_descriptor: namespace.namespace_descriptor, 
                                                                 namespace_verbose: namespace.namespace_verbose.to_owned(),
-                                                                namespace_is_float: namespace.namespace_is_float});
+                                                                });
        }
         if        function_name == "BinnerSqrtPlain" {
             TransformerBinner::create_function(&(|x, resolution| x.sqrt() * resolution), function_name, &executor_namespaces_from, function_params, false)
@@ -204,10 +203,15 @@ mod tests {
     use crate::parser::{IS_NOT_SINGLE_MASK, IS_FLOAT_NAMESPACE_MASK, MASK31};
     use crate::feature_transform_executor::default_seeds;
 
+    fn ns_desc(i: u16) -> vwmap::NamespaceDescriptor {
+        vwmap::NamespaceDescriptor {namespace_index: i, namespace_type: vwmap::NamespaceType::Default}
+    }
+
+
     #[test]
     fn test_interpolation() {
         let to_namespace_empty = ExecutorToNamespace {
-                namespace_index: 1,
+                namespace_descriptor: ns_desc(1),
                 namespace_verbose: "b".to_string(),
                 namespace_seeds: default_seeds(1),	// These are precomputed namespace seeds
                 tmp_data: Vec::new(),

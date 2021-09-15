@@ -203,7 +203,7 @@ impl VowpalParser {
                 
                 let mut current_namespace_hash_seed:u32 = 0;
                 let mut current_namespace_index_offset:usize = HEADER_LEN as usize;
-                let mut current_namespace_is_float_namespace = false;
+                let mut current_namespace_type = vwmap::NamespaceType::Default;
 
                 let mut bufpos_namespace_start = 0;
                 let mut current_namespace_weight:f32 = 1.0;
@@ -230,14 +230,15 @@ impl VowpalParser {
                      //   print!("Only single letter namespaces are allowed, however namespace string is: {:?}\n", String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end_first_part]));
                         let current_vwname = &self.tmp_read_buf[i_start..i_end_first_part];
 //                        println!("Current: {:?}", current_vwname);
-                        let current_namespace_index = match self.vw_map.map_vwname_to_index.get(current_vwname) {
-                            Some(v) => *v,
+                        let current_namespace_descriptor = match self.vw_map.map_vwname_to_namespace_descriptor.get(current_vwname) {
+                            Some(v) => v,
                             None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Feature name was not predeclared in vw_namespace_map.csv: {}", String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end_first_part])))))
                         };
+                        let current_namespace_index = current_namespace_descriptor.namespace_index as usize;
                         current_namespace_hash_seed = *self.namespace_hash_seeds.get_unchecked(current_namespace_index);
                         current_namespace_index_offset =  current_namespace_index * NAMESPACE_DESC_LEN as usize + HEADER_LEN as usize;
+                        current_namespace_type = current_namespace_descriptor.namespace_type;
                         current_namespace_num_of_features = 0;
-                        current_namespace_is_float_namespace = self.vw_map.map_index_to_save_as_float[current_namespace_index];
                         bufpos_namespace_start = self.output_buffer.len(); // this is only used if we will have multiple values
                     } else { 
                         // We have a feature! Let's hash it and write it to the buffer
@@ -258,19 +259,19 @@ impl VowpalParser {
                         if current_namespace_weight == 1.0 && 
                             feature_weight == 1.0 && 
                             current_namespace_num_of_features == 0 && 
-                            current_namespace_is_float_namespace == false {
+                            current_namespace_type == vwmap::NamespaceType::Default  {
                             *self.output_buffer.get_unchecked_mut(current_namespace_index_offset) = h;
                         } else {
                             if (current_namespace_num_of_features == 1) && (*self.output_buffer.get_unchecked(current_namespace_index_offset) & IS_NOT_SINGLE_MASK) == 0 {
                                 // We need to promote feature currently written in-place to out of place
                                 self.output_buffer.push(*self.output_buffer.get_unchecked(current_namespace_index_offset));
                                 self.output_buffer.push(FLOAT32_ONE);
-                                debug_assert_eq!(current_namespace_is_float_namespace, false);
+                                debug_assert_eq!(current_namespace_type, vwmap::NamespaceType::Default);
                             }
                             self.output_buffer.push(h);
                             self.output_buffer.push((current_namespace_weight * feature_weight).to_bits());
-                            if current_namespace_is_float_namespace == true {
-                                // The float_namespaces_skip_prefix allows us to parse a value A100, where A is one byte prefix which gets ignored
+                            if current_namespace_type == vwmap::NamespaceType::F32 {
+                                // The namespace_skip_prefix allows us to parse a value A100, where A is one byte prefix which gets ignored
                                 let float_start = i_start + self.vw_map.vw_source.namespace_skip_prefix as usize;
                                 let float_value:f32 = match i_end_first_part - float_start {
                                     0 => f32::NAN,

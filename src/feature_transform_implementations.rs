@@ -10,6 +10,7 @@ use crate::feature_reader_float_namespace;
 
 use crate::feature_transform_executor::{SeedNumber, ExecutorFromNamespace, ExecutorToNamespace, FunctionExecutorTrait, TransformExecutors};
 use crate::feature_transform_parser;
+use crate::vwmap::{NamespaceType, NamespaceDescriptor};
 
 
 
@@ -21,7 +22,7 @@ struct FunctionExampleSqrt {
 
 impl FunctionExecutorTrait for FunctionExampleSqrt {
     fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace, transform_executors: &TransformExecutors) {
-        feature_reader_float_namespace!(record_buffer, self.from_namespace.namespace_index, hash_index, hash_value, float_value, {
+        feature_reader_float_namespace!(record_buffer, self.from_namespace.namespace_descriptor, hash_index, hash_value, float_value, {
             let transformed_float = float_value.sqrt();
             let transformed_int = transformed_float as i32;
             to_namespace.emit_i32::<{SeedNumber::Default as usize}>(transformed_int, hash_value);
@@ -34,7 +35,7 @@ impl FunctionExampleSqrt {
         // For simplicity of example, we just assert instead of full error reporting
         assert!(function_params.len() == 0);
         assert!(from_namespaces.len() == 1);
-        assert!(from_namespaces[0].namespace_is_float == true);
+        assert!(from_namespaces[0].namespace_descriptor.namespace_type == NamespaceType::F32);
         Ok(Box::new(Self{from_namespace: from_namespaces[0].clone()}))
     }   
 }
@@ -73,7 +74,7 @@ pub struct TransformerBinner {
 
 impl FunctionExecutorTrait for TransformerBinner {
     fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace, transform_executors: &TransformExecutors) {
-        feature_reader_float_namespace!(record_buffer, self.from_namespace.namespace_index, hash_index, hash_value, float_value, {
+        feature_reader_float_namespace!(record_buffer, self.from_namespace.namespace_descriptor, hash_index, hash_value, float_value, {
             if float_value < self.greater_than {
                 to_namespace.emit_i32::<{SeedNumber::Default as usize}>(float_value as i32, hash_value);
             } else {
@@ -117,8 +118,8 @@ impl TransformerBinner {
         }
 
         for namespace in from_namespaces.iter() {
-            if !namespace.namespace_is_float {
-                return Err(Box::new(IOError::new(ErrorKind::Other, format!("All namespaces of function {} have to be float: From namespace ({}) has to be defined as --float_namespaces", function_name, namespace.namespace_verbose))));
+            if namespace.namespace_descriptor.namespace_type != NamespaceType::F32 {
+                return Err(Box::new(IOError::new(ErrorKind::Other, format!("All namespaces of function {} have to be of type f32: From namespace ({}) should be typed in vw_namespace_map.csv", function_name, namespace.namespace_verbose))));
             }
         }
 
@@ -150,8 +151,8 @@ pub struct TransformerLogRatioBinner {
 
 impl FunctionExecutorTrait for TransformerLogRatioBinner {
     fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace, transform_executors: &TransformExecutors) {
-        feature_reader_float_namespace!(record_buffer, self.from_namespace1.namespace_index, hash_index1, hash_value1, float_value1, {
-            feature_reader_float_namespace!(record_buffer, self.from_namespace2.namespace_index, hash_index2, hash_value2, float_value2, {
+        feature_reader_float_namespace!(record_buffer, self.from_namespace1.namespace_descriptor, hash_index1, hash_value1, float_value1, {
+            feature_reader_float_namespace!(record_buffer, self.from_namespace2.namespace_descriptor, hash_index2, hash_value2, float_value2, {
 
                 let joint_value = hash_value1 * hash_value2;
                 let val1 = float_value1;
@@ -202,8 +203,8 @@ impl TransformerLogRatioBinner {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes exactly two namespace arguments, example {}(A,B)(2.0)", function_name, function_name))));            
         }
         for namespace in from_namespaces.iter() {
-            if !namespace.namespace_is_float {
-                return Err(Box::new(IOError::new(ErrorKind::Other, format!("All namespaces of function {} have to be float: From namespace ({}) has to be defined as --float_namespaces", function_name, namespace.namespace_verbose))));
+            if namespace.namespace_descriptor.namespace_type != NamespaceType::F32 {
+                return Err(Box::new(IOError::new(ErrorKind::Other, format!("All namespaces of function {} have to be of type f32: From namespace ({}) should be typed in vw_namespace_map.csv", function_name, namespace.namespace_verbose))));
             }
         }
 
@@ -234,7 +235,7 @@ pub struct TransformerWeight {
 
 impl FunctionExecutorTrait for TransformerWeight {
     fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace, transform_executors: &TransformExecutors) {
-        feature_reader!(record_buffer, transform_executors, self.from_namespace.namespace_index, hash_index, hash_value, {
+        feature_reader!(record_buffer, transform_executors, self.from_namespace.namespace_descriptor, hash_index, hash_value, {
             to_namespace.emit_i32::<{SeedNumber::Default as usize}>(hash_index as i32, hash_value * self.multiplier);
         });
     }
@@ -280,22 +281,22 @@ impl FunctionExecutorTrait for TransformerCombine {
         //   - Automatic code generation: Didn't have time to learn macros that well
         // So we are left with good old "spaghetti technique"
         match self.n_namespaces {
-            2 =>    feature_reader!(record_buffer, transform_executors, self.from_namespaces[0].namespace_index, hash_index0, hash_value0, {
-                        feature_reader!(record_buffer, transform_executors, self.from_namespaces[1].namespace_index, hash_index1, hash_value1, {
+            2 =>    feature_reader!(record_buffer, transform_executors, self.from_namespaces[0].namespace_descriptor, hash_index0, hash_value0, {
+                        feature_reader!(record_buffer, transform_executors, self.from_namespaces[1].namespace_descriptor, hash_index1, hash_value1, {
                             to_namespace.emit_i32::<{SeedNumber::Default as usize}>((hash_index0 ^ hash_index1) as i32, hash_value0 * hash_value1);
                         });
                     }),
-            3 =>    feature_reader!(record_buffer, transform_executors, self.from_namespaces[0].namespace_index, hash_index0, hash_value0, {
-                        feature_reader!(record_buffer, transform_executors, self.from_namespaces[1].namespace_index, hash_index1, hash_value1, {
-                            feature_reader!(record_buffer, transform_executors, self.from_namespaces[2].namespace_index, hash_index2, hash_value2, {
+            3 =>    feature_reader!(record_buffer, transform_executors, self.from_namespaces[0].namespace_descriptor, hash_index0, hash_value0, {
+                        feature_reader!(record_buffer, transform_executors, self.from_namespaces[1].namespace_descriptor, hash_index1, hash_value1, {
+                            feature_reader!(record_buffer, transform_executors, self.from_namespaces[2].namespace_descriptor, hash_index2, hash_value2, {
                                 to_namespace.emit_i32::<{SeedNumber::Default as usize}>((hash_index0 ^ hash_index1 ^ hash_index2) as i32, hash_value0 * hash_value1 * hash_value2);
                             });
                         });
                     }),
-            4 =>    feature_reader!(record_buffer, transform_executors, self.from_namespaces[0].namespace_index, hash_index0, hash_value0, {
-                        feature_reader!(record_buffer, transform_executors, self.from_namespaces[1].namespace_index, hash_index1, hash_value1, {
-                            feature_reader!(record_buffer, transform_executors, self.from_namespaces[2].namespace_index, hash_index2, hash_value2, {
-                                feature_reader!(record_buffer, transform_executors, self.from_namespaces[3].namespace_index, hash_index3, hash_value3, {
+            4 =>    feature_reader!(record_buffer, transform_executors, self.from_namespaces[0].namespace_descriptor, hash_index0, hash_value0, {
+                        feature_reader!(record_buffer, transform_executors, self.from_namespaces[1].namespace_descriptor, hash_index1, hash_value1, {
+                            feature_reader!(record_buffer, transform_executors, self.from_namespaces[2].namespace_descriptor, hash_index2, hash_value2, {
+                                feature_reader!(record_buffer, transform_executors, self.from_namespaces[3].namespace_descriptor, hash_index3, hash_value3, {
                                     to_namespace.emit_i32::<{SeedNumber::Default as usize}>((hash_index0 ^ hash_index1 ^ hash_index2 ^ hash_index3) as i32, 
                                                             hash_value0 * hash_value1 * hash_value2 * hash_value3);
                                 });
@@ -303,11 +304,11 @@ impl FunctionExecutorTrait for TransformerCombine {
                         });
                     }),
 /* Disabled since we have compilation time issues */
-/*            5 =>    feature_reader!(record_buffer, transform_executors, self.from_namespaces[0].namespace_index, hash_index0, hash_value0, {
-                        feature_reader!(record_buffer, transform_executors, self.from_namespaces[1].namespace_index, hash_index1, hash_value1, {
-                            feature_reader!(record_buffer, transform_executors, self.from_namespaces[2].namespace_index, hash_index2, hash_value2, {
-                                feature_reader!(record_buffer, transform_executors, self.from_namespaces[3].namespace_index, hash_index3, hash_value3, {
-                                    feature_reader!(record_buffer, transform_executors, self.from_namespaces[4].namespace_index, hash_index4, hash_value4, {
+/*            5 =>    feature_reader!(record_buffer, transform_executors, self.from_namespaces[0].namespace_descriptor, hash_index0, hash_value0, {
+                        feature_reader!(record_buffer, transform_executors, self.from_namespaces[1].namespace_descriptor, hash_index1, hash_value1, {
+                            feature_reader!(record_buffer, transform_executors, self.from_namespaces[2].namespace_descriptor, hash_index2, hash_value2, {
+                                feature_reader!(record_buffer, transform_executors, self.from_namespaces[3].namespace_descriptor, hash_index3, hash_value3, {
+                                    feature_reader!(record_buffer, transform_executors, self.from_namespaces[4].namespace_descriptor, hash_index4, hash_value4, {
                                         to_namespace.emit_i32::<{SeedNumber::Default as usize}>((hash_index0 ^ hash_index1 ^ hash_index2 ^ hash_index3 ^ hash_index4) as i32, 
                                                                 hash_value0 * hash_value1 * hash_value2 * hash_value3 * hash_value4);
                                     });                                                                
@@ -338,7 +339,8 @@ impl TransformerCombine {
         // We do not need to check if the input namespace is float, Combine does not require float namespace as input        
 
         // We use fixed arrays, so we need to fill the array with defaults first
-        let c = ExecutorFromNamespace{namespace_index: 0, namespace_verbose: "dummy_name".to_owned(), namespace_is_float: false};
+        let c = ExecutorFromNamespace{namespace_descriptor: NamespaceDescriptor {namespace_index: 0, namespace_type: NamespaceType::Default}, 
+                                    namespace_verbose: "dummy_name".to_owned()};
         let mut executor_from_namespaces: [ExecutorFromNamespace;4] = [c.clone(),c.clone(),c.clone(),c.clone()];
         for (x, namespace) in from_namespaces.iter().enumerate() {
             executor_from_namespaces[x] = namespace.clone();
@@ -372,21 +374,28 @@ mod tests {
     fn nd(start: u32, end: u32) -> u32 {
         return (start << 16) + end;
     }
+    
+    fn ns_desc(i: u16) -> NamespaceDescriptor {
+        NamespaceDescriptor {namespace_index: i, namespace_type: NamespaceType::Default}
+    }
+
+    fn ns_desc_f32(i: u16) -> NamespaceDescriptor {
+        NamespaceDescriptor {namespace_index: i, namespace_type: NamespaceType::F32}
+    }
+
 
     #[test]
     fn test_transformerbinner_fail() {
         // this fails because input namespace is not float namespace    
         let from_namespace = ExecutorFromNamespace {
-            namespace_index: 0,
+            namespace_descriptor: ns_desc(0),
             namespace_verbose: "a".to_string(),
-            namespace_is_float: false,
         };
-        let to_namespace_index = 1;
-                            
+        
         let to_namespace_empty = ExecutorToNamespace {
-            namespace_index: to_namespace_index,
+            namespace_descriptor: ns_desc(1),
             namespace_verbose: "b".to_string(),
-            namespace_seeds: default_seeds(to_namespace_index),	// These are precomputed namespace seeds
+            namespace_seeds: default_seeds(1),	// These are precomputed namespace seeds
             tmp_data: Vec::new(),
         };
         
@@ -399,16 +408,15 @@ mod tests {
     fn test_transformerbinner() {
         
         let from_namespace = ExecutorFromNamespace {
-            namespace_index: 0,
+            namespace_descriptor: ns_desc_f32(0),
             namespace_verbose: "a".to_string(),
-            namespace_is_float: true,
         };
         let to_namespace_index = 1;
                             
         let to_namespace_empty = ExecutorToNamespace {
-            namespace_index: to_namespace_index,
+            namespace_descriptor: ns_desc(to_namespace_index),
             namespace_verbose: "b".to_string(),
-            namespace_seeds: default_seeds(to_namespace_index),	// These are precomputed namespace seeds
+            namespace_seeds: default_seeds(to_namespace_index as u32),	// These are precomputed namespace seeds
             tmp_data: Vec::new(),
         };
         
@@ -456,22 +464,20 @@ mod tests {
     fn test_transformerlogratiobinner() {
         
         let from_namespace_1 = ExecutorFromNamespace {
-            namespace_index: 0,
+            namespace_descriptor: ns_desc_f32(0),
             namespace_verbose: "a".to_string(),
-            namespace_is_float: true,
         };
 
         let from_namespace_2 = ExecutorFromNamespace {
-            namespace_index: 1,
+            namespace_descriptor: ns_desc_f32(1),
             namespace_verbose: "c".to_string(),
-            namespace_is_float: true,
         };
         let to_namespace_index = 1;
                             
         let to_namespace_empty = ExecutorToNamespace {
-            namespace_index: to_namespace_index,
+            namespace_descriptor: ns_desc(to_namespace_index),
             namespace_verbose: "b".to_string(),
-            namespace_seeds: default_seeds(to_namespace_index),	// These are precomputed namespace seeds
+            namespace_seeds: default_seeds(to_namespace_index as u32),	// These are precomputed namespace seeds
             tmp_data: Vec::new(),
         };
         
@@ -619,16 +625,15 @@ mod tests {
     fn test_transformerweightmutliplier() {
         
         let from_namespace_float = ExecutorFromNamespace {
-            namespace_index: 0,
+            namespace_descriptor: ns_desc_f32(0),
             namespace_verbose: "a".to_string(),
-            namespace_is_float: true,
         };
         let to_namespace_index = 1;
                             
         let to_namespace_empty = ExecutorToNamespace {
-            namespace_index: to_namespace_index,
+            namespace_descriptor: ns_desc(to_namespace_index),
             namespace_verbose: "b".to_string(),
-            namespace_seeds: default_seeds(to_namespace_index),	// These are precomputed namespace seeds
+            namespace_seeds: default_seeds(to_namespace_index as u32),	// These are precomputed namespace seeds
             tmp_data: Vec::new(),
         };
         
@@ -654,9 +659,8 @@ mod tests {
         
         // But weightmultiplier can take non-float namespaces
         let from_namespace_nonfloat = ExecutorFromNamespace {
-            namespace_index: 0,
+            namespace_descriptor: ns_desc(0),
             namespace_verbose: "a".to_string(),
-            namespace_is_float: false,
         };
 
         let transformer = TransformerWeight::create_function("Blah", &vec![from_namespace_nonfloat], &vec![40.]).unwrap();
@@ -687,24 +691,22 @@ mod tests {
     fn test_transformercombine() {
         
         let from_namespace_1 = ExecutorFromNamespace {
-            namespace_index: 0,
+            namespace_descriptor: ns_desc_f32(0),
             namespace_verbose: "a".to_string(),
-            namespace_is_float: true,
         };
 
 
         let from_namespace_2 = ExecutorFromNamespace {
-            namespace_index: 1,
+            namespace_descriptor: ns_desc(1),
             namespace_verbose: "b".to_string(),
-            namespace_is_float: false,
         };
 
         let to_namespace_index = 2;
                             
         let to_namespace_empty = ExecutorToNamespace {
-            namespace_index: to_namespace_index,
+            namespace_descriptor: ns_desc(to_namespace_index),
             namespace_verbose: "c".to_string(),
-            namespace_seeds: default_seeds(to_namespace_index),	// These are precomputed namespace seeds
+            namespace_seeds: default_seeds(to_namespace_index as u32),	// These are precomputed namespace seeds
             tmp_data: Vec::new(),
         };
         

@@ -7,14 +7,27 @@ use serde::{Serialize,Deserialize};
 use std::io::ErrorKind;
 use std::io::Error as IOError;
 
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub enum NamespaceType {
+    Default = 0,
+    F32 = 1,
+    Transformed = 2,
+}
+
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy)]
+pub struct NamespaceDescriptor {
+    pub namespace_index: u16,
+    pub namespace_type: NamespaceType
+}
+
 
 #[derive(Clone, Debug)]
 pub struct VwNamespaceMap {
     pub num_namespaces: usize,
-    pub map_verbose_to_index: HashMap <std::string::String, usize>,
+    pub map_verbose_to_namespace_descriptor: HashMap <std::string::String, NamespaceDescriptor>,
+    pub map_vwname_to_namespace_descriptor: HashMap <Vec<u8>, NamespaceDescriptor>,
     pub map_vwname_to_name: HashMap <Vec<u8>, std::string::String>,
-    pub map_vwname_to_index: HashMap <Vec<u8>, usize>,
-    pub map_index_to_save_as_float: [bool; 256],
     pub vw_source: VwNamespaceMapSource,    // this is the source from which VwNamespaceMap can be constructed - for persistence
 }
 
@@ -37,9 +50,8 @@ impl VwNamespaceMap {
     pub fn new_from_source(vw_source: VwNamespaceMapSource)  -> Result<VwNamespaceMap, Box<dyn Error>> {
         let mut vw = VwNamespaceMap {
                                 num_namespaces:0, 
-                                map_verbose_to_index:HashMap::new(),
-                                map_index_to_save_as_float: [false;256],
-                                map_vwname_to_index: HashMap::new(),
+                                map_verbose_to_namespace_descriptor:HashMap::new(),
+                                map_vwname_to_namespace_descriptor: HashMap::new(),
                                 map_vwname_to_name: HashMap::new(),
                                 vw_source: vw_source,
                                 };
@@ -50,10 +62,20 @@ impl VwNamespaceMap {
             let vwname_str = &vw_entry.namespace_vwname;
             let i = &vw_entry.namespace_index;
             
-            vw.map_verbose_to_index.insert(String::from(name_str), *i as usize);
-            vw.map_vwname_to_index.insert(vwname_str.as_bytes().to_vec(), *i as usize);
+            let namespace_type = match vw_entry.namespace_save_as_float {
+                false => NamespaceType::Default,
+                true => NamespaceType::F32,
+            };
+            
+            let namespace_descriptor = NamespaceDescriptor{
+                                        namespace_index: *i as u16, 
+                                        namespace_type: namespace_type
+                                    };
+            
             vw.map_vwname_to_name.insert(vwname_str.as_bytes().to_vec(), String::from(name_str));
-            vw.map_index_to_save_as_float[*i as usize] = vw_entry.namespace_save_as_float;
+            vw.map_vwname_to_namespace_descriptor.insert(vwname_str.as_bytes().to_vec(), namespace_descriptor.clone());
+            vw.map_verbose_to_namespace_descriptor.insert(String::from(name_str), namespace_descriptor.clone());
+
             if *i > vw.num_namespaces as u32 {
                 vw.num_namespaces = *i as usize;
             } 

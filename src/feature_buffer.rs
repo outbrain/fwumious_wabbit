@@ -2,6 +2,7 @@ use crate::model_instance;
 use crate::parser;
 use crate::feature_transform_executor;
 use crate::feature_transform_parser;
+use crate::vwmap::{NamespaceType};
 
 const VOWPAL_FNV_PRIME:u32 = 16777619;	// vowpal magic number
 //const CONSTANT_NAMESPACE:usize = 128;
@@ -52,14 +53,14 @@ pub struct FeatureBufferTranslator {
 macro_rules! feature_reader {
     ( $record_buffer:ident, 
       $transform_executors:expr,
-      $namespace_index:expr, 
+      $namespace_descriptor:expr, 
       $hash_index:ident, 
       $hash_value:ident, 
       $bl:block  ) => {
-        if $namespace_index & feature_transform_parser::TRANSFORM_NAMESPACE_MARK != 0 {
+        if $namespace_descriptor.namespace_type == NamespaceType::Transformed {
             // This is super-unoptimized
 //            let executor = $transform_executors.get_transformations($record_buffer, $namespace_index);
-            let executor_index = $namespace_index & !feature_transform_parser::TRANSFORM_NAMESPACE_MARK; // remove transform namespace mark
+            let executor_index = $namespace_descriptor.namespace_index;
             let executor = unsafe {$transform_executors.executors.get_unchecked(executor_index as usize)};
             
             // If we have a cyclic defintion (which is a bug), this will panic!
@@ -71,11 +72,11 @@ macro_rules! feature_reader {
             for (hash_index1, hash_value1) in &namespace_to.tmp_data {
                 let $hash_index = *hash_index1;
                 let $hash_value = *hash_value1;
-//                println!("{} SSSSSSS {}", $hash_value, $hash_index);
                 $bl
             }
         } else {
-            let namespace_desc = unsafe {*$record_buffer.get_unchecked(($namespace_index + parser::HEADER_LEN) as usize)};
+            let namespace_index = $namespace_descriptor.namespace_index as usize;
+            let namespace_desc = unsafe {*$record_buffer.get_unchecked(namespace_index + parser::HEADER_LEN as usize)};
             if (namespace_desc & parser::IS_NOT_SINGLE_MASK) == 0 {
                 let $hash_index = namespace_desc;
                 let $hash_value: f32 = 1.0;
@@ -104,12 +105,13 @@ macro_rules! feature_reader {
 #[macro_export]
 macro_rules! feature_reader_float_namespace {
     ( $record_buffer:ident, 
-      $namespace_index:expr, 
+      $namespace_descriptor:expr, 
       $hash_index:ident, 
       $hash_value:ident, 
       $float_value:ident, 
       $bl:block  ) => {
-        let namespace_desc = unsafe {*$record_buffer.get_unchecked(($namespace_index + parser::HEADER_LEN) as usize)};
+        let namespace_index = $namespace_descriptor.namespace_index as usize;
+        let namespace_desc = unsafe {*$record_buffer.get_unchecked(namespace_index + parser::HEADER_LEN as usize)};
         if (namespace_desc & parser::IS_FLOAT_NAMESPACE_MASK) != 0 {
             let start = ((namespace_desc >> 16) & 0x3fff) as usize; 
             let end = (namespace_desc & 0xffff) as usize;
@@ -184,24 +186,24 @@ impl FeatureBufferTranslator {
             for feature_combo_desc in &self.model_instance.feature_combo_descs {
                 let feature_combo_weight = feature_combo_desc.weight;
                 // we unroll first iteration of the loop and optimize
-                let num_namespaces:usize = feature_combo_desc.feature_indices.len() ;
-                let namespace_index = unsafe{*feature_combo_desc.feature_indices.get_unchecked(0)};
+                let num_namespaces:usize = feature_combo_desc.namespace_descriptors.len() ;
+                let namespace_descriptor = unsafe{*feature_combo_desc.namespace_descriptors.get_unchecked(0)};
                 // We special case a single feature (common occurance)
                 if num_namespaces == 1 {
-                    feature_reader!(record_buffer, self.transform_executors, namespace_index, hash_index, hash_value, {
+                    feature_reader!(record_buffer, self.transform_executors, namespace_descriptor, hash_index, hash_value, {
                         lr_buffer.push(HashAndValue {hash: hash_index & self.lr_hash_mask, 
                                                      value: hash_value * feature_combo_weight});
                     });
                 } else {
                     hashes_vec_in.truncate(0);
-                    feature_reader!(record_buffer, self.transform_executors, namespace_index, hash_index, hash_value, {
+                    feature_reader!(record_buffer, self.transform_executors, namespace_descriptor, hash_index, hash_value, {
                             hashes_vec_in.push(HashAndValue {hash: hash_index, value: hash_value});
                         });
-                    for namespace_index in unsafe{feature_combo_desc.feature_indices.get_unchecked(1 as usize .. num_namespaces)} {
+                    for namespace_descriptor in unsafe{feature_combo_desc.namespace_descriptors.get_unchecked(1 as usize .. num_namespaces)} {
                         hashes_vec_out.truncate(0);
                         for handv in &(*hashes_vec_in) {
                             let half_hash = handv.hash.overflowing_mul(VOWPAL_FNV_PRIME).0;
-                            feature_reader!(record_buffer, self.transform_executors, *namespace_index, hash_index, hash_value, {
+                            feature_reader!(record_buffer, self.transform_executors, *namespace_descriptor, hash_index, hash_value, {
                                 hashes_vec_out.push(HashAndValue{   hash: hash_index ^ half_hash,
                                                                     value: handv.value * hash_value});
                             });
@@ -230,8 +232,8 @@ impl FeatureBufferTranslator {
                 self.feature_buffer.ffm_fields_count = self.model_instance.ffm_fields.len() as u32;    
                 //let feature_len = self.feature_buffer.ffm_fields_count * self.model_instance.ffm_k;
                 for (contra_field_index, ffm_field) in self.model_instance.ffm_fields.iter().enumerate() {
-                    for namespace_index in ffm_field {
-                        feature_reader!(record_buffer, self.transform_executors, *namespace_index, hash_index, hash_value, {
+                    for namespace_descriptor in ffm_field {
+                        feature_reader!(record_buffer, self.transform_executors, *namespace_descriptor, hash_index, hash_value, {
                                 ffm_buffer.push(HashAndValueAndSeq {hash: hash_index & self.ffm_hash_mask,
                                                                         value: hash_value,
                                                                         contra_field_index: contra_field_index as u32 * self.model_instance.ffm_k as u32});
@@ -250,6 +252,7 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use crate::parser::{NO_FEATURES, IS_NOT_SINGLE_MASK, IS_FLOAT_NAMESPACE_MASK, MASK31};
+    use crate::vwmap::{NamespaceType, NamespaceDescriptor};
 
     fn add_header(v2: Vec<u32>) -> Vec<u32> {
         let mut rr: Vec<u32> = vec![100, 1, 1.0f32.to_bits()];
@@ -261,13 +264,17 @@ mod tests {
         return (start << 16) + end;
     }
 
+    fn ns_desc(i: u16) -> NamespaceDescriptor {
+        NamespaceDescriptor {namespace_index: i, namespace_type: NamespaceType::Default}
+    }
+
 
     #[test]
     fn test_constant() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = true;
         mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
-                                                        feature_indices: vec![0], 
+                                                        namespace_descriptors: vec![ns_desc(0)],
                                                         weight: 1.0});
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
@@ -282,7 +289,7 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
         mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
-                                                        feature_indices: vec![0], 
+                                                        namespace_descriptors: vec![ns_desc(0)],
                                                         weight: 1.0});
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
@@ -305,10 +312,10 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.add_constant_feature = false;
         mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
-                                                        feature_indices: vec![0], 
+                                                        namespace_descriptors: vec![ns_desc(0)],
                                                         weight: 1.0});
         mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
-                                                        feature_indices: vec![1], 
+                                                        namespace_descriptors: vec![ns_desc(1)],
                                                         weight: 1.0});
 
         let mut fbt = FeatureBufferTranslator::new(&mi);
@@ -334,7 +341,7 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.add_constant_feature = false;
         mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
-                                                        feature_indices: vec![0, 1], 
+                                                        namespace_descriptors: vec![ns_desc(0), ns_desc(1)],
                                                         weight: 1.0});
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
@@ -358,7 +365,7 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.add_constant_feature = false;
         mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
-                                                        feature_indices: vec![0], 
+                                                        namespace_descriptors: vec![ns_desc(0)],
                                                         weight: 2.0});
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
@@ -383,7 +390,7 @@ mod tests {
     fn test_ffm_one() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.add_constant_feature = false;
-        mi.ffm_fields.push(vec![0]);   // single feature in a single fields 
+        mi.ffm_fields.push(vec![ns_desc(0)]);   // single feature in a single fields 
         mi.ffm_k = 1;
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![0xfea]);
@@ -395,8 +402,8 @@ mod tests {
     fn test_ffm_two_fields() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.add_constant_feature = false;
-        mi.ffm_fields.push(vec![0]);   //  single namespace in a field
-        mi.ffm_fields.push(vec![0,1]);   // two namespaces in a field
+        mi.ffm_fields.push(vec![ns_desc(0)]);              //  single namespace in a field
+        mi.ffm_fields.push(vec![ns_desc(0),ns_desc(1)]);   // two namespaces in a field
         mi.ffm_k = 1;
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(5,9), 0xfec, 0xfea, 2.0f32.to_bits(), 0xfeb, 3.0f32.to_bits()]);
@@ -412,9 +419,9 @@ mod tests {
     fn test_ffm_three_fields() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.add_constant_feature = false;
-        mi.ffm_fields.push(vec![0]);   //  single namespace in a field        0xfea, 0xfeb
-        mi.ffm_fields.push(vec![0,1]);   // two namespaces in a field	      0xfea, 0xfeb, 0xfec
-        mi.ffm_fields.push(vec![1]);   // single namespace in a field	      0xfec
+        mi.ffm_fields.push(vec![ns_desc(0)]);   //  single namespace in a field        0xfea, 0xfeb
+        mi.ffm_fields.push(vec![ns_desc(0), ns_desc(1)]);   // two namespaces in a field	      0xfea, 0xfeb, 0xfec
+        mi.ffm_fields.push(vec![ns_desc(1)]);   // single namespace in a field	      0xfec
         mi.ffm_k = 1;
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(5,9), 0x1, 0xfff, 2.0f32.to_bits(), 0xfeb, 3.0f32.to_bits()]);
@@ -447,7 +454,7 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
         mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
-                                                        feature_indices: vec![0], 
+                                                        namespace_descriptors: vec![ns_desc(0)],
                                                         weight: 1.0});
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
@@ -461,7 +468,7 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
         mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
-                                                        feature_indices: vec![1], 
+                                                        namespace_descriptors: vec![ns_desc(1)],
                                                         weight: 1.0});
         
         let mut fbt = FeatureBufferTranslator::new(&mi);

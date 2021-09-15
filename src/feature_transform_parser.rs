@@ -19,9 +19,8 @@ pub const TRANSFORM_NAMESPACE_MARK: u32 = 1<< 31;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Namespace {
-    pub namespace_index: u32,
+    pub namespace_descriptor: vwmap::NamespaceDescriptor,
     pub namespace_verbose: String,
-    pub namespace_is_float: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -49,38 +48,34 @@ impl NamespaceTransforms {
         }
         let (_, (to_namespace_verbose, function_name, from_namespaces_verbose, function_parameters)) = rr.unwrap();
 
-        let to_namespace_index = get_namespace_id_verbose(self, vw, &to_namespace_verbose);
-        if to_namespace_index.is_ok() {
+        let to_namespace_descriptor = get_namespace_descriptor_verbose(self, vw, &to_namespace_verbose);
+        if to_namespace_descriptor.is_ok() {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("To namespace of {} already exists: {:?}", s, to_namespace_verbose))));
         }
+        
+        let to_namespace_descriptor = vwmap::NamespaceDescriptor {
+                                    namespace_index: self.v.len() as u16,
+                                    namespace_type: vwmap::NamespaceType::Transformed,
+                                    };
+        
         let to_namespace = Namespace {
-            namespace_index: self.v.len() as u32 | TRANSFORM_NAMESPACE_MARK, // mark it as special transformed namespace
+            namespace_descriptor: to_namespace_descriptor,
             namespace_verbose: to_namespace_verbose,
-            namespace_is_float: false,
         };
         
         
         let mut from_namespaces: Vec<Namespace> = Vec::new();
         for from_namespace_verbose in &from_namespaces_verbose {
-            let from_namespace_index = get_namespace_id_verbose(self, vw, from_namespace_verbose)?;
-         //   println!("from namespace verbose: {} from namespace index: {}",  from_namespace_verbose, from_namespace_index);
-            let mut namespace_is_float:bool;
-            if from_namespace_index & TRANSFORM_NAMESPACE_MARK != 0 {
-                // Currently if the namespace is a transformed namespace, it cannot be float
-                namespace_is_float = false;
-            } else {
-                namespace_is_float= vw.map_index_to_save_as_float[from_namespace_index as usize]
-            }
-            
-            from_namespaces.push(Namespace{ namespace_index: from_namespace_index, 
-                                            namespace_verbose: from_namespace_verbose.to_string(),
-                                            namespace_is_float: namespace_is_float });
+            let from_namespace_descriptor = get_namespace_descriptor_verbose(self, vw, from_namespace_verbose)?;
+            from_namespaces.push(Namespace{ namespace_descriptor: from_namespace_descriptor, 
+                                            namespace_verbose: from_namespace_verbose.to_string()
+                                            });
         }
         
         // Quadratic for loop... this never goes wrong! 
         for (i, from_namespace_1) in from_namespaces.iter().enumerate() {
             for from_namespace_2 in &from_namespaces[i+1..] {
-                if from_namespace_1.namespace_index == from_namespace_2.namespace_index {
+                if from_namespace_1.namespace_descriptor == from_namespace_2.namespace_descriptor {
                     return Err(Box::new(IOError::new(ErrorKind::Other, format!("Using the same from namespace in multiple arguments to a function is not supported: {:?}", from_namespace_1.namespace_verbose))));
                 }
             }
@@ -103,28 +98,26 @@ impl NamespaceTransforms {
     }
 }
 
-pub fn get_namespace_id(transform_namespaces: &NamespaceTransforms, vw: &vwmap::VwNamespaceMap, namespace_char: char) -> Result<u32, Box<dyn Error>> {
+pub fn get_namespace_descriptor(transform_namespaces: &NamespaceTransforms, vw: &vwmap::VwNamespaceMap, namespace_char: char) 
+    -> Result<vwmap::NamespaceDescriptor, Box<dyn Error>> {
    // Does not support transformed names
-   let index = match vw.map_vwname_to_index.get(&vec![namespace_char as u8]) {
-       Some(index) => return Ok(*index as u32),
+   let namespace_descriptor = match vw.map_vwname_to_namespace_descriptor.get(&vec![namespace_char as u8]) {
+       Some(namespace_descriptor) => return Ok(*namespace_descriptor),
        None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown namespace char in command line: {}", namespace_char))))
-   };   
+   };
 }
 
-pub fn get_namespace_id_verbose(transform_namespaces: &NamespaceTransforms, vw: &vwmap::VwNamespaceMap, namespace_verbose: &str) -> Result<u32, Box<dyn Error>> {
-   let index = match vw.map_verbose_to_index.get(namespace_verbose) {
-       Some(index) => return Ok(*index as u32),
+pub fn get_namespace_descriptor_verbose(transform_namespaces: &NamespaceTransforms, vw: &vwmap::VwNamespaceMap, namespace_verbose: &str) 
+    -> Result<vwmap::NamespaceDescriptor, Box<dyn Error>> {
+   let namespace_descriptor = match vw.map_verbose_to_namespace_descriptor.get(namespace_verbose) {
+       Some(namespace_descriptor) => return Ok(*namespace_descriptor),
        None => {
            // Yes, we do linear search, we only call this couple of times. It's fast enough
-/*           println!("Searching");
-           for x in transform_namespaces.v.iter() {
-               println!("NS: {:?}", x);
-           }*/
            let f:Vec<&NamespaceTransform> = transform_namespaces.v.iter().filter(|x| x.to_namespace.namespace_verbose == namespace_verbose).collect();
            if f.len() == 0 {
                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown verbose namespace in command line: {}", namespace_verbose))));
            } else {
-               return Ok(f[0].to_namespace.namespace_index as u32);
+               return Ok(f[0].to_namespace.namespace_descriptor);
            }
        }
    };   
@@ -212,7 +205,7 @@ pub fn parse_namespace_statement(input: &str) -> IResult<&str, (String, String, 
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::parser::{NO_FEATURES, IS_NOT_SINGLE_MASK, IS_FLOAT_NAMESPACE_MASK, MASK31};
+    use crate::parser::{NO_FEATURES, IS_NOT_SINGLE_MASK, MASK31};
 
 
     #[test]
