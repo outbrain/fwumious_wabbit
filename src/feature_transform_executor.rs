@@ -171,7 +171,9 @@ impl TransformExecutors {
         TransformExecutors {executors: executors}
     }
 
-/*    #[inline(always)]
+/*
+//  We don't use this function as we have put it into feature_reader! macro
+    #[inline(always)]
     pub fn get_transformations<'a>(&self, record_buffer: &[u32], feature_index_offset: u32) -> &TransformExecutor  {
         let executor_index = feature_index_offset & !feature_transform_parser::TRANSFORM_NAMESPACE_MARK; // remove transform namespace mark
         let executor = unsafe {&self.executors.get_unchecked(executor_index as usize)};

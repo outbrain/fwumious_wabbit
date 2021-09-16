@@ -76,14 +76,14 @@ macro_rules! feature_reader {
             }
         } else {
             let namespace_index = $namespace_descriptor.namespace_index as usize;
-            let namespace_desc = unsafe {*$record_buffer.get_unchecked(namespace_index + parser::HEADER_LEN as usize)};
-            if (namespace_desc & parser::IS_NOT_SINGLE_MASK) == 0 {
-                let $hash_index = namespace_desc;
+            let first_token = unsafe {*$record_buffer.get_unchecked(namespace_index + parser::HEADER_LEN as usize)};
+            if (first_token & parser::IS_NOT_SINGLE_MASK) == 0 {
+                let $hash_index = first_token;
                 let $hash_value: f32 = 1.0;
                 $bl
             } else {
-                let start = ((namespace_desc >> 16) & 0x3fff) as usize; 
-                let end = (namespace_desc & 0xffff) as usize;
+                let start = ((first_token >> 16) & 0x3fff) as usize; 
+                let end = (first_token & 0xffff) as usize;
                 if $namespace_descriptor.namespace_type != NamespaceType::F32 {
                     for hash_offset in (start..end).step_by(2) {
                         let $hash_index = unsafe {*$record_buffer.get_unchecked(hash_offset)};
@@ -111,10 +111,10 @@ macro_rules! feature_reader_float_namespace {
       $float_value:ident, 
       $bl:block  ) => {
         let namespace_index = $namespace_descriptor.namespace_index as usize;
-        let namespace_desc = unsafe {*$record_buffer.get_unchecked(namespace_index + parser::HEADER_LEN as usize)};
-        if (namespace_desc & parser::IS_FLOAT_NAMESPACE_MASK) != 0 {
-            let start = ((namespace_desc >> 16) & 0x3fff) as usize; 
-            let end = (namespace_desc & 0xffff) as usize;
+        let first_token = unsafe {*$record_buffer.get_unchecked(namespace_index + parser::HEADER_LEN as usize)};
+        if $namespace_descriptor.namespace_type == NamespaceType::F32 {
+            let start = ((first_token >> 16) & 0x3fff) as usize; 
+            let end = (first_token & 0xffff) as usize;
             for hash_offset in (start..end).step_by(3) {
                 let $hash_index = unsafe {*$record_buffer.get_unchecked(hash_offset)};
                 let $hash_value = unsafe {f32::from_bits(*$record_buffer.get_unchecked(hash_offset+1))};
