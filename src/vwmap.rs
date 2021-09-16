@@ -7,7 +7,7 @@ use serde::{Serialize,Deserialize};
 use std::io::ErrorKind;
 use std::io::Error as IOError;
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, Eq)]
 pub enum NamespaceType {
     Default = 0,
     F32 = 1,
@@ -36,8 +36,8 @@ pub struct VwNamespaceMap {
 pub struct VwNamespaceMapEntry {
     pub namespace_vwname: std::string::String,
     namespace_verbose: std::string::String,
-    namespace_index: u32,
-    namespace_save_as_float: bool, 
+    namespace_index: u16,
+    namespace_type: NamespaceType, 
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
@@ -60,24 +60,18 @@ impl VwNamespaceMap {
             //let record = result?;
             let name_str = &vw_entry.namespace_verbose;
             let vwname_str = &vw_entry.namespace_vwname;
-            let i = &vw_entry.namespace_index;
-            
-            let namespace_type = match vw_entry.namespace_save_as_float {
-                false => NamespaceType::Default,
-                true => NamespaceType::F32,
-            };
             
             let namespace_descriptor = NamespaceDescriptor{
-                                        namespace_index: *i as u16, 
-                                        namespace_type: namespace_type
+                                        namespace_index: vw_entry.namespace_index, 
+                                        namespace_type: vw_entry.namespace_type,
                                     };
             
             vw.map_vwname_to_name.insert(vwname_str.as_bytes().to_vec(), String::from(name_str));
             vw.map_vwname_to_namespace_descriptor.insert(vwname_str.as_bytes().to_vec(), namespace_descriptor.clone());
             vw.map_verbose_to_namespace_descriptor.insert(String::from(name_str), namespace_descriptor.clone());
 
-            if *i > vw.num_namespaces as u32 {
-                vw.num_namespaces = *i as usize;
+            if vw_entry.namespace_index as usize > vw.num_namespaces {
+                vw.num_namespaces = vw_entry.namespace_index as usize;
             } 
         }
         vw.num_namespaces += 1;
@@ -113,18 +107,18 @@ impl VwNamespaceMap {
             }
             
             let name_str = &record[1];
-            let namespace_save_as_float = match &record.get(2) {
-                Some("f32") => true,
-                Some("") => false,
-                None => false,
+            let namespace_type = match &record.get(2) {
+                Some("f32") => NamespaceType::F32,
+                Some("") => NamespaceType::Default,
+                None => NamespaceType::Default,
                 Some(unknown_type) => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown type used for the feature in vw_namespace_map.csv: \"{}\". Only \"f32\" is possible.", unknown_type))))
             };
             
             vw_source.entries.push(VwNamespaceMapEntry {
                 namespace_vwname: vwname_str.to_string(),
                 namespace_verbose: name_str.to_string(),
-                namespace_index: i as u32,
-                namespace_save_as_float: namespace_save_as_float,
+                namespace_index: i as u16,
+                namespace_type: namespace_type,
             });
         }
 
@@ -154,21 +148,21 @@ C,featureC
                 namespace_vwname: "A".to_string(),
                 namespace_verbose: "featureA".to_string(),
                 namespace_index: 0,
-                namespace_save_as_float: false});         
+                namespace_type: NamespaceType::Default});         
 
         assert_eq!(vw.vw_source.entries[1], 
             VwNamespaceMapEntry {
                 namespace_vwname: "B".to_string(),
                 namespace_verbose: "featureB".to_string(),
                 namespace_index: 1,
-                namespace_save_as_float: false});         
+                namespace_type: NamespaceType::Default});         
 
         assert_eq!(vw.vw_source.entries[2], 
             VwNamespaceMapEntry {
                 namespace_vwname: "C".to_string(),
                 namespace_verbose: "featureC".to_string(),
                 namespace_index: 2,
-                namespace_save_as_float: false});         
+                namespace_type: NamespaceType::Default});         
     }
 
 
@@ -182,7 +176,7 @@ C,featureC
                     namespace_vwname: "A".to_string(),
                     namespace_verbose: "featureA".to_string(),
                     namespace_index: 0,
-                    namespace_save_as_float: true});         
+                    namespace_type: NamespaceType::F32});         
             assert_eq!(vw.vw_source.namespace_skip_prefix, 2);
         }
         {
