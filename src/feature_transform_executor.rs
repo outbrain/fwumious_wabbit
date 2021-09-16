@@ -18,6 +18,7 @@ use crate::feature_transform_implementations::{TransformerBinner, TransformerLog
 
 
 pub fn default_seeds(to_namespace_index: u32) -> [u32; 5] {
+            let to_namespace_index = to_namespace_index ^ 1u32 << 31; // compatibility with earlier version
             [      
                 murmur3::hash32_with_seed(vec![214, 231, 1, 55], to_namespace_index),
                 murmur3::hash32_with_seed(vec![255, 6, 14, 69], to_namespace_index),
