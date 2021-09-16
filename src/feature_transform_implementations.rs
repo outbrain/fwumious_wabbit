@@ -362,7 +362,7 @@ impl TransformerCombine {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::parser::{IS_NOT_SINGLE_MASK, IS_FLOAT_NAMESPACE_MASK, MASK31};
+    use crate::parser::{IS_NOT_SINGLE_MASK, MASK31};
     use crate::feature_transform_executor::default_seeds;
 
     fn add_header(v2: Vec<u32>) -> Vec<u32> {
@@ -421,13 +421,12 @@ mod tests {
         };
         
         let transformer = TransformerBinner::create_function(&(|x, y| x.sqrt() * y), "Blah", &vec![from_namespace], &vec![40.0, 1.], false).unwrap();
-        let record_buffer = [7,	// length 
+        let record_buffer = [6,	// length 
                             0,	// label
                             (1.0_f32).to_bits(), // Example weight 
-                            nd(4, 7) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                            nd(4, 6) | IS_NOT_SINGLE_MASK, 
                             // Feature triple
                             1775699190 & MASK31,    // Hash location 
-                            2.0f32.to_bits(),       // Feature value of the feature
                             3.0f32.to_bits()];       // Float feature value
  
         let mut to_namespace = to_namespace_empty.clone();
@@ -437,18 +436,17 @@ mod tests {
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
-        to_namespace_comparison.emit_i32::<{SeedNumber::Default as usize}>(3, 2.0f32);
+        to_namespace_comparison.emit_i32::<{SeedNumber::Default as usize}>(3, 1.0f32);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
         
         
         // Now let's try with value> 40.0
-        let record_buffer = [7,	// length 
+        let record_buffer = [6,	// length 
                             0,	// label
                             (1.0_f32).to_bits(), // Example weight 
-                            nd(4, 7) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                            nd(4, 6) | IS_NOT_SINGLE_MASK, 
                             // Feature triple
                             1775699190 & MASK31,    // Hash location 
-                            2.0f32.to_bits(),       // Feature value of the feature
                             300.0f32.to_bits()];       // Float feature value
 
         let mut to_namespace = to_namespace_empty.clone();
@@ -456,7 +454,7 @@ mod tests {
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
-        to_namespace_comparison.emit_i32::<{SeedNumber::One as usize}>((300.0_f32 - 40.0_f32).sqrt() as i32, 2.0f32);
+        to_namespace_comparison.emit_i32::<{SeedNumber::One as usize}>((300.0_f32 - 40.0_f32).sqrt() as i32, 1.0f32);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);        
     }
 
@@ -482,18 +480,16 @@ mod tests {
         };
         
         let transformer = TransformerLogRatioBinner::create_function("Blah", &vec![from_namespace_1, from_namespace_2], &vec![40.0, 10.], false).unwrap();
-        let record_buffer = [11,	// length 
+        let record_buffer = [9,	// length 
                             0,	// label
                             (1.0_f32).to_bits(), // Example weight 
-                            nd(5, 8) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
-                            nd(8, 11) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                            nd(5, 7) | IS_NOT_SINGLE_MASK, 
+                            nd(7, 9) | IS_NOT_SINGLE_MASK, 
                             // Feature triple
                             1775699190 & MASK31,    // Hash location 
-                            2.0f32.to_bits(),       // Feature value of the feature
                             3.0f32.to_bits(),
                             // Feature triple
                             1775699190 & MASK31,    // Hash location 
-                            3.0f32.to_bits(),       // Feature value of the feature
                             7.0f32.to_bits(),
                             
                             ];       // Float feature value
@@ -504,24 +500,22 @@ mod tests {
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
-        to_namespace_comparison.emit_i32_i32::<{SeedNumber::One as usize}>(3 as i32, 7 as i32, 6.0);
+        to_namespace_comparison.emit_i32_i32::<{SeedNumber::One as usize}>(3 as i32, 7 as i32, 1.0);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
         
         
 
         // Now let's have 30.0/60.0
-        let record_buffer = [11,	// length 
+        let record_buffer = [9,	// length 
                             0,	// label
                             (1.0_f32).to_bits(), // Example weight 
-                            nd(5, 8) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
-                            nd(8, 11) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                            nd(5, 7) | IS_NOT_SINGLE_MASK, 
+                            nd(7, 9) | IS_NOT_SINGLE_MASK, 
                             // Feature triple
                             1775699190 & MASK31,    // Hash location 
-                            2.0f32.to_bits(),       // Feature value of the feature
                             30.0f32.to_bits(),
                             // Feature triple
                             1775699190 & MASK31,    // Hash location 
-                            3.0f32.to_bits(),       // Feature value of the feature
                             60.0f32.to_bits(),
                             
                             ];       // Float feature value
@@ -532,23 +526,21 @@ mod tests {
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
-        to_namespace_comparison.emit_f32::<{SeedNumber::Default as usize}>((30.0/60.0_f32).ln() * 10.0, 6.0, false);
+        to_namespace_comparison.emit_f32::<{SeedNumber::Default as usize}>((30.0/60.0_f32).ln() * 10.0, 1.0, false);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
 
 
         // Now let's have 30.0/0.0
-        let record_buffer = [11,	// length 
+        let record_buffer = [9,	// length 
                             0,	// label
                             (1.0_f32).to_bits(), // Example weight 
-                            nd(5, 8) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
-                            nd(8, 11) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                            nd(5, 7) | IS_NOT_SINGLE_MASK, 
+                            nd(7, 9) | IS_NOT_SINGLE_MASK, 
                             // Feature triple
                             1775699190 & MASK31,    // Hash location 
-                            2.0f32.to_bits(),       // Feature value of the feature
                             30.0f32.to_bits(),
                             // Feature triple
                             1775699190 & MASK31,    // Hash location 
-                            3.0f32.to_bits(),       // Feature value of the feature
                             0.0f32.to_bits(),
                             
                             ];       // Float feature value
@@ -559,22 +551,20 @@ mod tests {
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
-        to_namespace_comparison.emit_i32_i32::<{SeedNumber::One as usize}>(30, 0, 6.0);
+        to_namespace_comparison.emit_i32_i32::<{SeedNumber::One as usize}>(30, 0, 1.0);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
 
         // Now let's have 0.0/50.0
-        let record_buffer = [11,	// length 
+        let record_buffer = [9,	// length 
                             0,	// label
                             (1.0_f32).to_bits(), // Example weight 
-                            nd(5, 8) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
-                            nd(8, 11) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                            nd(5, 7) | IS_NOT_SINGLE_MASK, 
+                            nd(7, 9) | IS_NOT_SINGLE_MASK, 
                             // Feature triple
                             1775699190 & MASK31,    // Hash location 
-                            2.0f32.to_bits(),       // Feature value of the feature
                             0.0f32.to_bits(),
                             // Feature triple
                             1775699190 & MASK31,    // Hash location 
-                            3.0f32.to_bits(),       // Feature value of the feature
                             50.0f32.to_bits(),
                             
                             ];       // Float feature value
@@ -585,24 +575,22 @@ mod tests {
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
-        to_namespace_comparison.emit_f32::<{SeedNumber::Two as usize}>((50_f32 - 40_f32).ln(), 6.0, false);
+        to_namespace_comparison.emit_f32::<{SeedNumber::Two as usize}>((50_f32 - 40_f32).ln(), 1.0, false);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
 
 
 
         // Now let's have 50.0/0.0
-        let record_buffer = [11,	// length 
+        let record_buffer = [9,	// length 
                             0,	// label
                             (1.0_f32).to_bits(), // Example weight 
-                            nd(5, 8) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
-                            nd(8, 11) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                            nd(5, 7) | IS_NOT_SINGLE_MASK, 
+                            nd(7, 9) | IS_NOT_SINGLE_MASK, 
                             // Feature triple
                             1775699190 & MASK31,    // Hash location 
-                            2.0f32.to_bits(),       // Feature value of the feature
                             50.0f32.to_bits(),
                             // Feature triple
                             1775699190 & MASK31,    // Hash location 
-                            3.0f32.to_bits(),       // Feature value of the feature
                             0.0f32.to_bits(),
                             
                             ];       // Float feature value
@@ -613,7 +601,7 @@ mod tests {
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
-        to_namespace_comparison.emit_f32::<{SeedNumber::Three as usize}>((50_f32 - 40_f32).ln(), 6.0, false);
+        to_namespace_comparison.emit_f32::<{SeedNumber::Three as usize}>((50_f32 - 40_f32).ln(), 1.0, false);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
 
 
@@ -638,13 +626,12 @@ mod tests {
         };
         
         let transformer = TransformerWeight::create_function("Blah", &vec![from_namespace_float], &vec![40.]).unwrap();
-        let record_buffer = [7,	// length 
+        let record_buffer = [6,	// length 
                             0,	// label
                             (1.0_f32).to_bits(), // Example weight 
-                            nd(4, 7) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                            nd(4, 6) | IS_NOT_SINGLE_MASK, 
                             // Feature triple
                             1775699190 & MASK31,    // Hash location 
-                            2.0f32.to_bits(),       // Feature value of the feature
                             3.0f32.to_bits()];       // Float feature value
  
         let mut to_namespace = to_namespace_empty.clone();
@@ -654,7 +641,7 @@ mod tests {
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
-        to_namespace_comparison.emit_i32::<{SeedNumber::Default as usize}>((1775699190 & MASK31) as i32, 2.0f32 * 40.);
+        to_namespace_comparison.emit_i32::<{SeedNumber::Default as usize}>((1775699190 & MASK31) as i32, 1.0f32 * 40.);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
         
         // But weightmultiplier can take non-float namespaces
@@ -712,19 +699,17 @@ mod tests {
         
         let transformer = TransformerCombine::create_function("Blah", &vec![from_namespace_1, from_namespace_2], &vec![]).unwrap();
 
-        let record_buffer = [10,	// length 
+        let record_buffer = [9,	// length 
                             0,	// label
                             (1.0_f32).to_bits(), // Example weight 
-                            nd(5, 8) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
-                            nd(8, 10) | IS_NOT_SINGLE_MASK, 
+                            nd(5, 7) | IS_NOT_SINGLE_MASK, 
+                            nd(7, 9) | IS_NOT_SINGLE_MASK, 
                             // Feature triple
                             1775699190 & MASK31,    // Hash location 
-                            2.0f32.to_bits(),       // Feature value of the feature
-                            3.0f32.to_bits(),
+                            3.0f32.to_bits(),	    // Float value of the feature
                             // Feature triple
                             1775699190 & MASK31,    // Hash location 
-                            3.0f32.to_bits(),       // Feature value of the feature
-                            
+                            3.0f32.to_bits(),       // Weight of the feature
                             ];      
 
         let mut to_namespace = to_namespace_empty.clone();
@@ -734,7 +719,7 @@ mod tests {
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
-        to_namespace_comparison.emit_i32::<{SeedNumber::Default as usize}>((1775699190 ^ 1775699190) as i32, 6.0f32);
+        to_namespace_comparison.emit_i32::<{SeedNumber::Default as usize}>((1775699190 ^ 1775699190) as i32, 3.0f32);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
     }
 

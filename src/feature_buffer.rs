@@ -59,9 +59,7 @@ macro_rules! feature_reader {
       $bl:block  ) => {
         if $namespace_descriptor.namespace_type == NamespaceType::Transformed {
             // This is super-unoptimized
-//            let executor = $transform_executors.get_transformations($record_buffer, $namespace_index);
-            let executor_index = $namespace_descriptor.namespace_index;
-            let executor = unsafe {$transform_executors.executors.get_unchecked(executor_index as usize)};
+            let executor = unsafe {$transform_executors.executors.get_unchecked($namespace_descriptor.namespace_index as usize)};
             
             // If we have a cyclic defintion (which is a bug), this will panic!
             let mut namespace_to = executor.namespace_to.borrow_mut();
@@ -91,9 +89,9 @@ macro_rules! feature_reader {
                         $bl
                     }
                 } else {
-                    for hash_offset in (start..end).step_by(3) {
+                    for hash_offset in (start..end).step_by(2) {
                         let $hash_index = unsafe {*$record_buffer.get_unchecked(hash_offset)};
-                        let $hash_value = unsafe {f32::from_bits(*$record_buffer.get_unchecked(hash_offset+1))};
+                        let $hash_value: f32 = 1.0;
                         $bl
                     }
                 }
@@ -115,10 +113,10 @@ macro_rules! feature_reader_float_namespace {
         if $namespace_descriptor.namespace_type == NamespaceType::F32 {
             let start = ((first_token >> 16) & 0x3fff) as usize; 
             let end = (first_token & 0xffff) as usize;
-            for hash_offset in (start..end).step_by(3) {
+            for hash_offset in (start..end).step_by(2) {
                 let $hash_index = unsafe {*$record_buffer.get_unchecked(hash_offset)};
-                let $hash_value = unsafe {f32::from_bits(*$record_buffer.get_unchecked(hash_offset+1))};
-                let $float_value = unsafe {f32::from_bits(*$record_buffer.get_unchecked(hash_offset+2))};
+                let $hash_value:f32 = 1.0;
+                let $float_value = unsafe {f32::from_bits(*$record_buffer.get_unchecked(hash_offset+1))};
                 $bl
             }
         } else {
@@ -251,7 +249,7 @@ impl FeatureBufferTranslator {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::parser::{NO_FEATURES, IS_NOT_SINGLE_MASK, IS_FLOAT_NAMESPACE_MASK, MASK31};
+    use crate::parser::{NO_FEATURES, IS_NOT_SINGLE_MASK, MASK31};
     use crate::vwmap::{NamespaceType, NamespaceDescriptor};
 
     fn add_header(v2: Vec<u32>) -> Vec<u32> {
@@ -477,13 +475,13 @@ mod tests {
         
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![                       NO_FEATURES, 
-                                                        nd(6, 12) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                                                        nd(6, 10) | IS_NOT_SINGLE_MASK, 
                                                         NO_FEATURES, 
-                                                        0xffc & MASK31, 2.0f32.to_bits(), 3.0f32.to_bits(),
-                                                        0xffa & MASK31, 1.0f32.to_bits(), 4.0f32.to_bits(),
+                                                        0xffc & MASK31, 3.0f32.to_bits(),
+                                                        0xffa & MASK31, 4.0f32.to_bits(),
                                                         ]);
         fbt.translate(&rb, 0);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xffc, value:2.0}, HashAndValue {hash:0xffa, value:1.0}]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xffc, value:1.0}, HashAndValue {hash:0xffa, value:1.0}]);
     }
 
 }
