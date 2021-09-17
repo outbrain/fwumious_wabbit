@@ -10,7 +10,7 @@ use crate::feature_reader_float_namespace;
 
 use crate::feature_transform_executor::{SeedNumber, ExecutorFromNamespace, ExecutorToNamespace, FunctionExecutorTrait, TransformExecutors};
 use crate::feature_transform_parser;
-use crate::vwmap::{NamespaceType, NamespaceDescriptor};
+use crate::vwmap::{NamespaceType, NamespaceFormat, NamespaceDescriptor};
 
 
 
@@ -35,7 +35,8 @@ impl FunctionExampleSqrt {
         // For simplicity of example, we just assert instead of full error reporting
         assert!(function_params.len() == 0);
         assert!(from_namespaces.len() == 1);
-        assert!(from_namespaces[0].namespace_descriptor.namespace_type == NamespaceType::F32);
+        assert!(from_namespaces[0].namespace_descriptor.namespace_type == NamespaceType::Primitive);
+        assert!(from_namespaces[0].namespace_descriptor.namespace_format == NamespaceFormat::F32);
         Ok(Box::new(Self{from_namespace: from_namespaces[0].clone()}))
     }   
 }
@@ -118,7 +119,7 @@ impl TransformerBinner {
         }
 
         for namespace in from_namespaces.iter() {
-            if namespace.namespace_descriptor.namespace_type != NamespaceType::F32 {
+            if namespace.namespace_descriptor.namespace_format != NamespaceFormat::F32 {
                 return Err(Box::new(IOError::new(ErrorKind::Other, format!("All namespaces of function {} have to be of type f32: From namespace ({}) should be typed in vw_namespace_map.csv", function_name, namespace.namespace_verbose))));
             }
         }
@@ -203,7 +204,7 @@ impl TransformerLogRatioBinner {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes exactly two namespace arguments, example {}(A,B)(2.0)", function_name, function_name))));            
         }
         for namespace in from_namespaces.iter() {
-            if namespace.namespace_descriptor.namespace_type != NamespaceType::F32 {
+            if namespace.namespace_descriptor.namespace_format != NamespaceFormat::F32 {
                 return Err(Box::new(IOError::new(ErrorKind::Other, format!("All namespaces of function {} have to be of type f32: From namespace ({}) should be typed in vw_namespace_map.csv", function_name, namespace.namespace_verbose))));
             }
         }
@@ -339,7 +340,9 @@ impl TransformerCombine {
         // We do not need to check if the input namespace is float, Combine does not require float namespace as input        
 
         // We use fixed arrays, so we need to fill the array with defaults first
-        let c = ExecutorFromNamespace{namespace_descriptor: NamespaceDescriptor {namespace_index: 0, namespace_type: NamespaceType::Default}, 
+        let c = ExecutorFromNamespace{namespace_descriptor: NamespaceDescriptor {namespace_index: 0, 
+                                                                                namespace_type: NamespaceType::Primitive, 
+                                                                                namespace_format: NamespaceFormat::Categorical}, 
                                     namespace_verbose: "dummy_name".to_owned()};
         let mut executor_from_namespaces: [ExecutorFromNamespace;4] = [c.clone(),c.clone(),c.clone(),c.clone()];
         for (x, namespace) in from_namespaces.iter().enumerate() {
@@ -376,11 +379,18 @@ mod tests {
     }
     
     fn ns_desc(i: u16) -> NamespaceDescriptor {
-        NamespaceDescriptor {namespace_index: i, namespace_type: NamespaceType::Default}
+        NamespaceDescriptor {namespace_index: i, 
+                             namespace_type: NamespaceType::Primitive,
+                             namespace_format: NamespaceFormat::Categorical,
+                             }
     }
 
     fn ns_desc_f32(i: u16) -> NamespaceDescriptor {
-        NamespaceDescriptor {namespace_index: i, namespace_type: NamespaceType::F32}
+        NamespaceDescriptor {namespace_index: i, 
+                             namespace_type: NamespaceType::Primitive,
+                             namespace_format: NamespaceFormat::F32,
+                             }
+
     }
 
 

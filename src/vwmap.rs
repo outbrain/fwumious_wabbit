@@ -9,16 +9,22 @@ use std::io::Error as IOError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, Eq)]
 pub enum NamespaceType {
-    Default = 0,
-    F32 = 1,
-    Transformed = 2,
+    Primitive = 0,
+    Transformed = 1,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, Eq)]
+pub enum NamespaceFormat {
+    Categorical = 0, // categorical (binary) features encoding (we have the hash and weight of each feature, value of the feature is assumed to be 1.0 (binary))
+    F32 = 1,	// f32 features encoding (we have the hash and value of each feature, weight is assumed to be 1.0)
 }
 
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy)]
 pub struct NamespaceDescriptor {
     pub namespace_index: u16,
-    pub namespace_type: NamespaceType
+    pub namespace_type: NamespaceType,
+    pub namespace_format: NamespaceFormat,
 }
 
 
@@ -37,7 +43,7 @@ pub struct VwNamespaceMapEntry {
     pub namespace_vwname: std::string::String,
     namespace_verbose: std::string::String,
     namespace_index: u16,
-    namespace_type: NamespaceType, 
+    namespace_format: NamespaceFormat, 
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
@@ -63,7 +69,8 @@ impl VwNamespaceMap {
             
             let namespace_descriptor = NamespaceDescriptor{
                                         namespace_index: vw_entry.namespace_index, 
-                                        namespace_type: vw_entry.namespace_type,
+                                        namespace_type: NamespaceType::Primitive,
+                                        namespace_format: vw_entry.namespace_format,
                                     };
             
             vw.map_vwname_to_name.insert(vwname_str.as_bytes().to_vec(), String::from(name_str));
@@ -107,10 +114,10 @@ impl VwNamespaceMap {
             }
             
             let name_str = &record[1];
-            let namespace_type = match &record.get(2) {
-                Some("f32") => NamespaceType::F32,
-                Some("") => NamespaceType::Default,
-                None => NamespaceType::Default,
+            let namespace_format = match &record.get(2) {
+                Some("f32") => NamespaceFormat::F32,
+                Some("") => NamespaceFormat::Categorical,
+                None => NamespaceFormat::Categorical,
                 Some(unknown_type) => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown type used for the feature in vw_namespace_map.csv: \"{}\". Only \"f32\" is possible.", unknown_type))))
             };
             
@@ -118,7 +125,7 @@ impl VwNamespaceMap {
                 namespace_vwname: vwname_str.to_string(),
                 namespace_verbose: name_str.to_string(),
                 namespace_index: i as u16,
-                namespace_type: namespace_type,
+                namespace_format: namespace_format,
             });
         }
 
@@ -148,21 +155,21 @@ C,featureC
                 namespace_vwname: "A".to_string(),
                 namespace_verbose: "featureA".to_string(),
                 namespace_index: 0,
-                namespace_type: NamespaceType::Default});         
+                namespace_format: NamespaceFormat::Categorical});         
 
         assert_eq!(vw.vw_source.entries[1], 
             VwNamespaceMapEntry {
                 namespace_vwname: "B".to_string(),
                 namespace_verbose: "featureB".to_string(),
                 namespace_index: 1,
-                namespace_type: NamespaceType::Default});         
+                namespace_format: NamespaceFormat::Categorical});         
 
         assert_eq!(vw.vw_source.entries[2], 
             VwNamespaceMapEntry {
                 namespace_vwname: "C".to_string(),
                 namespace_verbose: "featureC".to_string(),
                 namespace_index: 2,
-                namespace_type: NamespaceType::Default});         
+                namespace_format: NamespaceFormat::Categorical});         
     }
 
 
@@ -176,7 +183,7 @@ C,featureC
                     namespace_vwname: "A".to_string(),
                     namespace_verbose: "featureA".to_string(),
                     namespace_index: 0,
-                    namespace_type: NamespaceType::F32});         
+                    namespace_format: NamespaceFormat::F32});         
             assert_eq!(vw.vw_source.namespace_skip_prefix, 2);
         }
         {

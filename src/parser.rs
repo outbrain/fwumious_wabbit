@@ -202,7 +202,7 @@ impl VowpalParser {
                 
                 let mut current_namespace_hash_seed:u32 = 0;
                 let mut current_namespace_index_offset:usize = HEADER_LEN as usize;
-                let mut current_namespace_type = vwmap::NamespaceType::Default;
+                let mut current_namespace_format = vwmap::NamespaceFormat::Categorical;
 
                 let mut bufpos_namespace_start = 0;
                 let mut current_namespace_weight:f32 = 1.0;
@@ -236,7 +236,7 @@ impl VowpalParser {
                         let current_namespace_index = current_namespace_descriptor.namespace_index as usize;
                         current_namespace_hash_seed = *self.namespace_hash_seeds.get_unchecked(current_namespace_index);
                         current_namespace_index_offset =  current_namespace_index * NAMESPACE_DESC_LEN as usize + HEADER_LEN as usize;
-                        current_namespace_type = current_namespace_descriptor.namespace_type;
+                        current_namespace_format = current_namespace_descriptor.namespace_format;
                         current_namespace_num_of_features = 0;
                         bufpos_namespace_start = self.output_buffer.len(); // this is only used if we will have multiple values
                     } else { 
@@ -258,17 +258,17 @@ impl VowpalParser {
                         if current_namespace_weight == 1.0 && 
                             feature_weight == 1.0 && 
                             current_namespace_num_of_features == 0 && 
-                            current_namespace_type == vwmap::NamespaceType::Default  {
+                            current_namespace_format == vwmap::NamespaceFormat::Categorical  {
                             *self.output_buffer.get_unchecked_mut(current_namespace_index_offset) = h;
                         } else {
                             if (current_namespace_num_of_features == 1) && (*self.output_buffer.get_unchecked(current_namespace_index_offset) & IS_NOT_SINGLE_MASK) == 0 {
                                 // We need to promote feature currently written in-place to out of place
                                 self.output_buffer.push(*self.output_buffer.get_unchecked(current_namespace_index_offset));
                                 self.output_buffer.push(FLOAT32_ONE);
-                                debug_assert_eq!(current_namespace_type, vwmap::NamespaceType::Default);
+                                debug_assert_eq!(current_namespace_format, vwmap::NamespaceFormat::Categorical);
                             }
                             self.output_buffer.push(h);
-                            if current_namespace_type == vwmap::NamespaceType::F32 {
+                            if current_namespace_format == vwmap::NamespaceFormat::F32 {
                                 // The namespace_skip_prefix allows us to parse a value A100, where A is one byte prefix which gets ignored
                                 let float_start = i_start + self.vw_map.vw_source.namespace_skip_prefix as usize;
                                 let float_value:f32 = match i_end_first_part - float_start {
@@ -304,8 +304,8 @@ impl VowpalParser {
 #[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
-    use super::*;
     use vwmap;
+    use super::*;
     use std::io::Cursor;
         
     fn nd(start: u32, end: u32) -> u32 {

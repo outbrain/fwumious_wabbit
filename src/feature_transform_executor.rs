@@ -207,7 +207,9 @@ mod tests {
     use crate::feature_transform_executor::default_seeds;
 
     fn ns_desc(i: u16) -> vwmap::NamespaceDescriptor {
-        vwmap::NamespaceDescriptor {namespace_index: i, namespace_type: vwmap::NamespaceType::Default}
+        vwmap::NamespaceDescriptor {namespace_index: i, 
+                                    namespace_type: vwmap::NamespaceType::Primitive,
+                                    namespace_format: vwmap::NamespaceFormat::Categorical}
     }
 
 

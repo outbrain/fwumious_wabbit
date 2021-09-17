@@ -396,7 +396,9 @@ mod tests {
     use super::*;
     
     fn ns_desc(i: u16) -> NamespaceDescriptor {
-        NamespaceDescriptor {namespace_index: i, namespace_type: vwmap::NamespaceType::Default}
+        NamespaceDescriptor {namespace_index: i, 
+                             namespace_type: vwmap::NamespaceType::Primitive,
+                             namespace_format: vwmap::NamespaceFormat::Categorical}
     }
     
 

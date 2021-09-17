@@ -2,7 +2,7 @@ use crate::model_instance;
 use crate::parser;
 use crate::feature_transform_executor;
 use crate::feature_transform_parser;
-use crate::vwmap::{NamespaceType};
+use crate::vwmap::{NamespaceType, NamespaceFormat};
 
 const VOWPAL_FNV_PRIME:u32 = 16777619;	// vowpal magic number
 //const CONSTANT_NAMESPACE:usize = 128;
@@ -82,7 +82,7 @@ macro_rules! feature_reader {
             } else {
                 let start = ((first_token >> 16) & 0x3fff) as usize; 
                 let end = (first_token & 0xffff) as usize;
-                if $namespace_descriptor.namespace_type != NamespaceType::F32 {
+                if $namespace_descriptor.namespace_format != NamespaceFormat::F32 {
                     for hash_offset in (start..end).step_by(2) {
                         let $hash_index = unsafe {*$record_buffer.get_unchecked(hash_offset)};
                         let $hash_value = unsafe {f32::from_bits(*$record_buffer.get_unchecked(hash_offset+1))};
@@ -110,7 +110,7 @@ macro_rules! feature_reader_float_namespace {
       $bl:block  ) => {
         let namespace_index = $namespace_descriptor.namespace_index as usize;
         let first_token = unsafe {*$record_buffer.get_unchecked(namespace_index + parser::HEADER_LEN as usize)};
-        if $namespace_descriptor.namespace_type == NamespaceType::F32 {
+        if $namespace_descriptor.namespace_format == NamespaceFormat::F32 {
             let start = ((first_token >> 16) & 0x3fff) as usize; 
             let end = (first_token & 0xffff) as usize;
             for hash_offset in (start..end).step_by(2) {
@@ -250,7 +250,7 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use crate::parser::{NO_FEATURES, IS_NOT_SINGLE_MASK, MASK31};
-    use crate::vwmap::{NamespaceType, NamespaceDescriptor};
+    use crate::vwmap::{NamespaceType, NamespaceDescriptor, NamespaceFormat};
 
     fn add_header(v2: Vec<u32>) -> Vec<u32> {
         let mut rr: Vec<u32> = vec![100, 1, 1.0f32.to_bits()];
@@ -263,11 +263,15 @@ mod tests {
     }
 
     fn ns_desc(i: u16) -> NamespaceDescriptor {
-        NamespaceDescriptor {namespace_index: i, namespace_type: NamespaceType::Default}
+        NamespaceDescriptor {namespace_index: i, 
+                            namespace_type: NamespaceType::Primitive, 
+                            namespace_format: NamespaceFormat::Categorical}
     }
 
     fn ns_desc_f32(i: u16) -> NamespaceDescriptor {
-        NamespaceDescriptor {namespace_index: i, namespace_type: NamespaceType::F32}
+        NamespaceDescriptor {namespace_index: i, 
+                            namespace_type: NamespaceType::Primitive, 
+                            namespace_format: NamespaceFormat::F32}
     }
 
 

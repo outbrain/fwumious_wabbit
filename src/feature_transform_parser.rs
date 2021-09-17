@@ -56,6 +56,7 @@ impl NamespaceTransforms {
         let to_namespace_descriptor = vwmap::NamespaceDescriptor {
                                     namespace_index: self.v.len() as u16,
                                     namespace_type: vwmap::NamespaceType::Transformed,
+                                    namespace_format: vwmap::NamespaceFormat::Categorical, // For now all to-namespaces are categorical
                                     };
         
         let to_namespace = Namespace {
