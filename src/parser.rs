@@ -60,15 +60,15 @@ organization of records buffer
 (f32) Example importance (default: 1.0)
 (union_u u32)[number of features], where:
     -- if the most significant bit is zero
-            - this is a a namespace with a single feature
+            - this is a a binary namespace with a single feature
             - bits 1-31 are a feature hash
-            - feature value is assumed to be 1.0
+            - feature weight is implied to be 1.0 and is therefore not storred
     -- if the most significant bit is one
-            - the second most significant bit indicates if this is "float namespace", which means that 
-                there are tripels instead of tuples in dynamic buffer
             - 14 next bits are the start offset, and lower 16 bits are the end offset of features beyond initial map
-            - the dynamic buffer consists of (hash of the feature name, f32 value of the feature)
-            - or (hash of the fature name, 32 value of the feature, f32 parse of the feature name) 
+            - if this is a binary namespace the dynamic buffer content consists of the following pairs
+                - the hash of the feature name (u32, bits 1-31), f32 weight of the feature)
+            - if this is a f32 namespace the dynamic buffer content consists of the following pairs
+                - the hash of the feature name (31 bits of u32), f32 parsed value of the feature name)
 [dynamic buffer (of u32/f32 types, exact layout depends on the above bits)]
 */
 
@@ -278,7 +278,7 @@ impl VowpalParser {
                                 self.output_buffer.push(float_value.to_bits());
                                 *self.output_buffer.get_unchecked_mut(current_namespace_index_offset) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
                                 if current_namespace_weight * feature_weight != 1.0 {
-                                    return Err(Box::new(IOError::new(ErrorKind::Other, format!("Namespaces that are f32 can not have weight attached neither to namespace nro to a single feature (basically they can\' use :weight syntax"))))
+                                    return Err(Box::new(IOError::new(ErrorKind::Other, format!("Namespaces that are f32 can not have weight attached neither to namespace nor to a single feature (basically they can\' use :weight syntax"))))
                                 }
                             } else {
                                 self.output_buffer.push((current_namespace_weight * feature_weight).to_bits());
@@ -606,17 +606,37 @@ C,featureC
                                                         nd(6, 10) | IS_NOT_SINGLE_MASK, 
                                                         NO_FEATURES, 
                                                         1775699190 & MASK31, 3.0f32.to_bits(),
-                                                        382082293 & MASK31, 4.0f32.to_bits(),
+                                                        382082293 & MASK31, 4.0f32.to_bits()]);
                                                         
-                                                        ]);
+        
         let mut buf = str_to_cursor("-1 |B not_a_number\n");
         let result = rr.next_vowpal(&mut buf);
         assert!(result.is_err());
         assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Failed parsing feature value to float (for float namespace): not_a_number\" })");
 
-        let mut buf = str_to_cursor("-1 |B NONE\n");
- 
 
+        let mut buf = str_to_cursor("-1 |B 3 4\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [10, 0, FLOAT32_ONE,
+                                                        NO_FEATURES, 
+                                                        nd(6, 10) | IS_NOT_SINGLE_MASK, 
+                                                        NO_FEATURES, 
+                                                        1775699190 & MASK31, 3.0f32.to_bits(),
+                                                        382082293 & MASK31, 4.0f32.to_bits()]);
+                                                        
+        
+        let mut buf = str_to_cursor("-1 |B 3:3\n");
+        let result = rr.next_vowpal(&mut buf);
+        assert!(result.is_err());
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Namespaces that are f32 can not have weight attached neither to namespace nor to a single feature (basically they can\' use :weight syntax\" })");
+
+        let mut buf = str_to_cursor("-1 |B:3 3\n");
+        let result = rr.next_vowpal(&mut buf);
+        assert!(result.is_err());
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Namespaces that are f32 can not have weight attached neither to namespace nor to a single feature (basically they can\' use :weight syntax\" })");
+
+
+
+        let mut buf = str_to_cursor("-1 |B NONE\n");
         // Now test with skip_prefix = 1 
         let vw_map_string = r#"
 A,featureA
