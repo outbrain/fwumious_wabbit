@@ -217,6 +217,7 @@ impl ModelInstance {
                 mi.transform_namespaces.add_transform_namespace(vw, value_str)?;
             }
         }
+        mi.transform_namespaces.stage2(vw)?;
         
         if let Some(in_v) = cl.values_of("keep") {
             for value_str in in_v {

@@ -7,6 +7,8 @@ use crate::vwmap;
 use std::error::Error;
 use std::io::Error as IOError;
 use std::io::ErrorKind;
+use std::collections::HashMap;
+use std::mem::replace;
 
 use fasthash::murmur3;
 use serde::{Serialize,Deserialize};
@@ -33,26 +35,46 @@ pub struct NamespaceTransform {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct NamespaceTransforms {
-    pub v: Vec<NamespaceTransform>
+    pub v: Vec<NamespaceTransform>,
+    // 
+    pub dependencies: HashMap <std::string::String, Vec<std::string::String>>, // to_namespace_str -> list of from_namespace_str
+    pub definitions: HashMap <std::string::String, std::string::String>, // to_namespace_str -> its formula
+    
 }
+
+// We need two-stage parsing of the transforms, so user doesn't need to specify them in order
+// first stage we simply figure out namespace dependencies
+// then we do directed graph search and only process transformations where we have all inputs defined
+// and give error on circular dependencies
 
 impl NamespaceTransforms {
     pub fn new() -> NamespaceTransforms {
-        NamespaceTransforms {v: Vec::new()}
+        NamespaceTransforms { v: Vec::new(),
+                              dependencies: HashMap::new(),
+                              definitions: HashMap::new(),
+                            }
     }
-
-    pub fn add_transform_namespace(&mut self, vw: &vwmap::VwNamespaceMap, s: &str) -> Result<(), Box<dyn Error>> {
+    
+    pub fn stage2(&mut self, vw: &vwmap::VwNamespaceMap) -> Result<(), Box<dyn Error>> {
+        let definitions = replace(&mut self.definitions, HashMap::new());
+        for (key, value) in &definitions {
+            println!("{:?} / {:?}", key, value);
+            self.finalize_transform(vw, &value)?;
+        }
+        Ok(())
+    }
+    
+    fn finalize_transform(&mut self, vw: &vwmap::VwNamespaceMap, s: &str) -> Result<(), Box<dyn Error>> {
         let rr = parse_namespace_statement(s);
         if rr.is_err() {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("Error parsing {}\n{:?}", s, rr))));            
         }
         let (_, (to_namespace_verbose, function_name, from_namespaces_verbose, function_parameters)) = rr.unwrap();
-
         let to_namespace_descriptor = get_namespace_descriptor_verbose(self, vw, &to_namespace_verbose);
         if to_namespace_descriptor.is_ok() {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("To namespace of {} already exists: {:?}", s, to_namespace_verbose))));
         }
-        
+
         let to_namespace_descriptor = vwmap::NamespaceDescriptor {
                                     namespace_index: self.v.len() as u16,
                                     namespace_type: vwmap::NamespaceType::Transformed,
@@ -61,10 +83,8 @@ impl NamespaceTransforms {
         
         let to_namespace = Namespace {
             namespace_descriptor: to_namespace_descriptor,
-            namespace_verbose: to_namespace_verbose,
+            namespace_verbose: to_namespace_verbose.to_owned(),
         };
-        
-        
         let mut from_namespaces: Vec<Namespace> = Vec::new();
         for from_namespace_verbose in &from_namespaces_verbose {
             let from_namespace_descriptor = get_namespace_descriptor_verbose(self, vw, from_namespace_verbose)?;
@@ -95,6 +115,24 @@ impl NamespaceTransforms {
     
         self.v.push(nt);
 
+        Ok(())
+        
+    }
+    
+
+    pub fn add_transform_namespace(&mut self, vw: &vwmap::VwNamespaceMap, s: &str) -> Result<(), Box<dyn Error>> {
+        let rr = parse_namespace_statement(s);
+        if rr.is_err() {
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Error parsing {}\n{:?}", s, rr))));            
+        }
+        let (_, (to_namespace_verbose, function_name, from_namespaces_verbose, function_parameters)) = rr.unwrap();
+        let to_namespace_descriptor = get_namespace_descriptor_verbose(self, vw, &to_namespace_verbose);
+        if to_namespace_descriptor.is_ok() {
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("To namespace of {} already exists: {:?}", s, to_namespace_verbose))));
+        }
+        
+        self.definitions.insert(to_namespace_verbose.to_owned(), s.to_string());
+        self.dependencies.insert(to_namespace_verbose.to_owned(), from_namespaces_verbose);
         Ok(())
     }
 }
@@ -207,6 +245,92 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use crate::parser::{NO_FEATURES, IS_NOT_SINGLE_MASK, MASK31};
+    use crate::vwmap::{NamespaceType, NamespaceFormat, NamespaceDescriptor, VwNamespaceMap};
+
+    fn ns_desc(i: u16) -> NamespaceDescriptor {
+        NamespaceDescriptor {namespace_index: i, 
+                             namespace_type: NamespaceType::Primitive,
+                             namespace_format: NamespaceFormat::Categorical,
+                             }
+    }
+
+    fn ns_desc_trans(i: u16) -> NamespaceDescriptor {
+        NamespaceDescriptor {namespace_index: i, 
+                             namespace_type: NamespaceType::Transformed,
+                             namespace_format: NamespaceFormat::Categorical,
+                             }
+    }
+
+    fn ns_desc_f32(i: u16) -> NamespaceDescriptor {
+        NamespaceDescriptor {namespace_index: i, 
+                             namespace_type: NamespaceType::Primitive,
+                             namespace_format: NamespaceFormat::F32,
+                             }
+    }
+                        
+
+    #[test]
+    fn test_namespace_transforms() {
+        let vw_map_string = r#"
+A,featureA
+B,featureB,f32
+C,featureC,f32
+"#;
+        let vw = VwNamespaceMap::new(vw_map_string).unwrap();
+
+        {
+            let mut nst = NamespaceTransforms::new();
+            let result = nst.add_transform_namespace(&vw, "new=Combine(featureA,featureB)()");
+            assert!(result.is_ok());
+            nst.stage2(&vw).unwrap();
+            assert_eq!(nst.v[0].to_namespace.namespace_descriptor, ns_desc_trans(0));
+            assert_eq!(nst.v[0].from_namespaces[0].namespace_descriptor, ns_desc(0));
+            assert_eq!(nst.v[0].from_namespaces[1].namespace_descriptor, ns_desc_f32(1));
+        }
+        
+        {
+            let mut nst = NamespaceTransforms::new();
+            let result = nst.add_transform_namespace(&vw, "featureA=unknown(featureA,featureB)()"); // unknown function
+            nst.stage2(&vw).unwrap();
+            assert!(result.is_err());
+        }
+
+        {
+            // Now we test dependencies
+            let mut nst = NamespaceTransforms::new();
+            let result = nst.add_transform_namespace(&vw, "new1=Combine(featureA,featureB)()");
+            assert!(result.is_ok());
+            let result = nst.add_transform_namespace(&vw, "new2=Combine(new1,featureB)()");
+            assert!(result.is_ok());
+            nst.stage2(&vw).unwrap();
+            assert_eq!(nst.v[0].to_namespace.namespace_descriptor, ns_desc_trans(0));
+            assert_eq!(nst.v[0].from_namespaces[0].namespace_descriptor, ns_desc(0));
+            assert_eq!(nst.v[0].from_namespaces[1].namespace_descriptor, ns_desc_f32(1));
+            assert_eq!(nst.v[1].to_namespace.namespace_descriptor, ns_desc_trans(1));
+            assert_eq!(nst.v[1].from_namespaces[0].namespace_descriptor, ns_desc_trans(0));
+            assert_eq!(nst.v[1].from_namespaces[1].namespace_descriptor, ns_desc_f32(1));
+        }
+
+        {
+            // Now reverse order
+            let mut nst = NamespaceTransforms::new();
+            let result = nst.add_transform_namespace(&vw, "new2=Combine(featureA,featureB)()");
+            assert!(result.is_ok());
+/*            assert_eq!(nst.v[0].to_namespace.namespace_descriptor, ns_desc_trans(0));
+            assert_eq!(nst.v[0].from_namespaces[0].namespace_descriptor, ns_desc(0));
+            assert_eq!(nst.v[0].from_namespaces[1].namespace_descriptor, ns_desc_f32(1));*/
+            let result = nst.add_transform_namespace(&vw, "new1=Combine(new1,featureB)()");
+            nst.stage2(&vw).unwrap();
+//            assert!(result.is_ok());
+            /*
+            assert_eq!(nst.v[1].to_namespace.namespace_descriptor, ns_desc_trans(1));
+            assert_eq!(nst.v[1].from_namespaces[0].namespace_descriptor, ns_desc_trans(0));
+            assert_eq!(nst.v[1].from_namespaces[1].namespace_descriptor, ns_desc_f32(1));*/
+        }
+
+
+        
+    }
 
 
     #[test]
