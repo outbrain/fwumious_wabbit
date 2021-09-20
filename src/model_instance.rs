@@ -212,12 +212,14 @@ impl ModelInstance {
         }
 
         // we first need transform namespaces, before processing keep or interactions
+        
         if let Some(in_v) = cl.values_of("transform") {
+            let mut namespace_parser = feature_transform_parser::NamespaceTransformsParser::new();
             for value_str in in_v {                
-                mi.transform_namespaces.add_transform_namespace(vw, value_str)?;
+                namespace_parser.add_transform_namespace(vw, value_str)?;
             }
+            mi.transform_namespaces = namespace_parser.resolve(vw)?;
         }
-        mi.transform_namespaces.stage2(vw)?;
         
         if let Some(in_v) = cl.values_of("keep") {
             for value_str in in_v {
