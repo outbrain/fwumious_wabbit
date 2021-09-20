@@ -87,8 +87,8 @@ impl NamespaceTransformsParser {
     
     pub fn resolve(&mut self, vw: &vwmap::VwNamespaceMap) -> Result<NamespaceTransforms, Box<dyn Error>> {
         let mut nst = NamespaceTransforms::new();
-        let mut namespaces:Vec<String> = self.denormalized.keys().map(|x| x.to_owned()).collect();
-        namespaces.sort();
+        let mut namespaces:Vec<&String> = self.denormalized.keys().collect();
+        namespaces.sort();	// ensure determinism
         for key in &namespaces {
             self.depth_first_search(vw, &mut nst, key)?;
         }
@@ -119,13 +119,11 @@ impl NamespaceTransformsParser {
         }    
         
         n.processing.set(true);
-        let from_namespaces = n.from_namespaces.clone();
-        for from_namespace in from_namespaces {
+        for from_namespace in &n.from_namespaces {
             self.depth_first_search(vw, nst, &from_namespace)?;
         }
         nst.add_transform(vw, &self.denormalized[verbose_name].definition)?;
 
-//        let mut n = &mut self.denormalized.get_mut(verbose_name).unwrap();
         n.processing.set(false);
         n.done.set(true);
         Ok(())
@@ -378,6 +376,15 @@ C,featureC,f32
 
         {
             let mut nstp = NamespaceTransformsParser::new();
+            let result = nstp.add_transform_namespace(&vw, "new=Combine(featureA,featureA)()"); // unknown function
+            let result = nstp.resolve(&vw);
+            assert!(result.is_err());
+            assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Using the same from namespace in multiple arguments to a function is not supported: \\\"featureA\\\"\" })");
+        }
+
+
+        {
+            let mut nstp = NamespaceTransformsParser::new();
             nstp.add_transform_namespace(&vw, "new=unknown(nonexistent,featureB)()").unwrap(); // unknown function
             let result = nstp.resolve(&vw);
             assert!(result.is_err());
@@ -435,6 +442,18 @@ C,featureC,f32
             let result = nstp.add_transform_namespace(&vw, "new2=Combine(new1,featureB)()");
             assert!(result.is_ok());
             let result = nstp.add_transform_namespace(&vw, "new1=Combine(new2,featureB)()");
+            assert!(result.is_ok());
+            let nst = nstp.resolve(&vw);
+            assert!(nst.is_err());
+            assert_eq!(format!("{:?}", nst), "Err(Custom { kind: Other, error: \"Cyclic dependency detected, one of the namespaces involved is \\\"new1\\\"\" })");
+
+
+        }
+
+        {
+            // Now create a cycle 
+            let mut nstp = NamespaceTransformsParser::new();
+            let result = nstp.add_transform_namespace(&vw, "new1=Combine(new1,featureB)()");
             assert!(result.is_ok());
             let nst = nstp.resolve(&vw);
             assert!(nst.is_err());
