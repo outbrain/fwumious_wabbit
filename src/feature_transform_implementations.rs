@@ -31,13 +31,13 @@ impl FunctionExecutorTrait for FunctionExampleSqrt {
 }
 
 impl FunctionExampleSqrt {
-    fn create_function(function_name: &str, from_namespaces: &Vec<ExecutorFromNamespace>, function_params: &Vec<f32>) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
+    fn create_function(function_name: &str, from_namespaces: &Vec<feature_transform_parser::Namespace>, function_params: &Vec<f32>) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
         // For simplicity of example, we just assert instead of full error reporting
         assert!(function_params.len() == 0);
         assert!(from_namespaces.len() == 1);
         assert!(from_namespaces[0].namespace_descriptor.namespace_type == NamespaceType::Primitive);
         assert!(from_namespaces[0].namespace_descriptor.namespace_format == NamespaceFormat::F32);
-        Ok(Box::new(Self{from_namespace: from_namespaces[0].clone()}))
+        Ok(Box::new(Self{from_namespace: ExecutorFromNamespace{namespace_descriptor: from_namespaces[0].namespace_descriptor}}))
     }   
 }
 
@@ -90,7 +90,7 @@ impl FunctionExecutorTrait for TransformerBinner {
 impl TransformerBinner {
     pub fn create_function(function_pointer: &'static (dyn Fn(f32, f32) -> f32 +'static + Sync), 
                         function_name: &str, 
-                        from_namespaces: &Vec<ExecutorFromNamespace>, 
+                        from_namespaces: &Vec<feature_transform_parser::Namespace>, 
                         function_params: &Vec<f32>,
                         interpolated: bool,
                         ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
@@ -124,7 +124,7 @@ impl TransformerBinner {
             }
         }
 
-        Ok(Box::new(Self{from_namespace: from_namespaces[0].clone(), 
+        Ok(Box::new(Self{from_namespace: ExecutorFromNamespace{namespace_descriptor: from_namespaces[0].namespace_descriptor}, 
                         resolution: resolution,
                         greater_than: greater_than,
                         function_pointer: function_pointer,
@@ -178,7 +178,7 @@ impl FunctionExecutorTrait for TransformerLogRatioBinner {
 impl TransformerLogRatioBinner {
     pub fn create_function(
                         function_name: &str, 
-                        from_namespaces: &Vec<ExecutorFromNamespace>, 
+                        from_namespaces: &Vec<feature_transform_parser::Namespace>, 
                         function_params: &Vec<f32>,
                         interpolated: bool,
                         ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
@@ -209,8 +209,8 @@ impl TransformerLogRatioBinner {
             }
         }
 
-        Ok(Box::new(Self{from_namespace1: from_namespaces[0].clone(), 
-                        from_namespace2: from_namespaces[1].clone(), 
+        Ok(Box::new(Self{from_namespace1: ExecutorFromNamespace{namespace_descriptor: from_namespaces[0].namespace_descriptor}, 
+                        from_namespace2: ExecutorFromNamespace{namespace_descriptor: from_namespaces[1].namespace_descriptor}, 
                         resolution: resolution,
                         greater_than: greater_than,
                         interpolated: interpolated,
@@ -245,7 +245,7 @@ impl FunctionExecutorTrait for TransformerWeight {
 
 impl TransformerWeight {
     pub fn create_function( function_name: &str, 
-                        from_namespaces: &Vec<ExecutorFromNamespace>, 
+                        from_namespaces: &Vec<feature_transform_parser::Namespace>, 
                         function_params: &Vec<f32>,
                         ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
         if function_params.len() != 1 {
@@ -256,7 +256,7 @@ impl TransformerWeight {
         }
         // We do not check if input namespace is float, Weight does not require float namespace as input
         
-        Ok(Box::new(Self{from_namespace: from_namespaces[0].clone(),
+        Ok(Box::new(Self{from_namespace: ExecutorFromNamespace{namespace_descriptor: from_namespaces[0].namespace_descriptor},
                         multiplier: function_params[0], 
                         }))
     }
@@ -328,7 +328,7 @@ impl FunctionExecutorTrait for TransformerCombine {
 impl TransformerCombine {
     pub fn create_function(
                         function_name: &str, 
-                        from_namespaces: &Vec<ExecutorFromNamespace>, 
+                        from_namespaces: &Vec<feature_transform_parser::Namespace>, 
                         function_params: &Vec<f32>,
                         ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
         if function_params.len() != 0 {
@@ -343,10 +343,10 @@ impl TransformerCombine {
         let c = ExecutorFromNamespace{namespace_descriptor: NamespaceDescriptor {namespace_index: 0, 
                                                                                 namespace_type: NamespaceType::Primitive, 
                                                                                 namespace_format: NamespaceFormat::Categorical}, 
-                                    namespace_verbose: "dummy_name".to_owned()};
+                                    };
         let mut executor_from_namespaces: [ExecutorFromNamespace;4] = [c.clone(),c.clone(),c.clone(),c.clone()];
         for (x, namespace) in from_namespaces.iter().enumerate() {
-            executor_from_namespaces[x] = namespace.clone();
+            executor_from_namespaces[x].namespace_descriptor = namespace.namespace_descriptor;
         }
 
         Ok(Box::new(Self{from_namespaces: executor_from_namespaces,
@@ -397,14 +397,13 @@ mod tests {
     #[test]
     fn test_transformerbinner_fail() {
         // this fails because input namespace is not float namespace    
-        let from_namespace = ExecutorFromNamespace {
-            namespace_descriptor: ns_desc(0),
+        let from_namespace = feature_transform_parser::Namespace {
             namespace_verbose: "a".to_string(),
+            namespace_descriptor: ns_desc(0),
         };
         
         let to_namespace_empty = ExecutorToNamespace {
             namespace_descriptor: ns_desc(1),
-            namespace_verbose: "b".to_string(),
             namespace_seeds: default_seeds(1),	// These are precomputed namespace seeds
             tmp_data: Vec::new(),
         };
@@ -417,7 +416,7 @@ mod tests {
     #[test]
     fn test_transformerbinner() {
         
-        let from_namespace = ExecutorFromNamespace {
+        let from_namespace = feature_transform_parser::Namespace {
             namespace_descriptor: ns_desc_f32(0),
             namespace_verbose: "a".to_string(),
         };
@@ -425,7 +424,6 @@ mod tests {
                             
         let to_namespace_empty = ExecutorToNamespace {
             namespace_descriptor: ns_desc(to_namespace_index),
-            namespace_verbose: "b".to_string(),
             namespace_seeds: default_seeds(to_namespace_index as u32),	// These are precomputed namespace seeds
             tmp_data: Vec::new(),
         };
@@ -471,20 +469,19 @@ mod tests {
     #[test]
     fn test_transformerlogratiobinner() {
         
-        let from_namespace_1 = ExecutorFromNamespace {
+        let from_namespace_1 = feature_transform_parser::Namespace {
             namespace_descriptor: ns_desc_f32(0),
             namespace_verbose: "a".to_string(),
         };
 
-        let from_namespace_2 = ExecutorFromNamespace {
+        let from_namespace_2 = feature_transform_parser::Namespace {
             namespace_descriptor: ns_desc_f32(1),
             namespace_verbose: "c".to_string(),
         };
-        let to_namespace_index = 1;
-                            
+        
+        let to_namespace_index = 1;                           
         let to_namespace_empty = ExecutorToNamespace {
             namespace_descriptor: ns_desc(to_namespace_index),
-            namespace_verbose: "b".to_string(),
             namespace_seeds: default_seeds(to_namespace_index as u32),	// These are precomputed namespace seeds
             tmp_data: Vec::new(),
         };
@@ -501,7 +498,6 @@ mod tests {
                             // Feature triple
                             1775699190 & MASK31,    // Hash location 
                             7.0f32.to_bits(),
-                            
                             ];       // Float feature value
  
         let mut to_namespace = to_namespace_empty.clone();
@@ -622,7 +618,7 @@ mod tests {
     #[test]
     fn test_transformerweightmutliplier() {
         
-        let from_namespace_float = ExecutorFromNamespace {
+        let from_namespace_float = feature_transform_parser::Namespace {
             namespace_descriptor: ns_desc_f32(0),
             namespace_verbose: "a".to_string(),
         };
@@ -630,7 +626,6 @@ mod tests {
                             
         let to_namespace_empty = ExecutorToNamespace {
             namespace_descriptor: ns_desc(to_namespace_index),
-            namespace_verbose: "b".to_string(),
             namespace_seeds: default_seeds(to_namespace_index as u32),	// These are precomputed namespace seeds
             tmp_data: Vec::new(),
         };
@@ -655,7 +650,7 @@ mod tests {
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
         
         // But weightmultiplier can take non-float namespaces
-        let from_namespace_nonfloat = ExecutorFromNamespace {
+        let from_namespace_nonfloat = feature_transform_parser::Namespace {
             namespace_descriptor: ns_desc(0),
             namespace_verbose: "a".to_string(),
         };
@@ -687,13 +682,13 @@ mod tests {
     #[test]
     fn test_transformercombine() {
         
-        let from_namespace_1 = ExecutorFromNamespace {
+        let from_namespace_1 = feature_transform_parser::Namespace {
             namespace_descriptor: ns_desc_f32(0),
             namespace_verbose: "a".to_string(),
         };
 
 
-        let from_namespace_2 = ExecutorFromNamespace {
+        let from_namespace_2 = feature_transform_parser::Namespace {
             namespace_descriptor: ns_desc(1),
             namespace_verbose: "b".to_string(),
         };
@@ -702,7 +697,6 @@ mod tests {
                             
         let to_namespace_empty = ExecutorToNamespace {
             namespace_descriptor: ns_desc(to_namespace_index),
-            namespace_verbose: "c".to_string(),
             namespace_seeds: default_seeds(to_namespace_index as u32),	// These are precomputed namespace seeds
             tmp_data: Vec::new(),
         };

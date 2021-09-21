@@ -20,6 +20,7 @@ use crate::feature_transform_implementations::{TransformerBinner, TransformerLog
 pub fn default_seeds(to_namespace_index: u32) -> [u32; 5] {
             let to_namespace_index = to_namespace_index ^ 1u32 << 31; // compatibility with earlier version
             [      
+            // These are random numbers, i threw a dice!
                 murmur3::hash32_with_seed(vec![214, 231, 1, 55], to_namespace_index),
                 murmur3::hash32_with_seed(vec![255, 6, 14, 69], to_namespace_index),
                 murmur3::hash32_with_seed(vec![50, 6, 71, 123], to_namespace_index),
@@ -43,7 +44,6 @@ pub enum SeedNumber {
 #[derive(Clone)]
 pub struct ExecutorToNamespace {
     pub namespace_descriptor: vwmap::NamespaceDescriptor,
-    pub namespace_verbose: String,
     pub namespace_seeds: [u32; 5],	// These are precomputed namespace seeds
     pub tmp_data: Vec<(u32, f32)>,
 }
@@ -51,17 +51,14 @@ pub struct ExecutorToNamespace {
 #[derive(Clone)]
 pub struct ExecutorFromNamespace {
     pub namespace_descriptor: vwmap::NamespaceDescriptor,
-    pub namespace_verbose: String,	// This is actually not needed as we could just do a lookup each time
 }
 
 
 impl ExecutorToNamespace {
-    
     // We use const generics here as an experiment to see if they would be useful elsewhere to specialize functions
     #[inline(always)]
     pub fn emit_i32<const SEED_ID: usize>(&mut self, to_data:i32, hash_value:f32) {
         let hash_index = murmur3::hash32_with_seed(to_data.to_le_bytes(), *unsafe{self.namespace_seeds.get_unchecked(SEED_ID)}) & parser::MASK31;
-//        println!("Emitting {} {}", hash_index, hash_value);
         self.tmp_data.push((hash_index, hash_value));
     } 
 
@@ -70,7 +67,6 @@ impl ExecutorToNamespace {
         if !f.is_finite() { // these handle INF, -INF and NAN
             self.emit_i32::<SEED_ID>(f.to_bits() as i32, hash_value);
         } else {
-//            println!("F: {}, hash_value: {}", f, hash_value);
             if interpolated {
                 let floor = f.floor();
                 let floor_int = floor as i32;
@@ -107,8 +103,6 @@ impl TransformExecutor {
         
         let namespace_to = ExecutorToNamespace {
             namespace_descriptor: namespace_transform.to_namespace.namespace_descriptor,
-            namespace_verbose: namespace_transform.to_namespace.namespace_verbose.to_owned(),
-            // These are random numbers, i threw a dice!
             namespace_seeds: default_seeds(namespace_transform.to_namespace.namespace_descriptor.namespace_index as u32),
             tmp_data: Vec::new(),
         };
@@ -122,29 +116,29 @@ impl TransformExecutor {
         Ok(te)
     }
 
-    pub fn create_executor(function_name: &str, namespaces_from: &Vec<feature_transform_parser::Namespace>, function_params: &Vec<f32>) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
-        let mut executor_namespaces_from: Vec<ExecutorFromNamespace> = Vec::new();
+    pub fn create_executor(function_name: &str, namespaces_from: &Vec<feature_transform_parser::Namespace>, function_params: &Vec<f32>) 
+        -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
+/*        let mut executor_namespaces_from: Vec<ExecutorFromNamespace> = Vec::new();
         for namespace in namespaces_from {
             executor_namespaces_from.push(ExecutorFromNamespace{namespace_descriptor: namespace.namespace_descriptor, 
-                                                                namespace_verbose: namespace.namespace_verbose.to_owned(),
                                                                 });
-       }
+       }*/
         if        function_name == "BinnerSqrtPlain" {
-            TransformerBinner::create_function(&(|x, resolution| x.sqrt() * resolution), function_name, &executor_namespaces_from, function_params, false)
+            TransformerBinner::create_function(&(|x, resolution| x.sqrt() * resolution), function_name, namespaces_from, function_params, false)
         } else if function_name == "BinnerSqrt" {
-            TransformerBinner::create_function(&(|x, resolution| x.sqrt() * resolution), function_name, &executor_namespaces_from, function_params, true)
+            TransformerBinner::create_function(&(|x, resolution| x.sqrt() * resolution), function_name, namespaces_from, function_params, true)
         } else if function_name == "BinnerLogPlain" {
-            TransformerBinner::create_function(&(|x, resolution| x.ln() * resolution), function_name, &executor_namespaces_from, function_params, false)
+            TransformerBinner::create_function(&(|x, resolution| x.ln() * resolution), function_name, namespaces_from, function_params, false)
         } else if function_name == "BinnerLog" {
-            TransformerBinner::create_function(&(|x, resolution| x.ln() * resolution), function_name, &executor_namespaces_from, function_params, true)
+            TransformerBinner::create_function(&(|x, resolution| x.ln() * resolution), function_name, namespaces_from, function_params, true)
         } else if function_name == "BinnerLogRatioPlain" {
-            TransformerLogRatioBinner::create_function(function_name, &executor_namespaces_from, function_params, false)
+            TransformerLogRatioBinner::create_function(function_name, namespaces_from, function_params, false)
         } else if function_name == "BinnerLogRatio" {
-            TransformerLogRatioBinner::create_function(function_name, &executor_namespaces_from, function_params, true)
+            TransformerLogRatioBinner::create_function(function_name, namespaces_from, function_params, true)
         } else if function_name == "Combine" {
-            TransformerCombine::create_function(function_name, &executor_namespaces_from, function_params)
+            TransformerCombine::create_function(function_name, namespaces_from, function_params)
         } else if function_name == "Weight" {
-            TransformerWeight::create_function(function_name, &executor_namespaces_from, function_params)
+            TransformerWeight::create_function(function_name, namespaces_from, function_params)
         } else {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown transformer function: {}", function_name))));
         
@@ -217,7 +211,6 @@ mod tests {
     fn test_interpolation() {
         let to_namespace_empty = ExecutorToNamespace {
                 namespace_descriptor: ns_desc(1),
-                namespace_verbose: "b".to_string(),
                 namespace_seeds: default_seeds(1),	// These are precomputed namespace seeds
                 tmp_data: Vec::new(),
             };
