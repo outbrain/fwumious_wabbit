@@ -14,7 +14,6 @@ pub const NAMESPACE_DESC_LEN:u32 = 1;
 pub const LABEL_OFFSET:usize = 1;
 pub const EXAMPLE_IMPORTANCE_OFFSET:usize = 2;
 pub const IS_NOT_SINGLE_MASK : u32 = 1u32 << 31;
-pub const IS_FLOAT_NAMESPACE_MASK : u32 = 1u32 << 30;
 pub const MASK31: u32 = !IS_NOT_SINGLE_MASK;
 pub const NO_FEATURES: u32= IS_NOT_SINGLE_MASK; // null is just an exact IS_NOT_SINGLE_MASK
 pub const NO_LABEL: u32 = 0xff;
@@ -61,15 +60,15 @@ organization of records buffer
 (f32) Example importance (default: 1.0)
 (union_u u32)[number of features], where:
     -- if the most significant bit is zero
-            - this is a a namespace with a single feature
+            - this is a a binary namespace with a single feature
             - bits 1-31 are a feature hash
-            - feature value is assumed to be 1.0
+            - feature weight is implied to be 1.0 and is therefore not storred
     -- if the most significant bit is one
-            - the second most significant bit indicates if this is "float namespace", which means that 
-                there are tripels instead of tuples in dynamic buffer
             - 14 next bits are the start offset, and lower 16 bits are the end offset of features beyond initial map
-            - the dynamic buffer consists of (hash of the feature name, f32 value of the feature)
-            - or (hash of the fature name, 32 value of the feature, f32 parse of the feature name) 
+            - if this is a binary namespace the dynamic buffer content consists of the following pairs
+                - the hash of the feature name (u32, bits 1-31), f32 weight of the feature)
+            - if this is a f32 namespace the dynamic buffer content consists of the following pairs
+                - the hash of the feature name (31 bits of u32), f32 parsed value of the feature name)
 [dynamic buffer (of u32/f32 types, exact layout depends on the above bits)]
 */
 
@@ -203,7 +202,7 @@ impl VowpalParser {
                 
                 let mut current_namespace_hash_seed:u32 = 0;
                 let mut current_namespace_index_offset:usize = HEADER_LEN as usize;
-                let mut current_namespace_is_float_namespace = false;
+                let mut current_namespace_format = vwmap::NamespaceFormat::Categorical;
 
                 let mut bufpos_namespace_start = 0;
                 let mut current_namespace_weight:f32 = 1.0;
@@ -230,14 +229,15 @@ impl VowpalParser {
                      //   print!("Only single letter namespaces are allowed, however namespace string is: {:?}\n", String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end_first_part]));
                         let current_vwname = &self.tmp_read_buf[i_start..i_end_first_part];
 //                        println!("Current: {:?}", current_vwname);
-                        let current_namespace_index = match self.vw_map.map_vwname_to_index.get(current_vwname) {
-                            Some(v) => *v,
+                        let current_namespace_descriptor = match self.vw_map.map_vwname_to_namespace_descriptor.get(current_vwname) {
+                            Some(v) => v,
                             None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Feature name was not predeclared in vw_namespace_map.csv: {}", String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end_first_part])))))
                         };
+                        let current_namespace_index = current_namespace_descriptor.namespace_index as usize;
                         current_namespace_hash_seed = *self.namespace_hash_seeds.get_unchecked(current_namespace_index);
                         current_namespace_index_offset =  current_namespace_index * NAMESPACE_DESC_LEN as usize + HEADER_LEN as usize;
+                        current_namespace_format = current_namespace_descriptor.namespace_format;
                         current_namespace_num_of_features = 0;
-                        current_namespace_is_float_namespace = self.vw_map.map_index_to_save_as_float[current_namespace_index];
                         bufpos_namespace_start = self.output_buffer.len(); // this is only used if we will have multiple values
                     } else { 
                         // We have a feature! Let's hash it and write it to the buffer
@@ -258,27 +258,30 @@ impl VowpalParser {
                         if current_namespace_weight == 1.0 && 
                             feature_weight == 1.0 && 
                             current_namespace_num_of_features == 0 && 
-                            current_namespace_is_float_namespace == false {
+                            current_namespace_format == vwmap::NamespaceFormat::Categorical  {
                             *self.output_buffer.get_unchecked_mut(current_namespace_index_offset) = h;
                         } else {
                             if (current_namespace_num_of_features == 1) && (*self.output_buffer.get_unchecked(current_namespace_index_offset) & IS_NOT_SINGLE_MASK) == 0 {
                                 // We need to promote feature currently written in-place to out of place
                                 self.output_buffer.push(*self.output_buffer.get_unchecked(current_namespace_index_offset));
                                 self.output_buffer.push(FLOAT32_ONE);
-                                debug_assert_eq!(current_namespace_is_float_namespace, false);
+                                debug_assert_eq!(current_namespace_format, vwmap::NamespaceFormat::Categorical);
                             }
                             self.output_buffer.push(h);
-                            self.output_buffer.push((current_namespace_weight * feature_weight).to_bits());
-                            if current_namespace_is_float_namespace == true {
-                                // The float_namespaces_skip_prefix allows us to parse a value A100, where A is one byte prefix which gets ignored
-                                let float_start = i_start + self.vw_map.vw_source.float_namespaces_skip_prefix as usize;
+                            if current_namespace_format == vwmap::NamespaceFormat::F32 {
+                                // The namespace_skip_prefix allows us to parse a value A100, where A is one byte prefix which gets ignored
+                                let float_start = i_start + self.vw_map.vw_source.namespace_skip_prefix as usize;
                                 let float_value:f32 = match i_end_first_part - float_start {
                                     0 => f32::NAN,
                                     _ => self.parse_float_or_error(float_start, i_end_first_part, "Failed parsing feature value to float (for float namespace)")?
                                 };
                                 self.output_buffer.push(float_value.to_bits());
-                                *self.output_buffer.get_unchecked_mut(current_namespace_index_offset) = IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
+                                *self.output_buffer.get_unchecked_mut(current_namespace_index_offset) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
+                                if current_namespace_weight * feature_weight != 1.0 {
+                                    return Err(Box::new(IOError::new(ErrorKind::Other, format!("Namespaces that are f32 can not have weight attached neither to namespace nor to a single feature (basically they can\' use :weight syntax"))))
+                                }
                             } else {
+                                self.output_buffer.push((current_namespace_weight * feature_weight).to_bits());
                                 *self.output_buffer.get_unchecked_mut(current_namespace_index_offset) = IS_NOT_SINGLE_MASK | (((bufpos_namespace_start<<16) + self.output_buffer.len()) as u32);
                             }
                         }
@@ -301,8 +304,8 @@ impl VowpalParser {
 #[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
-    use super::*;
     use vwmap;
+    use super::*;
     use std::io::Cursor;
         
     fn nd(start: u32, end: u32) -> u32 {
@@ -318,7 +321,7 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
 
         fn str_to_cursor(s: &str) -> Cursor<Vec<u8>> {
           Cursor::new(s.as_bytes().to_vec())
@@ -567,13 +570,12 @@ C,featureC
           Cursor::new(s.as_bytes().to_vec())
         }
 
-        // Test for perfect vowpal-compatible hashing
         let vw_map_string = r#"
 A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mut rr = VowpalParser::new(&vw);
         // we test a single record, single namespace, with string value "3"
         let mut buf = str_to_cursor("-1 |B 3\n");
@@ -582,58 +584,91 @@ C,featureC
                                                         1775699190 & MASK31, 
                                                         NO_FEATURES]);
 
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec!["featureB".to_string()], 0)).unwrap();
-        let mut rr = VowpalParser::new(&vw);
-        // we test a single record, single namespace, with string value "3" with weight "2"
-        let mut buf = str_to_cursor("-1 |B 3:2\n");
-        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [9, 0, FLOAT32_ONE,
-                                                        NO_FEATURES, 
-                                                        nd(6, 9) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
-                                                        NO_FEATURES, 
-                                                        1775699190 & MASK31, 2.0f32.to_bits(), 3.0f32.to_bits()]);
+        let vw_map_string = r#"
+A,featureA
+B,featureB,f32
+C,featureC
+"#;
 
-        let mut buf = str_to_cursor("-1 |B 3:2 4\n");
-        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [12, 0, FLOAT32_ONE,
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+        let mut rr = VowpalParser::new(&vw);
+        // we test a single record, single namespace, with string value "3"
+        let mut buf = str_to_cursor("-1 |B 3\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [8, 0, FLOAT32_ONE,
                                                         NO_FEATURES, 
-                                                        nd(6, 12) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                                                        nd(6, 8) | IS_NOT_SINGLE_MASK, 
                                                         NO_FEATURES, 
-                                                        1775699190 & MASK31, 2.0f32.to_bits(), 3.0f32.to_bits(),
-                                                        382082293 & MASK31, 1.0f32.to_bits(), 4.0f32.to_bits(),
+                                                        1775699190 & MASK31, 3.0f32.to_bits()]);
+
+        let mut buf = str_to_cursor("-1 |B 3 4\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [10, 0, FLOAT32_ONE,
+                                                        NO_FEATURES, 
+                                                        nd(6, 10) | IS_NOT_SINGLE_MASK, 
+                                                        NO_FEATURES, 
+                                                        1775699190 & MASK31, 3.0f32.to_bits(),
+                                                        382082293 & MASK31, 4.0f32.to_bits()]);
                                                         
-                                                        ]);
+        
         let mut buf = str_to_cursor("-1 |B not_a_number\n");
         let result = rr.next_vowpal(&mut buf);
         assert!(result.is_err());
         assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Failed parsing feature value to float (for float namespace): not_a_number\" })");
 
-        let mut buf = str_to_cursor("-1 |B NONE\n");
- 
 
+        let mut buf = str_to_cursor("-1 |B 3 4\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [10, 0, FLOAT32_ONE,
+                                                        NO_FEATURES, 
+                                                        nd(6, 10) | IS_NOT_SINGLE_MASK, 
+                                                        NO_FEATURES, 
+                                                        1775699190 & MASK31, 3.0f32.to_bits(),
+                                                        382082293 & MASK31, 4.0f32.to_bits()]);
+                                                        
+        
+        let mut buf = str_to_cursor("-1 |B 3:3\n");
+        let result = rr.next_vowpal(&mut buf);
+        assert!(result.is_err());
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Namespaces that are f32 can not have weight attached neither to namespace nor to a single feature (basically they can\' use :weight syntax\" })");
+
+        let mut buf = str_to_cursor("-1 |B:3 3\n");
+        let result = rr.next_vowpal(&mut buf);
+        assert!(result.is_err());
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Namespaces that are f32 can not have weight attached neither to namespace nor to a single feature (basically they can\' use :weight syntax\" })");
+
+
+
+        let mut buf = str_to_cursor("-1 |B NONE\n");
         // Now test with skip_prefix = 1 
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec!["featureB".to_string()], 1)).unwrap();
+        let vw_map_string = r#"
+A,featureA
+B,featureB,f32
+C,featureC
+_namespace_skip_prefix,1
+"#;
+
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mut rr = VowpalParser::new(&vw);
-        // we test a single record, single namespace, with string value "3" with weight "2"
-        let mut buf = str_to_cursor("-1 |B B3:2\n");
-        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [9, 0, FLOAT32_ONE,
+        // we test a single record, single namespace, with string value "3"
+        let mut buf = str_to_cursor("-1 |B B3\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [8, 0, FLOAT32_ONE,
                                                         NO_FEATURES, 
-                                                        nd(6, 9) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                                                        nd(6, 8) | IS_NOT_SINGLE_MASK, 
                                                         NO_FEATURES, 
-                                                        1416737454 & MASK31, 2.0f32.to_bits(), 3.0f32.to_bits()]);
+                                                        1416737454 & MASK31, 3.0f32.to_bits()]);
 
         // Because we skip one char, the float value of B is the float value of "" which is NAN
-        let mut buf = str_to_cursor("-1 |B B:2\n");
-        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [9, 0, FLOAT32_ONE,
+        let mut buf = str_to_cursor("-1 |B B\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [8, 0, FLOAT32_ONE,
                                                         NO_FEATURES, 
-                                                        nd(6, 9) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                                                        nd(6, 8) | IS_NOT_SINGLE_MASK, 
                                                         NO_FEATURES, 
-                                                        25602353 & MASK31, 2.0f32.to_bits(), f32::NAN.to_bits()]);
+                                                        25602353 & MASK31, f32::NAN.to_bits()]);
 
-        let mut buf = str_to_cursor("-1 |B BNONE:2\n");
-        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [9, 0, FLOAT32_ONE,
+        let mut buf = str_to_cursor("-1 |B BNONE\n");
+        assert_eq!(rr.next_vowpal(&mut buf).unwrap(), [8, 0, FLOAT32_ONE,
                                                         NO_FEATURES, 
-                                                        nd(6, 9) | IS_NOT_SINGLE_MASK | IS_FLOAT_NAMESPACE_MASK, 
+                                                        nd(6, 8) | IS_NOT_SINGLE_MASK, 
                                                         NO_FEATURES, 
-                                                        1846432377 & MASK31, 2.0f32.to_bits(), f32::NAN.to_bits()]);
+                                                        1846432377 & MASK31, f32::NAN.to_bits()]);
 
 
 
@@ -653,7 +688,7 @@ AA,featureA
 BB,featureB
 CC,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
 
         fn str_to_cursor(s: &str) -> Cursor<Vec<u8>> {
           Cursor::new(s.as_bytes().to_vec())
