@@ -21,6 +21,7 @@ pub struct BlockLR<L:OptimizerTrait> {
     pub weights: Vec<WeightAndOptimizerData<L>>,
     pub weights_len: u32,
     pub optimizer_lr: L,
+    l2: f32,
 }
 
 impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L> 
@@ -34,6 +35,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
             weights: Vec::new(),
             weights_len: 0, 
             optimizer_lr: L::new(),
+            l2: mi.l2,
         };
         reg_lr.optimizer_lr.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
         reg_lr.weights_len = 1 << mi.bit_precision;
@@ -45,6 +47,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
             weights_len: self.weights_len,
             weights: Vec::new(),
             optimizer_lr:optimizer::OptimizerSGD::new(),
+            l2: 0.0,
         };
         
         Ok(Box::new(forwards_only))
@@ -83,7 +86,19 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
                     let feature_index     = hashvalue.hash as usize;
                     let feature_value:f32 = hashvalue.value;                        
                     let gradient = general_gradient * feature_value;
-                    let update = self.optimizer_lr.calculate_update(gradient, &mut self.weights.get_unchecked_mut(feature_index).optimizer_data);
+                    let mut update = self.optimizer_lr.calculate_update(
+                        gradient,
+                        &mut self.weights.get_unchecked_mut(feature_index).optimizer_data
+                    );
+                    // Apply l2 regularization. Unlike VW, only activated weights receive regularization.
+                    // Regularization is scaled by adagrad adaptive learning rate factors.
+                    if self.l2 != 0.0 {
+                        let weight = self.weights.get_unchecked(feature_index).weight;
+                        update -= self.l2 * self.optimizer_lr.calculate_l2(
+                            weight,
+                            &self.weights.get_unchecked(feature_index).optimizer_data
+                        );
+                    }
                     self.weights.get_unchecked_mut(feature_index).weight += update;
                 }
             }

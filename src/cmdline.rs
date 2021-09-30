@@ -79,7 +79,7 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                     .arg(Arg::with_name("l2")
                      .long("l2")
                      .value_name("0.0")
-                     .help("Regularization is not supported (only 0.0 will work)")
+                     .help("L2 regularization. Only supported for logistic regression blocks")
                      .takes_value(true))
 
                     .arg(Arg::with_name("sgd")

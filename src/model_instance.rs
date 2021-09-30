@@ -34,6 +34,7 @@ pub struct ModelInstance {
     #[serde(default = "default_f32_zero")]
     pub minimum_learning_rate: f32,
     pub power_t: f32,
+    pub l2: f32,        // Only supported for logistic regression blocks
     pub bit_precision: u8,
     pub hash_mask: u32,		// DEPRECATED, UNUSED -- this is recalculated in feature_buffer.rs
     pub add_constant_feature: bool,
@@ -101,6 +102,7 @@ impl ModelInstance {
             ffm_learning_rate: 0.5, // vw default
             minimum_learning_rate: 0.0, 
             bit_precision: 18,      // vw default
+            l2: 0.0,
             hash_mask: 0, // DEPRECATED, UNUSED
             power_t: 0.5,
             ffm_power_t: 0.5,
@@ -346,10 +348,7 @@ impl ModelInstance {
             }            
         }
         if let Some(val) = cl.value_of("l2") {
-            let v2:f32 = val.parse()?;
-            if v2.abs() > 0.00000001 {
-                return Err(Box::new(IOError::new(ErrorKind::Other, format!("--l2 can only be 0.0"))))
-            }
+            mi.l2 = val.parse()?;
         }
 
         if cl.is_present("noconstant") {

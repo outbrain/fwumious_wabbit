@@ -9,6 +9,7 @@ pub trait OptimizerTrait : std::clone::Clone {
     unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32;
     fn initial_data(&self) -> Self::PerWeightStore;
     fn get_name() -> &'static str;
+    fn calculate_l2(&self, weight: f32, data: &Self::PerWeightStore) -> f32;
 }
 
 /******************* SGD **************************/
@@ -40,6 +41,10 @@ impl OptimizerTrait for OptimizerSGD {
 
     fn initial_data(&self) -> Self::PerWeightStore {
         std::marker::PhantomData{}
+    }
+
+    fn calculate_l2(&self, weight: f32, _data: &Self::PerWeightStore) -> f32 {
+        weight
     }
 }
 
@@ -86,6 +91,9 @@ impl OptimizerTrait for OptimizerAdagradFlex {
         self.initial_acc_gradient
     }
     
+    fn calculate_l2(&self, weight: f32, data: &Self::PerWeightStore) -> f32 {
+        weight * data.powf(self.minus_power_t)
+    }
 }
 
 
@@ -101,6 +109,7 @@ pub const FASTMATH_LR_LUT_SIZE:usize = 1 <<  FASTMATH_LR_LUT_BITS;
 #[derive(Clone, Copy)]
 pub struct OptimizerAdagradLUT {
    pub fastmath_lr_lut: [f32; FASTMATH_LR_LUT_SIZE], 
+   minus_power_t: f32, // Used for scaling l2
 }
 
 impl OptimizerTrait for OptimizerAdagradLUT {
@@ -110,7 +119,10 @@ impl OptimizerTrait for OptimizerAdagradLUT {
     type PerWeightStore = f32;
 
     fn new() -> Self {
-        OptimizerAdagradLUT{fastmath_lr_lut: [0.0;FASTMATH_LR_LUT_SIZE]}
+        OptimizerAdagradLUT{
+            fastmath_lr_lut: [0.0;FASTMATH_LR_LUT_SIZE],
+            minus_power_t: 0.0,
+        }
     } 
     
     fn init(&mut self, learning_rate: f32, power_t: f32, initial_acc_gradient: f32) {
@@ -131,6 +143,7 @@ impl OptimizerTrait for OptimizerAdagradLUT {
             }
             
             self.fastmath_lr_lut[x] = val;
+            self.minus_power_t = -power_t;
         }
     }
     
@@ -151,6 +164,9 @@ impl OptimizerTrait for OptimizerAdagradLUT {
         0.0
     }
 
+    fn calculate_l2(&self, weight: f32, data: &Self::PerWeightStore) -> f32 {
+        weight * data.powf(self.minus_power_t)
+    }
 }
 
 
