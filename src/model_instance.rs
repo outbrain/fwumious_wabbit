@@ -10,11 +10,12 @@ use serde_json::{Value};
 use crate::vwmap;
 use crate::consts;
 use crate::feature_transform_parser;
+use crate::vwmap::{NamespaceDescriptor, NamespaceType};
 
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct FeatureComboDesc {
-    pub feature_indices: Vec<u32>,
+    pub namespace_descriptors: Vec<vwmap::NamespaceDescriptor>,
     pub weight:f32,
 }
 
@@ -25,7 +26,7 @@ pub enum Optimizer {
     Adagrad = 2,
 }
 
-pub type FieldDesc = Vec<u32>;
+pub type FieldDesc = Vec<vwmap::NamespaceDescriptor>;
 
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -79,20 +80,6 @@ fn default_bool_false() -> bool{false}
 fn default_optimizer_adagrad() -> Optimizer{Optimizer::Adagrad}
 
 
-pub fn get_float_namespaces<'a>(cl: &clap::ArgMatches<'a>) -> Result<(Vec<String>, u32), Box<dyn Error>> {
-   if let Some(in_v) = cl.value_of("float_namespaces") {
-       let prefix_skip:u32 = match cl.value_of("float_namespaces_skip_prefix") {
-           Some(prefix_skip_str) => prefix_skip_str.parse()?,
-           None => 0,
-       };
-       let namespaces_verbose: Vec<String> = in_v.split(",").map(|x| x.to_string()).collect();  // verbose names are separated by comma
-       Ok((namespaces_verbose, prefix_skip))
-   } else {
-       Ok((vec![], 0))
-   }
-}
-
-
 
 impl ModelInstance {
     pub fn new_empty() -> Result<ModelInstance, Box<dyn Error>> {
@@ -137,13 +124,13 @@ impl ModelInstance {
         }
 
         let namespaces_str = vsplit[0];
-        let mut feature_indices: Vec<u32> = Vec::new();
+        let mut namespace_descriptors: Vec<vwmap::NamespaceDescriptor> = Vec::new();
         for char in namespaces_str.chars() {
-           let index = feature_transform_parser::get_namespace_id(&self.transform_namespaces, vw, char)?;
-           feature_indices.push(index);
+           let namespace_descriptor = feature_transform_parser::get_namespace_descriptor(&self.transform_namespaces, vw, char)?;
+           namespace_descriptors.push(namespace_descriptor);
         }
         Ok(FeatureComboDesc {
-                             feature_indices: feature_indices,
+                              namespace_descriptors: namespace_descriptors,
                               weight: combo_weight
                             })
     }
@@ -163,13 +150,13 @@ impl ModelInstance {
         }
         
         let namespaces_verbose: Vec<&str> = vsplit[0].split(",").collect();  // verbose names are separated by comma
-        let mut feature_indices: Vec<u32> = Vec::new();
+        let mut namespace_descriptors: Vec<vwmap::NamespaceDescriptor> = Vec::new();
         for namespace_verbose in namespaces_verbose {
-           let index = feature_transform_parser::get_namespace_id_verbose(&self.transform_namespaces, vw, namespace_verbose)?;
-           feature_indices.push(index);
+           let namespace_descriptor = feature_transform_parser::get_namespace_descriptor_verbose(&self.transform_namespaces, vw, namespace_verbose)?;
+           namespace_descriptors.push(namespace_descriptor);
         }
         Ok(FeatureComboDesc {
-                              feature_indices: feature_indices,
+                              namespace_descriptors: namespace_descriptors,
                               weight: combo_weight
                             })
     }
@@ -182,8 +169,8 @@ impl ModelInstance {
         let namespaces_verbose: Vec<&str> = s.split(",").collect();  // verbose names are separated by comma
         let mut field: FieldDesc = Vec::new();
         for namespace_verbose in namespaces_verbose {
-            let index = feature_transform_parser::get_namespace_id_verbose(&self.transform_namespaces, vw, namespace_verbose)?;
-            field.push(index);
+            let namespace_descriptor = feature_transform_parser::get_namespace_descriptor_verbose(&self.transform_namespaces, vw, namespace_verbose)?;
+            field.push(namespace_descriptor);
         }
         Ok(field)
     }
@@ -225,10 +212,13 @@ impl ModelInstance {
         }
 
         // we first need transform namespaces, before processing keep or interactions
-        if let Some(in_v) = cl.values_of("transform_namespace") {
+        
+        if let Some(in_v) = cl.values_of("transform") {
+            let mut namespace_parser = feature_transform_parser::NamespaceTransformsParser::new();
             for value_str in in_v {                
-                mi.transform_namespaces.add_transform_namespace(vw, value_str)?;
+                namespace_parser.add_transform_namespace(vw, value_str)?;
             }
+            mi.transform_namespaces = namespace_parser.resolve(vw)?;
         }
         
         if let Some(in_v) = cl.values_of("keep") {
@@ -279,16 +269,11 @@ impl ModelInstance {
 
         if let Some(in_v) = cl.values_of("ffm_field") {
             for namespaces_str in in_v {          
-                let mut field: Vec<u32>= Vec::new();
+                let mut field: Vec<vwmap::NamespaceDescriptor>= Vec::new();
                 for char in namespaces_str.chars() {
                     //println!("K: {}", char);
-                    let index = feature_transform_parser::get_namespace_id(&mi.transform_namespaces, vw, char)?;
-/*                    let index = match vw.map_vwname_to_index.get(&vec![char as u8]) {
-                        Some(index) => *index,
-                        None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown namespace char in command line: {}", char))))
-                    };
-*/
-                    field.push(index);
+                    let namespace_descriptor = feature_transform_parser::get_namespace_descriptor(&mi.transform_namespaces, vw, char)?;
+                    field.push(namespace_descriptor);
                 }
                 mi.ffm_fields.push(field);
             }
@@ -412,6 +397,13 @@ impl ModelInstance {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
+    
+    fn ns_desc(i: u16) -> NamespaceDescriptor {
+        NamespaceDescriptor {namespace_index: i, 
+                             namespace_type: vwmap::NamespaceType::Primitive,
+                             namespace_format: vwmap::NamespaceFormat::Categorical}
+    }
+    
 
     #[test]
     fn test_interaction_parsing() {
@@ -420,18 +412,18 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mi = ModelInstance::new_empty().unwrap();        
         
         let result = mi.create_feature_combo_desc(&vw, "A").unwrap();
         assert_eq!(result, FeatureComboDesc {
-                                feature_indices: vec![0],
+                                namespace_descriptors: vec![ns_desc(0)],
                                 weight: 1.0
                                 });
         
         let result = mi.create_feature_combo_desc(&vw, "BA:1.5").unwrap();
         assert_eq!(result, FeatureComboDesc {
-                                feature_indices: vec![1,0],
+                                namespace_descriptors: vec![ns_desc(1), ns_desc(0)],
                                 weight: 1.5
                                 });
                                 
@@ -444,11 +436,11 @@ A,featureA:2
 B,featureB:3
 "#;
         // The main point is that weight in feature names from vw_map_str is ignored
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mi = ModelInstance::new_empty().unwrap();        
         let result = mi.create_feature_combo_desc(&vw, "BA:1.5").unwrap();
         assert_eq!(result, FeatureComboDesc {
-                                feature_indices: vec![1,0],
+                                namespace_descriptors: vec![ns_desc(1), ns_desc(0)],
                                 weight: 1.5
                                 });
                                 
@@ -461,17 +453,18 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mi = ModelInstance::new_empty().unwrap();        
         let result = mi.create_feature_combo_desc_from_verbose(&vw, "featureA").unwrap();
         assert_eq!(result, FeatureComboDesc {
-                                feature_indices: vec![0],
+                                namespace_descriptors: vec![ns_desc(0)],
+
                                 weight: 1.0
                                 });
         
         let result = mi.create_feature_combo_desc_from_verbose(&vw, "featureB,featureA:1.5").unwrap();
         assert_eq!(result, FeatureComboDesc {
-                                feature_indices: vec![1,0],
+                                namespace_descriptors: vec![ns_desc(1), ns_desc(0)],
                                 weight: 1.5
                                 });
 
@@ -488,14 +481,14 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mi = ModelInstance::new_empty().unwrap();        
 
         let result = mi.create_field_desc_from_verbose(&vw, "featureA").unwrap();
-        assert_eq!(result, vec![0]);
+        assert_eq!(result, vec![ns_desc(0)]);
 
         let result = mi.create_field_desc_from_verbose(&vw, "featureA,featureC").unwrap();
-        assert_eq!(result, vec![0,2]);
+        assert_eq!(result, vec![ns_desc(0), ns_desc(2)]);
 
 
         let result = mi.create_field_desc_from_verbose(&vw, "featureA,featureC:3");
