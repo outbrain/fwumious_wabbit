@@ -148,7 +148,7 @@ impl FeatureBufferTranslator {
                             feature_buffer: fb,
                             lr_hash_mask: (1 << mi.bit_precision) -1,
                             ffm_params_record_size: mi.ffm_k * (mi.ffm_fields.len() as u32),
-                            ffm_hashspace_size: 2 ^ mi.ffm_bit_precision,
+                            ffm_hashspace_size: 1 << mi.ffm_bit_precision,
                             transform_executors: feature_transform_executor::TransformExecutors::from_namespace_transforms(&mi.transform_namespaces),
         };
         fbt

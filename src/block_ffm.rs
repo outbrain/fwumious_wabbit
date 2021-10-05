@@ -90,7 +90,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         if mi.ffm_k > 0 {
             reg_ffm.optimizer_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
             // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
-            reg_ffm.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * reg_ffm.ffm_k);
+            reg_ffm.ffm_weights_len = (1 << mi.ffm_bit_precision) * (mi.ffm_fields.len() as u32) * mi.ffm_k;
             // println!("1 << mi.ffm_bit_precision {:?}", 1 << mi.ffm_bit_precision);
         }
         // println!("reg_ffm ffm_weights_len {:?}", reg_ffm.ffm_weights_len);
