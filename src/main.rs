@@ -17,6 +17,9 @@ use std::time::Instant;
 use flate2::read::MultiGzDecoder;
 
 
+#[macro_use]
+extern crate nom;
+
 mod vwmap;
 mod parser;
 mod model_instance;
@@ -34,6 +37,9 @@ mod block_lr;
 mod block_loss_functions;
 mod block_helpers;
 mod multithread_helpers;
+mod feature_transform_parser;
+mod feature_transform_executor;
+mod feature_transform_implementations;
 
 fn main() {
     match main2() {
@@ -95,8 +101,9 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             let vw_namespace_map_filepath = Path::new(input_filename).parent().expect("Couldn't access path given by --data").join("vw_namespace_map.csv");
             vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
             mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
-            re = regressor::get_regressor(&mi);
+            re = regressor::get_regressor_with_weights(&mi);
         };
+        
         let input_filename = cl.value_of("data").expect("--data expected");
         let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"), &vw);
         let mut fbt = feature_buffer::FeatureBufferTranslator::new(&mi);

@@ -2,6 +2,7 @@
 use std::{mem,slice};
 use std::io;
 use std::io::Read;
+use std::io::Write;
 use std::fs;
 use std::error::Error;
 use std::path;
@@ -10,15 +11,16 @@ use std::path;
 //use flate2::read::DeflateDecoder;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 //use zstd::stream::{Encoder, Decoder};
-
 //use lz4::{Decoder, EncoderBuilder};
 
 use crate::vwmap;
 
 const CACHE_HEADER_MAGIC_STRING: &[u8; 4] = b"FWCA";    // Fwumious Wabbit CAche
-const CACHE_HEADER_VERSION:u32 = 9;
+const CACHE_HEADER_VERSION:u32 = 11; 
 /*
 Version incompatibilites:
+10->11: float namespaces cannot have a weight attached
+9->10: enable binning
 8->9: enabled multi-byte feature names in vw files
 7->8: add example importance to the parsed buffer format
 */
@@ -27,12 +29,34 @@ Version incompatibilites:
 // 4 bytes: Magic bytes
 // u32: Version of the cache format
 // u_size + blob: json encoding of vw_source
-// u_size + blob: json encoding of model_instance
 // ...cached examples
 
 
 const READBUF_LEN:usize = 1024*100;
 
+// This is super ugly hack around the fact that we need to call finish() before closing the lz4 stream
+// Effectively lz4 implementation we're using is kind of bad
+// More info (and where workaround comes from): https://github.com/bozaro/lz4-rs/issues/9
+struct Wrapper<W: Write> {
+    s: Option<lz4::Encoder<W>>,
+}
+impl<W: io::Write> Write for Wrapper<W> {
+    fn write(&mut self, buffer: &[u8]) -> Result<usize, std::io::Error> {
+        self.s.as_mut().unwrap().write(buffer)
+    }
+
+    fn flush(&mut self) -> Result<(), std::io::Error> {
+        self.s.as_mut().unwrap().flush()
+    }
+}
+impl<W: Write> Drop for Wrapper<W> {
+    fn drop(&mut self) {
+        match self.s.take() {
+            Some(s) => {let a = s.finish();}
+            None => {}
+        }
+    }
+}
 
 pub struct RecordCache {
     output_bufwriter: Box<dyn io::Write>,
@@ -47,7 +71,6 @@ pub struct RecordCache {
     end_pointer: usize,
     total_read: usize,
 }
-
 
 impl RecordCache {
     pub fn new(input_filename: &str, enabled: bool, vw_map: &vwmap::VwNamespaceMap) -> RecordCache {
@@ -88,16 +111,17 @@ impl RecordCache {
                 }
                 println!("using cache_file = {}", final_filename );
                 println!("ignoring text input in favor of cache input");
-                rc.byte_buffer.resize(READBUF_LEN, 0);
                 match rc.verify_header(vw_map) {
                     Ok(()) => {},
                     Err(e) => {
-                        
                         println!("Couldn't use the existing cache file: {:?}", e);
                         rc.reading = false;
                     }
                 }
+                rc.byte_buffer.resize(READBUF_LEN, 0);
+                
             }
+            
             if !rc.reading {
                 rc.writing = true;
                 println!("creating cache file = {}", final_filename );
@@ -109,9 +133,11 @@ impl RecordCache {
 
 //                      rc.output_bufwriter = Box::new(io::BufWriter::new(zstd::stream::Encoder::new(fs::File::create(temporary_filename).unwrap(),
 //                                                                    -5).unwrap().auto_finish()));
-                      rc.output_bufwriter = Box::new(io::BufWriter::new(lz4::EncoderBuilder::new()
-                                                                      .level(3).build(fs::File::create(temporary_filename).unwrap()
-                                                                    ).unwrap()));
+//                      rc.output_bufwriter = Box::new(io::BufWriter::new(lz4::EncoderBuilder::new()
+//                                                                      .level(3).build(fs::File::create(temporary_filename).unwrap()
+//                                                                    ).unwrap()));
+                      let w = Wrapper{s:Some(lz4::EncoderBuilder::new().level(3).build(fs::File::create(temporary_filename).unwrap()).unwrap())};
+                      rc.output_bufwriter = Box::new(io::BufWriter::new(w));
                 }
                 rc.write_header(vw_map).unwrap();
             }

@@ -6,7 +6,8 @@ use std::thread;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::Mutex;
-
+use std::ops::DerefMut;
+use std::str;
 use daemonize::Daemonize;
 
 use crate::parser;
@@ -15,6 +16,7 @@ use crate::regressor;
 use crate::feature_buffer;
 use crate::model_instance;
 use crate::optimizer;
+use crate::persistence;
 use crate::regressor::Regressor;
 use crate::multithread_helpers::{BoxedRegressorTrait};
 
@@ -101,6 +103,27 @@ impl WorkerThread {
                                 Ok(_) => {},
                                 Err(_e) => { /*println!("Flushing the socket failed, dropping it");*/ return ConnectionEnd::StreamFlushError; }
                             }
+                        } else if e.is::<parser::HogwildLoadCommand>() {
+                            // FlushCommand just causes us to flush, not to break
+                            let hogwild_command = e.downcast_ref::<parser::HogwildLoadCommand>().unwrap();
+                            match persistence::hogwild_load(self.re_fixed.deref_mut(), &hogwild_command.filename) {
+                                Ok(_) => {
+                                    let p_res = format!("hogwild_load success\n");
+                                    match writer.write_all(p_res.as_bytes()) {
+                                        Ok(_) => {},
+                                        Err(_e) => { /*println!("Write to socket failed, dropping it"); */ return ConnectionEnd::StreamWriteError; }
+                                    };
+                                },
+                                Err(_e) => {
+                                    // TODO This kind of error should fold the whole daemon...
+                                    let p_res = format!("ERR: hogwild_load fail\n");
+                                    match writer.write_all(p_res.as_bytes()) {
+                                        Ok(_) => {},
+                                        Err(_e) => { /*println!("Write to socket failed, dropping it"); */ return ConnectionEnd::StreamWriteError; }
+                                    };
+                                    return ConnectionEnd::StreamWriteError;
+                                }
+                            }                   
                         } else
                         {
                             let p_res = format!("ERR: {}\n", e.to_string());
@@ -216,6 +239,11 @@ mod tests {
     use crate::regressor;
     use std::io::ErrorKind;
     use mockstream::{SharedMockStream, FailingMockStream};
+    use crate::feature_buffer;
+    use crate::feature_buffer::HashAndValue;
+    use crate::feature_buffer::HashAndValueAndSeq;
+    use tempfile::{tempdir};
+    use std::str;
 
 
     impl IsEmpty for std::io::BufReader<mockstream::SharedMockStream> {
@@ -273,7 +301,7 @@ C,featureC
             mocked_stream.push_bytes_to_read(b"! exclamation mark is not a valid label");
             assert_eq!(ConnectionEnd::ParseError, newt.handle_connection(&mut reader, &mut writer));
             let x = mocked_stream.pop_bytes_written();
-            assert_eq!(&x[..] == &b"ERR: Unknown first character of the label: ascii 33\n"[..], true);
+            assert_eq!(&x[..] == &b"ERR: Cannot parse an example\n"[..], true);
         } 
         
         // Non Working stream test
@@ -299,6 +327,94 @@ C,featureC
 
                                  
     }
+
+    fn lr_and_ffm_vec(v1:Vec<feature_buffer::HashAndValue>, v2:Vec<feature_buffer::HashAndValueAndSeq>, ffm_fields_count:u32) -> feature_buffer::FeatureBuffer {
+        feature_buffer::FeatureBuffer {
+                    label: 0.0,
+                    example_importance: 1.0,
+                    example_number: 0,
+                    lr_buffer: v1,
+                    ffm_buffer: v2,
+                    ffm_fields_count: ffm_fields_count,
+        }
+    }
+
+
+    #[test]
+    fn test_hogwild() {
+        let vw_map_string = r#"
+A,featureA
+B,featureB
+C,featureC
+"#;
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.learning_rate = 0.1;
+        mi.power_t = 0.0;
+        mi.bit_precision = 18;
+        mi.ffm_k = 1;
+        mi.ffm_bit_precision = 18;
+        mi.ffm_power_t = 0.0;
+        mi.ffm_learning_rate = 0.1;
+        mi.ffm_fields = vec![vec![],vec![]]; 
+        mi.optimizer = model_instance::Optimizer::Adagrad;
+        mi.fastmath = false;
+        let mut re_1 = regressor::Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
+        let mut re_2 = regressor::Regressor::new::<optimizer::OptimizerSGD>(&mi);
+        let mut p: f32;
+
+        let dir = tempdir().unwrap();
+        let regressor_filepath_1 = dir.path().join("test_regressor1.fw").to_str().unwrap().to_owned();
+        persistence::save_regressor_to_filename(&regressor_filepath_1, &mi, &vw, re_1).unwrap();
+        let regressor_filepath_2 = dir.path().join("test_regressor2.fw").to_str().unwrap().to_owned();
+        persistence::save_regressor_to_filename(&regressor_filepath_2, &mi, &vw, re_2).unwrap();
+
+        // OK NOW EVERYTHING IS READY... Let's start
+        let mut re = regressor::Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
+        let re_fixed = BoxedRegressorTrait::new(Box::new(re.immutable_regressor(&mi).unwrap()));
+        let fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
+        let pa = parser::VowpalParser::new(&vw);
+
+        let mut newt = WorkerThread {id: 1,
+                                 fbt: fbt,
+                                 pa: pa,
+                                 re_fixed: re_fixed,
+                                 };
+
+        { // WORKING STREAM TEST
+            let mut mocked_stream = SharedMockStream::new();
+            let mut reader = BufReader::new(mocked_stream.clone());
+            let mut writer = BufWriter::new(mocked_stream.clone());
+            // Just passes through, as the stream is empty
+            newt.handle_connection(&mut reader, &mut writer);
+
+
+            // now let's start playing
+            mocked_stream.push_bytes_to_read(&format!("hogwild_load {}", &regressor_filepath_1).as_bytes());
+            assert_eq!(ConnectionEnd::EndOfStream, newt.handle_connection(&mut reader, &mut writer));
+            let x = mocked_stream.pop_bytes_written();
+            assert_eq!(str::from_utf8(&x), str::from_utf8(b"hogwild_load success\n"));
+
+            // now incompatible regressor - should return error
+            mocked_stream.push_bytes_to_read(&format!("hogwild_load {}", &regressor_filepath_2).as_bytes());
+            assert_eq!(ConnectionEnd::StreamWriteError, newt.handle_connection(&mut reader, &mut writer));
+            let x = mocked_stream.pop_bytes_written();
+            assert_eq!(str::from_utf8(&x), str::from_utf8(b""));
+
+            // file does not exist
+            mocked_stream.push_bytes_to_read("hogwild_load /fba/baba/ba".as_bytes());
+            assert_eq!(ConnectionEnd::StreamWriteError, newt.handle_connection(&mut reader, &mut writer));
+            let x = mocked_stream.pop_bytes_written();
+            assert_eq!(str::from_utf8(&x), str::from_utf8(b""));
+
+        } 
+
+
+
+    }
+
+
+
 
 
 

@@ -143,6 +143,12 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .multiple(false)
                      .takes_value(false))
 
+                    .arg(Arg::with_name("transform")
+                     .long("transform")
+                     .value_name("target_namespace=func(source_namespaces)(parameters)")
+                     .help("Create new namespace by transforming one or more other namespaces")
+                     .multiple(true)
+                     .takes_value(true))
 
                     .arg(Arg::with_name("ffm_field")
                      .long("ffm_field")
@@ -232,7 +238,6 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .help("After how many examples start printing predictions")
                      .takes_value(true))
                     .arg(Arg::with_name("holdout_after")
-                     .conflicts_with("predictions_after")
                      .conflicts_with("testonly")
                      .required(false)
                      .long("holdout_after")

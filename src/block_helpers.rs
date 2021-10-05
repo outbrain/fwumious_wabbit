@@ -16,7 +16,7 @@ pub struct Weight {
     pub weight: f32, 
 }
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug)]
 #[repr(C)]
 pub struct WeightAndOptimizerData<L:OptimizerTrait> {
     pub weight: f32, 
@@ -64,6 +64,11 @@ pub fn read_weights_only_from_buf2<L:OptimizerTrait>(weights_len: usize, out_wei
     const BUF_LEN:usize = 1024 * 1024;
     let mut in_weights: Vec<WeightAndOptimizerData::<L>> = Vec::with_capacity(BUF_LEN as usize);
     let mut remaining_weights = weights_len;
+    let mut out_idx: usize = 0;
+    if weights_len != out_weights.len() {
+        return Err(format!("read_weights_only_from_buf2 - number of weights to read ({}) and number of weights allocated ({}) isn't the same", weights_len, out_weights.len()))?;
+    }
+
     unsafe {
         while remaining_weights > 0 {
             let chunk_size = min(remaining_weights, BUF_LEN);
@@ -72,7 +77,9 @@ pub fn read_weights_only_from_buf2<L:OptimizerTrait>(weights_len: usize, out_wei
                                          chunk_size * mem::size_of::<WeightAndOptimizerData<L>>());
             input_bufreader.read_exact(&mut in_weights_view)?;
             for w in &in_weights {
-                out_weights.push(WeightAndOptimizerData{weight:w.weight, optimizer_data: std::marker::PhantomData{}});
+                //out_weights.push(WeightAndOptimizerData{weight:w.weight, optimizer_data: std::marker::PhantomData{}});
+                out_weights.get_unchecked_mut(out_idx).weight = w.weight;
+                out_idx += 1;
             }
             remaining_weights -= chunk_size;
         }
@@ -114,11 +121,6 @@ pub fn spredict<'a>(block_run: &mut Box<dyn BlockTrait>,
         return prediction_probability
     }
 }
-
-
-
-
-
 
 
 
