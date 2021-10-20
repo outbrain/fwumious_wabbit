@@ -120,32 +120,32 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
 
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
-        self.weights =vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_ffm.initial_data()}; self.ffm_weights_len as usize];
-        if mi.ffm_k > 0 {
-            if mi.ffm_init_width == 0.0 {
-                // Initialization that has showed to work ok for us, like in ffm.pdf, but centered around zero and further divided by 50
-                let ffm_one_over_k_root = 1.0 / (self.ffm_k as f32).sqrt() / 50.0;
-                for i in 0..self.ffm_weights_len {
-                    self.weights[i as usize].weight = (1.0 * merand48((self.ffm_weights_len as usize+ i as usize) as u64)-0.5) * ffm_one_over_k_root;
-                    self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
-                }
-            } else {
-                let zero_half_band_width = mi.ffm_init_width * mi.ffm_init_zero_band * 0.5;
-                let band_width = mi.ffm_init_width * (1.0 - mi.ffm_init_zero_band);
-                for i in 0..self.ffm_weights_len {
-                    let mut w = merand48(i as u64) * band_width - band_width * 0.5;
-                    if w > 0.0 {
-                        w += zero_half_band_width ;
-                    } else {
-                        w -= zero_half_band_width;
-                    }
-                    w += mi.ffm_init_center;
-                    self.weights[i as usize].weight = w;
-                    self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
-                }
-
-            }
-        }
+        self.weights =vec![WeightAndOptimizerData::<L>{weight:0.002, optimizer_data: self.optimizer_ffm.initial_data()}; self.ffm_weights_len as usize];
+        // if mi.ffm_k > 0 {
+        //     if mi.ffm_init_width == 0.0 {
+        //         // Initialization that has showed to work ok for us, like in ffm.pdf, but centered around zero and further divided by 50
+        //         let ffm_one_over_k_root = 1.0 / (self.ffm_k as f32).sqrt() / 50.0;
+        //         for i in 0..self.ffm_weights_len {
+        //             self.weights[i as usize].weight = (1.0 * merand48((self.ffm_weights_len as usize+ i as usize) as u64)-0.5) * ffm_one_over_k_root;
+        //             self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
+        //         }
+        //     } else {
+        //         let zero_half_band_width = mi.ffm_init_width * mi.ffm_init_zero_band * 0.5;
+        //         let band_width = mi.ffm_init_width * (1.0 - mi.ffm_init_zero_band);
+        //         for i in 0..self.ffm_weights_len {
+        //             let mut w = merand48(i as u64) * band_width - band_width * 0.5;
+        //             if w > 0.0 {
+        //                 w += zero_half_band_width ;
+        //             } else {
+        //                 w -= zero_half_band_width;
+        //             }
+        //             w += mi.ffm_init_center;
+        //             self.weights[i as usize].weight = w;
+        //             self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
+        //         }
+        //
+        //     }
+        // }
     }
 
 
