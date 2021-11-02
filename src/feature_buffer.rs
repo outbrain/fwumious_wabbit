@@ -43,8 +43,7 @@ pub struct FeatureBufferTranslator {
     hashes_vec_out: Vec<HashAndValue>,
     pub feature_buffer: FeatureBuffer,
     pub lr_hash_mask: u32,
-    pub ffm_hashspace_size: u32,
-    pub ffm_params_record_size: u32,
+    pub ffm_hash_mask: u32,
     pub transform_executors: feature_transform_executor::TransformExecutors,
 }
 
@@ -131,6 +130,20 @@ macro_rules! feature_reader_float_namespace {
 
 impl FeatureBufferTranslator {
     pub fn new(mi: &model_instance::ModelInstance) -> FeatureBufferTranslator {
+
+        // Calculate lr_hash_mask
+        let lr_hash_mask = (1 << mi.bit_precision) -1;
+        // Calculate ffm_hash_mask
+        let mut ffm_bits_for_dimensions = 0;
+        while mi.ffm_k > (1 << (ffm_bits_for_dimensions)) {
+            ffm_bits_for_dimensions += 1;
+        }
+        
+        let dimensions_mask = (1 << ffm_bits_for_dimensions) - 1;
+        // in ffm we will simply mask the lower bits, so we spare them for k
+        let ffm_hash_mask = ((1 << mi.ffm_bit_precision) -1) ^ dimensions_mask;
+
+
         let mut fb = FeatureBuffer {
             label: 0.0,
             example_importance: 1.0,
@@ -140,15 +153,15 @@ impl FeatureBufferTranslator {
             ffm_fields_count: 0,
         };
 
+
         // avoid doing any allocations in translate
         let fbt = FeatureBufferTranslator{
                             model_instance: mi.clone(), // not the nicest option
                             hashes_vec_in : Vec::with_capacity(100),
                             hashes_vec_out : Vec::with_capacity(100),
                             feature_buffer: fb,
-                            lr_hash_mask: (1 << mi.bit_precision) -1,
-                            ffm_params_record_size: mi.ffm_k * (mi.ffm_fields.len() as u32),
-                            ffm_hashspace_size: 1 << mi.ffm_bit_precision,
+                            lr_hash_mask: lr_hash_mask,
+                            ffm_hash_mask: ffm_hash_mask,
                             transform_executors: feature_transform_executor::TransformExecutors::from_namespace_transforms(&mi.transform_namespaces),
         };
         fbt
@@ -220,8 +233,7 @@ impl FeatureBufferTranslator {
                 for (contra_field_index, ffm_field) in self.model_instance.ffm_fields.iter().enumerate() {
                     for namespace_descriptor in ffm_field {
                         feature_reader!(record_buffer, self.transform_executors, *namespace_descriptor, hash_index, hash_value, {
-                                let rehashed_hash_index = (hash_index % self.ffm_hashspace_size) * self.ffm_params_record_size;
-                                ffm_buffer.push(HashAndValueAndSeq {hash: rehashed_hash_index,
+                                ffm_buffer.push(HashAndValueAndSeq {hash: hash_index & self.ffm_hash_mask,
                                                                         value: hash_value,
                                                                         contra_field_index: contra_field_index as u32 * self.model_instance.ffm_k as u32});
                         });
