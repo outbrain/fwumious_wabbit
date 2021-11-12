@@ -13,11 +13,11 @@ Multipass can be done with an external tool by saving the final model and
 then doing another pass with that as an initial model.
 
 Unlike VW we also do not track prediction performance during the run - 
-we do not continously compute logloss. Additionally we are interested in 
+we do not continuously compute logloss. Additionally we are interested in 
 the predictions only on the evaluation part of the dataset, therefore a 
 new parameter  --predictions-after allows for skipping outputting all 
-predictions. We were surprised to learn that fromatting floating point 
-valuesfor human readable output can take significant time compared to 
+predictions. We were surprised to learn that formatting floating point 
+values for human readable output can take significant time compared to 
 making the prediction itself. 
 
 # Reduced Flexibility in Input Formats
@@ -115,7 +115,7 @@ accumulated gradients into separate vectors. This caused a 50% slowdown. The
 theory is that we are doing lots of random memory accesses (to load weights)
 and additional latencies overshadow the benefits of (possibly) better
 vectorization.
-- Manulally rolled-out AVX2 code for LR: While on paper instructions take 
+- Manually rolled-out AVX2 code for LR: While on paper instructions take 
 less time to execute than LLVM code, in practice there is no difference due
 to the floating point operations not being the bottleneck - it looks like
 the bottleneck is delivering values from memory.
