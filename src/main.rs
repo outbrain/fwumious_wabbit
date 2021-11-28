@@ -71,7 +71,11 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         },
         None => {}
     };
-    
+
+    let mut human_readable_weights_file = match cl.value_of("human_readable_weights") {
+        Some(filename) => Some(BufWriter::new(File::create(filename)?)),
+        None => None
+    };
     
     /* setting up the pipeline, either from command line or from existing regressor */
     // we want heal-allocated objects here
@@ -192,7 +196,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         println!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
 
         match final_regressor_filename {
-            Some(filename) => persistence::save_regressor_to_filename(filename, &mi, &vw, re).unwrap(),
+            Some(filename) => persistence::save_regressor_to_filename(filename, &mi, &vw, re, &mut human_readable_weights_file).unwrap(),
             None => {}
         }
     
