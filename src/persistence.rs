@@ -1,7 +1,7 @@
 use std::str;
 use std::error::Error;
 
-use std::io::{Read};
+use std::io::{Read, BufWriter};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::fs::File;
 use std::io;
@@ -56,12 +56,13 @@ pub fn save_regressor_to_filename(
                         mi: &model_instance::ModelInstance,
                         vwmap: &vwmap::VwNamespaceMap,
                         re: regressor::Regressor,
+                        human_readable_weights_file: &mut Option<BufWriter<File>>
                         ) -> Result<(), Box<dyn Error>> {
         let output_bufwriter = &mut io::BufWriter::new(fs::File::create(filename).expect(format!("Cannot open {} to save regressor to", filename).as_str()));
         write_regressor_header(output_bufwriter)?;
         vwmap.save_to_buf(output_bufwriter)?;
         mi.save_to_buf(output_bufwriter)?;
-        re.write_weights_to_buf(output_bufwriter)?;
+        re.write_weights_to_buf(output_bufwriter, human_readable_weights_file)?;
         Ok(())
     }
 
@@ -166,8 +167,9 @@ B,featureB
         let rr = regressor::get_regressor_with_weights(&mi);
         let dir = tempfile::tempdir().unwrap();
         let regressor_filepath = dir.path().join("test_regressor.fw");
-        save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, rr).unwrap();
-    }    
+        let human_readable_weights_file= &mut Option::from(BufWriter::new(File::create("test_human_readable_weights.fw").expect("Cannot open file to save weights as human readable format.")));
+        save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, rr, human_readable_weights_file).unwrap();
+    }
 
     fn lr_vec(v:Vec<feature_buffer::HashAndValue>) -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {
@@ -204,7 +206,7 @@ B,featureB
         let CONST_RESULT = 0.41731137;
         assert_eq!(re.learn(fbuf, false), CONST_RESULT);
 
-        // Now we test conversion to fixed regressor 
+        // Now we test conversion to fixed regressor
         {
             let re_fixed = re.immutable_regressor(&mi).unwrap();
             // predict with the same feature vector
@@ -214,7 +216,8 @@ B,featureB
         {
             let dir = tempdir().unwrap();
             let regressor_filepath = dir.path().join("test_regressor2.fw");
-            save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, re).unwrap();
+            let human_readable_weights_file= &mut Option::from(BufWriter::new(File::create("test_human_readable_weights2.fw").expect("Cannot open file to save weights.")));
+            save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, re, human_readable_weights_file).unwrap();
 
             // a) load as regular regressor
             let (_mi2, _vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap(), false).unwrap();
@@ -228,7 +231,7 @@ B,featureB
 
         }
 
-    }    
+    }
 
     fn ffm_fixed_init(rg: &mut Regressor) -> () {
         // This is a bit of black magic - we "know" that FFM is at index 1 and we downcast...
@@ -298,7 +301,8 @@ B,featureB
         {
             let dir = tempdir().unwrap();
             let regressor_filepath = dir.path().join("test_regressor2.fw");
-            save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, re).unwrap();
+            let human_readable_weights_file= &mut Option::from(BufWriter::new(File::create("test_human_readable_weights2.fw").expect("Cannot open file to save weights.")));
+            save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, re, human_readable_weights_file).unwrap();
 
             // a) load as regular regressor
             let (_mi2, _vw2, mut re2) = new_regressor_from_filename(regressor_filepath.to_str().unwrap(), false).unwrap();
@@ -407,9 +411,11 @@ B,featureB
         {
             let dir = tempdir().unwrap();
             let regressor_filepath_1 = dir.path().join("test_regressor1.fw").to_str().unwrap().to_owned();
-            save_regressor_to_filename(&regressor_filepath_1, &mi, &vw, re_1).unwrap();
+            let human_readable_weights_file_1= &mut Option::from(BufWriter::new(File::create("test_human_readable_weights2.fw").expect("Cannot open file to save weights.")));
+            save_regressor_to_filename(&regressor_filepath_1, &mi, &vw, re_1, human_readable_weights_file_1).unwrap();
             let regressor_filepath_2 = dir.path().join("test_regressor2.fw").to_str().unwrap().to_owned();
-            save_regressor_to_filename(&regressor_filepath_2, &mi, &vw, re_2).unwrap();
+            let human_readable_weights_file_2= &mut Option::from(BufWriter::new(File::create("test_human_readable_weights2.fw").expect("Cannot open file to save weights.")));
+            save_regressor_to_filename(&regressor_filepath_2, &mi, &vw, re_2, human_readable_weights_file_2).unwrap();
 
             // The mutable path
             let (_mi1, _vw1, mut new_re_1) = new_regressor_from_filename(&regressor_filepath_1, false).unwrap();

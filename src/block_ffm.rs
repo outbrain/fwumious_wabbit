@@ -25,6 +25,8 @@ const SQRT_OF_ONE_HALF:f32 = 0.70710678118;
  
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
+use std::io::BufWriter;
+use std::fs::File;
 
 
 pub struct BlockFFM<L:OptimizerTrait> {
@@ -433,8 +435,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader)
     }
 
-    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
-        block_helpers::write_weights_to_buf(&self.weights, output_bufwriter)
+    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write, human_readable_weights_file: &mut Option<BufWriter<File>>) -> Result<(), Box<dyn Error>> {
+        block_helpers::write_weights_to_buf(&self.weights, output_bufwriter, human_readable_weights_file)
     }
 
     fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>> {

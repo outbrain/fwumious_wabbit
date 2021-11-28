@@ -9,6 +9,9 @@ use crate::optimizer::OptimizerSGD;
 use std::marker::PhantomData;
 use crate::feature_buffer;
 use crate::regressor::BlockTrait;
+use std::io::BufWriter;
+use std::fs::File;
+use std::io::Write;
 
 #[derive(Clone, Debug)]
 #[repr(C)]
@@ -47,14 +50,22 @@ pub fn read_weights_from_buf<L:OptimizerTrait>(weights: &mut Vec<WeightAndOptimi
 }
 
 
-pub fn write_weights_to_buf<L:OptimizerTrait>(weights: &Vec<WeightAndOptimizerData<L>>, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
+pub fn write_weights_to_buf<L:OptimizerTrait>(weights: &Vec<WeightAndOptimizerData<L>>, output_bufwriter: &mut dyn io::Write,
+                                              human_readable_weights_file: &mut Option<BufWriter<File>>) -> Result<(), Box<dyn Error>> {
     if weights.len() == 0 {
         return Err(format!("Writing weights of unallocated weights buffer"))?;
     }
     unsafe {
-         let buf_view:&[u8] = slice::from_raw_parts(weights.as_ptr() as *const u8, 
-                                          weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
-         output_bufwriter.write_all(buf_view)?;
+        let buf_view:&[u8] = slice::from_raw_parts(weights.as_ptr() as *const u8,
+                                                   weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
+        output_bufwriter.write_all(buf_view)?;
+
+        if let Some(file) = human_readable_weights_file {
+            for w in weights {
+                // println!("{}", w.weight);
+                write!(file, "{:.6}\n", w.weight)?
+            }
+        }
     }
     Ok(())
 }

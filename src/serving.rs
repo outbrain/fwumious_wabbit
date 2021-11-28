@@ -244,6 +244,7 @@ mod tests {
     use crate::feature_buffer::HashAndValueAndSeq;
     use tempfile::{tempdir};
     use std::str;
+    use std::fs::File;
 
 
     impl IsEmpty for std::io::BufReader<mockstream::SharedMockStream> {
@@ -365,9 +366,11 @@ C,featureC
 
         let dir = tempdir().unwrap();
         let regressor_filepath_1 = dir.path().join("test_regressor1.fw").to_str().unwrap().to_owned();
-        persistence::save_regressor_to_filename(&regressor_filepath_1, &mi, &vw, re_1).unwrap();
+        let human_readable_weights_file_1= &mut Option::from(BufWriter::new(File::create("test_human_readable_weights2.fw").expect("Cannot open file to save weights.")));
+        persistence::save_regressor_to_filename(&regressor_filepath_1, &mi, &vw, re_1, human_readable_weights_file_1).unwrap();
         let regressor_filepath_2 = dir.path().join("test_regressor2.fw").to_str().unwrap().to_owned();
-        persistence::save_regressor_to_filename(&regressor_filepath_2, &mi, &vw, re_2).unwrap();
+        let human_readable_weights_file_2= &mut Option::from(BufWriter::new(File::create("test_human_readable_weights2.fw").expect("Cannot open file to save weights.")));
+        persistence::save_regressor_to_filename(&regressor_filepath_2, &mi, &vw, re_2, human_readable_weights_file_2).unwrap();
 
         // OK NOW EVERYTHING IS READY... Let's start
         let mut re = regressor::Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);

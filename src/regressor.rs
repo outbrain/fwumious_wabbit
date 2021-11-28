@@ -6,7 +6,8 @@ use std::sync::Arc;
 use core::arch::x86_64::*;
 use merand48::*;
 use std::io;
-use std::io::Cursor;
+use std::io::{Cursor, BufWriter};
+use std::fs::File;
 use std::error::Error;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::cmp::min;
@@ -36,7 +37,7 @@ pub trait BlockTrait {
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance);
     fn get_serialized_len(&self) -> usize;
-    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>>;
+    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write, human_readable_weights_file: &mut Option<BufWriter<File>>) -> Result<(), Box<dyn Error>>;
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>;
     fn new_forward_only_without_weights(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>>;
     fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> where Self:Sized;
@@ -144,12 +145,12 @@ impl Regressor  {
     }
     
     // Yeah, this is weird. I just didn't want to break the format compatibility at this point
-    pub fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
+    pub fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write, human_readable_weights_file: &mut Option<BufWriter<File>>) -> Result<(), Box<dyn Error>> {
         let length = self.blocks_boxes.iter().map(|block| block.get_serialized_len()).sum::<usize>() as u64;
         output_bufwriter.write_u64::<LittleEndian>(length as u64)?;
 
         for v in &self.blocks_boxes {
-            v.write_weights_to_buf(output_bufwriter)?;
+            v.write_weights_to_buf(output_bufwriter, human_readable_weights_file);
         }
         Ok(())
     }
@@ -203,7 +204,8 @@ impl Regressor  {
         let mut tmp_vec: Vec<u8> = Vec::new();
         for (i, v) in &mut self.blocks_boxes.iter().enumerate() {
             let mut cursor = Cursor::new(&mut tmp_vec);
-            v.write_weights_to_buf(&mut cursor)?;
+            let mut cursor2 = None;
+            v.write_weights_to_buf(&mut cursor, &mut cursor2)?;
             cursor.set_position(0);
             v.read_weights_from_buf_into_forward_only(&mut cursor, &mut rg.blocks_boxes[i])?;
         }

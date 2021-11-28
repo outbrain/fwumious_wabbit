@@ -142,6 +142,12 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .help("vowpal compatibility mode. Uses slow adagrad, emits warnings for non-compatible features")
                      .multiple(false)
                      .takes_value(false))
+                    .arg(Arg::with_name("human_readable_weights")
+                        .short("h")
+                     .long("human_readable_weights")
+                     .value_name("arg")
+                     .help("Final weights in human readable format to save")
+                     .takes_value(true))
 
                     .arg(Arg::with_name("transform")
                      .long("transform")

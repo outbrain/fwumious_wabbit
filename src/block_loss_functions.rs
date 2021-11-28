@@ -6,6 +6,8 @@ use crate::regressor;
 use crate::feature_buffer;
 use crate::model_instance;
 use regressor::BlockTrait;
+use std::io::BufWriter;
+use std::fs::File;
 
 
 //use fastapprox::fast::sigmoid; // surprisingly this doesn't work very well
@@ -106,7 +108,7 @@ impl BlockTrait for BlockSigmoid {
         Ok(())
     }
 
-    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
+    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write, human_readable_weights_file: &mut Option<BufWriter<File>>) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
 
