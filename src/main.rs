@@ -94,7 +94,8 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         se.serve()?;
     } else if cl.is_present("convert_inference_regressor") {
         let filename = cl.value_of("initial_regressor").expect("Convert mode requires --initial regressor");
-        let (mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true)?;
+        let (mut mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true)?;
+        mi2.optimizer = model_instance::Optimizer::SGD;
         match inference_regressor_filename {
             Some(filename1) => persistence::save_regressor_to_filename(filename1, &mi2, &vw2, re_fixed).unwrap(),
             None => {}
