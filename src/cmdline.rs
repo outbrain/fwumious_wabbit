@@ -146,6 +146,7 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                         .short("inference")
                         .long("convert_inference_regressor")
                         .value_name("arg")
+                        .conflicts_with("adaptive")
                         .help("Inference regressor to save (arg is filename)")
                         .takes_value(true))
 
