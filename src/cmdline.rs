@@ -143,7 +143,6 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .multiple(false)
                      .takes_value(false))
                     .arg(Arg::with_name("convert_inference_regressor")
-                        .short("inference")
                         .long("convert_inference_regressor")
                         .value_name("arg")
                         .conflicts_with("adaptive")
