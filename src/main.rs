@@ -71,6 +71,14 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         },
         None => {}
     };
+
+    let inference_regressor_filename = cl.value_of("convert_inference_regressor");
+    match inference_regressor_filename {
+        Some(filename1) => {
+            println!("inference_regressor = {}", filename1);
+        },
+        None => {}
+    };
     
     
     /* setting up the pipeline, either from command line or from existing regressor */
@@ -84,6 +92,14 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         let (mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true)?;
         let mut se = serving::Serving::new(&cl, &vw2, Box::new(re_fixed), &mi2)?;
         se.serve()?;
+    } else if cl.is_present("convert_inference_regressor") {
+        let filename = cl.value_of("initial_regressor").expect("Convert mode requires --initial regressor");
+        let (mut mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true)?;
+        mi2.optimizer = model_instance::Optimizer::SGD;
+        match inference_regressor_filename {
+            Some(filename1) => persistence::save_regressor_to_filename(filename1, &mi2, &vw2, re_fixed).unwrap(),
+            None => {}
+        }
     } else {
         let vw: vwmap::VwNamespaceMap;
         let mut re: regressor::Regressor;

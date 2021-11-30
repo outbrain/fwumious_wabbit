@@ -142,6 +142,12 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .help("vowpal compatibility mode. Uses slow adagrad, emits warnings for non-compatible features")
                      .multiple(false)
                      .takes_value(false))
+                    .arg(Arg::with_name("convert_inference_regressor")
+                        .long("convert_inference_regressor")
+                        .value_name("arg")
+                        .conflicts_with("adaptive")
+                        .help("Inference regressor to save (arg is filename)")
+                        .takes_value(true))
 
                     .arg(Arg::with_name("transform")
                      .long("transform")
