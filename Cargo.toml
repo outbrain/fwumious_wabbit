@@ -31,6 +31,11 @@ dyn-clone = "1.0"
 #flate2 = { version = "1.0", features = ["zlib"], default-features = false }
 flate2 = { version = "1.0", features = ["cloudflare_zlib"], default-features = false }
 
+clokwerk = "0.3.0"
+
+metrics = "0.17.1"
+metrics-exporter-prometheus = "0.7.0"
+
 [dev-dependencies]
 tempfile = "3.1.0"
 mockstream = "0.0.3"

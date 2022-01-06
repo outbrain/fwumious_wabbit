@@ -13,9 +13,14 @@ use std::io::Write;
 use std::io::BufRead;
 use std::f32;
 use std::collections::VecDeque;
-use std::time::Instant;
+use std::thread::sleep;
+use std::time::{Duration, Instant};
 use flate2::read::MultiGzDecoder;
-
+use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
+use metrics_exporter_prometheus::PrometheusRecorder;
+use metrics::{GaugeValue, histogram, Key, Label, Recorder, Unit};
+use metrics::register_histogram;
+use clokwerk::{Scheduler, TimeUnits, Interval};
 
 #[macro_use]
 extern crate nom;
@@ -79,8 +84,16 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         },
         None => {}
     };
-    
-    
+
+    let prometheus_builder = PrometheusBuilder::new();
+
+    let prometheus_recorder = prometheus_builder.build();
+
+    // we'll launch a new thread writing the metrics to a file every minute,
+    // using the recorder handle's render function:
+    // let log_string = prometheus_recorder.handle().render();
+    metrics::set_boxed_recorder(Box::new(prometheus_recorder))?;
+
     /* setting up the pipeline, either from command line or from existing regressor */
     // we want heal-allocated objects here
     
@@ -217,5 +230,69 @@ fn main2() -> Result<(), Box<dyn Error>>  {
     Ok(())
 }
 
+#[test]
+fn test_metrics() -> Result<(), Box<dyn Error>> {
+    let prometheus_builder = PrometheusBuilder::new();
+
+    let prometheus_recorder = prometheus_builder.build();
+
+    let handle : PrometheusHandle = prometheus_recorder.handle();
+
+    metrics::set_boxed_recorder(Box::new(prometheus_recorder))?;
 
 
+    let start = Instant::now();
+    // do something
+    let delta = start.elapsed();
+
+    register_histogram!("model_latency", "model_name" => "dummy");
+    histogram!("model_latency", delta, "model_name" => "dave");
+
+    println!("{}", handle.render());
+    // sleep(Duration::from_secs(10));
+
+    Ok(())
+}
+//
+// struct MyRecorder {
+//     inner : PrometheusRecorder,
+// }
+//
+// impl Recorder for MyRecorder {
+//     fn register_counter(&self, key: &Key, unit: Option<Unit>, description: Option<&'static str>) {
+//         self.inner.register_counter(key, unit, description);
+//     }
+//
+//     fn register_gauge(&self, key: &Key, unit: Option<Unit>, description: Option<&'static str>) {
+//         self.inner.register_gauge(key, unit, description);
+//     }
+//
+//     fn register_histogram(&self, key: &Key, unit: Option<Unit>, description: Option<&'static str>) {
+//         self.inner.register_histogram(key, unit, description);
+//     }
+//
+//     fn increment_counter(&self, key: &Key, value: u64) {
+//         self.inner.increment_counter(key, value);
+//     }
+//
+//     fn update_gauge(&self, key: &Key, value: GaugeValue) {
+//         self.inner.update_gauge(key, value);
+//     }
+//
+//     fn record_histogram(&self, key: &Key, value: f64) {
+//         self.inner.record_histogram(key, value);
+//     }
+// }
+//
+// impl MyRecorder {
+//     fn initialize_logger(&self) -> Scheduler {
+//         println!("{}", "initializing logger");
+//         let mut scheduler = Scheduler::new();
+//         scheduler.every(1.seconds()).run(|| self.render());
+//         scheduler
+//     }
+//
+//     fn render(&self) {
+//         println!("{}", self.inner.handle().render());
+//     }
+// }
