@@ -15,7 +15,9 @@ use optimizer::OptimizerTrait;
 use regressor::Regressor;
 
 const REGRESSOR_HEADER_MAGIC_STRING: &[u8; 4] = b"FWRE";    // Fwumious Wabbit REgressor
-const REGRESSOR_HEADER_VERSION:u32 = 4;
+const REGRESSOR_HEADER_VERSION:u32 = 5; // Change to 5: introduce namespace descriptors which changes regressor
+
+
 
 impl model_instance::ModelInstance {
     pub fn save_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
@@ -158,7 +160,7 @@ mod tests {
 A,featureA
 B,featureB
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
@@ -183,7 +185,7 @@ B,featureB
 A,featureA
 B,featureB
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
@@ -252,7 +254,7 @@ B,featureB
 A,featureA
 B,featureB
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
@@ -324,7 +326,7 @@ B,featureB
 A,featureA
 B,featureB
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;

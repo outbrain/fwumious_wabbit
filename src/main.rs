@@ -44,6 +44,7 @@ mod block_helpers;
 mod multithread_helpers;
 mod feature_transform_parser;
 mod feature_transform_executor;
+mod feature_transform_implementations;
 
 fn main() {
     match main2() {
@@ -75,6 +76,14 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         },
         None => {}
     };
+
+    let inference_regressor_filename = cl.value_of("convert_inference_regressor");
+    match inference_regressor_filename {
+        Some(filename1) => {
+            println!("inference_regressor = {}", filename1);
+        },
+        None => {}
+    };
     
     
     /* setting up the pipeline, either from command line or from existing regressor */
@@ -88,6 +97,14 @@ fn main2() -> Result<(), Box<dyn Error>>  {
         let (mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true)?;
         let mut se = serving::Serving::new(&cl, &vw2, Box::new(re_fixed), &mi2)?;
         se.serve()?;
+    } else if cl.is_present("convert_inference_regressor") {
+        let filename = cl.value_of("initial_regressor").expect("Convert mode requires --initial regressor");
+        let (mut mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true)?;
+        mi2.optimizer = model_instance::Optimizer::SGD;
+        match inference_regressor_filename {
+            Some(filename1) => persistence::save_regressor_to_filename(filename1, &mi2, &vw2, re_fixed).unwrap(),
+            None => {}
+        }
     } else {
         let vw: vwmap::VwNamespaceMap;
         let mut re: regressor::Regressor;
@@ -103,8 +120,7 @@ fn main2() -> Result<(), Box<dyn Error>>  {
             // This is one of the major differences from vowpal
             let input_filename = cl.value_of("data").expect("--data expected");
             let vw_namespace_map_filepath = Path::new(input_filename).parent().expect("Couldn't access path given by --data").join("vw_namespace_map.csv");
-            let float_namespaces = model_instance::get_float_namespaces(&cl)?;
-            vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath, float_namespaces)?;
+            vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
             mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
             re = regressor::get_regressor_with_weights(&mi);
         };

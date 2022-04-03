@@ -265,7 +265,7 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mi = model_instance::ModelInstance::new_empty().unwrap();        
         let mut re = regressor::Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
         let re_fixed = BoxedRegressorTrait::new(Box::new(re.immutable_regressor(&mi).unwrap()));
@@ -344,7 +344,7 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
