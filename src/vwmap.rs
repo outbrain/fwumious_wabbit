@@ -3,7 +3,7 @@ use std::error::Error;
 use std::path::PathBuf;
 use std::io::prelude::*;
 use std::fs;
-use serde::{Serialize,Deserialize};
+use serde::{Deserialize, Serialize};
 use std::io::ErrorKind;
 use std::io::Error as IOError;
 
@@ -42,7 +42,7 @@ pub struct VwNamespaceMap {
 pub struct VwNamespaceMapEntry {
     pub namespace_vwname: std::string::String,
     pub namespace_verbose: std::string::String,
-    namespace_index: u16,
+    pub namespace_index: u16,
     namespace_format: NamespaceFormat, 
 }
 

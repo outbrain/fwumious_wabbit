@@ -146,13 +146,13 @@ impl ModelInstance {
         let mut audit_aux_data = default_audit_data();
 
         for vw_entry in &vw.vw_source.entries {
-            audit_aux_data.namespace_index_to_string.insert(vw_entry.namespace_index, vw_entry.namespace_verbose.to_string());
+            audit_aux_data.namespace_index_to_string.insert(vw_entry.namespace_index as u32, vw_entry.namespace_verbose.to_string());
         }
 
         for (combo_index, combo_desc) in self.feature_combo_descs.iter().enumerate() {
             let mut names_list: Vec<String> = Vec::new();
-            for namespace_index in &combo_desc.feature_indices {
-                names_list.push(audit_aux_data.namespace_index_to_string[namespace_index].to_string());
+            for namespace_field in &combo_desc.namespace_descriptors {
+                names_list.push(audit_aux_data.namespace_index_to_string[&(namespace_field.namespace_index as u32)].to_string());
             }
             
             audit_aux_data.combo_index_to_string.insert(combo_index as i32, names_list.join(","));
@@ -161,8 +161,8 @@ impl ModelInstance {
 
         for (field_index, field_vec) in self.ffm_fields.iter().enumerate() {
             let mut names_list: Vec<String> = Vec::new();
-            for namespace_index in field_vec {
-                names_list.push(audit_aux_data.namespace_index_to_string[namespace_index].to_string());
+            for field_obj in field_vec {
+                names_list.push(audit_aux_data.namespace_index_to_string[&(field_obj.namespace_index as u32)].to_string());
             }
             audit_aux_data.field_index_to_string.insert(field_index as u32, names_list.join(","));
         }

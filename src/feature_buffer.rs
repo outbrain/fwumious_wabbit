@@ -298,7 +298,7 @@ impl FeatureBufferTranslator {
                         });
                         if self.model_instance.audit_mode {
                             while ffm_buffer.len() > self.feature_buffer.ffm_buffer_audit.len() {
-                                self.feature_buffer.ffm_buffer_audit.push(*namespace_index);
+                                self.feature_buffer.ffm_buffer_audit.push(namespace_descriptor.namespace_index as u32);
                             }
                         }
                     }
