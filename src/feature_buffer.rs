@@ -38,7 +38,7 @@ pub struct FeatureBuffer {
     pub audit_mode: bool,
     pub audit_aux_data: model_instance::AuditData,
     pub lr_buffer_audit: Vec<i32>, // Corresponding ids of feature combos from lr_buffer
-    pub ffm_buffer_audit: Vec<u32>, // Corresponding ids of namespace indexes
+    pub ffm_buffer_audit: Vec<String>, // Corresponding ids of namespace indexes
 }
 
 #[derive(Clone)]
@@ -353,9 +353,29 @@ impl FeatureBufferTranslator {
                         );
                         if self.model_instance.audit_mode {
                             while ffm_buffer.len() > self.feature_buffer.ffm_buffer_audit.len() {
-                                self.feature_buffer
-                                    .ffm_buffer_audit
-                                    .push(namespace_descriptor.namespace_index as u32);
+                                let feature_name: String = match namespace_descriptor.namespace_type
+                                {
+                                    NamespaceType::Transformed => {
+                                        let namespace_transformed_index =
+                                            namespace_descriptor.namespace_index as usize;
+                                        let namespace_transformed_verbose =
+                                            self.model_instance.transform_namespaces.v
+                                                [namespace_transformed_index]
+                                                .to_namespace
+                                                .namespace_verbose
+                                                .to_string();
+                                        namespace_transformed_verbose
+                                    }
+                                    NamespaceType::Primitive => {
+                                        let ns_descriptor: &u32 =
+                                            &(namespace_descriptor.namespace_index as u32);
+                                        self.feature_buffer.audit_aux_data.namespace_index_to_string
+                                            [ns_descriptor]
+                                            .clone()
+                                    }
+                                };
+
+                                self.feature_buffer.ffm_buffer_audit.push(feature_name);
                             }
                         }
                     }

@@ -169,6 +169,7 @@ impl ModelInstance {
                     }
                 }
             }
+
             audit_aux_data
                 .combo_index_to_string
                 .insert(combo_index as i32, names_list.join(","));

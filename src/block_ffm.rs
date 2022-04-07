@@ -529,7 +529,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             features.push(json!({
             "index": feature_hash_index,
             "value": feature_value,
-            "feature": fb.audit_aux_data.namespace_index_to_string[namespace_index],
+            "feature": namespace_index,
             "weights": contra_fields,
             }));
         }
