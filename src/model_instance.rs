@@ -151,11 +151,24 @@ impl ModelInstance {
         for (combo_index, combo_desc) in self.feature_combo_descs.iter().enumerate() {
             let mut names_list: Vec<String> = Vec::new();
             for namespace_field in &combo_desc.namespace_descriptors {
-                let casted_index = namespace_field.namespace_index as u32;
-                names_list
-                    .push(audit_aux_data.namespace_index_to_string[&casted_index].to_string());
+                match namespace_field.namespace_type {
+                    NamespaceType::Transformed => {
+                        let namespace_transformed_index = namespace_field.namespace_index as usize;
+                        let namespace_transformed_verbose = self.transform_namespaces.v
+                            [namespace_transformed_index]
+                            .to_namespace
+                            .namespace_verbose
+                            .to_string();
+                        names_list.push(namespace_transformed_verbose)
+                    }
+                    NamespaceType::Primitive => {
+                        let casted_index = namespace_field.namespace_index as u32;
+                        names_list.push(
+                            audit_aux_data.namespace_index_to_string[&casted_index].to_string(),
+                        )
+                    }
+                }
             }
-
             audit_aux_data
                 .combo_index_to_string
                 .insert(combo_index as i32, names_list.join(","));
