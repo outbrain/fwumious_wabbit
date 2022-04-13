@@ -119,8 +119,6 @@ fn load_regressor_without_weights(
         }
     };
 
-    println!("{:?}", mi);
-
     let re = regressor::get_regressor_without_weights(&mi);
     Ok((mi, vw, re))
 }
