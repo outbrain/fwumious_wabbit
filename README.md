@@ -30,4 +30,3 @@ Check out our [benchmark](BENCHMARK.md), here's a teaser:
 - Features' namespaces have to be declared up-front
 - Prefetching of weights from memory (avoiding pipeline stalls)
 - Written in Rust with heavy use of code specialization (via macros and traits)
-
