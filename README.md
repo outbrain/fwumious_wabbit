@@ -9,10 +9,10 @@ Fwumious Wabbit is
 
 Fwumious Wabbit is actively used in Outbrain for offline research, as well as for some production flows. It 
 enables "high bandwidth research" when doing feature engineering, feature 
-selection, hyper-parameter tuning, and the like. 
+selection, hyperparameter tuning, and the like. 
 
 Data scientists can train hundreds of models over hundreds of millions of examples in 
-a matter of hours on a single machine.
+a matter of hours on a single (CPU-only) machine.
 
 For our tested scenarios it is almost two orders of magnitude faster than the 
 fastest Tensorflow implementation of Logistic Regression and FFMs that we could 
