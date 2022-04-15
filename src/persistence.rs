@@ -16,6 +16,7 @@ use std::io::Read;
 
 const REGRESSOR_HEADER_MAGIC_STRING: &[u8; 4] = b"FWRE"; // Fwumious Wabbit REgressor
 const REGRESSOR_HEADER_VERSION: u32 = 5; // Change to 5: introduce namespace descriptors which changes regressor
+                                         //const ONLINE_HYPERPARAMETER_CANDIDATES: [&str; 1] = ["learning_rate"]; // which hyperparameters will get updated based on cmd
 const ONLINE_HYPERPARAMETER_CANDIDATES: [&str; 1] = ["learning_rate"]; // which hyperparameters will get updated based on cmd
 
 impl model_instance::ModelInstance {
@@ -100,17 +101,20 @@ fn load_regressor_without_weights(
             let mut mi = model_instance::ModelInstance::new_from_buf(input_bufreader)
                 .expect("Loading model instance from regressor failed");
 
+            // if hyperparam. is part of the cmd, try to replace it
             for hyperparameter_value in ONLINE_HYPERPARAMETER_CANDIDATES.iter() {
                 if p.is_present(hyperparameter_value) {
-                    mi.learning_rate = p
-                        .value_of("learning_rate")
-                        .unwrap_or("Could not parse the learning rate.")
-                        .parse::<f32>()
-                        .unwrap();
+                    match p.value_of(hyperparameter_value) {
+                        Some(result) => {
+                            mi.learning_rate = result.parse::<f32>().unwrap();
+                        }
+                        None => continue,
+                    }
                 }
             }
-            let mi2 = mi; // transfer ownership to immutable
-            mi2
+
+            let mi_im = mi; // ownership transfer
+            mi_im
         }
         None => {
             let mi = model_instance::ModelInstance::new_from_buf(input_bufreader)
