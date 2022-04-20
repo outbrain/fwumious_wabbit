@@ -149,8 +149,8 @@ impl OptimizerTrait for OptimizerAdagradLUT {
         *data = new_accumulated_gradient_squared;
         let key = new_accumulated_gradient_squared.to_bits() >> (31 - FASTMATH_LR_LUT_BITS);
         let update = gradient * *self.fastmath_lr_lut.get_unchecked(key as usize);
-        if update > 0.0001 {
-            println!("{}", update);
+        if update > 0.00001 {
+            println!("GRAD_UPDATE\t{}", update);
         }
         return update;
     }

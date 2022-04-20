@@ -89,7 +89,9 @@ fn main2() -> Result<(), Box<dyn Error>> {
             .value_of("initial_regressor")
             .expect("Daemon mode only supports serving from --initial regressor");
         println!("initial_regressor = {}", filename);
-        println!("WARNING: Command line model parameters will be ignored");
+        println!(
+            "WARNING: Command line model parameters (if any) will be considered during updates."
+        );
         let (mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true, &cl)?;
         let mut se = serving::Serving::new(&cl, &vw2, Box::new(re_fixed), &mi2)?;
         se.serve()?;

@@ -69,13 +69,15 @@ impl ExecutorToNamespace {
             if interpolated {
                 let floor = f.floor();
                 let floor_int = floor as i32;
-                let part = f - floor;
-                if part != 0.0 {
-                    self.emit_i32::<SEED_ID>(floor_int + 1, hash_value * part);
+                let part_a = f - floor;
+                let part_b = 1.0 - part_a;
+                let joint_part = part_a * part_b / (part_a + part_b); // something ~unique
+
+                if part_a != 0.0 {
+                    self.emit_i32::<SEED_ID>(floor_int + 1, hash_value * part_a);
                 }
-                let part = 1.0 - part;
-                if part != 0.0 {
-                    self.emit_i32::<SEED_ID>(floor_int, hash_value * part);
+                if part_b != 0.0 {
+                    self.emit_i32::<SEED_ID>(floor_int, hash_value * part_b);
                 }
             } else {
                 self.emit_i32::<SEED_ID>(f as i32, hash_value);
