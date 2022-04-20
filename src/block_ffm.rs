@@ -506,19 +506,17 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         let mut map = Map::new();
         map.insert("_type".to_string(), Value::String("BlockFFM".to_string()));
         let mut features: Vec<Value> = Vec::new();
-
-        // multi-value map check
-        let mut mapVals = HashMap::new();
         let mut counter = 0;
+        let mut mapVals = fb.fhash.borrow_mut();
+
         for (val, namespace_index) in fb.ffm_buffer.iter().zip(fb.ffm_buffer_audit.iter()) {
             counter += 1;
             let feature_hash_index = val.hash;
             let mut feature_value = val.value;
-            let findex_string = feature_hash_index.to_string();
-            if !mapVals.contains_key(&findex_string) {
-                mapVals.insert(findex_string, feature_value);
+            if !mapVals.contains_key(&feature_hash_index) {
+                mapVals.insert(feature_hash_index, feature_value);
             } else {
-                feature_value = *mapVals.get(&findex_string).unwrap();
+                feature_value = *mapVals.get(&feature_hash_index).unwrap();
             }
             let mut contra_fields: Vec<Value> = Vec::new();
             for contra_field_index in 0..fb.ffm_fields_count as usize {

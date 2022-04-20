@@ -5,6 +5,7 @@ use crate::parser;
 use crate::vwmap::{NamespaceFormat, NamespaceType};
 use serde_json::{Map, Value};
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 const VOWPAL_FNV_PRIME: u32 = 16777619; // vowpal magic number
@@ -39,6 +40,7 @@ pub struct FeatureBuffer {
     pub audit_aux_data: model_instance::AuditData,
     pub lr_buffer_audit: Vec<i32>, // Corresponding ids of feature combos from lr_buffer
     pub ffm_buffer_audit: Vec<String>, // Corresponding ids of namespace indexes
+    pub fhash: RefCell<HashMap<u32, f32>>,
 }
 
 #[derive(Clone)]
@@ -67,6 +69,7 @@ impl FeatureBuffer {
             audit_aux_data: model_instance::default_audit_data(),
             lr_buffer_audit: Vec::new(),
             ffm_buffer_audit: Vec::new(),
+            fhash: RefCell::new(HashMap::new()),
         }
     }
 
