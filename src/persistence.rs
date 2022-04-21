@@ -17,7 +17,7 @@ use regressor::Regressor;
 
 const REGRESSOR_HEADER_MAGIC_STRING: &[u8; 4] = b"FWRE"; // Fwumious Wabbit REgressor
 const REGRESSOR_HEADER_VERSION: u32 = 5; // Change to 5: introduce namespace descriptors which changes regressor
-const ONLINE_HYPERPARAMETER_CANDIDATES: [&str; 2] = ["learning_rate", "ffm_learning_rate"]; // which hyperparameters will get updated based on cmd
+const ONLINE_HYPERPARAMETER_CANDIDATES: [&str; 2] = ["learning_rate", "power_t"]; // which hyperparameters will get updated based on cmd
 
 impl model_instance::ModelInstance {
     pub fn save_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
@@ -106,7 +106,11 @@ fn load_regressor_without_weights(
                 if p.is_present(hyperparameter_value) {
                     match p.value_of(hyperparameter_value) {
                         Some(result) => {
-                            mi.learning_rate = result.parse::<f32>().unwrap();
+							if hyperparameter_value.eq(&"learning_rate".to_string()) {
+								mi.learning_rate = result.parse::<f32>().unwrap();
+							} else if hyperparameter_value.eq(&"power_t".to_string()) {
+								mi.power_t = result.parse::<f32>().unwrap();
+							}
                         }
                         None => continue,
                     }
