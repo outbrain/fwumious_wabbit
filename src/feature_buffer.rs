@@ -16,12 +16,14 @@ const CONSTANT_HASH: u32 = 11650396;
 pub struct HashAndValue {
     pub hash: u32,
     pub value: f32,
+	pub raw_value: f32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct HashAndValueAndSeq {
     pub hash: u32,
     pub value: f32,
+	pub raw_value: f32,
     pub contra_field_index: u32,
 }
 
@@ -246,6 +248,7 @@ impl FeatureBufferTranslator {
                             lr_buffer.push(HashAndValue {
                                 hash: hash_index & self.lr_hash_mask,
                                 value: hash_value * feature_combo_weight,
+								raw_value: hash_value,
                             });
                         }
                     );
@@ -268,6 +271,7 @@ impl FeatureBufferTranslator {
                             hashes_vec_in.push(HashAndValue {
                                 hash: hash_index,
                                 value: hash_value,
+								raw_value: hash_value,
                             });
                         }
                     );
@@ -289,6 +293,7 @@ impl FeatureBufferTranslator {
                                     hashes_vec_out.push(HashAndValue {
                                         hash: hash_index ^ half_hash,
                                         value: handv.value * hash_value,
+										raw_value: handv.value,
                                     });
                                 }
                             );
@@ -299,6 +304,7 @@ impl FeatureBufferTranslator {
                         lr_buffer.push(HashAndValue {
                             hash: handv.hash & self.lr_hash_mask,
                             value: handv.value * feature_combo_weight,
+							raw_value: handv.value,
                         });
                     }
                     if self.model_instance.audit_mode {
@@ -315,6 +321,7 @@ impl FeatureBufferTranslator {
                 lr_buffer.push(HashAndValue {
                     hash: CONSTANT_HASH & self.lr_hash_mask,
                     value: 1.0,
+					raw_value: 1.0,
                 });
                 if self.model_instance.audit_mode {
                     while lr_buffer.len() > self.feature_buffer.lr_buffer_audit.len() {
@@ -349,6 +356,7 @@ impl FeatureBufferTranslator {
                                 ffm_buffer.push(HashAndValueAndSeq {
                                     hash: hash_index & self.ffm_hash_mask,
                                     value: hash_value,
+									raw_value: hash_value,
                                     contra_field_index: contra_field_index as u32
                                         * self.model_instance.ffm_k as u32,
                                 });
@@ -623,6 +631,7 @@ mod tests {
             vec![HashAndValueAndSeq {
                 hash: 0xfea,
                 value: 1.0,
+				raw_value: 1.0,
                 contra_field_index: 0
             }]
         );

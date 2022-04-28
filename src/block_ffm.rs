@@ -513,6 +513,13 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             counter += 1;
             let feature_hash_index = val.hash;
             let mut feature_value = val.value;
+//			let mut feature_raw_value = 0.0;
+			
+			let feature_raw_value = val.raw_value;
+			// if let Err(_err) = Some(val.raw_value) {
+			// 	println!("test");
+			// }
+			
             // if !mapVals.contains_key(&feature_hash_index) {
             //     mapVals.insert(feature_hash_index, feature_value);
             // } else {
@@ -537,10 +544,11 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     }));
             }
             features.push(json!({
-            "index": feature_hash_index,
-            "value": feature_value,
-            "feature": namespace_index,
-            "weights": contra_fields,
+				"index": feature_hash_index,
+				"value": feature_value,
+				"raw_value": feature_raw_value,
+				"feature": namespace_index,
+				"weights": contra_fields,
             }));
         }
         map.insert("input".to_string(), Value::Array(features));
