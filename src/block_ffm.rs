@@ -513,11 +513,11 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             counter += 1;
             let feature_hash_index = val.hash;
             let mut feature_value = val.value;
-            if !mapVals.contains_key(&feature_hash_index) {
-                mapVals.insert(feature_hash_index, feature_value);
-            } else {
-                feature_value = *mapVals.get(&feature_hash_index).unwrap();
-            }
+            // if !mapVals.contains_key(&feature_hash_index) {
+            //     mapVals.insert(feature_hash_index, feature_value);
+            // } else {
+            //     feature_value = *mapVals.get(&feature_hash_index).unwrap();
+            // }
             let mut contra_fields: Vec<Value> = Vec::new();
             for contra_field_index in 0..fb.ffm_fields_count as usize {
                 let mut weights_vec: Vec<Value> = Vec::new();
