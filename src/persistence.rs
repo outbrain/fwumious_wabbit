@@ -17,7 +17,6 @@ use regressor::Regressor;
 
 const REGRESSOR_HEADER_MAGIC_STRING: &[u8; 4] = b"FWRE"; // Fwumious Wabbit REgressor
 const REGRESSOR_HEADER_VERSION: u32 = 5; // Change to 5: introduce namespace descriptors which changes regressor
-const ONLINE_HYPERPARAMETER_CANDIDATES: [&str; 2] = ["learning_rate", "power_t"]; // which hyperparameters will get updated based on cmd
 
 impl model_instance::ModelInstance {
     pub fn save_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
@@ -81,9 +80,7 @@ fn write_regressor_header(output_bufwriter: &mut dyn io::Write) -> Result<(), Bo
 }
 
 fn load_regressor_without_weights(
-    input_bufreader: &mut io::BufReader<File>,
-    cmd_arguments: Option<&clap::ArgMatches>,
-) -> Result<
+    input_bufreader: &mut io::BufReader<File>) -> Result<
     (
         model_instance::ModelInstance,
         vwmap::VwNamespaceMap,
@@ -95,46 +92,16 @@ fn load_regressor_without_weights(
     let vw = vwmap::VwNamespaceMap::new_from_buf(input_bufreader)
         .expect("Loading vwmap from regressor failed");
 
-    // Let's create a mutable model from the template and modify it based on CMDs
-    let mi: model_instance::ModelInstance = match cmd_arguments {
-        Some(p) => {
-            let mut mi = model_instance::ModelInstance::new_from_buf(input_bufreader)
-                .expect("Loading model instance from regressor failed");
-
-            // if hyperparam. is part of the cmd, try to replace it
-            for hyperparameter_value in ONLINE_HYPERPARAMETER_CANDIDATES.iter() {
-                if p.is_present(hyperparameter_value) {
-                    match p.value_of(hyperparameter_value) {
-                        Some(result) => {
-							if hyperparameter_value.eq(&"learning_rate".to_string()) {
-								mi.learning_rate = result.parse::<f32>().unwrap();
-							} else if hyperparameter_value.eq(&"power_t".to_string()) {
-								mi.power_t = result.parse::<f32>().unwrap();
-							}
-                        }
-                        None => continue,
-                    }
-                }
-            }
-
-            let mi_im = mi;
-            mi_im
-        }
-        None => {
-            let mi = model_instance::ModelInstance::new_from_buf(input_bufreader)
-                .expect("Loading model instance from regressor failed");
-            mi
-        }
-    };
+	let mi = model_instance::ModelInstance::new_from_buf(input_bufreader)
+        .expect("Loading model instance from regressor failed");
+	
     let re = regressor::get_regressor_without_weights(&mi);
     Ok((mi, vw, re))
 }
 
 pub fn new_regressor_from_filename(
     filename: &str,
-    immutable: bool,
-	cmd_arguments: &clap::ArgMatches,
-) -> Result<
+    immutable: bool) -> Result<
     (
         model_instance::ModelInstance,
         vwmap::VwNamespaceMap,
@@ -143,7 +110,7 @@ pub fn new_regressor_from_filename(
     Box<dyn Error>,
 > {
     let mut input_bufreader = io::BufReader::new(fs::File::open(filename).unwrap());
-    let (mi, vw, mut re) = load_regressor_without_weights(&mut input_bufreader, Some(cmd_arguments))?;
+    let (mi, vw, mut re) = load_regressor_without_weights(&mut input_bufreader)?;
     if !immutable {
         re.allocate_and_init_weights(&mi);
         re.overwrite_weights_from_buf(&mut input_bufreader)?;
@@ -158,7 +125,7 @@ pub fn new_regressor_from_filename(
 
 pub fn hogwild_load(re: &mut regressor::Regressor, filename: &str) -> Result<(), Box<dyn Error>> {
     let mut input_bufreader = io::BufReader::new(fs::File::open(filename)?);
-    let (mi_hw, vw_hw, mut re_hw) = load_regressor_without_weights(&mut input_bufreader, None)?;
+    let (mi_hw, vw_hw, mut re_hw) = load_regressor_without_weights(&mut input_bufreader)?;
     // TODO: Here we should do safety comparison that the regressor is really the same;
     if !re.immutable {
         re.overwrite_weights_from_buf(&mut input_bufreader)?;

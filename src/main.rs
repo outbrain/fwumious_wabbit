@@ -89,15 +89,18 @@ fn main2() -> Result<(), Box<dyn Error>> {
             .value_of("initial_regressor")
             .expect("Daemon mode only supports serving from --initial regressor");
         println!("initial_regressor = {}", filename);
-		println!("WARNING: Selected cmd parameters will be updated.");
-        let (mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true, &cl)?;
+        let (mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true)?;
+
+		// Consider hyperparameter switch based on provided cmd
+		let mi2 = model_instance::ModelInstance::update_hyperparameters_from_cmdline(&cl, &mi2).expect("Could not update model hyperparameters.");
+		
         let mut se = serving::Serving::new(&cl, &vw2, Box::new(re_fixed), &mi2)?;
         se.serve()?;
     } else if cl.is_present("convert_inference_regressor") {
         let filename = cl
             .value_of("initial_regressor")
             .expect("Convert mode requires --initial regressor");
-        let (mut mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true, &cl)?;
+        let (mut mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true)?;
         mi2.optimizer = model_instance::Optimizer::SGD;
         match inference_regressor_filename {
             Some(filename1) => {
@@ -106,21 +109,27 @@ fn main2() -> Result<(), Box<dyn Error>> {
             None => {}
         }
     } else {
+		
         let vw: vwmap::VwNamespaceMap;
         let mut re: regressor::Regressor;
         let mi: model_instance::ModelInstance;
 
         if let Some(filename) = cl.value_of("initial_regressor") {
             println!("initial_regressor = {}", filename);
-            println!("WARNING: Selected cmd parameters will be updated.");
-            let (mi2, vw2, re2) = persistence::new_regressor_from_filename(filename, testonly, &cl)?;
+            let (mi2, vw2, re2) = persistence::new_regressor_from_filename(filename, testonly)?;
+
+			// Consider hyperparameter switch based on provided cmd
+			let mi2 = model_instance::ModelInstance::update_hyperparameters_from_cmdline(&cl, &mi2).expect("Could not update model hyperparameters.");
+			
             mi = mi2;
             vw = vw2;
             re = re2;
 
         } else {
+			
             // We load vw_namespace_map.csv just so we know all the namespaces ahead of time
             // This is one of the major differences from vowpal
+			
             let input_filename = cl.value_of("data").expect("--data expected");
             let vw_namespace_map_filepath = Path::new(input_filename)
                 .parent()

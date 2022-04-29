@@ -79,8 +79,6 @@ fn default_f32_zero() -> f32{0.0}
 fn default_bool_false() -> bool{false}
 fn default_optimizer_adagrad() -> Optimizer{Optimizer::Adagrad}
 
-
-
 impl ModelInstance {
     pub fn new_empty() -> Result<ModelInstance, Box<dyn Error>> {
         let mi = ModelInstance {
@@ -350,46 +348,71 @@ impl ModelInstance {
             mi.optimizer = Optimizer::Adagrad;
         }
 
-        
-        
         Ok(mi)
     }
 
-/*
-    pub fn new_from_jsonfile(input_filename: &str, vw: &vwmap::VwNamespaceMap) -> Result<ModelInstance, Box<dyn Error>> {
-        let mut mi = ModelInstance::new_empty()?;
-        let mut input = File::open(input_filename)?;
-        let mut contents = String::new();
-        input.read_to_string(&mut contents)?;
-        let j: Value = serde_json::from_str(&contents)?;
-        let descj = &j["desc"];
-        mi.learning_rate = descj["learning_rate"].as_f64().unwrap() as f32;
-        mi.bit_precision = descj["bit_precision"].as_u64().unwrap() as u8;
-        let features = descj["features"].as_array().unwrap();
-        for feature in features {
-            let mut feature_combo_desc = FeatureComboDesc {
-                                feature_indices: Vec::new(),
-                                weight: 1.0,
-                                };
 
-            let fname = feature.as_str().unwrap();
-            let primitive_features = fname.split(",");
-            for primitive_feature_name in primitive_features {
-                let index = match vw.map_name_to_index.get(primitive_feature_name) {
-                    Some(index) => *index,
-                    None => return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown feature name in model json: {}", primitive_feature_name))))
-                };
-                let index = mi.get_namespace_id(vw, primitive_feature_name)?;
+	pub fn update_hyperparameters_from_cmdline<'a>(cmd_arguments: &clap::ArgMatches<'a>, mi: &ModelInstance) -> Result<ModelInstance, Box<dyn Error>> {
+		// A method that enables updating hyperparameters of an existing (pre-loaded) model.
+		
+		let mut mi_tmp = mi.clone();
 
-                feature_combo_desc.feature_indices.push(index);
-            }
-            mi.feature_combo_descs.push(feature_combo_desc);
-//            mi.feature_combos.push(feature_vec);
-        }
+		let hyper_unlock: bool =  cmd_arguments.is_present("unlock_hyperparameters");
+		if !hyper_unlock {
+			println!("Preserving initial regressor's hyperparameters ..");
+			return Ok(mi_tmp);
+		}
+		
+		println!("Replacing initial regressor's hyperparameters from the command line ..");
+		let mut replacement_hyperparam_ids: Vec<(String, String)> = vec![];
+		
+		// Handle learning rates
+		if cmd_arguments.is_present("learning_rate") {
+			let hvalue = cmd_arguments.value_of("learning_rate")
+				.unwrap()
+				.parse::<f32>()
+				.expect("Please, recheck the learning rate value provided.");
+			mi_tmp.learning_rate = hvalue;
+			replacement_hyperparam_ids.push(("learning_rate".to_string(), hvalue.to_string()));
+		}
 
-        Ok(mi)
-    }
-    */
+		if cmd_arguments.is_present("ffm_learning_rate") {
+			let hvalue = cmd_arguments.value_of("ffm_learning_rate")
+				.unwrap()
+				.parse::<f32>()
+				.expect("Please, recheck the ffm's learning rate value provided.");
+			mi_tmp.learning_rate = hvalue;			
+			replacement_hyperparam_ids.push(("ffm_learning_rate".to_string(), hvalue.to_string()));
+		}
+		
+		// Handle power of t
+		if cmd_arguments.is_present("power_t") {
+			let hvalue = cmd_arguments.value_of("power_t")
+				.unwrap()
+				.parse::<f32>()
+				.expect("Please, recheck the power_t value provided.");
+			mi_tmp.power_t = hvalue;
+			replacement_hyperparam_ids.push(("power_t".to_string(), hvalue.to_string()));
+			
+		}
+
+		if cmd_arguments.is_present("ffm_power_t") {
+			let hvalue = cmd_arguments.value_of("ffm_power_t")
+				.unwrap()
+				.parse::<f32>()
+				.expect("Please, recheck the ffm_power_t value provided.");
+			mi_tmp.power_t = hvalue;
+			replacement_hyperparam_ids.push(("ffm_power_t".to_string(), hvalue.to_string()));
+		}
+
+
+		for (hyper_name, hyper_value) in replacement_hyperparam_ids.into_iter() {
+			println!("Warning! Updated hyperparameter {} to value {}", hyper_name, hyper_value);
+		}
+
+		let mi2 = mi_tmp;
+		Ok(mi2)
+	}
 }
 
 
@@ -497,14 +520,4 @@ C,featureC
         
     }
 
-
-
-
 }
-
-
-
-
-
-
-
