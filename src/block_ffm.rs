@@ -513,7 +513,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             counter += 1;
             let feature_hash_index = val.hash;
             let mut feature_value = val.value;			
-			let feature_unweighted_value = val.unweighted_value;
+			let feature_bin_value = val.bin_value;
 			
 			// if let Err(_err) = Some(val.raw_value) {
 			// 	println!("test");
@@ -545,7 +545,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             features.push(json!({
 				"index": feature_hash_index,
 				"value": feature_value,
-				"unweighted_value": feature_unweighted_value,
+				"bin_value": feature_bin_value,
 				"feature": namespace_index,
 				"weights": contra_fields,
             }));

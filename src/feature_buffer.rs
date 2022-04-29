@@ -16,14 +16,14 @@ const CONSTANT_HASH: u32 = 11650396;
 pub struct HashAndValue {
     pub hash: u32,
     pub value: f32,
-	pub unweighted_value: f32,
+	pub bin_value: f32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct HashAndValueAndSeq {
     pub hash: u32,
     pub value: f32,
-	pub unweighted_value: f32,
+	pub bin_value: f32,
     pub contra_field_index: u32,
 }
 
@@ -94,6 +94,7 @@ macro_rules! feature_reader {
       $namespace_descriptor:expr,
       $hash_index:ident,
       $hash_value:ident,
+	  $bin_value:ident,
       $bl:block  ) => {
         if $namespace_descriptor.namespace_type == NamespaceType::Transformed {
             // This is super-unoptimized
@@ -113,9 +114,10 @@ macro_rules! feature_reader {
                 &$transform_executors,
             );
 
-            for (hash_index1, hash_value1) in &namespace_to.tmp_data {
+            for (hash_index1, hash_value1, bin_value1) in &namespace_to.tmp_data {
                 let $hash_index = *hash_index1;
                 let $hash_value = *hash_value1;
+				let $bin_value = *bin_value1;
                 $bl
             }
         } else {
@@ -126,6 +128,7 @@ macro_rules! feature_reader {
             if (first_token & parser::IS_NOT_SINGLE_MASK) == 0 {
                 let $hash_index = first_token;
                 let $hash_value: f32 = 1.0;
+				let $bin_value: f32 = 0.0;
                 $bl
             } else {
                 let start = ((first_token >> 16) & 0x3fff) as usize;
@@ -136,12 +139,14 @@ macro_rules! feature_reader {
                         let $hash_value = unsafe {
                             f32::from_bits(*$record_buffer.get_unchecked(hash_offset + 1))
                         };
+						let $bin_value: f32 = 0.0;
                         $bl
                     }
                 } else {
                     for hash_offset in (start..end).step_by(2) {
                         let $hash_index = unsafe { *$record_buffer.get_unchecked(hash_offset) };
                         let $hash_value: f32 = 1.0;
+						let $bin_value: f32 = 0.0;
                         $bl
                     }
                 }
@@ -244,11 +249,12 @@ impl FeatureBufferTranslator {
                         namespace_descriptor,
                         hash_index,
                         hash_value,
+						bin_value,
                         {
                             lr_buffer.push(HashAndValue {
                                 hash: hash_index & self.lr_hash_mask,
                                 value: hash_value * feature_combo_weight,
-								unweighted_value: hash_value,
+								bin_value: bin_value,
                             });
                         }
                     );
@@ -267,11 +273,12 @@ impl FeatureBufferTranslator {
                         namespace_descriptor,
                         hash_index,
                         hash_value,
+						bin_value,
                         {
                             hashes_vec_in.push(HashAndValue {
                                 hash: hash_index,
                                 value: hash_value,
-								unweighted_value: hash_value,
+								bin_value: bin_value,
                             });
                         }
                     );
@@ -289,11 +296,12 @@ impl FeatureBufferTranslator {
                                 *namespace_descriptor,
                                 hash_index,
                                 hash_value,
+								bin_value,
                                 {
                                     hashes_vec_out.push(HashAndValue {
                                         hash: hash_index ^ half_hash,
                                         value: handv.value * hash_value,
-										unweighted_value: handv.value,
+										bin_value: bin_value,
                                     });
                                 }
                             );
@@ -304,7 +312,7 @@ impl FeatureBufferTranslator {
                         lr_buffer.push(HashAndValue {
                             hash: handv.hash & self.lr_hash_mask,
                             value: handv.value * feature_combo_weight,
-							unweighted_value: handv.value,
+							bin_value: handv.value,
                         });
                     }
                     if self.model_instance.audit_mode {
@@ -321,7 +329,7 @@ impl FeatureBufferTranslator {
                 lr_buffer.push(HashAndValue {
                     hash: CONSTANT_HASH & self.lr_hash_mask,
                     value: 1.0,
-					unweighted_value: 1.0,
+					bin_value: 0.0,
                 });
                 if self.model_instance.audit_mode {
                     while lr_buffer.len() > self.feature_buffer.lr_buffer_audit.len() {
@@ -352,11 +360,12 @@ impl FeatureBufferTranslator {
                             *namespace_descriptor,
                             hash_index,
                             hash_value,
+							bin_value,
                             {
                                 ffm_buffer.push(HashAndValueAndSeq {
                                     hash: hash_index & self.ffm_hash_mask,
                                     value: hash_value,
-									unweighted_value: hash_value,
+									bin_value: bin_value,
                                     contra_field_index: contra_field_index as u32
                                         * self.model_instance.ffm_k as u32,
                                 });
