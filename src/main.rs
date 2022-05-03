@@ -61,7 +61,6 @@ fn main2() -> Result<(), Box<dyn Error>> {
     };
 
     let testonly = cl.is_present("testonly");
-	let hyper_unlock: bool =  cl.is_present("unlock_hyperparameters");
 	
     let final_regressor_filename = cl.value_of("final_regressor");
     match final_regressor_filename {
