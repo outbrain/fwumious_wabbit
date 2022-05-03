@@ -3,6 +3,8 @@ use std::io::Error as IOError;
 use std::io::ErrorKind;
 
 use std::io::Read;
+use std::io;
+use std::fs;
 use std::fs::File;
 use serde::{Serialize,Deserialize};//, Deserialize};
 use serde_json::{Value};
@@ -10,6 +12,7 @@ use serde_json::{Value};
 use crate::vwmap;
 use crate::consts;
 use crate::feature_transform_parser;
+use crate::regressor;
 use crate::vwmap::{NamespaceDescriptor, NamespaceType};
 
 
@@ -352,19 +355,12 @@ impl ModelInstance {
     }
 
 
-	pub fn update_hyperparameters_from_cmdline<'a>(cmd_arguments: &clap::ArgMatches<'a>, mi: &ModelInstance) -> Result<ModelInstance, Box<dyn Error>> {
-		// A method that enables updating hyperparameters of an existing (pre-loaded) model.
-		
-		let mut mi_tmp = mi.clone();
-
-		let hyper_unlock: bool =  cmd_arguments.is_present("unlock_hyperparameters");
-		if !hyper_unlock {
-			println!("Preserving initial regressor's hyperparameters ..");
-			return Ok(mi_tmp);
-		}
+	pub fn update_hyperparameters_from_cmd<'a>(cmd_arguments: &clap::ArgMatches<'a>, mi: &ModelInstance) -> Result<ModelInstance, Box<dyn Error>> {
+		// A method that enables updating hyperparameters of an existing (pre-loaded) model.	
 		
 		println!("Replacing initial regressor's hyperparameters from the command line ..");
 		let mut replacement_hyperparam_ids: Vec<(String, String)> = vec![];
+		let mut mi_tmp = mi.clone();
 		
 		// Handle learning rates
 		if cmd_arguments.is_present("learning_rate") {
@@ -409,9 +405,9 @@ impl ModelInstance {
 		for (hyper_name, hyper_value) in replacement_hyperparam_ids.into_iter() {
 			println!("Warning! Updated hyperparameter {} to value {}", hyper_name, hyper_value);
 		}
+		
+		Ok(mi_tmp)
 
-		let mi2 = mi_tmp;
-		Ok(mi2)
 	}
 }
 

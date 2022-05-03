@@ -80,7 +80,9 @@ fn write_regressor_header(output_bufwriter: &mut dyn io::Write) -> Result<(), Bo
 }
 
 fn load_regressor_without_weights(
-    input_bufreader: &mut io::BufReader<File>) -> Result<
+    input_bufreader: &mut io::BufReader<File>,
+    cmd_arguments: Option<&clap::ArgMatches>,
+) -> Result<
     (
         model_instance::ModelInstance,
         vwmap::VwNamespaceMap,
@@ -92,16 +94,30 @@ fn load_regressor_without_weights(
     let vw = vwmap::VwNamespaceMap::new_from_buf(input_bufreader)
         .expect("Loading vwmap from regressor failed");
 
-	let mi = model_instance::ModelInstance::new_from_buf(input_bufreader)
+    let mut mi = model_instance::ModelInstance::new_from_buf(input_bufreader)
         .expect("Loading model instance from regressor failed");
-	
+
+    match cmd_arguments {
+        Some(cmd_args) => {
+            if cmd_args.is_present("unlock_hyperparameters") {
+                mi =
+                    model_instance::ModelInstance::update_hyperparameters_from_cmd(&cmd_args, &mi)?;
+            }
+        }
+        None => (),
+    }
+
+    let mi = mi;
     let re = regressor::get_regressor_without_weights(&mi);
+
     Ok((mi, vw, re))
 }
 
 pub fn new_regressor_from_filename(
     filename: &str,
-    immutable: bool) -> Result<
+    immutable: bool,
+    cmd_arguments: &clap::ArgMatches,
+) -> Result<
     (
         model_instance::ModelInstance,
         vwmap::VwNamespaceMap,
@@ -110,7 +126,8 @@ pub fn new_regressor_from_filename(
     Box<dyn Error>,
 > {
     let mut input_bufreader = io::BufReader::new(fs::File::open(filename).unwrap());
-    let (mi, vw, mut re) = load_regressor_without_weights(&mut input_bufreader)?;
+    let (mi, vw, mut re) =
+        load_regressor_without_weights(&mut input_bufreader, Some(cmd_arguments))?;
     if !immutable {
         re.allocate_and_init_weights(&mi);
         re.overwrite_weights_from_buf(&mut input_bufreader)?;
@@ -125,7 +142,7 @@ pub fn new_regressor_from_filename(
 
 pub fn hogwild_load(re: &mut regressor::Regressor, filename: &str) -> Result<(), Box<dyn Error>> {
     let mut input_bufreader = io::BufReader::new(fs::File::open(filename)?);
-    let (mi_hw, vw_hw, mut re_hw) = load_regressor_without_weights(&mut input_bufreader)?;
+    let (mi_hw, vw_hw, mut re_hw) = load_regressor_without_weights(&mut input_bufreader, None)?;
     // TODO: Here we should do safety comparison that the regressor is really the same;
     if !re.immutable {
         re.overwrite_weights_from_buf(&mut input_bufreader)?;

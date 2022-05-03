@@ -61,7 +61,8 @@ fn main2() -> Result<(), Box<dyn Error>> {
     };
 
     let testonly = cl.is_present("testonly");
-
+	let hyper_unlock: bool =  cl.is_present("unlock_hyperparameters");
+	
     let final_regressor_filename = cl.value_of("final_regressor");
     match final_regressor_filename {
         Some(filename) => {
@@ -89,10 +90,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
             .value_of("initial_regressor")
             .expect("Daemon mode only supports serving from --initial regressor");
         println!("initial_regressor = {}", filename);
-        let (mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true)?;
-
-		// Consider hyperparameter switch based on provided cmd
-		let mi2 = model_instance::ModelInstance::update_hyperparameters_from_cmdline(&cl, &mi2).expect("Could not update model hyperparameters.");
+        let (mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true, &cl)?;
 		
         let mut se = serving::Serving::new(&cl, &vw2, Box::new(re_fixed), &mi2)?;
         se.serve()?;
@@ -100,7 +98,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
         let filename = cl
             .value_of("initial_regressor")
             .expect("Convert mode requires --initial regressor");
-        let (mut mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true)?;
+        let (mut mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true, &cl)?;
         mi2.optimizer = model_instance::Optimizer::SGD;
         match inference_regressor_filename {
             Some(filename1) => {
@@ -115,15 +113,9 @@ fn main2() -> Result<(), Box<dyn Error>> {
         let mi: model_instance::ModelInstance;
 
         if let Some(filename) = cl.value_of("initial_regressor") {
-            println!("initial_regressor = {}", filename);
-            let (mi2, vw2, re2) = persistence::new_regressor_from_filename(filename, testonly)?;
-
-			// Consider hyperparameter switch based on provided cmd
-			let mi2 = model_instance::ModelInstance::update_hyperparameters_from_cmdline(&cl, &mi2).expect("Could not update model hyperparameters.");
 			
-            mi = mi2;
-            vw = vw2;
-            re = re2;
+            println!("initial_regressor = {}", filename);
+            (mi, vw, re) = persistence::new_regressor_from_filename(filename, testonly, &cl)?;
 
         } else {
 			
