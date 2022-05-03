@@ -71,13 +71,13 @@ impl ExecutorToNamespace {
                 let floor_int = floor as i32;
                 let part0 = f - floor;
                 if part0 != 0.0 {
-                    self.emit_i32::<SEED_ID>(floor_int + 1, hash_value * part0, part0);
+                    self.emit_i32::<SEED_ID>(floor_int + 1, hash_value * part0, (floor_int + 1) as f32);
                 }
                 let part1 = 1.0 - part0;
                 if part1 != 0.0 {
-                    self.emit_i32::<SEED_ID>(floor_int, hash_value * part1, part1);
+                    self.emit_i32::<SEED_ID>(floor_int, hash_value * part1, floor_int as f32);
                 }
-				// println!("HASH_VALUE {} {} {}", hash_value, hash_value * part1, hash_value * part0);
+
             } else {
                 self.emit_i32::<SEED_ID>(f as i32, hash_value, 0.0);
             }

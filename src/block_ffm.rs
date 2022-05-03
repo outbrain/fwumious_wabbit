@@ -545,7 +545,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             features.push(json!({
 				"index": feature_hash_index,
 				"value": feature_value,
-				"bin_value": feature_bin_value,
+				"floor_int_value": feature_bin_value,
 				"feature": namespace_index,
 				"weights": contra_fields,
             }));
