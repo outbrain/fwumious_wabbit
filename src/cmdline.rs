@@ -33,7 +33,7 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
 						 .takes_value(false))
                     .arg(Arg::with_name("unlock_hyperparameters")
                      .long("unlock_hyperparameters")
-                     .help("Enable replacement of hyperparameter values when loading from an initial regressor. Currently supports learning_rate and power_t.")
+                     .help("Enable replacement of hyperparameter values when loading from an initial regressor. Currently supports learning_rate, ffm_learning_rate and ffm_power_t and power_t.")
                      .takes_value(false))
                     .arg(Arg::with_name("interactions")
                      .long("interactions")
