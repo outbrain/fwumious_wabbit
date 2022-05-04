@@ -99,12 +99,9 @@ fn load_regressor_without_weights(
 
     match cmd_arguments {
         Some(cmd_args) => {
-            if cmd_args.is_present("unlock_hyperparameters") {
-                mi =
-                    model_instance::ModelInstance::update_hyperparameters_from_cmd(&cmd_args, &mi)?;
-            }
+            model_instance::ModelInstance::update_hyperparameters_from_cmd(&cmd_args, &mut mi)?;
         }
-        None => (),
+        _ => (),
     }
 
     let mi = mi;

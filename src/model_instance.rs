@@ -355,12 +355,17 @@ impl ModelInstance {
     }
 
 
-	pub fn update_hyperparameters_from_cmd<'a>(cmd_arguments: &clap::ArgMatches<'a>, mi: &ModelInstance) -> Result<ModelInstance, Box<dyn Error>> {
-		// A method that enables updating hyperparameters of an existing (pre-loaded) model.	
+	pub fn update_hyperparameters_from_cmd<'a>(cmd_arguments: &clap::ArgMatches<'a>, mi: &mut ModelInstance) -> Result<(), Box<dyn Error>> {
+		/*! A method that enables updating hyperparameters of an existing (pre-loaded) model.
+		Currently limited to the most commonly used hyperparameters. */
+
+
+        if !cmd_arguments.is_present("unlock_hyperparameters") {
+			return Ok(());
+        }
 		
 		println!("Replacing initial regressor's hyperparameters from the command line ..");
 		let mut replacement_hyperparam_ids: Vec<(String, String)> = vec![];
-		let mut mi_tmp = mi.clone();
 		
 		// Handle learning rates
 		if cmd_arguments.is_present("learning_rate") {
@@ -368,7 +373,7 @@ impl ModelInstance {
 				.unwrap()
 				.parse::<f32>()
 				.expect("Please, recheck the learning rate value provided.");
-			mi_tmp.learning_rate = hvalue;
+			mi.learning_rate = hvalue;
 			replacement_hyperparam_ids.push(("learning_rate".to_string(), hvalue.to_string()));
 		}
 
@@ -377,7 +382,7 @@ impl ModelInstance {
 				.unwrap()
 				.parse::<f32>()
 				.expect("Please, recheck the ffm's learning rate value provided.");
-			mi_tmp.learning_rate = hvalue;			
+			mi.learning_rate = hvalue;			
 			replacement_hyperparam_ids.push(("ffm_learning_rate".to_string(), hvalue.to_string()));
 		}
 		
@@ -387,7 +392,7 @@ impl ModelInstance {
 				.unwrap()
 				.parse::<f32>()
 				.expect("Please, recheck the power_t value provided.");
-			mi_tmp.power_t = hvalue;
+			mi.power_t = hvalue;
 			replacement_hyperparam_ids.push(("power_t".to_string(), hvalue.to_string()));
 			
 		}
@@ -397,7 +402,7 @@ impl ModelInstance {
 				.unwrap()
 				.parse::<f32>()
 				.expect("Please, recheck the ffm_power_t value provided.");
-			mi_tmp.power_t = hvalue;
+			mi.power_t = hvalue;
 			replacement_hyperparam_ids.push(("ffm_power_t".to_string(), hvalue.to_string()));
 		}
 
@@ -406,7 +411,7 @@ impl ModelInstance {
 			println!("Warning! Updated hyperparameter {} to value {}", hyper_name, hyper_value);
 		}
 		
-		Ok(mi_tmp)
+		Ok(())
 
 	}
 }
