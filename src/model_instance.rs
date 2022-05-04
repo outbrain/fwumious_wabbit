@@ -421,7 +421,8 @@ impl ModelInstance {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    
+	use clap::{App, Arg,  AppSettings};
+	
     fn ns_desc(i: u16) -> NamespaceDescriptor {
         NamespaceDescriptor {namespace_index: i, 
                              namespace_type: vwmap::NamespaceType::Primitive,
@@ -519,6 +520,6 @@ C,featureC
         assert!(result.is_err());
         assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Fields currently do not support passing a value via : \\\"featureA,featureC:3\\\"\" })");
         
-    }
-
+    }	
+        
 }

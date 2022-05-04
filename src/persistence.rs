@@ -113,7 +113,7 @@ fn load_regressor_without_weights(
 pub fn new_regressor_from_filename(
     filename: &str,
     immutable: bool,
-    cmd_arguments: &clap::ArgMatches,
+    cmd_arguments: Option<&clap::ArgMatches>,
 ) -> Result<
     (
         model_instance::ModelInstance,
@@ -124,7 +124,7 @@ pub fn new_regressor_from_filename(
 > {
     let mut input_bufreader = io::BufReader::new(fs::File::open(filename).unwrap());
     let (mi, vw, mut re) =
-        load_regressor_without_weights(&mut input_bufreader, Some(cmd_arguments))?;
+        load_regressor_without_weights(&mut input_bufreader, cmd_arguments)?;
     if !immutable {
         re.allocate_and_init_weights(&mi);
         re.overwrite_weights_from_buf(&mut input_bufreader)?;
@@ -257,13 +257,13 @@ B,featureB
 
             // a) load as regular regressor
             let (_mi2, _vw2, mut re2) =
-                new_regressor_from_filename(regressor_filepath.to_str().unwrap(), false).unwrap();
+                new_regressor_from_filename(regressor_filepath.to_str().unwrap(), false, None).unwrap();
             assert_eq!(re2.learn(fbuf, false), CONST_RESULT);
             assert_eq!(re2.predict(fbuf), CONST_RESULT);
 
             // a) load as regular regressor, immutable
             let (_mi2, _vw2, mut re2) =
-                new_regressor_from_filename(regressor_filepath.to_str().unwrap(), true).unwrap();
+                new_regressor_from_filename(regressor_filepath.to_str().unwrap(), true, None).unwrap();
             assert_eq!(re2.learn(fbuf, false), CONST_RESULT);
             assert_eq!(re2.predict(fbuf), CONST_RESULT);
         }
@@ -362,14 +362,14 @@ B,featureB
 
             // a) load as regular regressor
             let (_mi2, _vw2, mut re2) =
-                new_regressor_from_filename(regressor_filepath.to_str().unwrap(), false).unwrap();
+                new_regressor_from_filename(regressor_filepath.to_str().unwrap(), false, None).unwrap();
             assert_eq!(re2.get_name(), "Regressor with optimizer \"AdagradFlex\"");
             assert_epsilon!(re2.learn(fbuf, false), CONST_RESULT);
             assert_epsilon!(re2.predict(fbuf), CONST_RESULT);
 
             // b) load as regular regressor, immutable
             let (_mi2, _vw2, mut re2) =
-                new_regressor_from_filename(regressor_filepath.to_str().unwrap(), true).unwrap();
+                new_regressor_from_filename(regressor_filepath.to_str().unwrap(), true, None).unwrap();
             assert_eq!(re2.get_name(), "Regressor with optimizer \"SGD\"");
             assert_epsilon!(re2.learn(fbuf, false), CONST_RESULT);
             assert_epsilon!(re2.predict(fbuf), CONST_RESULT);
@@ -529,7 +529,7 @@ B,featureB
 
             // The mutable path
             let (_mi1, _vw1, mut new_re_1) =
-                new_regressor_from_filename(&regressor_filepath_1, false).unwrap();
+                new_regressor_from_filename(&regressor_filepath_1, false, None).unwrap();
             assert_eq!(
                 new_re_1.get_name(),
                 "Regressor with optimizer \"AdagradFlex\""
@@ -549,7 +549,7 @@ B,featureB
 
             // The immutable path
             let (_mi1, _vw1, mut new_re_1) =
-                new_regressor_from_filename(&regressor_filepath_1, true).unwrap();
+                new_regressor_from_filename(&regressor_filepath_1, true, None).unwrap();
             assert_eq!(new_re_1.get_name(), "Regressor with optimizer \"SGD\"");
             assert_eq!(new_re_1.learn(fbuf_1, false), CONST_RESULT_1_ON_1);
             assert_eq!(new_re_1.predict(fbuf_1), CONST_RESULT_1_ON_1);

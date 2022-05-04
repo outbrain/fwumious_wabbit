@@ -89,7 +89,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
             .value_of("initial_regressor")
             .expect("Daemon mode only supports serving from --initial regressor");
         println!("initial_regressor = {}", filename);
-        let (mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true, &cl)?;
+        let (mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true, Option::Some(&cl))?;
 		
         let mut se = serving::Serving::new(&cl, &vw2, Box::new(re_fixed), &mi2)?;
         se.serve()?;
@@ -97,7 +97,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
         let filename = cl
             .value_of("initial_regressor")
             .expect("Convert mode requires --initial regressor");
-        let (mut mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true, &cl)?;
+        let (mut mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true, Option::Some(&cl))?;
         mi2.optimizer = model_instance::Optimizer::SGD;
         match inference_regressor_filename {
             Some(filename1) => {
@@ -114,7 +114,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
         if let Some(filename) = cl.value_of("initial_regressor") {
 			
             println!("initial_regressor = {}", filename);
-            (mi, vw, re) = persistence::new_regressor_from_filename(filename, testonly, &cl)?;
+            (mi, vw, re) = persistence::new_regressor_from_filename(filename, testonly, Option::Some(&cl))?;
 
         } else {
 			
