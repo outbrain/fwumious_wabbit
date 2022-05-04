@@ -369,41 +369,39 @@ impl ModelInstance {
 		
 		// Handle learning rates
 		if cmd_arguments.is_present("learning_rate") {
-			let hvalue = cmd_arguments.value_of("learning_rate")
-				.unwrap()
-				.parse::<f32>()
-				.expect("Please, recheck the learning rate value provided.");
-			mi.learning_rate = hvalue;
-			replacement_hyperparam_ids.push(("learning_rate".to_string(), hvalue.to_string()));
+			
+			if let Some(val) = cmd_arguments.value_of("learning_rate") {
+				let hvalue = val.parse::<f32>()?;
+				mi.learning_rate = hvalue;
+				replacement_hyperparam_ids.push(("learning_rate".to_string(), hvalue.to_string()));
+			}	
 		}
 
 		if cmd_arguments.is_present("ffm_learning_rate") {
-			let hvalue = cmd_arguments.value_of("ffm_learning_rate")
-				.unwrap()
-				.parse::<f32>()
-				.expect("Please, recheck the ffm's learning rate value provided.");
-			mi.learning_rate = hvalue;			
-			replacement_hyperparam_ids.push(("ffm_learning_rate".to_string(), hvalue.to_string()));
+
+			if let Some(val) = cmd_arguments.value_of("ffm_learning_rate") {
+				let hvalue = val.parse::<f32>()?;
+				mi.ffm_learning_rate = hvalue;
+				replacement_hyperparam_ids.push(("ffm_learning_rate".to_string(), hvalue.to_string()));
+			}				
 		}
 		
 		// Handle power of t
 		if cmd_arguments.is_present("power_t") {
-			let hvalue = cmd_arguments.value_of("power_t")
-				.unwrap()
-				.parse::<f32>()
-				.expect("Please, recheck the power_t value provided.");
-			mi.power_t = hvalue;
-			replacement_hyperparam_ids.push(("power_t".to_string(), hvalue.to_string()));
-			
+
+			if let Some(val) = cmd_arguments.value_of("power_t") {
+				let hvalue = val.parse::<f32>()?;
+				mi.power_t = hvalue;
+				replacement_hyperparam_ids.push(("power_t".to_string(), hvalue.to_string()));
+			}			
 		}
 
 		if cmd_arguments.is_present("ffm_power_t") {
-			let hvalue = cmd_arguments.value_of("ffm_power_t")
-				.unwrap()
-				.parse::<f32>()
-				.expect("Please, recheck the ffm_power_t value provided.");
-			mi.power_t = hvalue;
-			replacement_hyperparam_ids.push(("ffm_power_t".to_string(), hvalue.to_string()));
+			if let Some(val) = cmd_arguments.value_of("ffm_power_t") {
+				let hvalue = val.parse::<f32>()?;
+				mi.ffm_power_t = hvalue;
+				replacement_hyperparam_ids.push(("ffm_power_t".to_string(), hvalue.to_string()));
+			}
 		}
 
 
