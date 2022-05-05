@@ -357,12 +357,7 @@ impl ModelInstance {
 
 	pub fn update_hyperparameters_from_cmd<'a>(cmd_arguments: &clap::ArgMatches<'a>, mi: &mut ModelInstance) -> Result<(), Box<dyn Error>> {
 		/*! A method that enables updating hyperparameters of an existing (pre-loaded) model.
-		Currently limited to the most commonly used hyperparameters. */
-
-
-        if !cmd_arguments.is_present("unlock_hyperparameters") {
-			return Ok(());
-        }
+		Currently limited to the most commonly used hyperparameters: ffm_learning_rate, ffm_power_t, power_t, learning_rate. */
 		
 		println!("Replacing initial regressor's hyperparameters from the command line ..");
 		let mut replacement_hyperparam_ids: Vec<(String, String)> = vec![];
@@ -403,7 +398,6 @@ impl ModelInstance {
 				replacement_hyperparam_ids.push(("ffm_power_t".to_string(), hvalue.to_string()));
 			}
 		}
-
 
 		for (hyper_name, hyper_value) in replacement_hyperparam_ids.into_iter() {
 			println!("Warning! Updated hyperparameter {} to value {}", hyper_name, hyper_value);
