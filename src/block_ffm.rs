@@ -511,19 +511,11 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
         for (val, namespace_index) in fb.ffm_buffer.iter().zip(fb.ffm_buffer_audit.iter()) {
             counter += 1;
+			
             let feature_hash_index = val.hash;
             let mut feature_value = val.value;			
 			let feature_bin_value = val.bin_value;
 			
-			// if let Err(_err) = Some(val.raw_value) {
-			// 	println!("test");
-			// }
-			
-            // if !mapVals.contains_key(&feature_hash_index) {
-            //     mapVals.insert(feature_hash_index, feature_value);
-            // } else {
-            //     feature_value = *mapVals.get(&feature_hash_index).unwrap();
-            // }
             let mut contra_fields: Vec<Value> = Vec::new();
             for contra_field_index in 0..fb.ffm_fields_count as usize {
                 let mut weights_vec: Vec<Value> = Vec::new();
@@ -542,13 +534,22 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     "optimizer_data": optimizer_data_vec,
                     }));
             }
-            features.push(json!({
-				"index": feature_hash_index,
-				"value": feature_value,
-				"floor_int_value": feature_bin_value,
-				"feature": namespace_index,
-				"weights": contra_fields,
-            }));
+			if namespace_index.contains("_transf") {
+				features.push(json!({
+					"index": feature_hash_index,
+					"value": feature_value,
+					"floor_int_value": feature_bin_value,
+					"feature": namespace_index,
+					"weights": contra_fields,
+				}));
+			} else {
+				features.push(json!({
+					"index": feature_hash_index,
+					"value": feature_value,
+					"feature": namespace_index,
+					"weights": contra_fields,
+				}));
+			}
         }
         map.insert("input".to_string(), Value::Array(features));
         map.insert("output".to_string(), f32_to_json(wsum_output));
