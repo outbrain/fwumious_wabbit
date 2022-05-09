@@ -514,9 +514,9 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 			
             let feature_hash_index = val.hash;
             let mut feature_value = val.value;			
-			let feature_bin_value = val.bin_value;
-			
+			let feature_bin_value = val.bin_value;			
             let mut contra_fields: Vec<Value> = Vec::new();
+			
             for contra_field_index in 0..fb.ffm_fields_count as usize {
                 let mut weights_vec: Vec<Value> = Vec::new();
                 let mut optimizer_data_vec: Vec<Value> = Vec::new();
@@ -534,11 +534,11 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     "optimizer_data": optimizer_data_vec,
                     }));
             }
-			if namespace_index.contains("_transf") {
+
+			if feature_bin_value == -99999999999999.0 {
 				features.push(json!({
 					"index": feature_hash_index,
 					"value": feature_value,
-					"floor_int_value": feature_bin_value,
 					"feature": namespace_index,
 					"weights": contra_fields,
 				}));
@@ -546,10 +546,12 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 				features.push(json!({
 					"index": feature_hash_index,
 					"value": feature_value,
+					"floor_int_value": feature_bin_value,
 					"feature": namespace_index,
 					"weights": contra_fields,
 				}));
 			}
+
         }
         map.insert("input".to_string(), Value::Array(features));
         map.insert("output".to_string(), f32_to_json(wsum_output));

@@ -128,7 +128,7 @@ macro_rules! feature_reader {
             if (first_token & parser::IS_NOT_SINGLE_MASK) == 0 {
                 let $hash_index = first_token;
                 let $hash_value: f32 = 1.0;
-				let $bin_value: f32 = 0.0;
+				let $bin_value: f32 = -99999999999999.0;
                 $bl
             } else {
                 let start = ((first_token >> 16) & 0x3fff) as usize;
@@ -139,14 +139,14 @@ macro_rules! feature_reader {
                         let $hash_value = unsafe {
                             f32::from_bits(*$record_buffer.get_unchecked(hash_offset + 1))
                         };
-						let $bin_value: f32 = 0.0;
+						let $bin_value: f32 = -99999999999999.0;
                         $bl
                     }
                 } else {
                     for hash_offset in (start..end).step_by(2) {
                         let $hash_index = unsafe { *$record_buffer.get_unchecked(hash_offset) };
                         let $hash_value: f32 = 1.0;
-						let $bin_value: f32 = 0.0;
+						let $bin_value: f32 = -99999999999999.0;
                         $bl
                     }
                 }
@@ -329,7 +329,7 @@ impl FeatureBufferTranslator {
                 lr_buffer.push(HashAndValue {
                     hash: CONSTANT_HASH & self.lr_hash_mask,
                     value: 1.0,
-					bin_value: 0.0,
+					bin_value: -99999999999999.0,
                 });
                 if self.model_instance.audit_mode {
                     while lr_buffer.len() > self.feature_buffer.lr_buffer_audit.len() {
