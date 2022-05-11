@@ -111,7 +111,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         // Verify that forward pass will have enough stack for temporary buffer
         if reg_ffm.ffm_k as usize * mi.ffm_fields.len() * mi.ffm_fields.len() > FFM_CONTRA_BUF_LEN {
             return Err(format!("FFM_CONTRA_BUF_LEN is {}. It needs to be at least ffm_k * number_of_fields^2. number_of_fields: {}, ffm_k: {}, please recompile with larger constant",
-                        FFM_CONTRA_BUF_LEN, mi.ffm_fields.len(), reg_ffm.ffm_k))?;
+							   FFM_CONTRA_BUF_LEN, mi.ffm_fields.len(), reg_ffm.ffm_k))?;
         }
 
         Ok(Box::new(reg_ffm))
@@ -145,7 +145,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 for i in 0..self.ffm_weights_len {
                     self.weights[i as usize].weight =
                         (1.0 * merand48((self.ffm_weights_len as usize + i as usize) as u64) - 0.5)
-                            * ffm_one_over_k_root;
+                        * ffm_one_over_k_root;
                     self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
                 }
             } else {
@@ -180,7 +180,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         unsafe {
             macro_rules! core_macro {
                 (
-                $local_data_ffm_values: expr
+					$local_data_ffm_values: expr
                 ) => {
                     let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
                     let mut contra_fields: [f32; FFM_CONTRA_BUF_LEN] = MaybeUninit::uninit().assume_init();
@@ -188,11 +188,11 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     specialize_k!(self.ffm_k, FFMK, wsumbuf, {
                         /* first prepare two things:
                         - transposed contra vectors in contra_fields -
-                            - for each vector we sum up all the features within a field
-                            - and at the same time transpose it, so we can later directly multiply them with individual feature embeddings
+                        - for each vector we sum up all the features within a field
+                        - and at the same time transpose it, so we can later directly multiply them with individual feature embeddings
                         - cache of gradients in local_data_ffm_values
-                            - we will use these gradients later in backward pass
-                        */
+                        - we will use these gradients later in backward pass
+                         */
                         _mm_prefetch(mem::transmute::<&f32, &i8>(&contra_fields.get_unchecked(fb.ffm_buffer.get_unchecked(0).contra_field_index as usize)), _MM_HINT_T0);
                         let mut ffm_buffer_index = 0;
                         for field_index in 0..fb.ffm_fields_count {
@@ -201,15 +201,15 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                             // first we handle fields with no features
                             if ffm_buffer_index >= fb.ffm_buffer.len() ||
                                 fb.ffm_buffer.get_unchecked(ffm_buffer_index).contra_field_index > field_index_ffmk {
-                                let mut zfc:usize = field_index_ffmk as usize;
-                                for z in 0..fb.ffm_fields_count {
-                                    for k in 0..FFMK as usize{
-                                        *contra_fields.get_unchecked_mut(zfc + k) = 0.0;
-                                    }
-                                    zfc += fc;
-                                }
-                                continue;
-                            }
+									let mut zfc:usize = field_index_ffmk as usize;
+									for z in 0..fb.ffm_fields_count {
+										for k in 0..FFMK as usize{
+											*contra_fields.get_unchecked_mut(zfc + k) = 0.0;
+										}
+										zfc += fc;
+									}
+									continue;
+								}
                             let mut feature_num = 0;
                             while ffm_buffer_index < fb.ffm_buffer.len() && fb.ffm_buffer.get_unchecked(ffm_buffer_index).contra_field_index == field_index_ffmk {
                                 _mm_prefetch(mem::transmute::<&f32, &i8>(&self.weights.get_unchecked(fb.ffm_buffer.get_unchecked(ffm_buffer_index+1).hash as usize).weight), _MM_HINT_T0);
@@ -253,29 +253,29 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                             //let LEFT_HASH_VALUE = left_hash_value;
                             specialize_1f32!(left_hash_value, LEFT_HASH_VALUE, {
 
-                              for z in 0..fb.ffm_fields_count as usize {
-                                  if vv == left_hash_contra_field_index as usize {
-                                      for k in 0..FFMK as usize {
-                                          let ffm_weight = self.weights.get_unchecked(left_hash_hash + vv + k).weight;
-                                          let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k) - ffm_weight * LEFT_HASH_VALUE;
-                                          let gradient =  LEFT_HASH_VALUE * contra_weight;
-                                          *$local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
-                                          *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient;
-                                      }
-                                  } else {
-                                      for k in 0..FFMK as usize {
-                                          let ffm_weight = self.weights.get_unchecked(left_hash_hash + vv + k).weight;
-                                          let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k);
-                                          let gradient =  LEFT_HASH_VALUE * contra_weight;
-                                          *$local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
-                                          *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient;
-                                      }
-                                  }
-                                  vv += FFMK as usize;
-                                  //left_hash_hash += FFMK as usize;
-                                  //contra_offset += FFMK as usize;
-                                  ffm_values_offset += FFMK as usize;
-                              }
+								for z in 0..fb.ffm_fields_count as usize {
+									if vv == left_hash_contra_field_index as usize {
+										for k in 0..FFMK as usize {
+											let ffm_weight = self.weights.get_unchecked(left_hash_hash + vv + k).weight;
+											let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k) - ffm_weight * LEFT_HASH_VALUE;
+											let gradient =  LEFT_HASH_VALUE * contra_weight;
+											*$local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
+											*wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient;
+										}
+									} else {
+										for k in 0..FFMK as usize {
+											let ffm_weight = self.weights.get_unchecked(left_hash_hash + vv + k).weight;
+											let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k);
+											let gradient =  LEFT_HASH_VALUE * contra_weight;
+											*$local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
+											*wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient;
+										}
+									}
+									vv += FFMK as usize;
+									//left_hash_hash += FFMK as usize;
+									//contra_offset += FFMK as usize;
+									ffm_values_offset += FFMK as usize;
+								}
                             }); // End of macro specialize_1f32! for LEFT_HASH_VALUE
                         }
                         for k in 0..FFMK as usize {
@@ -356,13 +356,13 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
                 specialize_k!(self.ffm_k, FFMK, wsumbuf, {
                     /* We first prepare "contra_fields" or collapsed field embeddings, where we sum all individual feature embeddings
-                       We need to be careful to:
-                       - handle fields with zero features present
-                       - handle values on diagonal - we want to be able to exclude self-interactions later (we pre-substract from wsum)
-                       - optimize for just copying the embedding over when looking at first feature of the field, and add embeddings for the rest
-                       - optiize for very common case of value of the feature being 1.0 - avoid multiplications
-                       -
-                    */
+                    We need to be careful to:
+                    - handle fields with zero features present
+                    - handle values on diagonal - we want to be able to exclude self-interactions later (we pre-substract from wsum)
+                    - optimize for just copying the embedding over when looking at first feature of the field, and add embeddings for the rest
+                    - optiize for very common case of value of the feature being 1.0 - avoid multiplications
+                    -
+                     */
 
                     let mut ffm_buffer_index = 0;
                     for field_index in 0..fb.ffm_fields_count {
@@ -371,10 +371,10 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         // first we handle fields with no features
                         if ffm_buffer_index >= fb.ffm_buffer.len()
                             || fb
-                                .ffm_buffer
-                                .get_unchecked(ffm_buffer_index)
-                                .contra_field_index
-                                > field_index_ffmk
+                            .ffm_buffer
+                            .get_unchecked(ffm_buffer_index)
+                            .contra_field_index
+                            > field_index_ffmk
                         {
                             for z in 0..field_embedding_len as usize {
                                 // first time we see this field - just overwrite
@@ -385,10 +385,10 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         let mut feature_num = 0;
                         while ffm_buffer_index < fb.ffm_buffer.len()
                             && fb
-                                .ffm_buffer
-                                .get_unchecked(ffm_buffer_index)
-                                .contra_field_index
-                                == field_index_ffmk
+                            .ffm_buffer
+                            .get_unchecked(ffm_buffer_index)
+                            .contra_field_index
+                            == field_index_ffmk
                         {
                             _mm_prefetch(
                                 mem::transmute::<&f32, &i8>(
@@ -410,14 +410,14 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                         // first feature of the field - just overwrite
                                         *contra_fields.get_unchecked_mut(offset + z) =
                                             ffm_weights.get_unchecked(left_hash_hash + z).weight
-                                                * LEFT_HASH_VALUE;
+                                            * LEFT_HASH_VALUE;
                                     }
                                 } else {
                                     for z in 0..field_embedding_len {
                                         // additional features of the field - addition
                                         *contra_fields.get_unchecked_mut(offset + z) +=
                                             ffm_weights.get_unchecked(left_hash_hash + z).weight
-                                                * LEFT_HASH_VALUE;
+                                            * LEFT_HASH_VALUE;
                                     }
                                 }
                                 let vv = SQRT_OF_ONE_HALF * LEFT_HASH_VALUE; // To avoid one additional multiplication, we square root 0.5 into vv
@@ -522,8 +522,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 let mut optimizer_data_vec: Vec<Value> = Vec::new();
                 for k in 0..self.ffm_k as usize {
                     let weight = &self.weights[feature_hash_index as usize
-                        + contra_field_index * self.ffm_k as usize
-                        + k];
+											   + contra_field_index * self.ffm_k as usize
+											   + k];
                     weights_vec.push(f32_to_json(weight.weight));
                     optimizer_data_vec
                         .push(self.optimizer_ffm.get_audit_data(&weight.optimizer_data));
@@ -532,26 +532,29 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     "contra_field": fb.audit_aux_data.field_index_to_string[&(contra_field_index as u32)],
                     "weight": weights_vec,
                     "optimizer_data": optimizer_data_vec,
-                    }));
+                }));
             }
 
-			if feature_bin_value == -99999999999999.0 {
-				features.push(json!({
-					"index": feature_hash_index,
-					"value": feature_value,
-					"feature": namespace_index,
-					"weights": contra_fields,
-				}));
-			} else {
-				features.push(json!({
-					"index": feature_hash_index,
-					"value": feature_value,
-					"floor_int_value": feature_bin_value,
-					"feature": namespace_index,
-					"weights": contra_fields,
-				}));
-			}
-
+			match feature_bin_value {
+				Some(x) => {
+					features.push(json!({
+						"index": feature_hash_index,
+						"value": feature_value,
+						"floor_int_value": feature_bin_value.unwrap(),
+						"feature": namespace_index,
+						"weights": contra_fields,
+					}));
+					
+				},
+				None => {
+					features.push(json!({
+						"index": feature_hash_index,
+						"value": feature_value,
+						"feature": namespace_index,
+						"weights": contra_fields,
+					}));
+				},
+			}			
         }
         map.insert("input".to_string(), Value::Array(features));
         map.insert("output".to_string(), f32_to_json(wsum_output));
@@ -845,7 +848,7 @@ C,featureC
         );
         fb.ffm_buffer_audit.push(0); // we have Feature A
         fb.ffm_buffer_audit.push(1); // we have Feature B
-                                     // We don't have feature C in the input
+        // We don't have feature C in the input
 
         fb.audit_aux_data = mi.audit_aux_data.as_ref().unwrap().clone();
 
