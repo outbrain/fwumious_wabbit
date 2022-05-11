@@ -79,6 +79,7 @@ impl OptimizerTrait for OptimizerAdagradFlex {
         let new_accumulated_gradient_squared = accumulated_gradient_squared + gradient_squared;
         *data = new_accumulated_gradient_squared;
         let update =  gradient * self.learning_rate * (new_accumulated_gradient_squared).powf(self.minus_power_t);
+
         return update;
     }
     

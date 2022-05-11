@@ -30,7 +30,7 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                     .arg(Arg::with_name("save_resume")
                      .long("save_resume")
                      .help("save extra state so learning can be resumed later with new data")
-                     .takes_value(false))
+						 .takes_value(false))
                     .arg(Arg::with_name("interactions")
                      .long("interactions")
                      .value_name("namespace_char,namespace_char[:value]")
