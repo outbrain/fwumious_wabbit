@@ -2,7 +2,9 @@ name: Rust
 
 on:
   push:
-    branches: [ hyper_online ]
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 env:
   CARGO_TERM_COLOR: always
