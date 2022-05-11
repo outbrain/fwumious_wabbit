@@ -1,3 +1,6 @@
+# Audit branch of fw - useful for debugging.
+Developed jointly by Blaz Skrlj and Adi Schwartz
+
 Fwumious Wabbit is
 - a very fast machine learning tool
 - built with Rust
