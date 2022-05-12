@@ -25,7 +25,7 @@ impl FunctionExecutorTrait for FunctionExampleSqrt {
         feature_reader_float_namespace!(record_buffer, self.from_namespace.namespace_descriptor, hash_index, hash_value, float_value, {
             let transformed_float = float_value.sqrt();
             let transformed_int = transformed_float as i32;
-            to_namespace.emit_i32::<{SeedNumber::Default as usize}>(transformed_int, hash_value);
+            to_namespace.emit_i32::<{SeedNumber::Default as usize}>(transformed_int, hash_value, 0.0);
         });
     }
 }
@@ -77,7 +77,7 @@ impl FunctionExecutorTrait for TransformerBinner {
     fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace, transform_executors: &TransformExecutors) {
         feature_reader_float_namespace!(record_buffer, self.from_namespace.namespace_descriptor, hash_index, hash_value, float_value, {
             if float_value < self.greater_than {
-                to_namespace.emit_i32::<{SeedNumber::Default as usize}>(float_value as i32, hash_value);
+                to_namespace.emit_i32::<{SeedNumber::Default as usize}>(float_value as i32, hash_value, float_value);
             } else {
                 let transformed_float = (self.function_pointer)(float_value - self.greater_than, self.resolution);
                 to_namespace.emit_f32::<{SeedNumber::One as usize}>(transformed_float, hash_value, self.interpolated);
@@ -236,8 +236,8 @@ pub struct TransformerWeight {
 
 impl FunctionExecutorTrait for TransformerWeight {
     fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace, transform_executors: &TransformExecutors) {
-        feature_reader!(record_buffer, transform_executors, self.from_namespace.namespace_descriptor, hash_index, hash_value, {
-            to_namespace.emit_i32::<{SeedNumber::Default as usize}>(hash_index as i32, hash_value * self.multiplier);
+        feature_reader!(record_buffer, transform_executors, self.from_namespace.namespace_descriptor, hash_index, hash_value, bin_value, {
+            to_namespace.emit_i32::<{SeedNumber::Default as usize}>(hash_index as i32, hash_value * self.multiplier, 0.0);
         });
     }
 }
@@ -282,24 +282,24 @@ impl FunctionExecutorTrait for TransformerCombine {
         //   - Automatic code generation: Didn't have time to learn macros that well
         // So we are left with good old "spaghetti technique"
         match self.n_namespaces {
-            2 =>    feature_reader!(record_buffer, transform_executors, self.from_namespaces[0].namespace_descriptor, hash_index0, hash_value0, {
-                        feature_reader!(record_buffer, transform_executors, self.from_namespaces[1].namespace_descriptor, hash_index1, hash_value1, {
-                            to_namespace.emit_i32::<{SeedNumber::Default as usize}>((hash_index0 ^ hash_index1) as i32, hash_value0 * hash_value1);
+            2 =>    feature_reader!(record_buffer, transform_executors, self.from_namespaces[0].namespace_descriptor, hash_index0, hash_value0, bin_value0, {
+                        feature_reader!(record_buffer, transform_executors, self.from_namespaces[1].namespace_descriptor, hash_index1, hash_value1, bin_value1, {
+                            to_namespace.emit_i32::<{SeedNumber::Default as usize}>((hash_index0 ^ hash_index1) as i32, hash_value0 * hash_value1, 0.0);
                         });
                     }),
-            3 =>    feature_reader!(record_buffer, transform_executors, self.from_namespaces[0].namespace_descriptor, hash_index0, hash_value0, {
-                        feature_reader!(record_buffer, transform_executors, self.from_namespaces[1].namespace_descriptor, hash_index1, hash_value1, {
-                            feature_reader!(record_buffer, transform_executors, self.from_namespaces[2].namespace_descriptor, hash_index2, hash_value2, {
-                                to_namespace.emit_i32::<{SeedNumber::Default as usize}>((hash_index0 ^ hash_index1 ^ hash_index2) as i32, hash_value0 * hash_value1 * hash_value2);
+            3 =>    feature_reader!(record_buffer, transform_executors, self.from_namespaces[0].namespace_descriptor, hash_index0, hash_value0, bin_value0, {
+                        feature_reader!(record_buffer, transform_executors, self.from_namespaces[1].namespace_descriptor, hash_index1, hash_value1, bin_value1, {
+                            feature_reader!(record_buffer, transform_executors, self.from_namespaces[2].namespace_descriptor, hash_index2, hash_value2, bin_value2, {
+                                to_namespace.emit_i32::<{SeedNumber::Default as usize}>((hash_index0 ^ hash_index1 ^ hash_index2) as i32, hash_value0 * hash_value1 * hash_value2, 0.0);
                             });
                         });
                     }),
-            4 =>    feature_reader!(record_buffer, transform_executors, self.from_namespaces[0].namespace_descriptor, hash_index0, hash_value0, {
-                        feature_reader!(record_buffer, transform_executors, self.from_namespaces[1].namespace_descriptor, hash_index1, hash_value1, {
-                            feature_reader!(record_buffer, transform_executors, self.from_namespaces[2].namespace_descriptor, hash_index2, hash_value2, {
-                                feature_reader!(record_buffer, transform_executors, self.from_namespaces[3].namespace_descriptor, hash_index3, hash_value3, {
+            4 =>    feature_reader!(record_buffer, transform_executors, self.from_namespaces[0].namespace_descriptor, hash_index0, hash_value0, bin_value0, {
+                        feature_reader!(record_buffer, transform_executors, self.from_namespaces[1].namespace_descriptor, hash_index1, hash_value1, bin_value1, {
+                            feature_reader!(record_buffer, transform_executors, self.from_namespaces[2].namespace_descriptor, hash_index2, hash_value2, bin_value2, {
+                                feature_reader!(record_buffer, transform_executors, self.from_namespaces[3].namespace_descriptor, hash_index3, hash_value3, bin_value3, {
                                     to_namespace.emit_i32::<{SeedNumber::Default as usize}>((hash_index0 ^ hash_index1 ^ hash_index2 ^ hash_index3) as i32, 
-                                                            hash_value0 * hash_value1 * hash_value2 * hash_value3);
+                                                            hash_value0 * hash_value1 * hash_value2 * hash_value3, 0.0);
                                 });
                             });
                         });
