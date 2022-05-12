@@ -77,7 +77,7 @@ impl FunctionExecutorTrait for TransformerBinner {
     fn execute_function(&self, record_buffer: &[u32], to_namespace: &mut ExecutorToNamespace, transform_executors: &TransformExecutors) {
         feature_reader_float_namespace!(record_buffer, self.from_namespace.namespace_descriptor, hash_index, hash_value, float_value, {
             if float_value < self.greater_than {
-                to_namespace.emit_i32::<{SeedNumber::Default as usize}>(float_value as i32, hash_value, 0.0);
+                to_namespace.emit_i32::<{SeedNumber::Default as usize}>(float_value as i32, hash_value, float_value);
             } else {
                 let transformed_float = (self.function_pointer)(float_value - self.greater_than, self.resolution);
                 to_namespace.emit_f32::<{SeedNumber::One as usize}>(transformed_float, hash_value, self.interpolated);

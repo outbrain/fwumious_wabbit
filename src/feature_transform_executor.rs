@@ -79,7 +79,7 @@ impl ExecutorToNamespace {
                 }
 
             } else {
-                self.emit_i32::<SEED_ID>(f as i32, hash_value, 0.0);
+                self.emit_i32::<SEED_ID>(f as i32, hash_value, f.floor());
             }
         }
     }
