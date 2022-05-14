@@ -5,6 +5,7 @@ Fwumious Wabbit is
 - currently supports logistic regression and field-aware factorization machines
 
 ![Rust](https://github.com/outbrain/fwumious_wabbit/workflows/Rust/badge.svg?branch=main)
+[![Rust-Ubuntu18](https://github.com/SkBlaz/fwumious_wabbit/actions/workflows/rustUbuntu18.yml/badge.svg)](https://github.com/SkBlaz/fwumious_wabbit/actions/workflows/rustUbuntu18.yml)
 [![Gitter](https://badges.gitter.im/FwumiousWabbit/community.svg)](https://gitter.im/FwumiousWabbit/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 Fwumious Wabbit is actively used in Outbrain for offline research, as well as for some production flows. It 
