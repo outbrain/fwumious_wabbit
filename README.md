@@ -4,8 +4,8 @@ Fwumious Wabbit is
 - inspired by and partially compatible with Vowpal Wabbit (much love! read more about compatibility [here](COMPATIBILITY.md))
 - currently supports logistic regression and field-aware factorization machines
 
-[![Rust-UbuntuLatest](https://github.com/SkBlaz/fwumious_wabbit/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/SkBlaz/fwumious_wabbit/actions/workflows/rust.yml)
-[![Rust-Ubuntu18](https://github.com/SkBlaz/fwumious_wabbit/actions/workflows/rust-Ubuntu18.yml/badge.svg)](https://github.com/SkBlaz/fwumious_wabbit/actions/workflows/rust-Ubuntu18.yml)
+[![Rust-UbuntuLatest](https://github.com/outbrain/fwumious_wabbit/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/outbrain/fwumious_wabbit/actions/workflows/rust.yml)
+[![Rust-Ubuntu18](https://github.com/outbrain/fwumious_wabbit/actions/workflows/rust-Ubuntu18.yml/badge.svg)](https://github.com/outbrain/fwumious_wabbit/actions/workflows/rust-Ubuntu18.yml)
 
 [![Gitter](https://badges.gitter.im/FwumiousWabbit/community.svg)](https://gitter.im/FwumiousWabbit/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
