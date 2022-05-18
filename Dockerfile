@@ -20,20 +20,23 @@ RUN ./llvm.sh 13
 ENV PATH="/usr/lib/llvm-11/bin/:${PATH}"
 
 # Compile fbs
-WORKDIR /
-RUN git clone https://github.com/google/flatbuffers.git
-WORKDIR /flatbuffers
-RUN git checkout tags/v1.12.0
-RUN cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
-RUN make
-RUN make install
+#WORKDIR /
+#RUN git clone https://github.com/google/flatbuffers.git
+#WORKDIR /flatbuffers
+#RUN git checkout tags/v1.12.0
+#RUN cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
+#RUN make
+#RUN make install
 
 # Compile vw - needed for benchmark
+WORKDIR /
+RUN git clone --recursive https://github.com/VowpalWabbit/vowpal_wabbit.git
 WORKDIR /vowpal_wabbit
-RUN git clone https://github.com/VowpalWabbit/vowpal_wabbit.git
-WORKDIR /vowpal_wabbit/vowpal_wabbit
-RUN git checkout tags/8.9.2
-RUN make && make install
+RUN apt-get install libboost-math-dev libboost-test-dev zlib1g-dev cmake g++ -y
+RUN cmake -S . -B build
+RUN cmake --build build --target /bin/vw
+#RUN git checkout tags/8.9.2
+#RUN make && make install
 
 # Get rust ecosystem operating
 RUN apt-get update
