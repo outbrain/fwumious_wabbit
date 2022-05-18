@@ -33,6 +33,7 @@ WORKDIR /
 RUN git clone --recursive https://github.com/VowpalWabbit/vowpal_wabbit.git
 WORKDIR /vowpal_wabbit
 RUN apt-get install libboost-math-dev libboost-test-dev zlib1g-dev cmake g++ -y
+RUN mkdir -p build
 RUN cmake -S . -B build
 RUN cmake --build build --target /bin/vw
 #RUN git checkout tags/8.9.2
