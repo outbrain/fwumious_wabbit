@@ -28,17 +28,12 @@ RUN cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
 RUN make
 RUN make install
 
-WORKDIR /
-RUN git clone https://github.com/andraztori/vowpal_wabbit.git
-WORKDIR vowpal_wabbit
-RUN make && make install
-
 # Compile vw - needed for benchmark
-#WORKDIR /vowpal_wabbit
-#RUN git clone https://github.com/VowpalWabbit/vowpal_wabbit.git
-#WORKDIR /vowpal_wabbit/vowpal_wabbit
-#RUN git checkout tags/8.9.2
-#RUN make && make install
+WORKDIR /vowpal_wabbit
+RUN git clone https://github.com/VowpalWabbit/vowpal_wabbit.git
+WORKDIR /vowpal_wabbit/vowpal_wabbit
+RUN git checkout tags/8.9.2
+RUN make && make install
 
 # Get rust ecosystem operating
 RUN apt-get update
