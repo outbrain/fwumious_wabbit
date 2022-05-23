@@ -54,3 +54,4 @@ WORKDIR /fwumious_wabbit
 RUN cargo test
 WORKDIR /fwumious_wabbit/benchmark
 RUN ./run_with_plots.sh
+
