@@ -87,11 +87,11 @@ impl Regressor  {
         rg.blocks_boxes.push(reg_lr);
 
         if mi.ffm_k > 0 {
-            if mi.ffm_field_interaction_matrix == false {
+            if mi.ffm_interaction_matrix == false {
                 let mut reg_ffm = BlockFFM::<L>::new_without_weights(mi).unwrap();
                 rg.blocks_boxes.push(reg_ffm);
             } else {
-                // if we have field interaction mask, we have a separate implementation
+                // if we have field interaction mask, we have a separate implementation called "affm"
                 let mut reg_ffm = BlockAFFM::<L>::new_without_weights(mi).unwrap();
                 rg.blocks_boxes.push(reg_ffm);
             }

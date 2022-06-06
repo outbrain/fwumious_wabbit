@@ -43,7 +43,7 @@ pub struct ModelInstance {
     pub add_constant_feature: bool,
     pub feature_combo_descs: Vec<FeatureComboDesc>,
     pub ffm_fields: Vec<FieldDesc>,
-    pub ffm_field_interactions: Vec<(u32, u32, f32)>, // triplet of interactions - first field, second field, strength[A
+    pub ffm_interactions: Vec<(u32, u32, f32)>, // triplet of interactions - first field, second field, strength[A
     #[serde(default = "default_u32_zero")]
     pub ffm_k: u32,
     #[serde(default = "default_u32_zero")]
@@ -53,7 +53,7 @@ pub struct ModelInstance {
     #[serde(default = "default_bool_false")]
     pub fastmath: bool,
     #[serde(default = "default_bool_false")]
-    pub ffm_field_interaction_matrix: bool,
+    pub ffm_interaction_matrix: bool,
 
     #[serde(default = "default_f32_zero")]
     pub ffm_k_threshold: f32,
@@ -98,7 +98,7 @@ impl ModelInstance {
             add_constant_feature: true,
             feature_combo_descs: Vec::new(),
             ffm_fields: Vec::new(),
-            ffm_field_interactions: Vec::new(),
+            ffm_interactions: Vec::new(),
             ffm_k: 0,
             ffm_bit_precision: 18,
             ffm_separate_vectors: false, // DEPRECATED, UNUSED
@@ -108,7 +108,7 @@ impl ModelInstance {
             ffm_init_width: 0.0,
             ffm_init_zero_band: 0.0,
             ffm_init_acc_gradient: 0.0,
-            ffm_field_interaction_matrix: false,
+            ffm_interaction_matrix: false,
             init_acc_gradient: 1.0,
 
             optimizer: Optimizer::SGD,
@@ -183,7 +183,7 @@ impl ModelInstance {
     }
 
 
-    pub fn parse_ffm_interaction_mask(&self, s: &str, num_fields: u32) -> Result<(u32, u32, f32), Box<dyn Error>> {
+    pub fn parse_ffm_interaction_mask(&self, s: &str, num_fields: i32) -> Result<(u32, u32, f32), Box<dyn Error>> {
         let vsplit: Vec<&str> = s.split(":").collect(); // We use : as a delimiter for splitting first and second field id
         if vsplit.len() != 3 {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("Field interaction mask can be field_id:field_id or field_id1:field_id2:value, cannot parse: {}", s))))
@@ -204,11 +204,11 @@ impl ModelInstance {
         };
 
  
-        if field_id_1 >= num_fields {
+        if field_id_1 as i32 >= num_fields {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("Field interaction mask field_id_1 can only be between 0 and {} (number of fields), found: {}", num_fields - 1, field_id_1))))
         }
         
-        if field_id_2 >= num_fields {
+        if field_id_2 as i32 >= num_fields {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("Field interaction mask field_id_2 can only be between 0 and {} (number of fields), found: {}", num_fields - 1, field_id_2))))
         }
  
@@ -320,15 +320,20 @@ impl ModelInstance {
             }
         }
 
-        if let Some(in_v) = cl.values_of("ffm_field_verbose") {
+        if let Some(in_v) = cl.values_of("ffm_verbose") {
             for value_str in in_v {
                 mi.ffm_fields.push(mi.create_field_desc_from_verbose(vw, value_str)?);
             }
         }
 
-        if let Some(in_v) = cl.values_of("ffm_interaction_mask") {
+        mi.ffm_interaction_matrix = cl.is_present("ffm_interaction_matrix");
+
+        if let Some(in_v) = cl.values_of("ffm_interaction") {
+            if !mi.ffm_interaction_matrix {
+                return Err(Box::new(IOError::new(ErrorKind::Other, "You need to turn on --ffm_interaction_matrix")))
+            }
             for value_str in in_v {
-                mi.ffm_field_interactions.push(mi.parse_ffm_interaction_mask(value_str, mi.ffm_fields.len() as u32)?);
+                mi.ffm_interactions.push(mi.parse_ffm_interaction_mask(value_str, mi.ffm_fields.len() as i32)?);
             }
         }
 
@@ -354,7 +359,6 @@ impl ModelInstance {
 
 
 
-        mi.ffm_field_interaction_matrix = cl.is_present("field_interaction_matrix");
         
 
         if let Some(val) = cl.value_of("minimum_learning_rate") {
@@ -567,7 +571,7 @@ C,featureC
 
 
     #[test]
-    fn test_ffm_field_interaction_parsing() {
+    fn test_ffm_interaction_parsing() {
         let mi = ModelInstance::new_empty().unwrap();        
         
         let result = mi.parse_ffm_interaction_mask("0:1:0", 2).unwrap();
