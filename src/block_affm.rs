@@ -70,7 +70,6 @@ macro_rules! specialize_k {
 }
 
 
-
 impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
 
  {
@@ -79,8 +78,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
     }
 
     fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-        
-
         let mut reg_ffm = BlockAFFM::<L> {
             weights: Vec::new(),
             ffm_weights_len: 0, 
@@ -97,7 +94,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
             // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
             reg_ffm.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * reg_ffm.ffm_k);
             reg_ffm.field_interaction_weights_len = (mi.ffm_fields.len() * mi.ffm_fields.len()) as u32;        
-//            println!("AAAAAAA: {}", reg_ffm.field_interaction_weights_len);
         }
 
         // Verify that forward pass will have enough stack for temporary buffer
@@ -128,8 +124,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
         self.weights =vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_ffm.initial_data()}; self.ffm_weights_len as usize];
-        self.field_interaction_weights =vec![Weight{weight:1.0}; self.field_interaction_weights_len as usize];
-        
+        self.field_interaction_weights =vec![Weight{weight:1.0}; self.field_interaction_weights_len as usize];        
 
         if mi.ffm_k > 0 {       
             if mi.ffm_init_width == 0.0 {
@@ -155,10 +150,14 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                 }
 
             }
-/*            for z in 0..self.field_interaction_weights_len as usize {
-                self.field_interaction_weights[z].weight = 1.0; // This means there is no weight
+
+            // on command line, for each place in the matrix, we can define its own weight
+            for (field_id_1, field_id_2, interaction_weight) in mi.ffm_field_interactions.iter() {
+                // matrix has to be symetrical
+                self.field_interaction_weights[*field_id_1 as usize * mi.ffm_fields.len() + *field_id_2 as usize].weight = *interaction_weight;
+                self.field_interaction_weights[*field_id_2 as usize * mi.ffm_fields.len() + *field_id_1 as usize].weight = *interaction_weight;
             }
-*/
+
         }
     }
 
@@ -504,7 +503,7 @@ mod tests {
     }
 
     #[test]
-    fn test_ffm_k1() {
+    fn test_ffm_field_interactions_setup() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.learning_rate = 0.1;
         mi.ffm_learning_rate = 0.1;
@@ -515,46 +514,24 @@ mod tests {
         mi.ffm_bit_precision = 18;
         mi.ffm_fields = vec![vec![], vec![]]; // This isn't really used
         mi.ffm_field_interaction_matrix = true;
-        let mut lossf = BlockSigmoid::new_without_weights(&mi).unwrap();
         
-        // Nothing can be learned from a single field in FFMs
-        let mut re = BlockAFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
-        re.allocate_and_init_weights(&mi);
-
-        let fb = ffm_vec(vec![HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0}], 
-                        1); // saying we have 1 field isn't entirely correct
-        assert_epsilon!(spredict(&mut re, &mut lossf, &fb, true), 0.5);
-        assert_epsilon!(slearn  (&mut re, &mut lossf, &fb, true), 0.5);
-
-        // With two fields, things start to happen
-        // Since fields depend on initial randomization, these tests are ... peculiar.
-        let mut re = BlockAFFM::<optimizer::OptimizerAdagradFlex>::new_without_weights(&mi).unwrap();
-        re.allocate_and_init_weights(&mi);
-
-        ffm_init::<optimizer::OptimizerAdagradFlex>(&mut re);
-        let fb = ffm_vec(vec![
-                                  HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
-                                  HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: mi.ffm_k}
-                                  ], 2);
-        assert_epsilon!(spredict(&mut re, &mut lossf, &fb, true), 0.7310586); 
-        assert_eq!(slearn  (&mut re, &mut lossf, &fb, true), 0.7310586); 
+        mi.ffm_field_interactions.push((1, 0, 0.5));
+        mi.ffm_field_interactions.push((0, 0, 0.0));
         
-        assert_epsilon!(spredict(&mut re, &mut lossf, &fb, true), 0.7024794);
-        assert_eq!(slearn  (&mut re, &mut lossf, &fb, true), 0.7024794);
-
-        // Two fields, use values
         let mut re = BlockAFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
-        re.allocate_and_init_weights(&mi);
 
-        ffm_init::<optimizer::OptimizerAdagradLUT>(&mut re);
-        let fb = ffm_vec(vec![
-                                  HashAndValueAndSeq{hash:1, value: 2.0, contra_field_index: 0},
-                                  HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: mi.ffm_k * 1}
-                                  ], 2);
-        assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.98201376);
-        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.98201376);
-        assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.81377685);
-        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.81377685);
+        re.allocate_and_init_weights(&mi);
+        let re2 = re.as_any().downcast_mut::<BlockAFFM<optimizer::OptimizerAdagradLUT>>().unwrap();
+        assert_eq!(re2.field_interaction_weights.len(), 4);
+        assert_eq!(re2.field_interaction_weights[0].weight, 0.0);
+        assert_eq!(re2.field_interaction_weights[1].weight, 0.5);
+        assert_eq!(re2.field_interaction_weights[2].weight, 0.5);
+        assert_eq!(re2.field_interaction_weights[3].weight, 1.0);
+        
+        
+
+
+
     }
 
 
@@ -720,6 +697,19 @@ B,featureB
         assert_eq!(slearn  (&mut re, &mut lossf, &fb, true), 0.5);
 
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
 }
 
 
