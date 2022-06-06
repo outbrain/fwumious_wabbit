@@ -529,13 +529,13 @@ mod tests {
 
         ffm_init::<optimizer::OptimizerAdagradLUT>(&mut re);
         let fb = ffm_vec(vec![
-                                  HashAndValueAndSeq{hash:1, value: 2.0, contra_field_index: 0},
-                                  HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: mi.ffm_k * 1}
+                                  HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
+                                  HashAndValueAndSeq{hash:100, value: 3.0, contra_field_index: mi.ffm_k * 1}
                                   ], 2);
-        assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.98201376);
-        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.98201376);
-        assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.81377685);
-        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.81377685);
+        assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.95257413);
+        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.95257413);
+        assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.82205963);
+        assert_epsilon!(slearn(&mut re, &mut lossf, &fb, true), 0.82205963);
     }
 
 
