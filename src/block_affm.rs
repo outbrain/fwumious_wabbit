@@ -502,6 +502,8 @@ mod tests {
         }
     }
 
+
+
     #[test]
     fn test_ffm_field_interactions_setup() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
@@ -512,26 +514,81 @@ mod tests {
         mi.bit_precision = 18;
         mi.ffm_k = 1;
         mi.ffm_bit_precision = 18;
-        mi.ffm_fields = vec![vec![], vec![]]; // This isn't really used
+        mi.ffm_fields = vec![vec![], vec![], vec![]]; // This isn't really used
         mi.ffm_field_interaction_matrix = true;
-        
         mi.ffm_field_interactions.push((1, 0, 0.5));
-        mi.ffm_field_interactions.push((0, 0, 0.0));
+        mi.ffm_field_interactions.push((0, 0, 0.1));
+        mi.ffm_field_interactions.push((1, 1, 0.6));
         
         let mut re = BlockAFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
 
         re.allocate_and_init_weights(&mi);
         let re2 = re.as_any().downcast_mut::<BlockAFFM<optimizer::OptimizerAdagradLUT>>().unwrap();
-        assert_eq!(re2.field_interaction_weights.len(), 4);
-        assert_eq!(re2.field_interaction_weights[0].weight, 0.0);
-        assert_eq!(re2.field_interaction_weights[1].weight, 0.5);
-        assert_eq!(re2.field_interaction_weights[2].weight, 0.5);
-        assert_eq!(re2.field_interaction_weights[3].weight, 1.0);
+        assert_eq!(re2.field_interaction_weights.len(), 9);
+        assert_eq!(re2.field_interaction_weights[0].weight, 0.1);
+        assert_eq!(re2.field_interaction_weights[1*3 + 0].weight, 0.5);
+        assert_eq!(re2.field_interaction_weights[0*3 + 1].weight, 0.5);
+        assert_eq!(re2.field_interaction_weights[1*3 + 1].weight, 0.6);
+        assert_eq!(re2.field_interaction_weights[8].weight, 1.0);
+
+    }
+
+    #[test]
+    fn test_ffm_k1() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.learning_rate = 0.1;
+        mi.ffm_learning_rate = 0.1;
+        mi.power_t = 0.0;
+        mi.ffm_power_t = 0.0;
+        mi.bit_precision = 18;
+        mi.ffm_k = 1;
+        mi.ffm_bit_precision = 18;
+        mi.ffm_fields = vec![vec![], vec![]]; // This isn't really used
+        mi.ffm_field_interaction_matrix = true;
+/*        mi.ffm_field_interactions.push((1, 0, 0.5));
+        mi.ffm_field_interactions.push((0, 0, 0.1));
+        mi.ffm_field_interactions.push((1, 1, 0.6));
+*/
+        let mut lossf = BlockSigmoid::new_without_weights(&mi).unwrap();
         
+        // Nothing can be learned from a single field in FFMs
+        let mut re = BlockAFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
+        re.allocate_and_init_weights(&mi);
+
+        let fb = ffm_vec(vec![HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0}], 
+                        1); // saying we have 1 field isn't entirely correct
+        assert_epsilon!(spredict(&mut re, &mut lossf, &fb, true), 0.5);
+        assert_epsilon!(slearn  (&mut re, &mut lossf, &fb, true), 0.5);
+
+        // With two fields, things start to happen
+        // Since fields depend on initial randomization, these tests are ... peculiar.
+        let mut re = BlockAFFM::<optimizer::OptimizerAdagradFlex>::new_without_weights(&mi).unwrap();
+        re.allocate_and_init_weights(&mi);
+
+        ffm_init::<optimizer::OptimizerAdagradFlex>(&mut re);
+        let fb = ffm_vec(vec![
+                                  HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
+                                  HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: mi.ffm_k}
+                                  ], 2);
+        assert_epsilon!(spredict(&mut re, &mut lossf, &fb, true), 0.7310586); 
+        assert_eq!(slearn  (&mut re, &mut lossf, &fb, true), 0.7310586); 
         
+        assert_epsilon!(spredict(&mut re, &mut lossf, &fb, true), 0.7024794);
+        assert_eq!(slearn  (&mut re, &mut lossf, &fb, true), 0.7024794);
 
+        // Two fields, use values
+        let mut re = BlockAFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
+        re.allocate_and_init_weights(&mi);
 
-
+        ffm_init::<optimizer::OptimizerAdagradLUT>(&mut re);
+        let fb = ffm_vec(vec![
+                                  HashAndValueAndSeq{hash:1, value: 2.0, contra_field_index: 0},
+                                  HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: mi.ffm_k * 1}
+                                  ], 2);
+        assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.98201376);
+        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.98201376);
+        assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.81377685);
+        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.81377685);
     }
 
 
