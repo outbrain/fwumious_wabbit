@@ -152,7 +152,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
             }
 
             // on command line, for each place in the matrix, we can define its own weight
-            for (field_id_1, field_id_2, interaction_weight) in mi.ffm_field_interactions.iter() {
+            for (field_id_1, field_id_2, interaction_weight) in mi.ffm_interactions.iter() {
                 // matrix has to be symetrical
                 self.field_interaction_weights[*field_id_1 as usize * mi.ffm_fields.len() + *field_id_2 as usize].weight = *interaction_weight;
                 self.field_interaction_weights[*field_id_2 as usize * mi.ffm_fields.len() + *field_id_1 as usize].weight = *interaction_weight;
@@ -409,8 +409,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockAFFM<L>
                                         contra_fields.get_unchecked(f1_offset_ffmk + k as usize) * 
                                         contra_fields.get_unchecked(f2_offset_ffmk + k as usize) * 
                                         interaction_weight;
-
-
                             }
                         }
                         
@@ -514,7 +512,7 @@ mod tests {
 
 
     #[test]
-    fn test_ffm_field_interactions_setup() {
+    fn test_ffm_interactions_setup() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.learning_rate = 0.1;
         mi.ffm_learning_rate = 0.1;
@@ -524,10 +522,10 @@ mod tests {
         mi.ffm_k = 1;
         mi.ffm_bit_precision = 18;
         mi.ffm_fields = vec![vec![], vec![], vec![]]; // This isn't really used
-        mi.ffm_field_interaction_matrix = true;
-        mi.ffm_field_interactions.push((1, 0, 0.5));
-        mi.ffm_field_interactions.push((0, 0, 0.1));
-        mi.ffm_field_interactions.push((1, 1, 0.6));
+        mi.ffm_interaction_matrix = true;
+        mi.ffm_interactions.push((1, 0, 0.5));
+        mi.ffm_interactions.push((0, 0, 0.1));
+        mi.ffm_interactions.push((1, 1, 0.6));
         
         let mut re = BlockAFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
 
@@ -553,10 +551,10 @@ mod tests {
         mi.ffm_k = 1;
         mi.ffm_bit_precision = 18;
         mi.ffm_fields = vec![vec![], vec![]]; // This isn't really used
-        mi.ffm_field_interaction_matrix = true;
-        mi.ffm_field_interactions.push((1, 0, 0.5));
-        mi.ffm_field_interactions.push((0, 0, 0.1));
-        mi.ffm_field_interactions.push((1, 1, 0.6));
+        mi.ffm_interaction_matrix = true;
+        mi.ffm_interactions.push((1, 0, 0.5));
+        mi.ffm_interactions.push((0, 0, 0.1));
+        mi.ffm_interactions.push((1, 1, 0.6));
 
         let mut lossf = BlockSigmoid::new_without_weights(&mi).unwrap();
         
