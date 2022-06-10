@@ -320,7 +320,7 @@ impl ModelInstance {
             }
         }
 
-        if let Some(in_v) = cl.values_of("ffm_verbose") {
+        if let Some(in_v) = cl.values_of("ffm_field_verbose") {
             for value_str in in_v {
                 mi.ffm_fields.push(mi.create_field_desc_from_verbose(vw, value_str)?);
             }
