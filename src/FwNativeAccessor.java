@@ -19,9 +19,7 @@ public class FwNativeAccessor implements AutoCloseable {
 
   public float predict(String input) {
     MemorySegment cstringInput = SegmentAllocator.implicitAllocator().allocateUtf8String(input);
-    MemorySegment offHeap  = SegmentAllocator.implicitAllocator().allocateArray(ValueLayout.ADDRESS, input.length());
-    offHeap.set(ValueLayout.ADDRESS, 1, cstringInput);
-    return fw_predict(predictor, offHeap);
+    return fw_predict(predictor, cstringInput);
   }
 
   @Override

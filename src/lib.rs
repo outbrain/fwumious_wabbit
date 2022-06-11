@@ -45,8 +45,8 @@ impl Predictor {
 
     unsafe fn predict(mut self, input_buffer: &str) -> f32 {
         let mut buffered_input = Cursor::new(input_buffer);
-        let x= self.vw_parser.as_mut().unwrap();
-        let reading_result = x.next_vowpal(&mut buffered_input);
+        let mut_vw = self.vw_parser.as_mut().unwrap();
+        let reading_result = mut_vw.next_vowpal(&mut buffered_input);
         let buffer = match reading_result {
             Ok([]) => return -1.0, // EOF
             Ok(buffer2) => buffer2,
