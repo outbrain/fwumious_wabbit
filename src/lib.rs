@@ -20,45 +20,42 @@ mod serving;
 mod version;
 mod vwmap;
 
-use std::borrow::BorrowMut;
 use std::ffi::CStr;
 use std::io::Cursor;
 use std::os::raw::c_char;
-use clap;
-use clap::App;
-use clap::ArgMatches;
 use shellwords;
-use crate::model_instance::ModelInstance;
 use crate::feature_buffer::FeatureBufferTranslator;
 use crate::parser::VowpalParser;
 use crate::regressor::Regressor;
-use crate::vwmap::VwNamespaceMap;
 
 #[repr(C)]
+pub struct FfiPredictor {
+    _market: core::marker::PhantomData<Predictor>,
+}
+
 pub struct Predictor {
-    feature_buffer_translator: *mut FeatureBufferTranslator,
-    vw_parser: *mut VowpalParser,
-    regressor: *const Regressor,
+    feature_buffer_translator: FeatureBufferTranslator,
+    vw_parser: VowpalParser,
+    regressor: Regressor,
 }
 
 impl Predictor {
 
-    unsafe fn predict(mut self, input_buffer: &str) -> f32 {
+    unsafe fn predict(&mut self, input_buffer: &str) -> f32 {
         let mut buffered_input = Cursor::new(input_buffer);
-        let mut_vw = self.vw_parser.as_mut().unwrap();
-        let reading_result = mut_vw.next_vowpal(&mut buffered_input);
+        let reading_result = self.vw_parser.next_vowpal(&mut buffered_input);
         let buffer = match reading_result {
             Ok([]) => return -1.0, // EOF
             Ok(buffer2) => buffer2,
             Err(_e) => return -1.0
         };
-        self.feature_buffer_translator.as_mut().unwrap().translate(buffer, 0);
-        self.regressor.as_ref().unwrap().predict(&self.feature_buffer_translator.as_mut().unwrap().feature_buffer)
+        self.feature_buffer_translator.translate(buffer, 0);
+        self.regressor.predict(&self.feature_buffer_translator.feature_buffer)
     }
 }
 
 #[no_mangle]
-pub extern "C" fn new_fw_predictor(command: *const c_char) -> Predictor {
+pub extern "C" fn new_fw_predictor(command: *const c_char) -> *mut FfiPredictor {
     let str_command = c_char_to_str(command);
     let words = shellwords::split(str_command).unwrap();
     let cmd_matches = cmdline::create_expected_args().get_matches_from(words);
@@ -67,22 +64,35 @@ pub extern "C" fn new_fw_predictor(command: *const c_char) -> Predictor {
         None => panic!("Cannot resolve input weights file name")
     };
     let (model_instance, vw_namespace_map, regressor) = persistence::new_regressor_from_filename(weights_filename, true, Some(&cmd_matches)).unwrap();
-    let regressor: *const Regressor = &regressor;
-    let feature_buffer_translator: *mut FeatureBufferTranslator = &mut FeatureBufferTranslator::new(&model_instance);
-    let vw_parser: *mut VowpalParser = &mut VowpalParser::new(&vw_namespace_map);
-    Predictor {
+    let feature_buffer_translator = FeatureBufferTranslator::new(&model_instance);
+    let vw_parser = VowpalParser::new(&vw_namespace_map);
+    let predictor = Predictor {
         feature_buffer_translator,
         vw_parser,
         regressor
-    }
+    };
+    Box::into_raw(Box::new(predictor)).cast()
 }
 
 #[no_mangle]
-pub extern "C" fn fw_predict(predictor: Predictor, input_buffer: *const c_char) -> f32 {
+pub unsafe extern "C" fn fw_predict(ptr: *mut FfiPredictor, input_buffer: *const c_char) -> f32 {
     let str_buffer = c_char_to_str(input_buffer);
-    unsafe {
-        predictor.predict(str_buffer)
+    let predictor: &mut Predictor = from_ptr(ptr);
+    predictor.predict(str_buffer)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn free_predictor(ptr: *mut FfiPredictor) {
+    drop::<Box<Predictor>>(Box::from_raw(from_ptr(ptr)))
+}
+
+unsafe fn from_ptr<'a>(ptr: *mut FfiPredictor) -> &'a mut Predictor
+{
+    if ptr.is_null() {
+        eprintln!("Fatal error, got NULL `Context` pointer");
+        ::std::process::abort();
     }
+    &mut *(ptr.cast())
 }
 
 fn c_char_to_str<'a>(input_buffer: *const c_char) -> &'a str {
