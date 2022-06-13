@@ -1,4 +1,4 @@
-name: Docker Image - benchmark
+name: Build-docker-image-fw
 
 on:
   push:
