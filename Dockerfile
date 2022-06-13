@@ -41,8 +41,6 @@ RUN make install
 WORKDIR /
 RUN apt-get update
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup_install.sh &&  chmod +x rustup_install.sh && ./rustup_install.sh -y
-RUN echo 'source $HOME/.cargo/env' >> $HOME/.bashrc
-RUN rustup install 1.61.0
 ENV PATH="/root/.cargo/bin:/vowpal_wabbit/vowpalwabbit/vowpalwabbit/cli/:${PATH}"
 
 # Conduct benchmark against vw + produce --release bin
