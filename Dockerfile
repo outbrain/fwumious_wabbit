@@ -2,10 +2,7 @@ FROM ubuntu:18.04
 ENV IMAGENAME="fwumious-builder"
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && \
-    apt-get install gcc g++ -y && \
-    apt-get install libboost-dev libboost-thread-dev libboost-program-options-dev libboost-system-dev libboost-math-dev libboost-test-dev zlib1g-dev -y && \
-    apt-get install git python3 python3-psutil python3-matplotlib lsb-release wget software-properties-common openjdk-8-jdk -y
+RUN apt-get update &&     apt-get install gcc g++ -y &&     apt-get install libboost-dev libboost-thread-dev libboost-program-options-dev libboost-system-dev libboost-math-dev libboost-test-dev zlib1g-dev -y &&     apt-get install git python3 python3-psutil python3-matplotlib lsb-release wget software-properties-common openjdk-8-jdk curl -y
 
 ENV JAVA_HOME="/usr/lib/jvm/java-8-openjdk-amd64"
 
@@ -19,7 +16,7 @@ ENV PATH="/usr/lib/llvm-11/bin/:${PATH}"
 # Install newer cmake
 RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
 RUN apt-add-repository "deb https://apt.kitware.com/ubuntu/ $(lsb_release -cs) main"
-RUN apt update &&  apt install cmake -y
+RUN apt update && apt install cmake -y
 
 # Compile fbs
 WORKDIR /
@@ -30,28 +27,28 @@ RUN cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
 RUN make
 RUN make install
 
+# VW - FW benchmarking currently disabled
 # Compile vw - needed for benchmark
-WORKDIR /
-RUN git clone https://github.com/VowpalWabbit/vowpal_wabbit.git
-WORKDIR /vowpal_wabbit/vowpalwabbit
-RUN mkdir build
-RUN cd build
-RUN cmake ..
-RUN make vw_cli_bin -j $(nproc)
-WORKDIR /
+#WORKDIR /
+#UN git clone https://github.com/VowpalWabbit/vowpal_wabbit.git
+#ORKDIR /vowpal_wabbit/vowpalwabbit
+#UN mkdir build
+#UN cd build
+#UN cmake ..
+#RUN make vw_cli_bin -j $(nproc)
 
 # Get rust ecosystem operating
+WORKDIR /
 RUN apt-get update
-RUN apt-get -y install curl
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup_install.sh &&  chmod +x rustup_install.sh && ./rustup_install.sh -y
 ENV PATH="/root/.cargo/bin:/vowpal_wabbit/vowpalwabbit/vowpalwabbit/cli/:${PATH}"
-RUN cp /vowpal_wabbit/vowpalwabbit/vowpalwabbit/cli/vw /tmp
 
 # Conduct benchmark against vw + produce --release bin
 WORKDIR /
 RUN git clone https://github.com/outbrain/fwumious_wabbit.git
 WORKDIR /fwumious_wabbit
 RUN cargo test
-WORKDIR /fwumious_wabbit/benchmark
-RUN ./run_with_plots.sh
-
+RUN cargo build --release
+# VW - FW benchmarking currently disabled
+#WORKDIR /fwumious_wabbit/benchmark
+#RUN ./run_with_plots.sh
