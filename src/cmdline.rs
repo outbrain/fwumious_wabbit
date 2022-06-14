@@ -211,7 +211,16 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .takes_value(true))
 
 
-                     
+                    .arg(Arg::with_name("ffm_interaction_matrix")
+                     .long("ffm_interaction_matrix")
+                     .help("Turn on ffm implementation that supports manual interaction matrix")
+                     .takes_value(false))
+                    .arg(Arg::with_name("ffm_interaction")
+                     .long("ffm_interaction")
+                     .value_name("field_id_1:field_id_2:interaction_weight")
+                     .help("Manually specify interaction strength between two fields")
+                     .multiple(true)
+                     .takes_value(true))
 
                      // Daemon parameterts
                     .arg(Arg::with_name("daemon")

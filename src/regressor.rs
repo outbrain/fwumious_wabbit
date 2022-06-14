@@ -16,6 +16,7 @@ use crate::feature_buffer;
 use crate::optimizer;
 use optimizer::OptimizerTrait;
 use crate::block_ffm::BlockFFM;
+use crate::block_affm::BlockAFFM;
 use crate::block_lr::BlockLR;
 use crate::block_loss_functions::BlockSigmoid;
 
@@ -86,8 +87,14 @@ impl Regressor  {
         rg.blocks_boxes.push(reg_lr);
 
         if mi.ffm_k > 0 {
-            let mut reg_ffm = BlockFFM::<L>::new_without_weights(mi).unwrap();
-            rg.blocks_boxes.push(reg_ffm);
+            if mi.ffm_interaction_matrix == false {
+                let mut reg_ffm = BlockFFM::<L>::new_without_weights(mi).unwrap();
+                rg.blocks_boxes.push(reg_ffm);
+            } else {
+                // if we have field interaction mask, we have a separate implementation called "affm"
+                let mut reg_ffm = BlockAFFM::<L>::new_without_weights(mi).unwrap();
+                rg.blocks_boxes.push(reg_ffm);
+            }
         }
                     
         let mut reg_sigmoid = BlockSigmoid::new_without_weights(mi).unwrap();

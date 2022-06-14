@@ -1,3 +1,5 @@
+# Jun 2022
+- introduce support for manually set field interaction weights/masks
 
 # May 2021
 - introduce support for multi-letter namespace names
