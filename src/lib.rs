@@ -30,7 +30,7 @@ use crate::regressor::Regressor;
 
 #[repr(C)]
 pub struct FfiPredictor {
-    _market: core::marker::PhantomData<Predictor>,
+    _marker: core::marker::PhantomData<Predictor>,
 }
 
 pub struct Predictor {
