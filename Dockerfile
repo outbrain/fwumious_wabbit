@@ -27,15 +27,14 @@ RUN cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
 RUN make
 RUN make install
 
-# VW - FW benchmarking currently disabled
 # Compile vw - needed for benchmark
-#WORKDIR /
-#UN git clone https://github.com/VowpalWabbit/vowpal_wabbit.git
-#ORKDIR /vowpal_wabbit/vowpalwabbit
-#UN mkdir build
-#UN cd build
-#UN cmake ..
-#RUN make vw_cli_bin -j $(nproc)
+WORKDIR /
+RUN git clone https://github.com/VowpalWabbit/vowpal_wabbit.git
+WORKDIR /vowpal_wabbit/vowpalwabbit
+RUN mkdir build
+RUN cd build
+RUN cmake ..
+RUN make vw_cli_bin -j $(nproc)
 
 # Get rust ecosystem operating
 WORKDIR /
@@ -52,5 +51,5 @@ WORKDIR /fwumious_wabbit
 RUN cargo test
 RUN cargo build --release
 # VW - FW benchmarking currently disabled
-#WORKDIR /fwumious_wabbit/benchmark
-#RUN ./run_with_plots.sh
+WORKDIR /fwumious_wabbit/benchmark
+RUN ./run_with_plots.sh
