@@ -25,6 +25,7 @@ use std::io::Cursor;
 use std::os::raw::c_char;
 use shellwords;
 use crate::feature_buffer::FeatureBufferTranslator;
+use crate::multithread_helpers::BoxedRegressorTrait;
 use crate::parser::VowpalParser;
 use crate::regressor::Regressor;
 
@@ -36,7 +37,7 @@ pub struct FfiPredictor {
 pub struct Predictor {
     feature_buffer_translator: FeatureBufferTranslator,
     vw_parser: VowpalParser,
-    regressor: Regressor,
+    regressor: BoxedRegressorTrait,
 }
 
 impl Predictor {
@@ -54,24 +55,37 @@ impl Predictor {
     }
 }
 
+
 #[no_mangle]
-pub extern "C" fn new_fw_predictor(command: *const c_char) -> *mut FfiPredictor {
+pub extern "C" fn new_fw_predictor_prototype(command: *const c_char) -> *mut FfiPredictor {
     let str_command = c_char_to_str(command);
     let words = shellwords::split(str_command).unwrap();
     let cmd_matches = cmdline::create_expected_args().get_matches_from(words);
     let weights_filename = match cmd_matches.value_of("initial_regressor") {
-        Some(filename) => filename,
-        None => panic!("Cannot resolve input weights file name")
+            Some(filename) => filename,
+            None => panic!("Cannot resolve input weights file name")
     };
     let (model_instance, vw_namespace_map, regressor) = persistence::new_regressor_from_filename(weights_filename, true, Some(&cmd_matches)).unwrap();
     let feature_buffer_translator = FeatureBufferTranslator::new(&model_instance);
     let vw_parser = VowpalParser::new(&vw_namespace_map);
+    let sharable_regressor = BoxedRegressorTrait::new(Box::new(regressor));
     let predictor = Predictor {
         feature_buffer_translator,
         vw_parser,
-        regressor
+        regressor: sharable_regressor
     };
     Box::into_raw(Box::new(predictor)).cast()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn clone_lite(prototype: *mut FfiPredictor) -> *mut FfiPredictor {
+    let prototype: &mut Predictor = from_ptr(prototype);
+    let lite_predictor = Predictor {
+        feature_buffer_translator: prototype.feature_buffer_translator.clone(),
+        vw_parser: prototype.vw_parser.clone(),
+        regressor: prototype.regressor.clone()
+    };
+    Box::into_raw(Box::new(lite_predictor)).cast()
 }
 
 #[no_mangle]
@@ -83,7 +97,7 @@ pub unsafe extern "C" fn fw_predict(ptr: *mut FfiPredictor, input_buffer: *const
 
 #[no_mangle]
 pub unsafe extern "C" fn free_predictor(ptr: *mut FfiPredictor) {
-    drop::<Box<Predictor>>(Box::from_raw(from_ptr(ptr)))
+    drop::<Box<Predictor>>(Box::from_raw(from_ptr(ptr)));
 }
 
 unsafe fn from_ptr<'a>(ptr: *mut FfiPredictor) -> &'a mut Predictor
