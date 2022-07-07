@@ -4,7 +4,9 @@ Fwumious Wabbit is
 - inspired by and partially compatible with Vowpal Wabbit (much love! read more about compatibility [here](COMPATIBILITY.md))
 - currently supports logistic regression and field-aware factorization machines
 
-![Rust](https://github.com/outbrain/fwumious_wabbit/workflows/Rust/badge.svg?branch=main)
+[![Rust-UbuntuLatest](https://github.com/outbrain/fwumious_wabbit/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/outbrain/fwumious_wabbit/actions/workflows/rust.yml)
+[![Rust-Ubuntu18](https://github.com/outbrain/fwumious_wabbit/actions/workflows/rust-Ubuntu18.yml/badge.svg)](https://github.com/outbrain/fwumious_wabbit/actions/workflows/rust-Ubuntu18.yml)
+[![Build-docker-image-fw](https://github.com/outbrain/fwumious_wabbit/actions/workflows/docker-image-benchmark-u18.yml/badge.svg)](https://github.com/outbrain/fwumious_wabbit/actions/workflows/docker-image-benchmark-u18.yml)
 [![Gitter](https://badges.gitter.im/FwumiousWabbit/community.svg)](https://gitter.im/FwumiousWabbit/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 Fwumious Wabbit is actively used in Outbrain for offline research, as well as for some production flows. It 
