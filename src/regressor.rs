@@ -42,6 +42,8 @@ pub trait BlockTrait {
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>;
     fn new_forward_only_without_weights(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>>;
     fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> where Self:Sized;
+    fn get_num_outputs(&self) -> u32;
+    fn set_num_inputs(&mut self, num_inputs: u32);
     fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>>;
 
     /// Sets internal state of weights based on some completely object-dependent parameters

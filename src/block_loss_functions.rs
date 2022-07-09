@@ -34,6 +34,7 @@ pub fn logistic(t: f32) -> f32 {
 
 
 pub struct BlockSigmoid {
+    num_inputs: u32,
 }
 
 impl BlockTrait for BlockSigmoid {
@@ -43,8 +44,21 @@ impl BlockTrait for BlockSigmoid {
     }
 
     fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-        Ok(Box::new(BlockSigmoid {}))
+        Ok(Box::new(BlockSigmoid {num_inputs: 0}))
     }
+
+
+    fn get_num_outputs(&self) -> u32 {
+        return 0
+    }
+    
+    fn set_num_inputs(&mut self, num_inputs: u32) {
+        if num_inputs <= 0 {
+          panic!("set_num_inputs(): num_inputs for BlockSigmoid has to be greater than 0");
+        }
+        self.num_inputs = num_inputs;
+    }
+
 
     #[inline(always)]
     fn forward_backward(&mut self, 
@@ -118,7 +132,7 @@ impl BlockTrait for BlockSigmoid {
     }
 
     fn new_forward_only_without_weights(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-        Ok(Box::new(BlockSigmoid{}))
+        Ok(Box::new(BlockSigmoid{num_inputs: 0}))
     }
     /// Sets internal state of weights based on some completely object-dependent parameters
     fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {

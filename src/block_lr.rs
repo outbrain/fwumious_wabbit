@@ -58,6 +58,18 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
         
     }
 
+
+    fn get_num_outputs(&self) -> u32 {
+        return 1
+    }
+    
+    fn set_num_inputs(&mut self, num_inputs: u32) {
+        if num_inputs != 0 {
+          panic!("You cannnot set set_num_inputs on block ffm to anything but 0");
+        }
+    }
+
+
     #[inline(always)]
     fn forward_backward(&mut self, 
                             further_regressors: &mut [Box<dyn BlockTrait>], 
