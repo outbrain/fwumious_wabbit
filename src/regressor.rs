@@ -243,10 +243,11 @@ mod tests {
     fn test_learning_turned_off() {
         let mi = model_instance::ModelInstance::new_empty().unwrap();        
         let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
+        let mut pb = re.new_portbuffer(&mi);
         // Empty model: no matter how many features, prediction is 0.5
-        assert_eq!(re.learn(&lr_vec(vec![]), false), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), false), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), false), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![]), &mut pb, false), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), &mut pb, false), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), &mut pb, false), 0.5);
     }
 
     #[test]
@@ -266,10 +267,12 @@ mod tests {
             //Box::new(Regressor::<optimizer::OptimizerSGD>::new(&mi))
             ];
         
+        let mut pb = regressors[0].new_portbuffer(&mi);
+        
         for re in &mut regressors {
-            assert_eq!(re.learn(vec_in, true), 0.5);
-            assert_eq!(re.learn(vec_in, true), 0.48750263);
-            assert_eq!(re.learn(vec_in, true), 0.47533244);
+            assert_eq!(re.learn(vec_in, &mut pb, true), 0.5);
+            assert_eq!(re.learn(vec_in, &mut pb, true), 0.48750263);
+            assert_eq!(re.learn(vec_in, &mut pb, true), 0.47533244);
         }
     }
 
@@ -283,11 +286,12 @@ mod tests {
         mi.power_t = 0.0;
         
         let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
+        let mut pb = re.new_portbuffer(&mi);
         let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash: 1, value: 2.0}]);
 
-        assert_eq!(re.learn(vec_in, true), 0.5);
-        assert_eq!(re.learn(vec_in, true), 0.38936076);
-        assert_eq!(re.learn(vec_in, true), 0.30993468);
+        assert_eq!(re.learn(vec_in, &mut pb, true), 0.5);
+        assert_eq!(re.learn(vec_in, &mut pb, true), 0.38936076);
+        assert_eq!(re.learn(vec_in, &mut pb, true), 0.30993468);
     }
 
 
@@ -299,10 +303,11 @@ mod tests {
         mi.init_acc_gradient = 0.0;
         
         let mut re = Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi);
+        let mut pb = re.new_portbuffer(&mi);
         
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true), 0.4750208);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true), 0.45788094);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), &mut pb, true), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), &mut pb, true), 0.4750208);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), &mut pb, true), 0.45788094);
     }
 
     #[test]
@@ -315,11 +320,12 @@ mod tests {
         mi.init_acc_gradient = 0.0;
         
         let mut re = get_regressor_with_weights(&mi);
+        let mut pb = re.new_portbuffer(&mi);
         let mut p: f32;
         
-        p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true);
+        p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), &mut pb, true);
         assert_eq!(p, 0.5);
-        p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true);
+        p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), &mut pb, true);
         if optimizer::FASTMATH_LR_LUT_BITS == 12 { 
             assert_eq!(p, 0.47539312);
         } else if optimizer::FASTMATH_LR_LUT_BITS == 11 { 
@@ -338,10 +344,11 @@ mod tests {
         mi.init_acc_gradient = 0.0;
         
         let mut re = Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi);
+        let mut pb = re.new_portbuffer(&mi);
         // Here we take twice two features and then once just one
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true), 0.45016602);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), true), 0.45836908);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), &mut pb, true), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), &mut pb, true), 0.45016602);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), &mut pb,  true), 0.45836908);
     }
 
     #[test]
@@ -352,10 +359,11 @@ mod tests {
         mi.bit_precision = 18;
         
         let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
+        let mut pb = re.new_portbuffer(&mi);
         
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true), 0.45016602);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true), 0.40611085);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), &mut pb, true), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), &mut pb, true), 0.45016602);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), &mut pb, true), 0.40611085);
     }
 
     #[test]
@@ -368,12 +376,13 @@ mod tests {
         mi.fastmath = true;
         
         let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
+        let mut pb = re.new_portbuffer(&mi);
         
         let mut fb_instance = lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);
         fb_instance.example_importance = 0.5;
-        assert_eq!(re.learn(&fb_instance, true), 0.5);
-        assert_eq!(re.learn(&fb_instance, true), 0.49375027);
-        assert_eq!(re.learn(&fb_instance, true), 0.4875807);
+        assert_eq!(re.learn(&fb_instance, &mut pb, true), 0.5);
+        assert_eq!(re.learn(&fb_instance, &mut pb, true), 0.49375027);
+        assert_eq!(re.learn(&fb_instance, &mut pb, true), 0.4875807);
     }
 
 }
