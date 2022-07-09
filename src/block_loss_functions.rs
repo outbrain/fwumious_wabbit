@@ -4,7 +4,9 @@ use std::io;
 
 use crate::regressor;
 use crate::feature_buffer;
+use crate::port_buffer;
 use crate::model_instance;
+
 use regressor::BlockTrait;
 
 
@@ -49,6 +51,7 @@ impl BlockTrait for BlockSigmoid {
                     further_regressors: &mut [Box<dyn BlockTrait>], 
                     wsum: f32, 
                     fb: &feature_buffer::FeatureBuffer, 
+                    pb: &mut port_buffer::PortBuffer, 
                     update:bool) -> (f32, f32) {
         if further_regressors.len() != 0 {
             panic!("RegSigmoid can only be at the end of the chain!");

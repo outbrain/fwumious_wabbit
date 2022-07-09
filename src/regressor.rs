@@ -28,6 +28,7 @@ pub trait BlockTrait {
                          further_blocks: &mut [Box<dyn BlockTrait>], 
                          wsum: f32, 
                          fb: &feature_buffer::FeatureBuffer,
+                         pb: &mut port_buffer::PortBuffer, 
                          update:bool) -> (f32, f32);
 
     fn forward(&self, 
@@ -137,7 +138,7 @@ impl Regressor  {
 
         let blocks_list = &mut self.blocks_boxes[..];
         let (current, further_blocks) = &mut blocks_list.split_at_mut(1);
-        let (prediction_probability, general_gradient) = current[0].forward_backward(further_blocks, 0.0, fb, update);
+        let (prediction_probability, general_gradient) = current[0].forward_backward(further_blocks, 0.0, fb, pb, update);
     
         return prediction_probability
     }

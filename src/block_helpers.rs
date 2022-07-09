@@ -9,6 +9,7 @@ use crate::optimizer::OptimizerSGD;
 use std::marker::PhantomData;
 use crate::feature_buffer;
 use crate::regressor::BlockTrait;
+use crate::port_buffer;
 
 #[derive(Clone, Debug)]
 #[repr(C)]
@@ -92,13 +93,14 @@ pub fn read_weights_only_from_buf2<L:OptimizerTrait>(weights_len: usize, out_wei
 pub fn slearn<'a>(block_run: &mut Box<dyn BlockTrait>, 
                     block_loss_function: &mut Box<dyn BlockTrait>,
                     fb: &feature_buffer::FeatureBuffer, 
+                    pb: &mut port_buffer::PortBuffer,                             
                     update: bool) -> f32 {
 
     unsafe {
         let block_loss_function: Box<dyn BlockTrait> = mem::transmute(& *block_loss_function.deref().deref());
         let mut further_blocks_v: Vec<Box<dyn BlockTrait>> = vec![block_loss_function];
         let further_blocks = &mut further_blocks_v[..];
-        let (prediction_probability, general_gradient) = block_run.forward_backward(further_blocks, 0.0, fb, update);
+        let (prediction_probability, general_gradient) = block_run.forward_backward(further_blocks, 0.0, fb, pb, update);
         // black magic here: forget about further blocks that we got through transmute:
         further_blocks_v.set_len(0);
         return prediction_probability

@@ -15,6 +15,7 @@ use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 use crate::block_helpers;
 use block_helpers::{Weight, WeightAndOptimizerData};
+use crate::port_buffer;
 
 
 pub struct BlockLR<L:OptimizerTrait> {
@@ -62,6 +63,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
                             further_regressors: &mut [Box<dyn BlockTrait>], 
                             wsum_input: f32, 
                             fb: &feature_buffer::FeatureBuffer, 
+                            pb: &mut port_buffer::PortBuffer,                             
                             update:bool) -> (f32, f32) {
         let mut wsum:f32 = 0.0;
         unsafe {
@@ -76,7 +78,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
             }
 
             let (next_regressor, further_regressors) = further_regressors.split_at_mut(1);
-            let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_regressors, wsum_input + wsum, fb, update);
+            let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_regressors, wsum_input + wsum, fb, pb, update);
 
             if update {
                 for hashvalue in fb.lr_buffer.iter() {

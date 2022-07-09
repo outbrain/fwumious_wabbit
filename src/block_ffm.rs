@@ -10,6 +10,7 @@ use crate::optimizer;
 use crate::regressor;
 use crate::model_instance;
 use crate::feature_buffer;
+use crate::port_buffer;
 use crate::consts;
 use crate::block_helpers;
 use optimizer::OptimizerTrait;
@@ -151,6 +152,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                         further_blocks: &mut [Box<dyn BlockTrait>], 
                         wsum_input: f32, 
                         fb: &feature_buffer::FeatureBuffer, 
+                        pb: &mut port_buffer::PortBuffer, 
                         update:bool) -> (f32, f32) {
         let mut wsum = 0.0;
         let local_data_ffm_len = fb.ffm_buffer.len() * (self.ffm_k * fb.ffm_fields_count) as usize;
@@ -267,7 +269,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                     });
                         
                     let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
-                    let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_blocks, wsum + wsum_input, fb, update);
+                    let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_blocks, wsum + wsum_input, fb, pb, update);
                     
                     if update {
                         let mut local_index: usize = 0;
@@ -501,11 +503,12 @@ mod tests {
         // Nothing can be learned from a single field in FFMs
         let mut re = BlockFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
         re.allocate_and_init_weights(&mi);
+        let mut pb = port_buffer::PortBuffer::new(&mi);
 
         let fb = ffm_vec(vec![HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0}], 
                         1); // saying we have 1 field isn't entirely correct
         assert_epsilon!(spredict(&mut re, &mut lossf, &fb, true), 0.5);
-        assert_epsilon!(slearn  (&mut re, &mut lossf, &fb, true), 0.5);
+        assert_epsilon!(slearn  (&mut re, &mut lossf, &fb, &mut pb, true), 0.5);
 
         // With two fields, things start to happen
         // Since fields depend on initial randomization, these tests are ... peculiar.
@@ -518,10 +521,10 @@ mod tests {
                                   HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: mi.ffm_k}
                                   ], 2);
         assert_epsilon!(spredict(&mut re, &mut lossf, &fb, true), 0.7310586); 
-        assert_eq!(slearn  (&mut re, &mut lossf, &fb, true), 0.7310586); 
+        assert_eq!(slearn  (&mut re, &mut lossf, &fb, &mut pb, true), 0.7310586); 
         
         assert_epsilon!(spredict(&mut re, &mut lossf, &fb, true), 0.7024794);
-        assert_eq!(slearn  (&mut re, &mut lossf, &fb, true), 0.7024794);
+        assert_eq!(slearn  (&mut re, &mut lossf, &fb, &mut pb, true), 0.7024794);
 
         // Two fields, use values
         let mut re = BlockFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
@@ -533,9 +536,9 @@ mod tests {
                                   HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: mi.ffm_k * 1}
                                   ], 2);
         assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.98201376);
-        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.98201376);
+        assert_eq!(slearn(&mut re, &mut lossf, &fb, &mut pb, true), 0.98201376);
         assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.81377685);
-        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.81377685);
+        assert_eq!(slearn(&mut re, &mut lossf, &fb, &mut pb, true), 0.81377685);
     }
 
 
@@ -554,12 +557,13 @@ mod tests {
         // Nothing can be learned from a single field in FFMs
         let mut re = BlockFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
         re.allocate_and_init_weights(&mi);
+        let mut pb = port_buffer::PortBuffer::new(&mi);
 
         let fb = ffm_vec(vec![HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0}], 4);
         assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.5);
-        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.5);
+        assert_eq!(slearn(&mut re, &mut lossf, &fb, &mut pb, true), 0.5);
         assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.5);
-        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.5);
+        assert_eq!(slearn(&mut re, &mut lossf, &fb, &mut pb, true), 0.5);
 
         // With two fields, things start to happen
         // Since fields depend on initial randomization, these tests are ... peculiar.
@@ -572,9 +576,9 @@ mod tests {
                                   HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: mi.ffm_k * 1}
                                   ], 2);
         assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.98201376); 
-        assert_eq!(slearn  (&mut re, &mut lossf, &fb, true), 0.98201376); 
+        assert_eq!(slearn  (&mut re, &mut lossf, &fb, &mut pb, true), 0.98201376); 
         assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.96277946);
-        assert_eq!(slearn  (&mut re, &mut lossf, &fb, true), 0.96277946);
+        assert_eq!(slearn  (&mut re, &mut lossf, &fb, &mut pb, true), 0.96277946);
 
         // Two fields, use values
         let mut re = BlockFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
@@ -586,9 +590,9 @@ mod tests {
                                   HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: mi.ffm_k * 1}
                                   ], 2);
         assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.9999999);
-        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.9999999);
+        assert_eq!(slearn(&mut re, &mut lossf, &fb, &mut pb, true), 0.9999999);
         assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.99685884);
-        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.99685884);
+        assert_eq!(slearn(&mut re, &mut lossf, &fb, &mut pb, true), 0.99685884);
     }
 
 
@@ -613,6 +617,8 @@ B,featureB
 
         let mut re = BlockFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
         re.allocate_and_init_weights(&mi);
+        let mut pb = port_buffer::PortBuffer::new(&mi);
+
         let mut p: f32;
 
         ffm_init::<optimizer::OptimizerAdagradLUT>(&mut re);
@@ -622,11 +628,11 @@ B,featureB
                                   HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: mi.ffm_k * 1}
                                   ], 2);
         assert_epsilon!(spredict(&mut re, &mut lossf, &fbuf, true), 0.9933072);
-        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, true), 0.9933072);
+        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, &mut pb, true), 0.9933072);
         assert_epsilon!(spredict(&mut re, &mut lossf, &fbuf, false), 0.9395168);
-        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, false), 0.9395168);
+        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, &mut pb, false), 0.9395168);
         assert_epsilon!(spredict(&mut re, &mut lossf, &fbuf, false), 0.9395168);
-        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, false), 0.9395168);
+        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, &mut pb, false), 0.9395168);
     }
 
     #[test]
@@ -646,6 +652,10 @@ B,featureB
 
         let mut re = BlockFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
         re.allocate_and_init_weights(&mi);
+
+
+        let mut pb = port_buffer::PortBuffer::new(&mi);
+
         ffm_init::<optimizer::OptimizerAdagradLUT>(&mut re);
         let fbuf = &ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
@@ -654,10 +664,10 @@ B,featureB
                                   ], 2);
 
         assert_eq!(spredict(&mut re, &mut lossf, &fbuf, true), 1.0);
-        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, true), 1.0);
+        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, &mut pb, true), 1.0);
         assert_eq!(spredict(&mut re, &mut lossf, &fbuf, false), 0.9949837);
-        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, false), 0.9949837);
-        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, false), 0.9949837);
+        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, &mut pb, false), 0.9949837);
+        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, &mut pb, false), 0.9949837);
     }
 
     #[test]
@@ -679,6 +689,7 @@ B,featureB
         // Nothing can be learned from a single field in FFMs
         let mut re = BlockFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
         re.allocate_and_init_weights(&mi);
+        let mut pb = port_buffer::PortBuffer::new(&mi);
 
 
         // With two fields, things start to happen
@@ -693,12 +704,12 @@ B,featureB
                                   HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: mi.ffm_k * 2}
                                   ], 3);
         assert_epsilon!(spredict(&mut re, &mut lossf, &fb, true), 0.95257413); 
-        assert_eq!(slearn  (&mut re, &mut lossf, &fb, false), 0.95257413); 
+        assert_eq!(slearn  (&mut re, &mut lossf, &fb, &mut pb, false), 0.95257413); 
 
         // here we intentionally have just the middle field
         let fb = ffm_vec(vec![HashAndValueAndSeq{hash:5, value: 1.0, contra_field_index: mi.ffm_k * 1}], 3);
         assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.5);
-        assert_eq!(slearn  (&mut re, &mut lossf, &fb, true), 0.5);
+        assert_eq!(slearn  (&mut re, &mut lossf, &fb, &mut pb, true), 0.5);
 
     }
 }
