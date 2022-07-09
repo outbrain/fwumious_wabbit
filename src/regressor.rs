@@ -61,11 +61,7 @@ pub struct Regressor {
 
 
 pub fn get_regressor_without_weights(mi: &model_instance::ModelInstance) -> Regressor {
-    match mi.optimizer {
-        model_instance::Optimizer::AdagradLUT => Regressor::new_without_weights::<optimizer::OptimizerAdagradLUT>(&mi),
-        model_instance::Optimizer::AdagradFlex => Regressor::new_without_weights::<optimizer::OptimizerAdagradFlex>(&mi),
-        model_instance::Optimizer::SGD => Regressor::new_without_weights::<optimizer::OptimizerSGD>(&mi),
-    }
+        Regressor::new_without_weights(&mi)
 }
 
 pub fn get_regressor_with_weights(mi: &model_instance::ModelInstance) -> Regressor {
@@ -75,11 +71,11 @@ pub fn get_regressor_with_weights(mi: &model_instance::ModelInstance) -> Regress
 }
 
 impl Regressor  {
-    pub fn new_without_weights<L: optimizer::OptimizerTrait + 'static>(mi: &model_instance::ModelInstance) -> Regressor {
+    pub fn new_without_weights(mi: &model_instance::ModelInstance) -> Regressor {
 
         let mut rg = Regressor{
             blocks_boxes: Vec::new(),
-            regressor_name: format!("Regressor with optimizer {:?}", L::get_name()),
+            regressor_name: format!("Regressor with optimizer \"{:?}\"", mi.optimizer),
             immutable: false,
             result_tape_index: -1,
         };
@@ -115,9 +111,9 @@ impl Regressor  {
     }
     
 
-    pub fn new<L: optimizer::OptimizerTrait + 'static>(mi: &model_instance::ModelInstance) -> Regressor 
+    pub fn new(mi: &model_instance::ModelInstance) -> Regressor 
     {
-        let mut rg = Regressor::new_without_weights::<L>(mi);
+        let mut rg = Regressor::new_without_weights(mi);
         rg.allocate_and_init_weights(mi);
         rg
     }
@@ -194,7 +190,10 @@ impl Regressor  {
 
 
     pub fn immutable_regressor_without_weights(&mut self, mi: &model_instance::ModelInstance)  -> Result<Regressor, Box<dyn Error>> {
-        let mut rg = Regressor::new_without_weights::<optimizer::OptimizerSGD>(&mi);
+        // make sure we are creating immutable regressor from SGD mi
+        assert!(mi.optimizer == model_instance::Optimizer::SGD);       
+
+        let mut rg = Regressor::new_without_weights(&mi);
         rg.immutable = true;
         Ok(rg)        
     }
@@ -218,6 +217,8 @@ impl Regressor  {
     // Create immutable regressor from current regressor
     pub fn immutable_regressor(&mut self, mi: &model_instance::ModelInstance) -> Result<Regressor, Box<dyn Error>> {
         // Only to be used by unit tests 
+        // make sure we are creating immutable regressor from SGD mi
+        assert!(mi.optimizer == model_instance::Optimizer::SGD);       
         let mut rg = self.immutable_regressor_without_weights(&mi)?;
         rg.allocate_and_init_weights(&mi);
 
@@ -255,8 +256,9 @@ mod tests {
 
     #[test]
     fn test_learning_turned_off() {
-        let mi = model_instance::ModelInstance::new_empty().unwrap();        
-        let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap(); 
+        mi.optimizer = model_instance::Optimizer::AdagradLUT;
+        let mut re = Regressor::new(&mi);
         let mut pb = re.new_portbuffer(&mi);
         // Empty model: no matter how many features, prediction is 0.5
         assert_eq!(re.learn(&lr_vec(vec![]), &mut pb, false), 0.5);
@@ -279,7 +281,7 @@ mod tests {
 
         let mut regressors: Vec<Box<Regressor>> = vec![
             //Box::new(Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi)),
-            Box::new(Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi)),
+            Box::new(Regressor::new(&mi)),
             //Box::new(Regressor::<optimizer::OptimizerSGD>::new(&mi))
             ];
         
@@ -302,7 +304,7 @@ mod tests {
         mi.power_t = 0.0;
         mi.optimizer = model_instance::Optimizer::AdagradLUT;
         
-        let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
+        let mut re = Regressor::new(&mi);
         let mut pb = re.new_portbuffer(&mi);
         let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash: 1, value: 2.0}]);
 
@@ -319,7 +321,7 @@ mod tests {
         mi.power_t = 0.5;
         mi.init_acc_gradient = 0.0;
         mi.optimizer = model_instance::Optimizer::AdagradFlex;
-        let mut re = Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi);
+        let mut re = Regressor::new(&mi);
         let mut pb = re.new_portbuffer(&mi);
         
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), &mut pb, true), 0.5);
@@ -361,7 +363,7 @@ mod tests {
         mi.init_acc_gradient = 0.0;
         mi.optimizer = model_instance::Optimizer::AdagradFlex;
         
-        let mut re = Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi);
+        let mut re = Regressor::new(&mi);
         let mut pb = re.new_portbuffer(&mi);
         // Here we take twice two features and then once just one
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), &mut pb, true), 0.5);
@@ -377,7 +379,7 @@ mod tests {
         mi.bit_precision = 18;
         mi.optimizer = model_instance::Optimizer::AdagradLUT;
         
-        let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
+        let mut re = Regressor::new(&mi);
         let mut pb = re.new_portbuffer(&mi);
         
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), &mut pb, true), 0.5);
@@ -394,7 +396,7 @@ mod tests {
         mi.optimizer = model_instance::Optimizer::AdagradLUT;
         mi.fastmath = true;
         
-        let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
+        let mut re = Regressor::new(&mi);
         let mut pb = re.new_portbuffer(&mi);
         
         let mut fb_instance = lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);

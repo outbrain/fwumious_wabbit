@@ -266,8 +266,10 @@ B,featureB
 C,featureC
 "#;
         let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
-        let mi = model_instance::ModelInstance::new_empty().unwrap();        
-        let mut re = regressor::Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.optimizer = model_instance::Optimizer::AdagradLUT;
+        let mut re = regressor::Regressor::new(&mi);
+        mi.optimizer = model_instance::Optimizer::SGD;
         let re_fixed = BoxedRegressorTrait::new(Box::new(re.immutable_regressor(&mi).unwrap()));
         let fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
         let pa = parser::VowpalParser::new(&vw);
@@ -358,9 +360,9 @@ C,featureC
         mi.ffm_learning_rate = 0.1;
         mi.ffm_fields = vec![vec![],vec![]]; 
         mi.optimizer = model_instance::Optimizer::AdagradLUT;
-        let mut re_1 = regressor::Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
+        let mut re_1 = regressor::Regressor::new(&mi);
         mi.optimizer = model_instance::Optimizer::SGD;
-        let mut re_2 = regressor::Regressor::new::<optimizer::OptimizerSGD>(&mi);
+        let mut re_2 = regressor::Regressor::new(&mi);
         let mut p: f32;
 
         let dir = tempdir().unwrap();
@@ -372,7 +374,7 @@ C,featureC
 
         // OK NOW EVERYTHING IS READY... Let's start
         mi.optimizer = model_instance::Optimizer::AdagradLUT;
-        let mut re = regressor::Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
+        let mut re = regressor::Regressor::new(&mi);
         mi.optimizer = model_instance::Optimizer::SGD;
         let re_fixed = BoxedRegressorTrait::new(Box::new(re.immutable_regressor(&mi).unwrap()));
         let fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
