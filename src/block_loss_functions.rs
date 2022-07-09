@@ -39,18 +39,18 @@ pub struct BlockSigmoid {
     output_tape_index: i32,
 }
 
+pub fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+    Ok(Box::new(BlockSigmoid {num_inputs: 0,
+                                input_tape_index: -1,
+                                output_tape_index: -1}))
+}
+
+
 impl BlockTrait for BlockSigmoid {
 
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
-
-    fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-        Ok(Box::new(BlockSigmoid {num_inputs: 0,
-                                    input_tape_index: -1,
-                                    output_tape_index: -1}))
-    }
-
 
     fn get_num_outputs(&self) -> u32 {
         return 0

@@ -16,9 +16,9 @@ use crate::feature_buffer;
 use crate::port_buffer;
 use crate::optimizer;
 use optimizer::OptimizerTrait;
-use crate::block_ffm::BlockFFM;
-use crate::block_lr::BlockLR;
-use crate::block_loss_functions::BlockSigmoid;
+use crate::block_ffm;
+use crate::block_lr;
+use crate::block_loss_functions;
 
 
 
@@ -39,7 +39,6 @@ pub trait BlockTrait {
     fn get_serialized_len(&self) -> usize;
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>>;
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>;
-    fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> where Self:Sized;
     fn get_num_outputs(&self) -> u32;
     fn set_num_inputs(&mut self, num_inputs: u32);
     fn set_input_tape_index(&mut self, input_tape_index: i32);
@@ -62,15 +61,11 @@ pub struct Regressor {
 
 
 pub fn get_regressor_without_weights(mi: &model_instance::ModelInstance) -> Regressor {
-    if mi.optimizer == model_instance::Optimizer::Adagrad {
-        if mi.fastmath {
-            Regressor::new_without_weights::<optimizer::OptimizerAdagradLUT>(&mi)
-        } else {
-            Regressor::new_without_weights::<optimizer::OptimizerAdagradFlex>(&mi)
-        }
-    } else {
-        Regressor::new_without_weights::<optimizer::OptimizerSGD>(&mi)
-    }    
+    match mi.optimizer {
+        model_instance::Optimizer::AdagradLUT => Regressor::new_without_weights::<optimizer::OptimizerAdagradLUT>(&mi),
+        model_instance::Optimizer::AdagradFlex => Regressor::new_without_weights::<optimizer::OptimizerAdagradFlex>(&mi),
+        model_instance::Optimizer::SGD => Regressor::new_without_weights::<optimizer::OptimizerSGD>(&mi),
+    }
 }
 
 pub fn get_regressor_with_weights(mi: &model_instance::ModelInstance) -> Regressor {
@@ -91,19 +86,19 @@ impl Regressor  {
 
         let mut inputs = 0;
         // A bit more elaborate than necessary. Let's really make it clear what's happening
-        let mut reg_lr = BlockLR::<L>::new_without_weights(mi).unwrap();
+        let mut reg_lr = block_lr::new_without_weights(mi).unwrap();
         inputs += reg_lr.get_num_outputs();
         reg_lr.set_output_tape_index(0);
         rg.blocks_boxes.push(reg_lr);
 
         if mi.ffm_k > 0 {
-            let mut reg_ffm = BlockFFM::<L>::new_without_weights(mi).unwrap();
+            let mut reg_ffm = block_ffm::new_without_weights(mi).unwrap();
             inputs += reg_ffm.get_num_outputs();
             reg_ffm.set_output_tape_index(0);
             rg.blocks_boxes.push(reg_ffm);
         }
                     
-        let mut reg_sigmoid = BlockSigmoid::new_without_weights(mi).unwrap();
+        let mut reg_sigmoid = block_loss_functions::new_without_weights(mi).unwrap();
         reg_sigmoid.set_num_inputs(inputs);
         reg_sigmoid.set_input_tape_index(0);
         reg_sigmoid.set_output_tape_index(1);
@@ -280,6 +275,8 @@ mod tests {
         let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);
         
         // Here learning rate mechanism does not affect the results, so let's verify three different ones
+        mi.optimizer = model_instance::Optimizer::AdagradFlex;
+
         let mut regressors: Vec<Box<Regressor>> = vec![
             //Box::new(Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi)),
             Box::new(Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi)),
@@ -303,6 +300,7 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
+        mi.optimizer = model_instance::Optimizer::AdagradLUT;
         
         let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
         let mut pb = re.new_portbuffer(&mi);
@@ -320,7 +318,7 @@ mod tests {
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
         mi.init_acc_gradient = 0.0;
-        
+        mi.optimizer = model_instance::Optimizer::AdagradFlex;
         let mut re = Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi);
         let mut pb = re.new_portbuffer(&mi);
         
@@ -335,7 +333,7 @@ mod tests {
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
         mi.fastmath = true;
-        mi.optimizer = model_instance::Optimizer::Adagrad;
+        mi.optimizer = model_instance::Optimizer::AdagradLUT;
         mi.init_acc_gradient = 0.0;
         
         let mut re = get_regressor_with_weights(&mi);
@@ -361,6 +359,7 @@ mod tests {
         mi.power_t = 0.5;
         mi.bit_precision = 18;
         mi.init_acc_gradient = 0.0;
+        mi.optimizer = model_instance::Optimizer::AdagradFlex;
         
         let mut re = Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi);
         let mut pb = re.new_portbuffer(&mi);
@@ -376,6 +375,7 @@ mod tests {
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
         mi.bit_precision = 18;
+        mi.optimizer = model_instance::Optimizer::AdagradLUT;
         
         let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
         let mut pb = re.new_portbuffer(&mi);
@@ -391,7 +391,7 @@ mod tests {
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
         mi.bit_precision = 18;
-        mi.optimizer = model_instance::Optimizer::Adagrad;
+        mi.optimizer = model_instance::Optimizer::AdagradLUT;
         mi.fastmath = true;
         
         let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);

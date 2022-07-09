@@ -25,8 +25,9 @@ pub struct FeatureComboDesc {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Copy)]
 pub enum Optimizer {
-    SGD = 1,
-    Adagrad = 2,
+    SGD = 100,
+    AdagradFlex = 200,
+    AdagradLUT = 300,
 }
 
 pub type FieldDesc = Vec<vwmap::NamespaceDescriptor>;
@@ -80,7 +81,7 @@ pub struct ModelInstance {
 fn default_u32_zero() -> u32{0}
 fn default_f32_zero() -> f32{0.0}
 fn default_bool_false() -> bool{false}
-fn default_optimizer_adagrad() -> Optimizer{Optimizer::Adagrad}
+fn default_optimizer_adagrad() -> Optimizer{Optimizer::AdagradFlex}
 
 impl ModelInstance {
     pub fn new_empty() -> Result<ModelInstance, Box<dyn Error>> {
@@ -348,8 +349,15 @@ impl ModelInstance {
         }
 
         if cl.is_present("adaptive") {
-            mi.optimizer = Optimizer::Adagrad;
+            mi.optimizer = Optimizer::AdagradFlex;
         }
+
+        if mi.optimizer == Optimizer::AdagradFlex {
+            if mi.fastmath {
+                mi.optimizer = Optimizer::AdagradLUT;
+            }
+        }
+
 
         Ok(mi)
     }
@@ -406,6 +414,8 @@ impl ModelInstance {
 		Ok(())
 
 	}
+
+
 }
 
 

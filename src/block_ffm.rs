@@ -68,6 +68,45 @@ macro_rules! specialize_k {
     };
 }
 
+pub fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+    match mi.optimizer {
+        model_instance::Optimizer::AdagradLUT => new_without_weights_2::<optimizer::OptimizerAdagradLUT>(&mi),
+        model_instance::Optimizer::AdagradFlex => new_without_weights_2::<optimizer::OptimizerAdagradFlex>(&mi),
+        model_instance::Optimizer::SGD => new_without_weights_2::<optimizer::OptimizerSGD>(&mi)
+    }
+}
+
+
+fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+
+    let mut reg_ffm = BlockFFM::<L> {
+        weights: Vec::new(),
+        ffm_weights_len: 0, 
+        local_data_ffm_values: Vec::with_capacity(1024),
+        ffm_k: mi.ffm_k, 
+        field_embedding_len: mi.ffm_k * mi.ffm_fields.len() as u32,
+        optimizer_ffm: L::new(),
+        output_tape_index: -1
+    };
+
+    if mi.ffm_k > 0 {
+        reg_ffm.optimizer_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
+        // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
+        reg_ffm.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * reg_ffm.ffm_k);
+    }
+
+    // Verify that forward pass will have enough stack for temporary buffer
+    if reg_ffm.ffm_k as usize * mi.ffm_fields.len() * mi.ffm_fields.len() > FFM_CONTRA_BUF_LEN {
+        return Err(format!("FFM_CONTRA_BUF_LEN is {}. It needs to be at least ffm_k * number_of_fields^2. number_of_fields: {}, ffm_k: {}, please recompile with larger constant", 
+                    FFM_CONTRA_BUF_LEN, mi.ffm_fields.len(), reg_ffm.ffm_k))?;
+    }
+
+    Ok(Box::new(reg_ffm))
+}
+
+
+
+
 
 
 impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
@@ -77,32 +116,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         self
     }
 
-    fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-
-        let mut reg_ffm = BlockFFM::<L> {
-            weights: Vec::new(),
-            ffm_weights_len: 0, 
-            local_data_ffm_values: Vec::with_capacity(1024),
-            ffm_k: mi.ffm_k, 
-            field_embedding_len: mi.ffm_k * mi.ffm_fields.len() as u32,
-            optimizer_ffm: L::new(),
-            output_tape_index: -1
-        };
-
-        if mi.ffm_k > 0 {
-            reg_ffm.optimizer_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
-            // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
-            reg_ffm.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * reg_ffm.ffm_k);
-        }
-
-        // Verify that forward pass will have enough stack for temporary buffer
-        if reg_ffm.ffm_k as usize * mi.ffm_fields.len() * mi.ffm_fields.len() > FFM_CONTRA_BUF_LEN {
-            return Err(format!("FFM_CONTRA_BUF_LEN is {}. It needs to be at least ffm_k * number_of_fields^2. number_of_fields: {}, ffm_k: {}, please recompile with larger constant", 
-                        FFM_CONTRA_BUF_LEN, mi.ffm_fields.len(), reg_ffm.ffm_k))?;
-        }
-
-        Ok(Box::new(reg_ffm))
-    }
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
         self.weights =vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_ffm.initial_data()}; self.ffm_weights_len as usize];
@@ -473,7 +486,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::block_loss_functions::BlockSigmoid;
+    use crate::block_loss_functions;
+    use crate::model_instance::Optimizer;
     use crate::feature_buffer;
     use crate::feature_buffer::HashAndValueAndSeq;
     use crate::vwmap;
@@ -513,14 +527,15 @@ mod tests {
         mi.ffm_k = 1;
         mi.ffm_bit_precision = 18;
         mi.ffm_fields = vec![vec![], vec![]]; // This isn't really used
-        let mut lossf = BlockSigmoid::new_without_weights(&mi).unwrap();
+        mi.optimizer = Optimizer::AdagradLUT;
+        let mut lossf = block_loss_functions::new_without_weights(&mi).unwrap();
         lossf.set_num_inputs(1);
         lossf.set_input_tape_index(0);
         lossf.set_output_tape_index(1);
         
         
         // Nothing can be learned from a single field in FFMs
-        let mut re = BlockFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
+        let mut re = new_without_weights(&mi).unwrap();
         re.allocate_and_init_weights(&mi);
         re.set_output_tape_index(0);
         let mut pb = port_buffer::PortBuffer::new(&mi);
@@ -532,7 +547,8 @@ mod tests {
 
         // With two fields, things start to happen
         // Since fields depend on initial randomization, these tests are ... peculiar.
-        let mut re = BlockFFM::<optimizer::OptimizerAdagradFlex>::new_without_weights(&mi).unwrap();
+        mi.optimizer = Optimizer::AdagradFlex;
+        let mut re = new_without_weights(&mi).unwrap();
         re.allocate_and_init_weights(&mi);
         re.set_output_tape_index(0);
         
@@ -548,7 +564,8 @@ mod tests {
         assert_eq!(slearn  (&mut re, &mut lossf, &fb, &mut pb, true), 0.7024794);
 
         // Two fields, use values
-        let mut re = BlockFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
+        mi.optimizer = Optimizer::AdagradLUT;
+        let mut re = new_without_weights(&mi).unwrap();
         re.allocate_and_init_weights(&mi);
         re.set_output_tape_index(0);
         
@@ -574,13 +591,14 @@ mod tests {
         mi.ffm_k = 4;
         mi.ffm_bit_precision = 18;
         mi.ffm_fields = vec![vec![], vec![]]; // This isn't really used
-        let mut lossf = BlockSigmoid::new_without_weights(&mi).unwrap();
+        let mut lossf = block_loss_functions::new_without_weights(&mi).unwrap();
         lossf.set_num_inputs(1);
         lossf.set_input_tape_index(0);
         lossf.set_output_tape_index(1);
         
         // Nothing can be learned from a single field in FFMs
-        let mut re = BlockFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
+        mi.optimizer = Optimizer::AdagradLUT;
+        let mut re = new_without_weights(&mi).unwrap();
         re.allocate_and_init_weights(&mi);
         re.set_output_tape_index(0);
         let mut pb = port_buffer::PortBuffer::new(&mi);
@@ -593,7 +611,8 @@ mod tests {
 
         // With two fields, things start to happen
         // Since fields depend on initial randomization, these tests are ... peculiar.
-        let mut re = BlockFFM::<optimizer::OptimizerAdagradFlex>::new_without_weights(&mi).unwrap();
+        mi.optimizer = Optimizer::AdagradFlex;
+        let mut re = new_without_weights(&mi).unwrap();
         re.allocate_and_init_weights(&mi);
         re.set_output_tape_index(0);
         
@@ -608,7 +627,8 @@ mod tests {
         assert_eq!(slearn  (&mut re, &mut lossf, &fb, &mut pb, true), 0.96277946);
 
         // Two fields, use values
-        let mut re = BlockFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
+        mi.optimizer = Optimizer::AdagradLUT;
+        let mut re = new_without_weights(&mi).unwrap();
         re.allocate_and_init_weights(&mi);
         re.set_output_tape_index(0);
 
@@ -639,14 +659,13 @@ B,featureB
         mi.ffm_power_t = 0.0;
         mi.ffm_learning_rate = 0.1;
         mi.ffm_fields = vec![vec![],vec![]]; 
-        mi.optimizer = model_instance::Optimizer::Adagrad;
-        mi.fastmath = false;
-        let mut lossf = BlockSigmoid::new_without_weights(&mi).unwrap();
+        let mut lossf = block_loss_functions::new_without_weights(&mi).unwrap();
         lossf.set_num_inputs(1);
         lossf.set_input_tape_index(0);
         lossf.set_output_tape_index(1);
 
-        let mut re = BlockFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
+        mi.optimizer = Optimizer::AdagradLUT;
+        let mut re = new_without_weights(&mi).unwrap();
         re.allocate_and_init_weights(&mi);
         re.set_output_tape_index(0);
         let mut pb = port_buffer::PortBuffer::new(&mi);
@@ -678,14 +697,13 @@ B,featureB
         mi.ffm_k = 4;
         mi.ffm_bit_precision = 18;
         mi.ffm_fields = vec![vec![],vec![]]; 
-        mi.optimizer = model_instance::Optimizer::Adagrad;
-        mi.fastmath = false;
-        let mut lossf = BlockSigmoid::new_without_weights(&mi).unwrap();
+        let mut lossf = block_loss_functions::new_without_weights(&mi).unwrap();
         lossf.set_num_inputs(1);
         lossf.set_input_tape_index(0);
         lossf.set_output_tape_index(1);
 
-        let mut re = BlockFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
+        mi.optimizer = Optimizer::AdagradLUT;
+        let mut re = new_without_weights(&mi).unwrap();
         re.allocate_and_init_weights(&mi);
         re.set_output_tape_index(0);
 
@@ -720,13 +738,14 @@ B,featureB
         mi.ffm_k = 1;
         mi.ffm_bit_precision = 18;
         mi.ffm_fields = vec![vec![], vec![], vec![]]; // This isn't really used
-        let mut lossf = BlockSigmoid::new_without_weights(&mi).unwrap();
+        let mut lossf = block_loss_functions::new_without_weights(&mi).unwrap();
         lossf.set_num_inputs(1);
         lossf.set_input_tape_index(0);
         lossf.set_output_tape_index(1);
         
         // Nothing can be learned from a single field in FFMs
-        let mut re = BlockFFM::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
+        mi.optimizer = Optimizer::AdagradLUT;
+        let mut re = new_without_weights(&mi).unwrap();
         re.allocate_and_init_weights(&mi);
         re.set_output_tape_index(0);
         let mut pb = port_buffer::PortBuffer::new(&mi);
@@ -734,7 +753,8 @@ B,featureB
 
         // With two fields, things start to happen
         // Since fields depend on initial randomization, these tests are ... peculiar.
-        let mut re = BlockFFM::<optimizer::OptimizerAdagradFlex>::new_without_weights(&mi).unwrap();
+        mi.optimizer = Optimizer::AdagradFlex;
+        let mut re = new_without_weights(&mi).unwrap();
         re.allocate_and_init_weights(&mi);
         re.set_output_tape_index(0);
         

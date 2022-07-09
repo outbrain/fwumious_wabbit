@@ -123,13 +123,14 @@ pub fn new_regressor_from_filename(
     Box<dyn Error>,
 > {
     let mut input_bufreader = io::BufReader::new(fs::File::open(filename).unwrap());
-    let (mi, vw, mut re) =
+    let (mut mi, vw, mut re) =
         load_regressor_without_weights(&mut input_bufreader, cmd_arguments)?;
     if !immutable {
         re.allocate_and_init_weights(&mi);
         re.overwrite_weights_from_buf(&mut input_bufreader)?;
         Ok((mi, vw, re))
     } else {
+        mi.optimizer = model_instance::Optimizer::SGD;
         let mut immutable_re = re.immutable_regressor_without_weights(&mi)?;
         immutable_re.allocate_and_init_weights(&mi);
         re.into_immutable_regressor_from_buf(&mut immutable_re, &mut input_bufreader)?;
@@ -173,9 +174,9 @@ mod tests {
     use crate::feature_buffer;
     use crate::feature_buffer::HashAndValue;
     use crate::feature_buffer::HashAndValueAndSeq;
-
+    use crate::model_instance::Optimizer;
     use crate::assert_epsilon;
-    use crate::block_ffm::BlockFFM;
+    use crate::block_ffm;
     use regressor::BlockTrait;
     use regressor::Regressor;
 
@@ -191,8 +192,7 @@ B,featureB
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
         mi.bit_precision = 18;
-        mi.optimizer = model_instance::Optimizer::Adagrad;
-        mi.fastmath = false;
+        mi.optimizer = model_instance::Optimizer::AdagradFlex;
         let rr = regressor::get_regressor_with_weights(&mi);
         let dir = tempfile::tempdir().unwrap();
         let regressor_filepath = dir.path().join("test_regressor.fw");
@@ -221,10 +221,9 @@ B,featureB
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
         mi.bit_precision = 18;
-        mi.optimizer = model_instance::Optimizer::Adagrad;
-        mi.fastmath = false;
+        mi.optimizer = model_instance::Optimizer::AdagradFlex;
         mi.init_acc_gradient = 0.0;
-        let mut re = regressor::get_regressor_with_weights(&mi);
+        let mut re = regressor::Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi);
         let mut pb = re.new_portbuffer(&mi);
         
         let fbuf = &lr_vec(vec![
@@ -246,9 +245,12 @@ B,featureB
 
         // Now we test conversion to fixed regressor
         {
+            mi.optimizer = model_instance::Optimizer::SGD;
             let re_fixed = re.immutable_regressor(&mi).unwrap();
             // predict with the same feature vector
             assert_eq!(re_fixed.predict(&fbuf), CONST_RESULT);
+            mi.optimizer = model_instance::Optimizer::AdagradFlex;
+
         }
         // Now we test saving and loading a) regular regressor, b) fixed regressor
         {
@@ -275,7 +277,7 @@ B,featureB
         let block_ffm = &mut rg.blocks_boxes[1];
         let mut block_ffm = block_ffm
             .as_any()
-            .downcast_mut::<BlockFFM<optimizer::OptimizerAdagradFlex>>()
+            .downcast_mut::<block_ffm::BlockFFM<optimizer::OptimizerAdagradFlex>>()
             .unwrap();
 
         // TODO: this is not future compatible
@@ -315,8 +317,7 @@ B,featureB
         mi.ffm_power_t = 0.0;
         mi.ffm_learning_rate = 0.1;
         mi.ffm_fields = vec![vec![], vec![]];
-        mi.optimizer = model_instance::Optimizer::Adagrad;
-        mi.fastmath = false;
+        mi.optimizer = Optimizer::AdagradFlex;
         let mut re = regressor::Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi);
         let mut pb = re.new_portbuffer(&mi);
 
@@ -353,8 +354,10 @@ B,featureB
 
         // Now we test conversion to fixed regressor
         {
+            mi.optimizer = Optimizer::SGD;
             let re_fixed = re.immutable_regressor(&mi).unwrap();
             // predict with the same feature vector
+            mi.optimizer = Optimizer::AdagradFlex;
             assert_epsilon!(re_fixed.predict(&fbuf), CONST_RESULT);
         }
         // Now we test saving and loading a) regular regressor, b) fixed regressor
@@ -410,8 +413,9 @@ B,featureB
         mi.ffm_power_t = 0.0;
         mi.ffm_learning_rate = 0.1;
         mi.ffm_fields = vec![vec![], vec![]];
-        mi.optimizer = model_instance::Optimizer::Adagrad;
-        mi.fastmath = false;
+        mi.optimizer = Optimizer::AdagradFlex;
+        let mut re = regressor::Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi);
+        
         let mut re_1 = regressor::Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi);
         let mut re_2 = regressor::Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi);
         let mut pb_1 = re_1.new_portbuffer(&mi);

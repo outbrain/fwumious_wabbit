@@ -25,30 +25,36 @@ pub struct BlockLR<L:OptimizerTrait> {
     pub output_tape_index: i32,
 }
 
+pub fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+    match mi.optimizer {
+        model_instance::Optimizer::AdagradLUT => new_without_weights_2::<optimizer::OptimizerAdagradLUT>(&mi),
+        model_instance::Optimizer::AdagradFlex => new_without_weights_2::<optimizer::OptimizerAdagradFlex>(&mi),
+        model_instance::Optimizer::SGD => new_without_weights_2::<optimizer::OptimizerSGD>(&mi)
+    }
+}
+
+fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+    let mut reg_lr = BlockLR::<L> {
+        weights: Vec::new(),
+        weights_len: 0, 
+        optimizer_lr: L::new(),
+        output_tape_index: -1, 
+    };
+    reg_lr.optimizer_lr.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
+    reg_lr.weights_len = 1 << mi.bit_precision;
+    Ok(Box::new(reg_lr))
+}
+
 impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L> 
 {
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
 
-    fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>>  where Self: Sized {
-        let mut reg_lr = BlockLR::<L> {
-            weights: Vec::new(),
-            weights_len: 0, 
-            optimizer_lr: L::new(),
-            output_tape_index: -1, 
-        };
-        reg_lr.optimizer_lr.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
-        reg_lr.weights_len = 1 << mi.bit_precision;
-        Ok(Box::new(reg_lr))
-    }
-
-
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
         self.weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_lr.initial_data()}; self.weights_len as usize];
         
     }
-
 
     fn get_num_outputs(&self) -> u32 {
         return 1
