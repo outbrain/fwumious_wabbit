@@ -80,12 +80,16 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
         self.output_tape_index = output_tape_index;
     }
 
+    fn get_output_tape_index(&self) -> i32 {
+        self.output_tape_index
+    }
+
     #[inline(always)]
     fn forward_backward(&mut self, 
                             further_regressors: &mut [Box<dyn BlockTrait>], 
                             fb: &feature_buffer::FeatureBuffer, 
                             pb: &mut port_buffer::PortBuffer,                             
-                            update:bool) -> (f32, f32) {
+                            update:bool) {
         debug_assert!(self.output_tape_index >= 0);
 
         let mut wsum:f32 = 0.0;
@@ -102,7 +106,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
 
             let (next_regressor, further_regressors) = further_regressors.split_at_mut(1);
             pb.tapes[self.output_tape_index as usize].push(wsum);
-            let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_regressors, fb, pb, update);
+            next_regressor[0].forward_backward(further_regressors, fb, pb, update);
+            let general_gradient = pb.tapes[self.output_tape_index as usize].pop().unwrap();
 
             if update {
                 for hashvalue in fb.lr_buffer.iter() {
@@ -113,7 +118,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
                     self.weights.get_unchecked_mut(feature_index).weight += update;
                 }
             }
-            (prediction_probability, general_gradient)
+            return
         } // end of unsafe
     }
     

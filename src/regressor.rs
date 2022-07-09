@@ -28,7 +28,7 @@ pub trait BlockTrait {
                          further_blocks: &mut [Box<dyn BlockTrait>], 
                          fb: &feature_buffer::FeatureBuffer,
                          pb: &mut port_buffer::PortBuffer, 
-                         update:bool) -> (f32, f32);
+                         update:bool);
 
     fn forward(&self, 
                          further_blocks: &[Box<dyn BlockTrait>], 
@@ -45,6 +45,7 @@ pub trait BlockTrait {
     fn set_num_inputs(&mut self, num_inputs: u32);
     fn set_input_tape_index(&mut self, input_tape_index: i32);
     fn set_output_tape_index(&mut self, output_tape_index: i32);
+    fn get_output_tape_index(&self) -> i32;
 
     fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>>;
 
@@ -57,6 +58,7 @@ pub struct Regressor {
     pub regressor_name: String,
     pub blocks_boxes: Vec<Box<dyn BlockTrait>>,
     pub immutable: bool,
+    pub result_tape_index: i32,
 }
 
 
@@ -85,6 +87,7 @@ impl Regressor  {
             blocks_boxes: Vec::new(),
             regressor_name: format!("Regressor with optimizer {:?}", L::get_name()),
             immutable: false,
+            result_tape_index: -1,
         };
 
         let mut inputs = 0;
@@ -104,7 +107,9 @@ impl Regressor  {
         let mut reg_sigmoid = BlockSigmoid::new_without_weights(mi).unwrap();
         reg_sigmoid.set_num_inputs(inputs);
         reg_sigmoid.set_input_tape_index(0);
+        reg_sigmoid.set_output_tape_index(1);
         rg.blocks_boxes.push(reg_sigmoid);
+        rg.result_tape_index = 1;
 
         rg
     }
@@ -151,7 +156,8 @@ impl Regressor  {
         let (current, further_blocks) = &mut blocks_list.split_at_mut(1);
         pb.reset(); // empty the tape
 
-        let (prediction_probability, general_gradient) = current[0].forward_backward(further_blocks, fb, pb, update);
+        current[0].forward_backward(further_blocks, fb, pb, update);
+        let prediction_probability = pb.tapes[self.result_tape_index as usize].pop().unwrap();
     
         return prediction_probability
     }

@@ -169,6 +169,10 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         self.output_tape_index = output_tape_index;
     }
 
+    fn get_output_tape_index(&self) -> i32 {
+        self.output_tape_index
+    }
+
 
 
     #[inline(always)]
@@ -176,7 +180,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                         further_blocks: &mut [Box<dyn BlockTrait>], 
                         fb: &feature_buffer::FeatureBuffer, 
                         pb: &mut port_buffer::PortBuffer, 
-                        update:bool) -> (f32, f32) {
+                        update:bool) {
         debug_assert!(self.output_tape_index >= 0);
         
         let mut wsum = 0.0;
@@ -295,7 +299,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                         
                     let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
                     pb.tapes[self.output_tape_index as usize].push(wsum);
-                    let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_blocks, fb, pb, update);
+                    next_regressor[0].forward_backward(further_blocks, fb, pb, update);
+                    let general_gradient = pb.tapes[self.output_tape_index as usize].pop().unwrap();
                     
                     if update {
                         let mut local_index: usize = 0;
@@ -312,7 +317,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                         }
                     }
                     // The only exit point
-                    return (prediction_probability, general_gradient)
+                    return
                 }
             }; // End of macro
             

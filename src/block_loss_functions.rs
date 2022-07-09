@@ -71,16 +71,25 @@ impl BlockTrait for BlockSigmoid {
         self.output_tape_index = output_tape_index;
     }
 
+    fn get_output_tape_index(&self) -> i32 {
+        self.output_tape_index
+    }
+
+
     #[inline(always)]
     fn forward_backward(&mut self, 
                     further_regressors: &mut [Box<dyn BlockTrait>], 
                     fb: &feature_buffer::FeatureBuffer, 
                     pb: &mut port_buffer::PortBuffer, 
-                    update:bool) -> (f32, f32) {
+                    update:bool) {
+
         if further_regressors.len() != 0 {
             panic!("RegSigmoid can only be at the end of the chain!");
         }
-        
+        debug_assert!(self.output_tape_index >= 0);
+        debug_assert!(self.input_tape_index >= 0);
+        debug_assert!(self.input_tape_index != self.output_tape_index);
+
 
         let len = pb.tapes[self.input_tape_index as usize].len();
         // Technically it needs to be longer. but for debugging we want to consume all of them
@@ -89,22 +98,38 @@ impl BlockTrait for BlockSigmoid {
         }
         
 //        println!("AAA: {}", len);
-        let wsum:f32 = pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..].iter().sum();
-
+        let wsum:f32 = {
+            let mut myslice = &pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..];
+            myslice.iter().sum()
+        };
         // vowpal compatibility
+        
+        let mut prediction_probability: f32;
+        let mut general_gradient: f32;
+        
         if wsum.is_nan() {
             eprintln!("NAN prediction in example {}, forcing 0.0", fb.example_number);
-            return (logistic(0.0), 0.0);
+            prediction_probability = logistic(0.0);
+            general_gradient = 0.0;
         } else if wsum < -50.0 {
-            return (logistic(-50.0), 0.0);
+            prediction_probability = logistic(-50.0);
+            general_gradient = 0.0;
         } else if wsum > 50.0 {
-            return (logistic(50.0), 0.0);
-        }        
-
-        let prediction_probability = logistic(wsum);
-        let general_gradient = (fb.label - prediction_probability) * fb.example_importance;
+            prediction_probability = logistic(50.0);
+            general_gradient = 0.0;
+        } else {
+            prediction_probability = logistic(wsum);
+            general_gradient = (fb.label - prediction_probability) * fb.example_importance;
+        }
         //println!("General gradient: {}", general_gradient);
-        (prediction_probability, general_gradient)
+        pb.tapes[self.output_tape_index as usize].push(prediction_probability);
+        {
+            // replace inputs with their gradients
+            let mut myslice = &mut pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..];
+            for s in myslice.iter_mut() {
+                *s = general_gradient;
+            }
+        }
     }
 
     fn forward(&self, 
