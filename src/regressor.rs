@@ -13,6 +13,7 @@ use std::cmp::min;
 
 use crate::model_instance;
 use crate::feature_buffer;
+use crate::port_buffer;
 use crate::optimizer;
 use optimizer::OptimizerTrait;
 use crate::block_ffm::BlockFFM;
@@ -114,11 +115,17 @@ impl Regressor  {
         self.regressor_name.to_owned()    
     }
 
+
+    pub fn new_portbuffer(&self, mi: &model_instance::ModelInstance) -> port_buffer::PortBuffer
+    {
+        port_buffer::PortBuffer::new(mi)
+    }
+
     pub fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
         self.allocate_and_init_weights_(mi);
     }
 
-    pub fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, update: bool) -> f32 {
+    pub fn learn(&mut self, fb: &feature_buffer::FeatureBuffer, pb: &mut port_buffer::PortBuffer, update: bool) -> f32 {
         if update && self.immutable {
             // Important to know: learn() functions in blocks aren't guaranteed to be thread-safe
             panic!("This regressor is immutable, you cannot call learn() with update = true");
