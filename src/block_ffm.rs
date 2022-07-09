@@ -104,22 +104,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         Ok(Box::new(reg_ffm))
     }
 
-    fn new_forward_only_without_weights(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-        let forwards_only = BlockFFM::<optimizer::OptimizerSGD> {
-            weights: Vec::new(),
-            ffm_weights_len: self.ffm_weights_len, 
-            local_data_ffm_values: Vec::new(),
-            ffm_k: self.ffm_k, 
-            field_embedding_len: self.field_embedding_len,
-            optimizer_ffm: optimizer::OptimizerSGD::new(),
-            output_tape_index: -1
-        };
-        
-        Ok(Box::new(forwards_only))
-    }
-
-
-
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
         self.weights =vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_ffm.initial_data()}; self.ffm_weights_len as usize];
         if mi.ffm_k > 0 {       

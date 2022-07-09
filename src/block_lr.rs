@@ -43,18 +43,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
         Ok(Box::new(reg_lr))
     }
 
-    fn new_forward_only_without_weights(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-        let forwards_only = BlockLR::<optimizer::OptimizerSGD> {
-            weights_len: self.weights_len,
-            weights: Vec::new(),
-            optimizer_lr:optimizer::OptimizerSGD::new(),
-            output_tape_index: -1, 
-        };
-        
-        Ok(Box::new(forwards_only))
-    }
-
-
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
         self.weights = vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_lr.initial_data()}; self.weights_len as usize];

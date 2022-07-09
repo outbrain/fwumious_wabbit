@@ -176,11 +176,6 @@ impl BlockTrait for BlockSigmoid {
         Ok(())        
     }
 
-    fn new_forward_only_without_weights(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-        Ok(Box::new(BlockSigmoid{num_inputs: 0,
-                                input_tape_index: -1,
-                                output_tape_index: -1}))
-    }
     /// Sets internal state of weights based on some completely object-dependent parameters
     fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {
         Ok(())
