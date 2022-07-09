@@ -35,6 +35,8 @@ pub fn logistic(t: f32) -> f32 {
 
 pub struct BlockSigmoid {
     num_inputs: u32,
+    input_tape_index: i32,
+    output_tape_index: i32,
 }
 
 impl BlockTrait for BlockSigmoid {
@@ -44,7 +46,9 @@ impl BlockTrait for BlockSigmoid {
     }
 
     fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-        Ok(Box::new(BlockSigmoid {num_inputs: 0}))
+        Ok(Box::new(BlockSigmoid {num_inputs: 0,
+                                    input_tape_index: -1,
+                                    output_tape_index: -1}))
     }
 
 
@@ -59,11 +63,17 @@ impl BlockTrait for BlockSigmoid {
         self.num_inputs = num_inputs;
     }
 
+    fn set_input_tape_index(&mut self, input_tape_index: i32) {
+        self.input_tape_index = input_tape_index;
+    }
+
+    fn set_output_tape_index(&mut self, output_tape_index: i32) {
+        self.output_tape_index = output_tape_index;
+    }
 
     #[inline(always)]
     fn forward_backward(&mut self, 
                     further_regressors: &mut [Box<dyn BlockTrait>], 
-                    wsum: f32, 
                     fb: &feature_buffer::FeatureBuffer, 
                     pb: &mut port_buffer::PortBuffer, 
                     update:bool) -> (f32, f32) {
@@ -71,6 +81,16 @@ impl BlockTrait for BlockSigmoid {
             panic!("RegSigmoid can only be at the end of the chain!");
         }
         
+
+        let len = pb.tapes[self.input_tape_index as usize].len();
+        // Technically it needs to be longer. but for debugging we want to consume all of them
+        if (self.num_inputs as usize) != len {
+            panic!("BlockSigmoid::forward_backward() Number of inputs is different than number of values on the input tape");
+        }
+        
+//        println!("AAA: {}", len);
+        let wsum:f32 = pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..].iter().sum();
+
         // vowpal compatibility
         if wsum.is_nan() {
             eprintln!("NAN prediction in example {}, forcing 0.0", fb.example_number);
@@ -132,7 +152,9 @@ impl BlockTrait for BlockSigmoid {
     }
 
     fn new_forward_only_without_weights(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-        Ok(Box::new(BlockSigmoid{num_inputs: 0}))
+        Ok(Box::new(BlockSigmoid{num_inputs: 0,
+                                input_tape_index: -1,
+                                output_tape_index: -1}))
     }
     /// Sets internal state of weights based on some completely object-dependent parameters
     fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {

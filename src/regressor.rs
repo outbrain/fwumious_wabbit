@@ -26,7 +26,6 @@ pub trait BlockTrait {
     fn as_any(&mut self) -> &mut dyn Any; // This enables downcasting
     fn forward_backward(&mut self, 
                          further_blocks: &mut [Box<dyn BlockTrait>], 
-                         wsum: f32, 
                          fb: &feature_buffer::FeatureBuffer,
                          pb: &mut port_buffer::PortBuffer, 
                          update:bool) -> (f32, f32);
@@ -44,6 +43,9 @@ pub trait BlockTrait {
     fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> where Self:Sized;
     fn get_num_outputs(&self) -> u32;
     fn set_num_inputs(&mut self, num_inputs: u32);
+    fn set_input_tape_index(&mut self, input_tape_index: i32);
+    fn set_output_tape_index(&mut self, output_tape_index: i32);
+
     fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>>;
 
     /// Sets internal state of weights based on some completely object-dependent parameters
@@ -85,16 +87,23 @@ impl Regressor  {
             immutable: false,
         };
 
+        let mut inputs = 0;
         // A bit more elaborate than necessary. Let's really make it clear what's happening
         let mut reg_lr = BlockLR::<L>::new_without_weights(mi).unwrap();
+        inputs += reg_lr.get_num_outputs();
+        reg_lr.set_output_tape_index(0);
         rg.blocks_boxes.push(reg_lr);
 
         if mi.ffm_k > 0 {
             let mut reg_ffm = BlockFFM::<L>::new_without_weights(mi).unwrap();
+            inputs += reg_ffm.get_num_outputs();
+            reg_ffm.set_output_tape_index(0);
             rg.blocks_boxes.push(reg_ffm);
         }
                     
         let mut reg_sigmoid = BlockSigmoid::new_without_weights(mi).unwrap();
+        reg_sigmoid.set_num_inputs(inputs);
+        reg_sigmoid.set_input_tape_index(0);
         rg.blocks_boxes.push(reg_sigmoid);
 
         rg
@@ -140,7 +149,9 @@ impl Regressor  {
 
         let blocks_list = &mut self.blocks_boxes[..];
         let (current, further_blocks) = &mut blocks_list.split_at_mut(1);
-        let (prediction_probability, general_gradient) = current[0].forward_backward(further_blocks, 0.0, fb, pb, update);
+        pb.reset(); // empty the tape
+
+        let (prediction_probability, general_gradient) = current[0].forward_backward(further_blocks, fb, pb, update);
     
         return prediction_probability
     }

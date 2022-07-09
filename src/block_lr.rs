@@ -22,6 +22,7 @@ pub struct BlockLR<L:OptimizerTrait> {
     pub weights: Vec<WeightAndOptimizerData<L>>,
     pub weights_len: u32,
     pub optimizer_lr: L,
+    pub output_tape_index: i32,
 }
 
 impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L> 
@@ -35,6 +36,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
             weights: Vec::new(),
             weights_len: 0, 
             optimizer_lr: L::new(),
+            output_tape_index: -1, 
         };
         reg_lr.optimizer_lr.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
         reg_lr.weights_len = 1 << mi.bit_precision;
@@ -46,6 +48,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
             weights_len: self.weights_len,
             weights: Vec::new(),
             optimizer_lr:optimizer::OptimizerSGD::new(),
+            output_tape_index: -1, 
         };
         
         Ok(Box::new(forwards_only))
@@ -69,14 +72,22 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
         }
     }
 
+    fn set_input_tape_index(&mut self, output_tape_index: i32) {
+        panic!("You cannnot set input_tape_index for BlockLR");
+    }
+
+    fn set_output_tape_index(&mut self, output_tape_index: i32) {
+        self.output_tape_index = output_tape_index;
+    }
 
     #[inline(always)]
     fn forward_backward(&mut self, 
                             further_regressors: &mut [Box<dyn BlockTrait>], 
-                            wsum_input: f32, 
                             fb: &feature_buffer::FeatureBuffer, 
                             pb: &mut port_buffer::PortBuffer,                             
                             update:bool) -> (f32, f32) {
+        debug_assert!(self.output_tape_index >= 0);
+
         let mut wsum:f32 = 0.0;
         unsafe {
             for hashvalue in fb.lr_buffer.iter() {
@@ -90,7 +101,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
             }
 
             let (next_regressor, further_regressors) = further_regressors.split_at_mut(1);
-            let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_regressors, wsum_input + wsum, fb, pb, update);
+            pb.tapes[self.output_tape_index as usize].push(wsum);
+            let (prediction_probability, general_gradient) = next_regressor[0].forward_backward(further_regressors, fb, pb, update);
 
             if update {
                 for hashvalue in fb.lr_buffer.iter() {
