@@ -94,13 +94,22 @@ impl Regressor  {
             reg_ffm.set_output_tape_index(0);
             rg.blocks_boxes.push(reg_ffm);
         }
+         
+        // If we put sum function here, it has to be neutral
+        let mut reg = block_neuron::new_without_weights(mi, block_neuron::NeuronType::Sum).unwrap();
+        reg.set_num_inputs(inputs);
+        inputs = reg.get_num_outputs();
+        reg.set_input_tape_index(0);
+        reg.set_output_tape_index(1);
+        rg.blocks_boxes.push(reg);
                     
+        // now sigmoid has a single input
         let mut reg_sigmoid = block_loss_functions::new_without_weights(mi).unwrap();
         reg_sigmoid.set_num_inputs(inputs);
-        reg_sigmoid.set_input_tape_index(0);
-        reg_sigmoid.set_output_tape_index(1);
+        reg_sigmoid.set_input_tape_index(1);
+        reg_sigmoid.set_output_tape_index(2);
         rg.blocks_boxes.push(reg_sigmoid);
-        rg.result_tape_index = 1;
+        rg.result_tape_index = 2;
 
         rg
     }
@@ -139,10 +148,10 @@ impl Regressor  {
             panic!("This regressor is immutable, you cannot call learn() with update = true");
         }
         let update:bool = update && (fb.example_importance != 0.0);
-        if !update { // Fast-path for no-update case
+/*        if !update { // Fast-path for no-update case
             return self.predict(fb);
         }
-
+*/
         let blocks_list = &mut self.blocks_boxes[..];
         let (current, further_blocks) = &mut blocks_list.split_at_mut(1);
         pb.reset(); // empty the tape

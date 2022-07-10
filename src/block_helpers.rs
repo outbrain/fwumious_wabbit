@@ -24,10 +24,19 @@ pub struct WeightAndOptimizerData<L:OptimizerTrait> {
     pub optimizer_data: L::PerWeightStore,
 }
 
-#[macro_export]
+/*#[macro_export]
 macro_rules! assert_epsilon {
     ($x:expr, $y:expr) => {
         if !($x - $y < 0.0000001 || $y - $x < 0.0000001) { panic!(); }
+    }
+}*/
+
+#[macro_export]
+macro_rules! assert_epsilon {
+    ($x:expr, $y:expr) => {
+        let x = $x;       // Make sure we evaluate only once
+        let y = $y;
+        if !(x - y < 0.000005 && y - x < 0.000005) { println!("Expectation: {}, Got: {}", y, x); panic!(); }
     }
 }
 
