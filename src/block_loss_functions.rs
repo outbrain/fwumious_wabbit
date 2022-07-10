@@ -99,7 +99,7 @@ impl BlockTrait for BlockSigmoid {
         
 //        println!("AAA: {}", len);
         let wsum:f32 = {
-            let mut myslice = &pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..];
+            let myslice = &pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..];
             myslice.iter().sum()
         };
         // vowpal compatibility
@@ -119,7 +119,7 @@ impl BlockTrait for BlockSigmoid {
             general_gradient = 0.0;
         } else {
             prediction_probability = logistic(wsum);
-            general_gradient = (fb.label - prediction_probability) * fb.example_importance;
+            general_gradient = - (fb.label - prediction_probability) * fb.example_importance;
         }
         //println!("General gradient: {}", general_gradient);
         pb.tapes[self.output_tape_index as usize].push(prediction_probability);
@@ -180,6 +180,133 @@ impl BlockTrait for BlockSigmoid {
     fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
-
 }
+
+
+
+
+
+pub struct BlockIdentity {
+    num_inputs: u32,
+    input_tape_index: i32,
+    output_tape_index: i32,
+}
+
+pub fn new_identity_block(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+    Ok(Box::new(BlockIdentity {num_inputs: 0,
+                                input_tape_index: -1,
+                                output_tape_index: -1}))
+}
+
+
+impl BlockTrait for BlockIdentity {
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn get_num_outputs(&self) -> u32 {
+        return 0
+    }
+    
+    fn set_num_inputs(&mut self, num_inputs: u32) {
+        if num_inputs <= 0 {
+          panic!("set_num_inputs(): num_inputs for BlockSigmoid has to be greater than 0");
+        }
+        self.num_inputs = num_inputs;
+    }
+
+    fn set_input_tape_index(&mut self, input_tape_index: i32) {
+        self.input_tape_index = input_tape_index;
+    }
+
+    fn set_output_tape_index(&mut self, output_tape_index: i32) {
+        self.output_tape_index = output_tape_index;
+    }
+
+    fn get_output_tape_index(&self) -> i32 {
+        self.output_tape_index
+    }
+
+
+    #[inline(always)]
+    fn forward_backward(&mut self, 
+                    further_regressors: &mut [Box<dyn BlockTrait>], 
+                    fb: &feature_buffer::FeatureBuffer, 
+                    pb: &mut port_buffer::PortBuffer, 
+                    update:bool) {
+        debug_assert!(self.output_tape_index >= 0);
+        debug_assert!(self.input_tape_index >= 0);
+        debug_assert!(self.input_tape_index != self.output_tape_index);
+
+        let len = pb.tapes[self.input_tape_index as usize].len();
+        // Technically it needs to be longer. but for debugging we want to consume all of them
+        if (self.num_inputs as usize) != len {
+            panic!("BlockSigmoid::forward_backward() Number of inputs is different than number of values on the input tape");
+        }
+        
+        // replace inputs with their gradients
+        for x in 0..(self.num_inputs as usize) {
+            let s = pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize + x];
+            pb.tapes[self.output_tape_index as usize].push(s);
+            pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize + x] = 1.0;
+        }
+    }
+
+    fn forward(&self, 
+                     further_blocks: &[Box<dyn BlockTrait>], 
+                     wsum: f32, 
+                     fb: &feature_buffer::FeatureBuffer) -> f32 {
+        0.0
+    }
+
+    
+    
+    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
+        // empty
+    }
+    fn get_serialized_len(&self) -> usize {
+        return 0
+    }
+
+    fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+
+    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+
+    fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>> {
+        Ok(())        
+    }
+
+    /// Sets internal state of weights based on some completely object-dependent parameters
+    fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

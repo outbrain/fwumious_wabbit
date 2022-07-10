@@ -23,6 +23,7 @@ mod block_ffm;
 mod block_helpers;
 mod block_loss_functions;
 mod block_lr;
+mod block_neuron;
 mod cache;
 mod cmdline;
 mod consts;
