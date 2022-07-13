@@ -24,6 +24,7 @@ mod block_helpers;
 mod block_loss_functions;
 mod block_lr;
 mod block_neuron;
+mod block_neuronlayer;
 mod cache;
 mod cmdline;
 mod consts;
