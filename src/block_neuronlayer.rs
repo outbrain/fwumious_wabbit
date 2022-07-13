@@ -42,24 +42,38 @@ pub struct BlockNeuronLayer<L:OptimizerTrait> {
 }
 
 
-pub fn new_without_weights(mi: &model_instance::ModelInstance, ntype: NeuronType, num_neurons: u32) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+pub fn new_without_weights(mi: &model_instance::ModelInstance, 
+                            num_inputs: u32, 
+                            ntype: NeuronType, 
+                            num_neurons: u32) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
     match mi.optimizer {
-        model_instance::Optimizer::AdagradLUT => new_without_weights_2::<optimizer::OptimizerAdagradLUT>(&mi, ntype, num_neurons),
-        model_instance::Optimizer::AdagradFlex => new_without_weights_2::<optimizer::OptimizerAdagradFlex>(&mi, ntype, num_neurons),
-        model_instance::Optimizer::SGD => new_without_weights_2::<optimizer::OptimizerSGD>(&mi, ntype, num_neurons)
+        model_instance::Optimizer::AdagradLUT => new_without_weights_2::<optimizer::OptimizerAdagradLUT>(&mi, num_inputs, ntype, num_neurons),
+        model_instance::Optimizer::AdagradFlex => new_without_weights_2::<optimizer::OptimizerAdagradFlex>(&mi, num_inputs, ntype, num_neurons),
+        model_instance::Optimizer::SGD => new_without_weights_2::<optimizer::OptimizerSGD>(&mi, num_inputs, ntype, num_neurons)
     }
 }
 
 
-fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelInstance, ntype: NeuronType, num_neurons: u32) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelInstance, 
+                                                    num_inputs: u32, 
+                                                    ntype: NeuronType, 
+                                                    num_neurons: u32) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
     assert!(num_neurons > 0);
+    assert!((num_inputs as usize )< MAX_NUM_INPUTS);
+    assert!(num_inputs != 0);
+
+
+    let weights_len = num_inputs * num_neurons;
+   /* if self.bias_term {
+        self.weights_len += self.num_neurons;
+    }*/
     let mut rg = BlockNeuronLayer::<L> {
         weights: Vec::new(),
         output_tape_index: -1,
         input_tape_index: -1,
-        num_inputs: 0,
+        num_inputs: num_inputs,
         optimizer: L::new(),
-        weights_len: 0,
+        weights_len: weights_len,
         bias_term: false,
         neuron_type: ntype,
         num_neurons: num_neurons,
@@ -91,18 +105,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
         return self.num_neurons
     }
     
-    fn set_num_inputs(&mut self, num_inputs: u32) {
-        assert!((num_inputs as usize )< MAX_NUM_INPUTS);
-        assert!(num_inputs != 0);
-
-        self.num_inputs = num_inputs;
-        self.weights_len = num_inputs * self.num_neurons;
-        if self.bias_term {
-            self.weights_len += self.num_neurons;
-        }
-    }
-
-
     fn set_input_tape_index(&mut self, input_tape_index: i32) {
         self.input_tape_index = input_tape_index;
     }
@@ -174,16 +176,18 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                             let feature_value = pb.tapes[self.input_tape_index as usize][input_tape_start + i];
                             println!("Wieght: {}, feature value: {}", w, feature_value);
                             let gradient = general_gradient * feature_value;
-                            let update = self.optimizer.calculate_update(gradient, &mut self.weights.get_unchecked_mut(i).optimizer_data);
+                            let update = self.optimizer.calculate_update(gradient, 
+                                                                    &mut self.weights.get_unchecked_mut(i + j * self.num_inputs as usize).optimizer_data);
                             println!("Update: {} {} {}", j, i, update);
                             self.weights.get_unchecked_mut(i + j * self.num_inputs as usize).weight -= update;
                             output_errors[i]  += w * general_gradient;
                         
                         }
-                        for i in 0..self.num_inputs as usize {
-                            pb.tapes[self.input_tape_index as usize][input_tape_start + i] = output_errors[i];
-                        }
                      }
+                    for i in 0..self.num_inputs as usize {
+                        pb.tapes[self.input_tape_index as usize][input_tape_start + i] = output_errors[i];
+                    }
+
                 pb.tapes[self.output_tape_index as usize].truncate(output_tape_start);
 
                 
@@ -286,14 +290,12 @@ mod tests {
         mi.optimizer = Optimizer::SGD;
         
         
-        let mut re = new_without_weights(&mi, NeuronType::WeightedSum, 1).unwrap();
+        let mut re = new_without_weights(&mi, 1, NeuronType::WeightedSum, 1).unwrap();
         re.set_input_tape_index(0);
-        re.set_num_inputs(1);
         re.set_output_tape_index(1);
         re.allocate_and_init_weights(&mi);
         
-        let mut ib = block_loss_functions::new_identity_block(&mi).unwrap();
-        ib.set_num_inputs(1);
+        let mut ib = block_loss_functions::new_identity_block(&mi, 1).unwrap();
         ib.set_input_tape_index(1);
         ib.set_output_tape_index(2);
 
@@ -325,14 +327,12 @@ mod tests {
         
         
         let NUM_NEURONS = 2;
-        let mut re = new_without_weights(&mi, NeuronType::WeightedSum, NUM_NEURONS).unwrap();
+        let mut re = new_without_weights(&mi, 1, NeuronType::WeightedSum, NUM_NEURONS).unwrap();
         re.set_input_tape_index(0);
-        re.set_num_inputs(1);
         re.set_output_tape_index(1);
         re.allocate_and_init_weights(&mi);
         
-        let mut ib = block_loss_functions::new_identity_block(&mi).unwrap();
-        ib.set_num_inputs(NUM_NEURONS);
+        let mut ib = block_loss_functions::new_identity_block(&mi, NUM_NEURONS).unwrap();
         ib.set_input_tape_index(1);
         ib.set_output_tape_index(2);
 
@@ -351,7 +351,7 @@ mod tests {
 
         pb.reset();
         pb.tapes[0].push(2.0);
-        assert_epsilon!(slearn  (&mut re, &mut ib, &fb, &mut pb, true), 1.4);
+        assert_epsilon!(slearn  (&mut re, &mut ib, &fb, &mut pb, false), 1.6);
         
 
     }

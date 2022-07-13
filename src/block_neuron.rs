@@ -39,23 +39,29 @@ pub struct BlockNeuron<L:OptimizerTrait> {
 }
 
 
-pub fn new_without_weights(mi: &model_instance::ModelInstance, ntype: NeuronType) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+pub fn new_without_weights(mi: &model_instance::ModelInstance, 
+                            num_inputs: u32,
+                            ntype: NeuronType) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
     match mi.optimizer {
-        model_instance::Optimizer::AdagradLUT => new_without_weights_2::<optimizer::OptimizerAdagradLUT>(&mi, ntype),
-        model_instance::Optimizer::AdagradFlex => new_without_weights_2::<optimizer::OptimizerAdagradFlex>(&mi, ntype),
-        model_instance::Optimizer::SGD => new_without_weights_2::<optimizer::OptimizerSGD>(&mi, ntype)
+        model_instance::Optimizer::AdagradLUT => new_without_weights_2::<optimizer::OptimizerAdagradLUT>(&mi, num_inputs, ntype),
+        model_instance::Optimizer::AdagradFlex => new_without_weights_2::<optimizer::OptimizerAdagradFlex>(&mi, num_inputs, ntype),
+        model_instance::Optimizer::SGD => new_without_weights_2::<optimizer::OptimizerSGD>(&mi, num_inputs, ntype)
     }
 }
 
 
-fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelInstance, ntype: NeuronType) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelInstance, 
+                                                    num_inputs: u32, 
+                                                    ntype: NeuronType) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+    assert!(num_inputs > 0);
+    let weights_len = num_inputs;
     let mut rg = BlockNeuron::<L> {
         weights: Vec::new(),
         output_tape_index: -1,
         input_tape_index: -1,
-        num_inputs: 0,
+        num_inputs: num_inputs,
         optimizer: L::new(),
-        weights_len: 0,
+        weights_len: weights_len,
         bias_term: false,
         neuron_type: ntype,
     };
@@ -86,17 +92,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuron<L>
         return 1
     }
     
-    fn set_num_inputs(&mut self, num_inputs: u32) {
-        if num_inputs == 0 {
-            panic!("Can not have a neuron without inputs");
-        }
-        self.num_inputs = num_inputs;
-        self.weights_len = num_inputs; // for the bias term
-        if self.bias_term {
-            self.weights_len += 1;
-        }
-    }
-
 
     fn set_input_tape_index(&mut self, input_tape_index: i32) {
         self.input_tape_index = input_tape_index;
@@ -258,14 +253,12 @@ mod tests {
         mi.optimizer = Optimizer::SGD;
         
         
-        let mut re = new_without_weights(&mi, NeuronType::WeightedSum).unwrap();
+        let mut re = new_without_weights(&mi, 1, NeuronType::WeightedSum).unwrap();
         re.set_input_tape_index(0);
-        re.set_num_inputs(1);
         re.set_output_tape_index(1);
         re.allocate_and_init_weights(&mi);
         
-        let mut ib = block_loss_functions::new_identity_block(&mi).unwrap();
-        ib.set_num_inputs(1);
+        let mut ib = block_loss_functions::new_identity_block(&mi, 1).unwrap();
         ib.set_input_tape_index(1);
         ib.set_output_tape_index(2);
 
@@ -282,6 +275,7 @@ mod tests {
         assert_eq!(pb.tapes[1].len(), 0);
         assert_eq!(pb.tapes[2].len(), 0);
 
+        pb.reset();
         pb.tapes[0].push(2.0);
         assert_epsilon!(slearn  (&mut re, &mut ib, &fb, &mut pb, true), 1.6);
         

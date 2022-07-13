@@ -41,7 +41,6 @@ pub trait BlockTrait {
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>>;
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>;
     fn get_num_outputs(&self) -> u32;
-    fn set_num_inputs(&mut self, num_inputs: u32);
     fn set_input_tape_index(&mut self, input_tape_index: i32);
     fn set_output_tape_index(&mut self, output_tape_index: i32);
     fn get_output_tape_index(&self) -> i32;
@@ -81,31 +80,29 @@ impl Regressor  {
             result_tape_index: -1,
         };
 
-        let mut inputs = 0;
+        let mut embedding_outputs = 0;
         // A bit more elaborate than necessary. Let's really make it clear what's happening
         let mut reg_lr = block_lr::new_without_weights(mi).unwrap();
-        inputs += reg_lr.get_num_outputs();
+        embedding_outputs += reg_lr.get_num_outputs();
         reg_lr.set_output_tape_index(0);
         rg.blocks_boxes.push(reg_lr);
 
         if mi.ffm_k > 0 {
             let mut reg_ffm = block_ffm::new_without_weights(mi).unwrap();
-            inputs += reg_ffm.get_num_outputs();
+            embedding_outputs += reg_ffm.get_num_outputs();
             reg_ffm.set_output_tape_index(0);
             rg.blocks_boxes.push(reg_ffm);
         }
          
         // If we put sum function here, it has to be neutral
-        let mut reg = block_neuron::new_without_weights(mi, block_neuron::NeuronType::Sum).unwrap();
-        reg.set_num_inputs(inputs);
-        inputs = reg.get_num_outputs();
+        let mut reg = block_neuron::new_without_weights(mi, embedding_outputs, block_neuron::NeuronType::Sum).unwrap();
+        let inputs = reg.get_num_outputs();
         reg.set_input_tape_index(0);
         reg.set_output_tape_index(1);
         rg.blocks_boxes.push(reg);
                     
         // now sigmoid has a single input
-        let mut reg_sigmoid = block_loss_functions::new_without_weights(mi).unwrap();
-        reg_sigmoid.set_num_inputs(inputs);
+        let mut reg_sigmoid = block_loss_functions::new_without_weights(mi, inputs).unwrap();
         reg_sigmoid.set_input_tape_index(1);
         reg_sigmoid.set_output_tape_index(2);
         rg.blocks_boxes.push(reg_sigmoid);

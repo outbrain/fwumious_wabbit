@@ -151,13 +151,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         return 1
     }
     
-    fn set_num_inputs(&mut self, num_inputs: u32) {
-        if num_inputs != 0 {
-          panic!("You cannnot set set_num_inputs on block ffm to anything but 0");
-        }
-    }
-
-
     fn set_input_tape_index(&mut self, output_tape_index: i32) {
         panic!("You cannnot set input_tape_index for BlockFFM");
     }
@@ -528,8 +521,7 @@ mod tests {
         mi.ffm_bit_precision = 18;
         mi.ffm_fields = vec![vec![], vec![]]; // This isn't really used
         mi.optimizer = Optimizer::AdagradLUT;
-        let mut lossf = block_loss_functions::new_without_weights(&mi).unwrap();
-        lossf.set_num_inputs(1);
+        let mut lossf = block_loss_functions::new_without_weights(&mi, 1).unwrap();
         lossf.set_input_tape_index(0);
         lossf.set_output_tape_index(1);
         
@@ -591,8 +583,7 @@ mod tests {
         mi.ffm_k = 4;
         mi.ffm_bit_precision = 18;
         mi.ffm_fields = vec![vec![], vec![]]; // This isn't really used
-        let mut lossf = block_loss_functions::new_without_weights(&mi).unwrap();
-        lossf.set_num_inputs(1);
+        let mut lossf = block_loss_functions::new_without_weights(&mi,1 ).unwrap();
         lossf.set_input_tape_index(0);
         lossf.set_output_tape_index(1);
         
@@ -659,8 +650,7 @@ B,featureB
         mi.ffm_power_t = 0.0;
         mi.ffm_learning_rate = 0.1;
         mi.ffm_fields = vec![vec![],vec![]]; 
-        let mut lossf = block_loss_functions::new_without_weights(&mi).unwrap();
-        lossf.set_num_inputs(1);
+        let mut lossf = block_loss_functions::new_without_weights(&mi, 1).unwrap();
         lossf.set_input_tape_index(0);
         lossf.set_output_tape_index(1);
 
@@ -697,8 +687,7 @@ B,featureB
         mi.ffm_k = 4;
         mi.ffm_bit_precision = 18;
         mi.ffm_fields = vec![vec![],vec![]]; 
-        let mut lossf = block_loss_functions::new_without_weights(&mi).unwrap();
-        lossf.set_num_inputs(1);
+        let mut lossf = block_loss_functions::new_without_weights(&mi, 1).unwrap();
         lossf.set_input_tape_index(0);
         lossf.set_output_tape_index(1);
 
@@ -738,8 +727,7 @@ B,featureB
         mi.ffm_k = 1;
         mi.ffm_bit_precision = 18;
         mi.ffm_fields = vec![vec![], vec![], vec![]]; // This isn't really used
-        let mut lossf = block_loss_functions::new_without_weights(&mi).unwrap();
-        lossf.set_num_inputs(1);
+        let mut lossf = block_loss_functions::new_without_weights(&mi, 1).unwrap();
         lossf.set_input_tape_index(0);
         lossf.set_output_tape_index(1);
         

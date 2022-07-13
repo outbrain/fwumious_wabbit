@@ -39,8 +39,9 @@ pub struct BlockSigmoid {
     output_tape_index: i32,
 }
 
-pub fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-    Ok(Box::new(BlockSigmoid {num_inputs: 0,
+pub fn new_without_weights(mi: &model_instance::ModelInstance, 
+                            num_inputs: u32) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+    Ok(Box::new(BlockSigmoid {num_inputs: num_inputs,
                                 input_tape_index: -1,
                                 output_tape_index: -1}))
 }
@@ -56,13 +57,6 @@ impl BlockTrait for BlockSigmoid {
         return 0
     }
     
-    fn set_num_inputs(&mut self, num_inputs: u32) {
-        if num_inputs <= 0 {
-          panic!("set_num_inputs(): num_inputs for BlockSigmoid has to be greater than 0");
-        }
-        self.num_inputs = num_inputs;
-    }
-
     fn set_input_tape_index(&mut self, input_tape_index: i32) {
         self.input_tape_index = input_tape_index;
     }
@@ -192,8 +186,9 @@ pub struct BlockIdentity {
     output_tape_index: i32,
 }
 
-pub fn new_identity_block(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-    Ok(Box::new(BlockIdentity {num_inputs: 0,
+pub fn new_identity_block(mi: &model_instance::ModelInstance,
+                            num_inputs: u32) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+    Ok(Box::new(BlockIdentity {num_inputs: num_inputs,
                                 input_tape_index: -1,
                                 output_tape_index: -1}))
 }
@@ -209,13 +204,6 @@ impl BlockTrait for BlockIdentity {
         return 0
     }
     
-    fn set_num_inputs(&mut self, num_inputs: u32) {
-        if num_inputs <= 0 {
-          panic!("set_num_inputs(): num_inputs for BlockSigmoid has to be greater than 0");
-        }
-        self.num_inputs = num_inputs;
-    }
-
     fn set_input_tape_index(&mut self, input_tape_index: i32) {
         self.input_tape_index = input_tape_index;
     }

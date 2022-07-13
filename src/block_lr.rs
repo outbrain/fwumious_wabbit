@@ -60,12 +60,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
         return 1
     }
     
-    fn set_num_inputs(&mut self, num_inputs: u32) {
-        if num_inputs != 0 {
-          panic!("You cannnot set set_num_inputs on block ffm to anything but 0");
-        }
-    }
-
     fn set_input_tape_index(&mut self, output_tape_index: i32) {
         panic!("You cannnot set input_tape_index for BlockLR");
     }
