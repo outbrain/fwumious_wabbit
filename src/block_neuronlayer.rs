@@ -36,7 +36,6 @@ pub struct BlockNeuronLayer<L:OptimizerTrait> {
     pub weights_len: u32, 
     pub weights: Vec<WeightAndOptimizerData<L>>,
     pub optimizer: L,
-    pub bias_term: bool,
     pub neuron_type: NeuronType,
     pub num_neurons: u32,
 }
@@ -63,10 +62,8 @@ fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelI
     assert!(num_inputs != 0);
 
 
-    let weights_len = num_inputs * num_neurons;
-   /* if self.bias_term {
-        self.weights_len += self.num_neurons;
-    }*/
+    let weights_len = (num_inputs + 1) * num_neurons; // +1 is for bias term
+
     let mut rg = BlockNeuronLayer::<L> {
         weights: Vec::new(),
         output_tape_index: -1,
@@ -74,7 +71,6 @@ fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelI
         num_inputs: num_inputs,
         optimizer: L::new(),
         weights_len: weights_len,
-        bias_term: false,
         neuron_type: ntype,
         num_neurons: num_neurons,
     };
@@ -98,6 +94,10 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
         assert!(self.weights_len != 0, "allocate_and_init_weights(): Have you forgotten to call set_num_inputs()?");
         self.weights =vec![WeightAndOptimizerData::<L>{weight:1.0, optimizer_data: self.optimizer.initial_data()}; self.weights_len as usize];
+        // now set bias terms to zero
+        for i in 0..self.num_neurons {
+            self.weights[(self.num_neurons * self.num_inputs + i) as usize].weight = 0.0
+        }
         
     }
 
@@ -136,14 +136,10 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
 
             {
                 for j in 0..self.num_neurons {
-                    let mut wsum:f32 = 0.0;
-                    {
-                        let myslice = &pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..];
-
-                        for i in 0..myslice.len() {
-                                 
-                                wsum += myslice.get_unchecked(i) * self.weights.get_unchecked(i as usize + j as usize *self.num_inputs as usize).weight;
-                            }
+                    let mut wsum:f32 = self.weights.get_unchecked((self.num_inputs * self.num_neurons + j) as usize).weight; // bias term
+                    let myslice = &pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..];
+                    for i in 0..myslice.len() {                                 
+                            wsum += myslice.get_unchecked(i) * self.weights.get_unchecked(i as usize + j as usize *self.num_inputs as usize).weight;
                     }
                     pb.tapes[self.output_tape_index as usize].push(wsum);
                 }
@@ -184,6 +180,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                         
                         }
                      }
+                     
+                     // TODO: Implement bias term update
                     for i in 0..self.num_inputs as usize {
                         pb.tapes[self.input_tape_index as usize][input_tape_start + i] = output_errors[i];
                     }
