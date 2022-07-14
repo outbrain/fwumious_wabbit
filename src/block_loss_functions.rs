@@ -128,25 +128,41 @@ impl BlockTrait for BlockSigmoid {
 
     fn forward(&self, 
                      further_blocks: &[Box<dyn BlockTrait>], 
-                     wsum: f32, 
-                     fb: &feature_buffer::FeatureBuffer) -> f32 {
+                     fb: &feature_buffer::FeatureBuffer,
+                     pb: &mut port_buffer::PortBuffer, ) {
 
         if further_blocks.len() != 0 {
             panic!("RegSigmoid can only be at the end of the chain!");
         }
+        debug_assert!(self.output_tape_index >= 0);
+        debug_assert!(self.input_tape_index >= 0);
+        debug_assert!(self.input_tape_index != self.output_tape_index);
+
+
+        let len = pb.tapes[self.input_tape_index as usize].len();
+        // Technically it needs to be longer. but for debugging we want to consume all of them
+        if (self.num_inputs as usize) != len {
+            panic!("BlockSigmoid::forward_backward() Number of inputs is different than number of values on the input tape");
+        }
         
-        // vowpal compatibility
+        let wsum:f32 = {
+            let myslice = &pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..];
+            myslice.iter().sum()
+        };
+        
+        let prediction_probability:f32;
         if wsum.is_nan() {
             eprintln!("NAN prediction in example {}, forcing 0.0", fb.example_number);
-            return logistic(0.0);
+            prediction_probability = logistic(0.0);
         } else if wsum < -50.0 {
-            return logistic(-50.0);
+            prediction_probability = logistic(-50.0);
         } else if wsum > 50.0 {
-            return logistic(50.0);
-        }        
-
-        let prediction_probability = logistic(wsum);
-        prediction_probability
+            prediction_probability = logistic(50.0);
+        } else {
+            prediction_probability = logistic(wsum);
+        }
+        
+        pb.tapes[self.output_tape_index as usize].push(prediction_probability);
     }
 
     
@@ -243,9 +259,23 @@ impl BlockTrait for BlockIdentity {
 
     fn forward(&self, 
                      further_blocks: &[Box<dyn BlockTrait>], 
-                     wsum: f32, 
-                     fb: &feature_buffer::FeatureBuffer) -> f32 {
-        0.0
+                     fb: &feature_buffer::FeatureBuffer,
+                     pb: &mut port_buffer::PortBuffer, ) {
+        debug_assert!(self.output_tape_index >= 0);
+        debug_assert!(self.input_tape_index >= 0);
+        debug_assert!(self.input_tape_index != self.output_tape_index);
+
+        let len = pb.tapes[self.input_tape_index as usize].len();
+        // Technically it needs to be longer. but for debugging we want to consume all of them
+        if (self.num_inputs as usize) != len {
+            panic!("BlockSigmoid::forward_backward() Number of inputs is different than number of values on the input tape");
+        }
+        
+        // replace inputs with their gradients
+        for x in 0..(self.num_inputs as usize) {
+            let s = pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize + x];
+            pb.tapes[self.output_tape_index as usize].push(s);
+        }
     }
 
     

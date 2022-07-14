@@ -19,6 +19,7 @@ use crate::optimizer;
 use crate::persistence;
 use crate::regressor::Regressor;
 use crate::multithread_helpers::{BoxedRegressorTrait};
+use crate::port_buffer;
 
 
 
@@ -34,6 +35,7 @@ pub struct WorkerThread {
     re_fixed: BoxedRegressorTrait,
     fbt: feature_buffer::FeatureBufferTranslator,
     pa: parser::VowpalParser,
+    pb: port_buffer::PortBuffer,
 }
 
 pub trait IsEmpty {
@@ -60,13 +62,15 @@ impl WorkerThread {
         re_fixed: BoxedRegressorTrait, 
         fbt: feature_buffer::FeatureBufferTranslator, 
         pa: parser::VowpalParser,
+        pb: port_buffer::PortBuffer,
         receiver: Arc<Mutex<mpsc::Receiver<net::TcpStream>>>,
     ) -> Result<thread::JoinHandle<u32>, Box<dyn Error>> {
         let mut wt = WorkerThread {
             id: id,
             re_fixed: re_fixed,
             fbt: fbt,
-            pa: pa
+            pa: pa,
+            pb: pb,
         };
         let thread = thread::spawn(move || {
             wt.start(receiver);
@@ -88,7 +92,7 @@ impl WorkerThread {
                 Ok([]) => return ConnectionEnd::EndOfStream, // EOF
                 Ok(buffer2) => {
                     self.fbt.translate(buffer2, i);
-                    let p = self.re_fixed.predict(&(self.fbt.feature_buffer));
+                    let p = self.re_fixed.predict(&(self.fbt.feature_buffer), &mut self.pb);
                     let p_res = format!("{:.6}\n", p);
                     match writer.write_all(p_res.as_bytes()) {
                         Ok(_) => {},
@@ -207,6 +211,7 @@ impl Serving {
         }
 
         let re_fixed2 = BoxedRegressorTrait::new(re_fixed);
+        let pb = re_fixed2.new_portbuffer(mi);
         let fbt = feature_buffer::FeatureBufferTranslator::new(mi);
         let pa = parser::VowpalParser::new(&vw);
         for i in 0..num_children {
@@ -214,6 +219,7 @@ impl Serving {
                                          re_fixed2.clone(),
                                          fbt.clone(),
                                          pa.clone(),
+                                         pb.clone(),
                                          Arc::clone(&receiver),
             )?;
             s.worker_threads.push(newt);
@@ -273,11 +279,13 @@ C,featureC
         let re_fixed = BoxedRegressorTrait::new(Box::new(re.immutable_regressor(&mi).unwrap()));
         let fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
         let pa = parser::VowpalParser::new(&vw);
+        let pb = re_fixed.new_portbuffer(&mi);
 
         let mut newt = WorkerThread {id: 1,
                                  fbt: fbt,
                                  pa: pa,
                                  re_fixed: re_fixed,
+                                 pb
                                  };
 
         { // WORKING STREAM TEST
@@ -379,11 +387,13 @@ C,featureC
         let re_fixed = BoxedRegressorTrait::new(Box::new(re.immutable_regressor(&mi).unwrap()));
         let fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
         let pa = parser::VowpalParser::new(&vw);
+        let pb = re_fixed.new_portbuffer(&mi);
 
         let mut newt = WorkerThread {id: 1,
                                  fbt: fbt,
                                  pa: pa,
                                  re_fixed: re_fixed,
+                                 pb,
                                  };
 
         { // WORKING STREAM TEST

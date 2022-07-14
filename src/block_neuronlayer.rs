@@ -142,8 +142,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                             wsum += myslice.get_unchecked(i) * self.weights.get_unchecked(i as usize + j as usize *self.num_inputs as usize).weight;
                     }
                     pb.tapes[self.output_tape_index as usize].push(wsum);
+//                    println!("wsum: {}", wsum);
                 }
-//                println!("wsum: {}", wsum);
             }
             let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
             next_regressor[0].forward_backward(further_blocks, fb, pb, update);
@@ -164,26 +164,28 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                     }
 
 
-                     for j in 0..self.num_neurons as usize {
-                        let general_gradient = pb.tapes[self.output_tape_index as usize][output_tape_start + j];
-                        println!("General gradient: {}", general_gradient);
+                    for j in 0..self.num_neurons as usize {
+                        let general_gradient = pb.tapes.get_unchecked(self.output_tape_index as usize).get_unchecked(output_tape_start + j);
+//                        println!("General gradient: {}", general_gradient);
                         for i in 0..self.num_inputs as usize {
                             let w = self.weights.get_unchecked(i + j * self.num_inputs as usize).weight;
-                            let feature_value = pb.tapes[self.input_tape_index as usize][input_tape_start + i];
-                            println!("Wieght: {}, feature value: {}", w, feature_value);
+                            let feature_value = pb.tapes.get_unchecked(self.input_tape_index as usize).get_unchecked(input_tape_start + i);
+  //                          println!("input tape index: {}, input tape start: {}, i: {}", self.input_tape_index, input_tape_start, i);
+  //                          println!("Wieght: {}, feature value: {}", w, feature_value);
                             let gradient = general_gradient * feature_value;
+    //                        println!("Final gradient: {}", gradient);
                             let update = self.optimizer.calculate_update(gradient, 
                                                                     &mut self.weights.get_unchecked_mut(i + j * self.num_inputs as usize).optimizer_data);
-                            println!("Update: {} {} {}", j, i, update);
+    //                        println!("Update: {} {} {}", j, i, update);
                             self.weights.get_unchecked_mut(i + j * self.num_inputs as usize).weight -= update;
-                            output_errors[i]  += w * general_gradient;
+                            *output_errors.get_unchecked_mut(i)  += w * general_gradient;
                         
                         }
                      }
                      
                      // TODO: Implement bias term update
                     for i in 0..self.num_inputs as usize {
-                        pb.tapes[self.input_tape_index as usize][input_tape_start + i] = output_errors[i];
+                        *(pb.tapes.get_unchecked_mut(self.input_tape_index as usize)).get_unchecked_mut(input_tape_start + i) = *output_errors.get_unchecked(i);
                     }
 
                 pb.tapes[self.output_tape_index as usize].truncate(output_tape_start);
@@ -217,9 +219,11 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
         } // unsafe end
     }
     
-    fn forward(&self, further_blocks: &[Box<dyn BlockTrait>], wsum_input: f32, fb: &feature_buffer::FeatureBuffer) -> f32 {
-        let mut wsum:f32 = 0.0;
-        wsum                 
+    fn forward(&self, further_blocks: &[Box<dyn BlockTrait>], 
+                        fb: &feature_buffer::FeatureBuffer, 
+                        pb: &mut port_buffer::PortBuffer, 
+                        ) {
+        assert!(false, "Unimplemented");    
     }
     
     fn get_serialized_len(&self) -> usize {

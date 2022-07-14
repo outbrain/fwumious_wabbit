@@ -94,6 +94,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
 
             let (next_regressor, further_regressors) = further_regressors.split_at_mut(1);
             pb.tapes[self.output_tape_index as usize].push(wsum);
+//            println!("Pushing feature value: {}", wsum);
             next_regressor[0].forward_backward(further_regressors, fb, pb, update);
             let general_gradient = pb.tapes[self.output_tape_index as usize].pop().unwrap();
 
@@ -116,8 +117,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
     
     fn forward(&self, 
              further_blocks: &[Box<dyn BlockTrait>], 
-             wsum_input: f32, 
-             fb: &feature_buffer::FeatureBuffer) -> f32 {
+             fb: &feature_buffer::FeatureBuffer,
+             pb: &mut port_buffer::PortBuffer) {
         let fbuf = &fb.lr_buffer;
         let mut wsum:f32 = 0.0;
         unsafe {
@@ -128,8 +129,9 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
             }
         }
         let (next_regressor, further_blocks) = further_blocks.split_at(1);
-        let prediction_probability = next_regressor[0].forward(further_blocks, wsum + wsum_input, fb);
-        prediction_probability         
+        pb.tapes[self.output_tape_index as usize].push(wsum);
+        next_regressor[0].forward(further_blocks, fb, pb);
+        pb.tapes[self.output_tape_index as usize].pop().unwrap();
     }
     
     

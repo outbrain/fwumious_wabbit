@@ -182,9 +182,12 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuron<L>
         } // unsafe end
     }
     
-    fn forward(&self, further_blocks: &[Box<dyn BlockTrait>], wsum_input: f32, fb: &feature_buffer::FeatureBuffer) -> f32 {
-        let mut wsum:f32 = 0.0;
-        wsum                 
+    fn forward(		    &self, 		
+                            further_blocks: &[Box<dyn BlockTrait>], 
+                            fb: &feature_buffer::FeatureBuffer,
+                            pb: &mut port_buffer::PortBuffer, 
+                           ) {
+            assert!(false, "Not implemented yet");
     }
     
     fn get_serialized_len(&self) -> usize {

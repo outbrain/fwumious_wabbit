@@ -20,6 +20,7 @@ use crate::block_ffm;
 use crate::block_lr;
 use crate::block_loss_functions;
 use crate::block_neuron;
+use crate::block_neuronlayer;
 
 
 
@@ -31,10 +32,10 @@ pub trait BlockTrait {
                          pb: &mut port_buffer::PortBuffer, 
                          update:bool);
 
-    fn forward(&self, 
+    fn forward(		&self, 
                          further_blocks: &[Box<dyn BlockTrait>], 
-                         wsum: f32, 
-                         fb: &feature_buffer::FeatureBuffer) -> f32;
+                         fb: &feature_buffer::FeatureBuffer,
+                         pb: &mut port_buffer::PortBuffer, );
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance);
     fn get_serialized_len(&self) -> usize;
@@ -95,15 +96,22 @@ impl Regressor  {
         }
          
         // If we put sum function here, it has to be neutral
-        let mut reg = block_neuron::new_without_weights(mi, embedding_outputs, block_neuron::NeuronType::Sum).unwrap();
-        let inputs = reg.get_num_outputs();
-        reg.set_input_tape_index(0);
-        reg.set_output_tape_index(1);
-        rg.blocks_boxes.push(reg);
-                    
+//        let mut reg = block_neuronlayer::new_without_weights(mi, embedding_outputs, block_neuronlayer::NeuronType::WeightedSum, 1).unwrap();
+//        let mut reg = block_neuron::new_without_weights(mi, embedding_outputs, block_neuron::NeuronType::WeightedSum).unwrap();
+    /*
+        let mut inputs:u32 = 0;
+        if true {
+            let mut reg = block_neuron::new_without_weights(mi, embedding_outputs, block_neuron::NeuronType::Sum).unwrap();
+            inputs += reg.get_num_outputs();
+            reg.set_input_tape_index(0);
+            reg.set_output_tape_index(1);
+            rg.blocks_boxes.push(reg);
+        } else {
+        
+        }          */
         // now sigmoid has a single input
-        let mut reg_sigmoid = block_loss_functions::new_without_weights(mi, inputs).unwrap();
-        reg_sigmoid.set_input_tape_index(1);
+        let mut reg_sigmoid = block_loss_functions::new_without_weights(mi, embedding_outputs).unwrap();
+        reg_sigmoid.set_input_tape_index(0);
         reg_sigmoid.set_output_tape_index(2);
         rg.blocks_boxes.push(reg_sigmoid);
         rg.result_tape_index = 2;
@@ -159,11 +167,15 @@ impl Regressor  {
         return prediction_probability
     }
     
-    pub fn predict(&self, fb: &feature_buffer::FeatureBuffer) -> f32 {
+    pub fn predict(&self, fb: &feature_buffer::FeatureBuffer, pb: &mut port_buffer::PortBuffer) -> f32 {
         // TODO: we should find a way of not using unsafe
         let blocks_list = &self.blocks_boxes[..];
         let (current, further_blocks) = blocks_list.split_at(1);
-        let prediction_probability = current[0].forward(further_blocks, 0.0, fb);
+        pb.reset(); // empty the tape
+
+        current[0].forward(further_blocks, fb, pb);
+        let prediction_probability = pb.tapes[self.result_tape_index as usize].pop().unwrap();
+
         return prediction_probability
     }
     
