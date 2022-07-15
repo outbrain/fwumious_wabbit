@@ -187,7 +187,30 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuron<L>
                             fb: &feature_buffer::FeatureBuffer,
                             pb: &mut port_buffer::PortBuffer, 
                            ) {
-            assert!(false, "Not implemented yet");
+//            assert!(false, "Not implemented yet");
+        debug_assert!(self.output_tape_index >= 0);
+        debug_assert!(self.input_tape_index >= 0);
+        debug_assert!(self.input_tape_index != self.output_tape_index);
+        debug_assert!(self.num_inputs > 0);
+        
+        unsafe {
+            let mut wsum:f32 = 0.0;
+            let len = pb.tapes[self.input_tape_index as usize].len();
+            {
+                let myslice = &pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..];
+                for i in 0..myslice.len() {
+                    wsum += myslice.get_unchecked(i) * self.weights.get_unchecked(i).weight;
+                }
+            }
+            let (next_regressor, further_blocks) = further_blocks.split_at(1);
+            pb.tapes[self.output_tape_index as usize].push(wsum);
+            next_regressor[0].forward(further_blocks, fb, pb);
+            pb.tapes[self.output_tape_index as usize].pop().unwrap();
+            return
+            
+        } // unsafe end
+
+
     }
     
     fn get_serialized_len(&self) -> usize {

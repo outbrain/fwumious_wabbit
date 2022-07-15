@@ -18,13 +18,20 @@ use regressor::BlockTrait;
 use block_helpers::{Weight, WeightAndOptimizerData};
 
 
-const MAX_NUM_INPUTS:usize= 4000;
+const MAX_NUM_INPUTS:usize= 16000;
 
 
 #[derive(PartialEq)]
 pub enum NeuronType {
     WeightedSum,
     LimitedWeightedSum,
+}
+
+#[derive(PartialEq)]
+pub enum InitType {
+    Random,
+    RandomFirstNeuron1,
+    RandomFirstNeuron10
 }
 
 
@@ -38,17 +45,19 @@ pub struct BlockNeuronLayer<L:OptimizerTrait> {
     pub optimizer: L,
     pub neuron_type: NeuronType,
     pub num_neurons: u32,
+    pub init_type: InitType,
 }
 
 
 pub fn new_without_weights(mi: &model_instance::ModelInstance, 
                             num_inputs: u32, 
                             ntype: NeuronType, 
-                            num_neurons: u32) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+                            num_neurons: u32,
+                            init_type: InitType) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
     match mi.optimizer {
-        model_instance::Optimizer::AdagradLUT => new_without_weights_2::<optimizer::OptimizerAdagradLUT>(&mi, num_inputs, ntype, num_neurons),
-        model_instance::Optimizer::AdagradFlex => new_without_weights_2::<optimizer::OptimizerAdagradFlex>(&mi, num_inputs, ntype, num_neurons),
-        model_instance::Optimizer::SGD => new_without_weights_2::<optimizer::OptimizerSGD>(&mi, num_inputs, ntype, num_neurons)
+        model_instance::Optimizer::AdagradLUT => new_without_weights_2::<optimizer::OptimizerAdagradLUT>(&mi, num_inputs, ntype, num_neurons, init_type),
+        model_instance::Optimizer::AdagradFlex => new_without_weights_2::<optimizer::OptimizerAdagradFlex>(&mi, num_inputs, ntype, num_neurons, init_type),
+        model_instance::Optimizer::SGD => new_without_weights_2::<optimizer::OptimizerSGD>(&mi, num_inputs, ntype, num_neurons, init_type)
     }
 }
 
@@ -56,7 +65,8 @@ pub fn new_without_weights(mi: &model_instance::ModelInstance,
 fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelInstance, 
                                                     num_inputs: u32, 
                                                     ntype: NeuronType, 
-                                                    num_neurons: u32) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+                                                    num_neurons: u32,
+                                                    init_type: InitType) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
     assert!(num_neurons > 0);
     assert!((num_inputs as usize )< MAX_NUM_INPUTS);
     assert!(num_inputs != 0);
@@ -73,6 +83,7 @@ fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelI
         weights_len: weights_len,
         neuron_type: ntype,
         num_neurons: num_neurons,
+        init_type: init_type,
     };
     rg.optimizer.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
 
@@ -95,6 +106,21 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
         assert!(self.weights_len != 0, "allocate_and_init_weights(): Have you forgotten to call set_num_inputs()?");
         self.weights =vec![WeightAndOptimizerData::<L>{weight:1.0, optimizer_data: self.optimizer.initial_data()}; self.weights_len as usize];
         // now set bias terms to zero
+        
+        // first neuron is always set to 1.0  
+        for i in 0..self.num_neurons * self.num_inputs {
+            self.weights[i as usize].weight = (2.0 * merand48(((i*i+i) as usize) as u64)-1.0) * 0.001;
+        }
+        
+        match self.init_type {
+            InitType::Random => {},
+            InitType::RandomFirstNeuron1 => { for i in 0..self.num_inputs { self.weights[i as usize].weight = 1.0}},
+            InitType::RandomFirstNeuron10 => { for i in 0..self.num_inputs { self.weights[i as usize].weight = 0.0}; self.weights[0].weight = 1.0;},
+        }
+        
+        
+//      
+        
         for i in 0..self.num_neurons {
             self.weights[(self.num_neurons * self.num_inputs + i) as usize].weight = 0.0
         }
@@ -132,28 +158,31 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
         
         unsafe {
             let len = pb.tapes[self.input_tape_index as usize].len();
+            let output_tape_start = pb.tapes[self.output_tape_index as usize].len();
+            let input_tape_start = pb.tapes[self.input_tape_index as usize].len() - self.num_inputs as usize; 
+
 //          println!("len: {}, num inputs: {}, input_tape_indeX: {}", len, self.num_inputs, self.input_tape_index);
 
             {
+
                 for j in 0..self.num_neurons {
                     let mut wsum:f32 = self.weights.get_unchecked((self.num_inputs * self.num_neurons + j) as usize).weight; // bias term
-                    let myslice = &pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..];
-                    for i in 0..myslice.len() {                                 
-                            wsum += myslice.get_unchecked(i) * self.weights.get_unchecked(i as usize + j as usize *self.num_inputs as usize).weight;
+                    let input_tape = pb.tapes.get_unchecked(self.input_tape_index as usize).get_unchecked(input_tape_start..);
+
+                    for i in 0..input_tape.len() {                                 
+                            wsum += input_tape.get_unchecked(i) * self.weights.get_unchecked((i as u32 + j * self.num_inputs) as usize).weight;
                     }
-                    pb.tapes[self.output_tape_index as usize].push(wsum);
+                    pb.tapes.get_unchecked_mut(self.output_tape_index as usize).push(wsum);
 //                    println!("wsum: {}", wsum);
                 }
             }
             let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
             next_regressor[0].forward_backward(further_blocks, fb, pb, update);
-            
+
             if update {
             {
 //                let general_gradient = pb.tapes[self.output_tape_index as usize].pop().unwrap();
-                let input_tape_start = pb.tapes[self.input_tape_index as usize].len() - self.num_inputs as usize; 
-                let output_tape_start = pb.tapes[self.output_tape_index as usize].len() - self.num_neurons as usize;
-
+            
                 if self.neuron_type == NeuronType::WeightedSum {
                     //let mut myslice = &mut pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..];
                     // first we need to initialize inputs to zero
@@ -163,23 +192,32 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                         output_errors[i] = 0.0; 
                     }
 
-
+                    let output_tape = pb.tapes.get_unchecked(self.output_tape_index as usize).get_unchecked(output_tape_start..);
+                    let input_tape = pb.tapes.get_unchecked(self.input_tape_index as usize).get_unchecked(input_tape_start..);
+                    
                     for j in 0..self.num_neurons as usize {
-                        let general_gradient = pb.tapes.get_unchecked(self.output_tape_index as usize).get_unchecked(output_tape_start + j);
+                        let general_gradient = output_tape.get_unchecked(j);
+                        let j_offset = j * self.num_inputs as usize;
 //                        println!("General gradient: {}", general_gradient);
                         for i in 0..self.num_inputs as usize {
-                            let w = self.weights.get_unchecked(i + j * self.num_inputs as usize).weight;
-                            let feature_value = pb.tapes.get_unchecked(self.input_tape_index as usize).get_unchecked(input_tape_start + i);
+                            let feature_value = input_tape.get_unchecked(i);
   //                          println!("input tape index: {}, input tape start: {}, i: {}", self.input_tape_index, input_tape_start, i);
   //                          println!("Wieght: {}, feature value: {}", w, feature_value);
                             let gradient = general_gradient * feature_value;
     //                        println!("Final gradient: {}", gradient);
                             let update = self.optimizer.calculate_update(gradient, 
-                                                                    &mut self.weights.get_unchecked_mut(i + j * self.num_inputs as usize).optimizer_data);
-    //                        println!("Update: {} {} {}", j, i, update);
-                            self.weights.get_unchecked_mut(i + j * self.num_inputs as usize).weight -= update;
-                            *output_errors.get_unchecked_mut(i)  += w * general_gradient;
-                        
+                                                                    &mut self.weights.get_unchecked_mut(i + j_offset).optimizer_data);
+    //                        println!
+                            *output_errors.get_unchecked_mut(i)  += self.weights.get_unchecked(i + j_offset).weight * general_gradient;
+                            self.weights.get_unchecked_mut(i + j_offset).weight -= update;
+                            
+                        }
+                        {
+                            // Updating bias term:
+                            let gradient = general_gradient * 1.0;
+                            let update = self.optimizer.calculate_update(gradient, 
+                                                                        &mut self.weights.get_unchecked_mut(((self.num_inputs* self.num_neurons) as usize + j) as usize).optimizer_data);
+                            self.weights.get_unchecked_mut(((self.num_inputs * self.num_neurons) as usize + j) as usize).weight -= update;
                         }
                      }
                      
@@ -188,7 +226,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                         *(pb.tapes.get_unchecked_mut(self.input_tape_index as usize)).get_unchecked_mut(input_tape_start + i) = *output_errors.get_unchecked(i);
                     }
 
-                pb.tapes[self.output_tape_index as usize].truncate(output_tape_start);
 
                 
                 } else if self.neuron_type == NeuronType::LimitedWeightedSum {
@@ -211,7 +248,10 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                      }
                     
                 }*/
+                pb.tapes[self.output_tape_index as usize].truncate(output_tape_start);
+
             }
+            
             // The only exit point
             return
         }
