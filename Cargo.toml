@@ -26,7 +26,7 @@ lz4 = "1.23.2"
 nom = "7"
 dyn-clone = "1.0"
 #funty="=1.1.0"	# no need for pinning any more
-
+rand = "0.6.5"
 # We'll use cloudflare's zlib as it is the fastest game in town
 #flate2 = "1.0" #minz library
 #flate2 = { version = "1.0", features = ["zlib"], default-features = false }

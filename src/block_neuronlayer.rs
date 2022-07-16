@@ -4,6 +4,7 @@ use merand48::*;
 use core::arch::x86_64::*;
 use std::error::Error;
 use std::mem::{self, MaybeUninit};
+use rand::distributions::{Normal, Distribution};
 
 
 use crate::optimizer;
@@ -48,6 +49,7 @@ pub struct BlockNeuronLayer<L:OptimizerTrait> {
     pub init_type: InitType,
     pub dropout: f32,
     pub dropout_1: f32,
+    pub max_norm: f32,
 }
 
 
@@ -56,11 +58,12 @@ pub fn new_without_weights(mi: &model_instance::ModelInstance,
                             ntype: NeuronType, 
                             num_neurons: u32,
                             init_type: InitType, 
-                            dropout: f32) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+                            dropout: f32,
+                            max_norm: f32) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
     match mi.optimizer {
-        model_instance::Optimizer::AdagradLUT => new_without_weights_2::<optimizer::OptimizerAdagradLUT>(&mi, num_inputs, ntype, num_neurons, init_type, dropout),
-        model_instance::Optimizer::AdagradFlex => new_without_weights_2::<optimizer::OptimizerAdagradFlex>(&mi, num_inputs, ntype, num_neurons, init_type, dropout),
-        model_instance::Optimizer::SGD => new_without_weights_2::<optimizer::OptimizerSGD>(&mi, num_inputs, ntype, num_neurons, init_type, dropout)
+        model_instance::Optimizer::AdagradLUT => new_without_weights_2::<optimizer::OptimizerAdagradLUT>(&mi, num_inputs, ntype, num_neurons, init_type, dropout, max_norm),
+        model_instance::Optimizer::AdagradFlex => new_without_weights_2::<optimizer::OptimizerAdagradFlex>(&mi, num_inputs, ntype, num_neurons, init_type, dropout, max_norm),
+        model_instance::Optimizer::SGD => new_without_weights_2::<optimizer::OptimizerSGD>(&mi, num_inputs, ntype, num_neurons, init_type, dropout, max_norm)
     }
 }
 
@@ -70,7 +73,9 @@ fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelI
                                                     ntype: NeuronType, 
                                                     num_neurons: u32,
                                                     init_type: InitType,
-                                                    dropout: f32) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+                                                    dropout: f32,
+                                                    max_norm: f32,
+                                                    ) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
     assert!(num_neurons > 0);
     assert!((num_inputs as usize )< MAX_NUM_INPUTS);
     assert!(num_inputs != 0);
@@ -90,9 +95,10 @@ fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelI
         init_type: init_type,
         dropout: dropout,
         dropout_1: 1.0 - dropout,
+        max_norm: max_norm,
     };
-    rg.optimizer.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
-
+//    rg.optimizer.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
+    rg.optimizer.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
     Ok(Box::new(rg))
 }
 
@@ -114,8 +120,11 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
         // now set bias terms to zero
         
         // first neuron is always set to 1.0  
+        let normal = Normal::new(0.0, (2.0/self.num_inputs as f32).sqrt() as f64);
+
         for i in 0..self.num_neurons * self.num_inputs {
-            self.weights[i as usize].weight = (2.0 * merand48(((i*i+i) as usize) as u64)-1.0) * 0.001;
+    //            self.weights[i as usize].weight = (2.0 * merand48(((i*i+i) as usize) as u64)-1.0) * (1.0/(self.num_inputs as f32)).sqrt();
+            self.weights[i as usize].weight = normal.sample(&mut rand::thread_rng()) as f32;
         }
         
         match self.init_type {
@@ -167,25 +176,23 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
             let output_tape_start = pb.tapes[self.output_tape_index as usize].len();
             let input_tape_start = pb.tapes[self.input_tape_index as usize].len() - self.num_inputs as usize; 
 
+
 //          println!("len: {}, num inputs: {}, input_tape_indeX: {}", len, self.num_inputs, self.input_tape_index);
             let frandseed = fb.example_number * fb.example_number;
-
-            {
-
-                for j in 0..self.num_neurons {
-                    let mut wsum:f32 = 0.0;
-                    if self.dropout == 0.0 || merand48(j as u64 + frandseed) > self.dropout {
-                        wsum = self.weights.get_unchecked((self.num_inputs * self.num_neurons + j) as usize).weight; // bias term
-                        let input_tape = pb.tapes.get_unchecked(self.input_tape_index as usize).get_unchecked(input_tape_start..);
-
-                        for i in 0..input_tape.len() {                                 
-                                wsum += input_tape.get_unchecked(i) * self.weights.get_unchecked((i as u32 + j * self.num_inputs) as usize).weight;
-                        }
+            let bias_offset = self.num_inputs * self.num_neurons;
+            let mut j_offset:u32 = 0;
+            for j in 0..self.num_neurons {
+                let mut wsum:f32 = 0.0;
+                if self.dropout == 0.0 || merand48(j as u64 + frandseed) > self.dropout {
+                    wsum = self.weights.get_unchecked((bias_offset + j) as usize).weight; // bias term
+                    let input_tape = pb.tapes.get_unchecked(self.input_tape_index as usize).get_unchecked(input_tape_start..);
+                    for i in 0..self.num_inputs {                                 
+                            wsum += input_tape.get_unchecked(i as usize) * self.weights.get_unchecked((i + j_offset) as usize).weight;
                     }
-                    if !update {wsum *= self.dropout_1;} // fix for overexcitment if we are just predicting and not learning
-                    pb.tapes.get_unchecked_mut(self.output_tape_index as usize).push(wsum);
-//                    println!("wsum: {}", wsum);
                 }
+                j_offset += self.num_inputs;
+                if !update {wsum *= self.dropout_1;} // fix for overexcitment if we are just predicting and not learning
+                pb.tapes.get_unchecked_mut(self.output_tape_index as usize).push(wsum);
             }
             let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
             next_regressor[0].forward_backward(further_blocks, fb, pb, update);
@@ -231,6 +238,23 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                                                                             &mut self.weights.get_unchecked_mut(((self.num_inputs* self.num_neurons) as usize + j) as usize).optimizer_data);
                                 self.weights.get_unchecked_mut(((self.num_inputs * self.num_neurons) as usize + j) as usize).weight -= update;
                             }
+                            
+                            
+                            if self.max_norm != 0.0 && fb.example_number % 1 == 0 {
+                                let mut wsumsquared = 0.0;
+                                for i in 0..self.num_inputs as usize {
+                                    let w = self.weights.get_unchecked_mut(i + j_offset).weight;
+                                    wsumsquared += w * w;
+                                }
+                                let norm = wsumsquared.sqrt();
+                                if norm > self.max_norm {
+                                    let scaling = self.max_norm / norm;
+                                    for i in 0..self.num_inputs as usize {
+                                        self.weights.get_unchecked_mut(i + j_offset).weight *= scaling;
+                                    }
+                                } 
+                            }
+                            
                         }
                      }
                      

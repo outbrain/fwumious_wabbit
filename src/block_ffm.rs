@@ -93,7 +93,8 @@ fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelI
     };
 
     if mi.ffm_k > 0 {
-        reg_ffm.optimizer_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
+        reg_ffm.optimizer_ffm.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
+        //reg_ffm.optimizer_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
         // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
         reg_ffm.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * reg_ffm.ffm_k);
     }
@@ -151,7 +152,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
 
 
     fn get_num_outputs(&self) -> u32 {
-        return self.ffm_num_fields * self.ffm_num_fields * self.ffm_k;
+        return self.ffm_num_fields * self.ffm_num_fields;
     }
     
     fn set_input_tape_index(&mut self, output_tape_index: i32) {
@@ -187,7 +188,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                 ) => {
                     // number of outputs
                     let original_size = pb.tapes[self.output_tape_index as usize].len();
-                    pb.tapes[self.output_tape_index as usize].resize_with(original_size + (self.ffm_num_fields * self.ffm_num_fields * self.ffm_k) as usize, || {0.0});
+                    pb.tapes[self.output_tape_index as usize].resize_with(original_size + (self.ffm_num_fields * self.ffm_num_fields) as usize, || {0.0});
                     let myslice = &mut pb.tapes[self.output_tape_index as usize][original_size..];
 
                     let mut local_data_ffm_values = $local_data_ffm_values;
@@ -258,8 +259,9 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                         
                         let mut ffm_values_offset = 0;
                         for (i, left_hash) in fb.ffm_buffer.iter().enumerate() {
-                            let mut contra_offset = (left_hash.contra_field_index * fb.ffm_fields_count) as usize;
+                            let contra_offset = (left_hash.contra_field_index * fb.ffm_fields_count) as usize;
                             let mut vv = 0;
+                            let contra_offset2 = contra_offset / FFMK as usize;
                             let left_hash_value = left_hash.value;
                             let left_hash_contra_field_index = left_hash.contra_field_index;
                             let left_hash_hash = left_hash.hash as usize;
@@ -274,7 +276,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                                           let gradient =  LEFT_HASH_VALUE * contra_weight;
                                           *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
 //                                          *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient;
-                                          *myslice.get_unchecked_mut( contra_offset + vv + k ) += ffm_weight * gradient * 0.5;
+                                          *myslice.get_unchecked_mut( contra_offset2 + z ) += ffm_weight * gradient * 0.5;
                                       }
                                   } else {
                                       for k in 0..FFMK as usize {
@@ -283,7 +285,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                                           let gradient =  LEFT_HASH_VALUE * contra_weight;
                                           *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
 //                                          *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient;
-                                          *myslice.get_unchecked_mut(contra_offset + vv + k ) += ffm_weight * gradient * 0.5;
+                                          *myslice.get_unchecked_mut(contra_offset2 + z ) += ffm_weight * gradient * 0.5;
                                       }
                                   }
                                   vv += FFMK as usize;
@@ -308,20 +310,38 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                         let mut local_index: usize = 0;
                         let myslice = &mut pb.tapes[self.output_tape_index as usize][original_size..];
 
-                        for left_hash in &fb.ffm_buffer {
-                            let mut feature_index = left_hash.hash as usize;
-                            let mut contra_offset = (left_hash.contra_field_index * fb.ffm_fields_count) as usize;
-                            
-                            for j in 0..fc as usize {
-                                let feature_value = *local_data_ffm_values.get_unchecked(local_index);
-                                let general_gradient = myslice.get_unchecked(contra_offset + j);
-                                let gradient = general_gradient * feature_value;
-                                let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
-                                ffm_weights.get_unchecked_mut(feature_index).weight -= update;
-                                local_index += 1;
-                                feature_index += 1;
+                        let wsumbuf: bool;
+                        specialize_k!(self.ffm_k, FFMK, wsumbuf, {
+                            for left_hash in &fb.ffm_buffer {
+                                let mut feature_index = left_hash.hash as usize;
+                                let mut contra_offset = (left_hash.contra_field_index * fb.ffm_fields_count) as usize;
+                                let mut contra_offset2 = contra_offset / FFMK as usize;
+                                                           
+                                for z in 0..fb.ffm_fields_count as usize {
+                                    let general_gradient = myslice.get_unchecked(contra_offset2 + z);
+                                    for k in 0..FFMK as usize {
+                                        let feature_value = *local_data_ffm_values.get_unchecked(local_index);
+                                        let gradient = general_gradient * feature_value;
+                                        let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
+                                        ffm_weights.get_unchecked_mut(feature_index).weight -= update;
+                                        local_index += 1;
+                                        feature_index += 1;
+                                    }   
+                                }    
+                                        
+                                        
+                                        /*
+                                for j in 0..fc as usize {
+                                    let feature_value = *local_data_ffm_values.get_unchecked(local_index);
+                                    let general_gradient = myslice.get_unchecked(contra_offset + j);
+                                    let gradient = general_gradient * feature_value;
+                                    let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
+                                    ffm_weights.get_unchecked_mut(feature_index).weight -= update;
+                                    local_index += 1;
+                                    feature_index += 1;
+                                }*/
                             }
-                        }
+                        });
                     }
                     pb.tapes[self.output_tape_index as usize].truncate(original_size );
                     // The only exit point
