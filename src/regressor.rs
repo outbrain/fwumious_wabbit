@@ -21,6 +21,7 @@ use crate::block_lr;
 use crate::block_loss_functions;
 use crate::block_neuron;
 use crate::block_neuronlayer;
+use crate::block_relu;
 
 
 
@@ -106,28 +107,36 @@ impl Regressor  {
             reg.set_input_tape_index(0);
             reg.set_output_tape_index(1);
             rg.blocks_boxes.push(reg);
-        } else {	
-            let neuron_layer_width = 30;
+        } else {
+            let neuron_layer_width = 10;
             let mut reg = block_neuronlayer::new_without_weights(mi, 
-                                                                embedding_outputs, 
+                                                                embedding_outputs, // number of inputs 
                                                                 block_neuronlayer::NeuronType::WeightedSum, 
                                                                 neuron_layer_width,
-                                                                block_neuronlayer::InitType::RandomFirstNeuron1).unwrap();
+                                                                block_neuronlayer::InitType::RandomFirstNeuron1,
+                                                                0.0 // dropout
+                                                                ).unwrap();
             inputs += reg.get_num_outputs();
             reg.set_input_tape_index(0);
             reg.set_output_tape_index(2);
             rg.blocks_boxes.push(reg);
-
 /*
-            let mut reg = block_neuronlayer::new_without_weights(mi, 
+            let mut reg = block_relu::new_without_weights(mi, inputs).unwrap();
+          //  inputs += reg.get_num_outputs();
+            reg.set_input_tape_index(1);
+            reg.set_output_tape_index(2);
+            rg.blocks_boxes.push(reg);
+*/
+
+            /*let mut reg = block_neuronlayer::new_without_weights(mi, 
                                                                 neuron_layer_width, 
                                                                 block_neuronlayer::NeuronType::WeightedSum, 
                                                                 1,
-                                                                block_neuronlayer::InitType::RandomFirstNeuron10
-                                                                ).unwrap();
-            inputs += reg.get_num_outputs();
-            reg.set_input_tape_index(1);
-            reg.set_output_tape_index(2);
+                                                                block_neuronlayer::InitType::RandomFirstNeuron10,
+                                                                1.0).unwrap();
+            inputs = reg.get_num_outputs();
+            reg.set_input_tape_index(2);
+            reg.set_output_tape_index(3);
             rg.blocks_boxes.push(reg);
 */
 
@@ -136,7 +145,7 @@ impl Regressor  {
 //        println!("INPUTS : {}", inputs);
         let mut reg_sigmoid = block_loss_functions::new_without_weights(mi, inputs).unwrap();
         reg_sigmoid.set_input_tape_index(2);
-        reg_sigmoid.set_output_tape_index(3);
+        reg_sigmoid.set_output_tape_index(4);
         rg.result_tape_index = reg_sigmoid.get_output_tape_index();
         rg.blocks_boxes.push(reg_sigmoid);
 

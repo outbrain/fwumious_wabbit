@@ -46,6 +46,7 @@ pub struct BlockNeuronLayer<L:OptimizerTrait> {
     pub neuron_type: NeuronType,
     pub num_neurons: u32,
     pub init_type: InitType,
+    pub dropout: f32,
 }
 
 
@@ -53,11 +54,12 @@ pub fn new_without_weights(mi: &model_instance::ModelInstance,
                             num_inputs: u32, 
                             ntype: NeuronType, 
                             num_neurons: u32,
-                            init_type: InitType) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+                            init_type: InitType, 
+                            dropout: f32) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
     match mi.optimizer {
-        model_instance::Optimizer::AdagradLUT => new_without_weights_2::<optimizer::OptimizerAdagradLUT>(&mi, num_inputs, ntype, num_neurons, init_type),
-        model_instance::Optimizer::AdagradFlex => new_without_weights_2::<optimizer::OptimizerAdagradFlex>(&mi, num_inputs, ntype, num_neurons, init_type),
-        model_instance::Optimizer::SGD => new_without_weights_2::<optimizer::OptimizerSGD>(&mi, num_inputs, ntype, num_neurons, init_type)
+        model_instance::Optimizer::AdagradLUT => new_without_weights_2::<optimizer::OptimizerAdagradLUT>(&mi, num_inputs, ntype, num_neurons, init_type, dropout),
+        model_instance::Optimizer::AdagradFlex => new_without_weights_2::<optimizer::OptimizerAdagradFlex>(&mi, num_inputs, ntype, num_neurons, init_type, dropout),
+        model_instance::Optimizer::SGD => new_without_weights_2::<optimizer::OptimizerSGD>(&mi, num_inputs, ntype, num_neurons, init_type, dropout)
     }
 }
 
@@ -66,7 +68,8 @@ fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelI
                                                     num_inputs: u32, 
                                                     ntype: NeuronType, 
                                                     num_neurons: u32,
-                                                    init_type: InitType) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+                                                    init_type: InitType,
+                                                    dropout: f32) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
     assert!(num_neurons > 0);
     assert!((num_inputs as usize )< MAX_NUM_INPUTS);
     assert!(num_inputs != 0);
@@ -84,6 +87,7 @@ fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelI
         neuron_type: ntype,
         num_neurons: num_neurons,
         init_type: init_type,
+        dropout: dropout,
     };
     rg.optimizer.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
 
@@ -162,15 +166,19 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
             let input_tape_start = pb.tapes[self.input_tape_index as usize].len() - self.num_inputs as usize; 
 
 //          println!("len: {}, num inputs: {}, input_tape_indeX: {}", len, self.num_inputs, self.input_tape_index);
+            let frandseed = fb.example_number * fb.example_number;
 
             {
 
                 for j in 0..self.num_neurons {
-                    let mut wsum:f32 = self.weights.get_unchecked((self.num_inputs * self.num_neurons + j) as usize).weight; // bias term
-                    let input_tape = pb.tapes.get_unchecked(self.input_tape_index as usize).get_unchecked(input_tape_start..);
+                    let mut wsum:f32 = 0.0;
+                    if self.dropout == 0.0 || merand48(j as u64 + frandseed) > self.dropout {
+                        wsum = self.weights.get_unchecked((self.num_inputs * self.num_neurons + j) as usize).weight; // bias term
+                        let input_tape = pb.tapes.get_unchecked(self.input_tape_index as usize).get_unchecked(input_tape_start..);
 
-                    for i in 0..input_tape.len() {                                 
-                            wsum += input_tape.get_unchecked(i) * self.weights.get_unchecked((i as u32 + j * self.num_inputs) as usize).weight;
+                        for i in 0..input_tape.len() {                                 
+                                wsum += input_tape.get_unchecked(i) * self.weights.get_unchecked((i as u32 + j * self.num_inputs) as usize).weight;
+                        }
                     }
                     pb.tapes.get_unchecked_mut(self.output_tape_index as usize).push(wsum);
 //                    println!("wsum: {}", wsum);
@@ -196,32 +204,33 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                     let input_tape = pb.tapes.get_unchecked(self.input_tape_index as usize).get_unchecked(input_tape_start..);
                     
                     for j in 0..self.num_neurons as usize {
-                        let general_gradient = output_tape.get_unchecked(j);
-                        let j_offset = j * self.num_inputs as usize;
-//                        println!("General gradient: {}", general_gradient);
-                        for i in 0..self.num_inputs as usize {
-                            let feature_value = input_tape.get_unchecked(i);
-  //                          println!("input tape index: {}, input tape start: {}, i: {}", self.input_tape_index, input_tape_start, i);
-  //                          println!("Wieght: {}, feature value: {}", w, feature_value);
-                            let gradient = general_gradient * feature_value;
-    //                        println!("Final gradient: {}", gradient);
-                            let update = self.optimizer.calculate_update(gradient, 
-                                                                    &mut self.weights.get_unchecked_mut(i + j_offset).optimizer_data);
-    //                        println!
-                            *output_errors.get_unchecked_mut(i)  += self.weights.get_unchecked(i + j_offset).weight * general_gradient;
-                            self.weights.get_unchecked_mut(i + j_offset).weight -= update;
-                            
-                        }
-                        {
-                            // Updating bias term:
-                            let gradient = general_gradient * 1.0;
-                            let update = self.optimizer.calculate_update(gradient, 
-                                                                        &mut self.weights.get_unchecked_mut(((self.num_inputs* self.num_neurons) as usize + j) as usize).optimizer_data);
-                            self.weights.get_unchecked_mut(((self.num_inputs * self.num_neurons) as usize + j) as usize).weight -= update;
+                        if self.dropout == 0.0 || merand48(j as u64 + frandseed) > self.dropout {
+
+                            let general_gradient = output_tape.get_unchecked(j);
+                            let j_offset = j * self.num_inputs as usize;
+    //                        println!("General gradient: {}", general_gradient);
+                            for i in 0..self.num_inputs as usize {
+                                let feature_value = input_tape.get_unchecked(i);
+      //                          println!("input tape index: {}, input tape start: {}, i: {}", self.input_tape_index, input_tape_start, i);
+      //                          println!("Wieght: {}, feature value: {}", w, feature_value);
+                                let gradient = general_gradient * feature_value;
+        //                        println!("Final gradient: {}", gradient);
+                                let update = self.optimizer.calculate_update(gradient, 
+                                                                        &mut self.weights.get_unchecked_mut(i + j_offset).optimizer_data);
+        //                        println!
+                                *output_errors.get_unchecked_mut(i)  += self.weights.get_unchecked(i + j_offset).weight * general_gradient;
+                                self.weights.get_unchecked_mut(i + j_offset).weight -= update;
+                            }
+                            {
+                                // Updating bias term:
+                                let gradient = general_gradient * 1.0;
+                                let update = self.optimizer.calculate_update(gradient, 
+                                                                            &mut self.weights.get_unchecked_mut(((self.num_inputs* self.num_neurons) as usize + j) as usize).optimizer_data);
+                                self.weights.get_unchecked_mut(((self.num_inputs * self.num_neurons) as usize + j) as usize).weight -= update;
+                            }
                         }
                      }
                      
-                     // TODO: Implement bias term update
                     for i in 0..self.num_inputs as usize {
                         *(pb.tapes.get_unchecked_mut(self.input_tape_index as usize)).get_unchecked_mut(input_tape_start + i) = *output_errors.get_unchecked(i);
                     }
