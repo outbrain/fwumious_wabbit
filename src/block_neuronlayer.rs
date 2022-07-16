@@ -47,6 +47,7 @@ pub struct BlockNeuronLayer<L:OptimizerTrait> {
     pub num_neurons: u32,
     pub init_type: InitType,
     pub dropout: f32,
+    pub dropout_1: f32,
 }
 
 
@@ -88,6 +89,7 @@ fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelI
         num_neurons: num_neurons,
         init_type: init_type,
         dropout: dropout,
+        dropout_1: 1.0 - dropout,
     };
     rg.optimizer.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
 
@@ -180,6 +182,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                                 wsum += input_tape.get_unchecked(i) * self.weights.get_unchecked((i as u32 + j * self.num_inputs) as usize).weight;
                         }
                     }
+                    if !update {wsum *= self.dropout_1;} // fix for overexcitment if we are just predicting and not learning
                     pb.tapes.get_unchecked_mut(self.output_tape_index as usize).push(wsum);
 //                    println!("wsum: {}", wsum);
                 }
