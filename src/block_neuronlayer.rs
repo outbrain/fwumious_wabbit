@@ -32,7 +32,8 @@ pub enum NeuronType {
 pub enum InitType {
     Random,
     RandomFirstNeuron1,
-    RandomFirstNeuron10
+    RandomFirstNeuron10,
+    One,
 }
 
 
@@ -97,8 +98,8 @@ fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelI
         dropout_1: 1.0 - dropout,
         max_norm: max_norm,
     };
-//    rg.optimizer.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
-    rg.optimizer.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
+    rg.optimizer.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
+//    rg.optimizer.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
     Ok(Box::new(rg))
 }
 
@@ -131,6 +132,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
             InitType::Random => {},
             InitType::RandomFirstNeuron1 => { for i in 0..self.num_inputs { self.weights[i as usize].weight = 1.0}},
             InitType::RandomFirstNeuron10 => { for i in 0..self.num_inputs { self.weights[i as usize].weight = 0.0}; self.weights[0].weight = 1.0;},
+            InitType::One => { for i in 0..self.weights_len { self.weights[i as usize].weight = 1.0}},
+
         }
         
         
@@ -218,16 +221,15 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
 
                             let general_gradient = output_tape.get_unchecked(j);
                             let j_offset = j * self.num_inputs as usize;
-    //                        println!("General gradient: {}", general_gradient);
+   //                         println!("General gradient: {}", general_gradient);
                             for i in 0..self.num_inputs as usize {
                                 let feature_value = input_tape.get_unchecked(i);
-      //                          println!("input tape index: {}, input tape start: {}, i: {}", self.input_tape_index, input_tape_start, i);
-      //                          println!("Wieght: {}, feature value: {}", w, feature_value);
+  //                              println!("input tape index: {}, input tape start: {}, i: {}", self.input_tape_index, input_tape_start, i);
+ //                               println!("Wieght: {}, feature value: {}", self.weights.get_unchecked_mut(i + j_offset).weight, feature_value);
                                 let gradient = general_gradient * feature_value;
-        //                        println!("Final gradient: {}", gradient);
+//                            println!("Final gradient: {}", gradient);
                                 let update = self.optimizer.calculate_update(gradient, 
                                                                         &mut self.weights.get_unchecked_mut(i + j_offset).optimizer_data);
-        //                        println!
                                 *output_errors.get_unchecked_mut(i)  += self.weights.get_unchecked(i + j_offset).weight * general_gradient;
                                 self.weights.get_unchecked_mut(i + j_offset).weight -= update;
                             }
@@ -368,7 +370,14 @@ mod tests {
         mi.optimizer = Optimizer::SGD;
         
         
-        let mut re = new_without_weights(&mi, 1, NeuronType::WeightedSum, 1).unwrap();
+        let mut re = new_without_weights(&mi, 
+                                            1, 
+                                            NeuronType::WeightedSum, 
+                                            1,
+                                            InitType::RandomFirstNeuron1,
+                                            0.0, // dropout
+                                            0.0, // max norm
+                                            ).unwrap();
         re.set_input_tape_index(0);
         re.set_output_tape_index(1);
         re.allocate_and_init_weights(&mi);
@@ -391,7 +400,7 @@ mod tests {
         assert_eq!(pb.tapes[2].len(), 0);
 
         pb.tapes[0].push(2.0);
-        assert_epsilon!(slearn  (&mut re, &mut ib, &fb, &mut pb, true), 1.6);
+        assert_epsilon!(slearn  (&mut re, &mut ib, &fb, &mut pb, true), 1.5);
         
 
     }
@@ -405,7 +414,14 @@ mod tests {
         
         
         let NUM_NEURONS = 2;
-        let mut re = new_without_weights(&mi, 1, NeuronType::WeightedSum, NUM_NEURONS).unwrap();
+        let mut re = new_without_weights(&mi, 
+                                            1, 
+                                            NeuronType::WeightedSum, 
+                                            NUM_NEURONS,
+                                            InitType::One,
+                                            0.0, // dropout
+                                            0.0, // max norm
+                                        ).unwrap();
         re.set_input_tape_index(0);
         re.set_output_tape_index(1);
         re.allocate_and_init_weights(&mi);
@@ -429,7 +445,7 @@ mod tests {
 
         pb.reset();
         pb.tapes[0].push(2.0);
-        assert_epsilon!(slearn  (&mut re, &mut ib, &fb, &mut pb, false), 1.6);
+        assert_epsilon!(slearn  (&mut re, &mut ib, &fb, &mut pb, false), 1.5);
         
 
     }

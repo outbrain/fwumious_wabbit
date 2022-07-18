@@ -12,6 +12,7 @@ const CONSTANT_HASH:u32 = 11650396;
 pub struct HashAndValue {
     pub hash: u32,
     pub value: f32
+//    pub combo_index: u32,
 }
 
 #[derive(Clone, Debug, PartialEq)]

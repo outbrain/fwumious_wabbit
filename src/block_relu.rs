@@ -197,10 +197,12 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
-        mi.optimizer = Optimizer::SGD;
+        mi.optimizer = model_instance::Optimizer::SGD;
         
         
-        let mut re = new_without_weights(&mi, 1, NeuronType::WeightedSum, 1).unwrap();
+        let mut re = new_without_weights(&mi, 
+                                            1, 
+                                        ).unwrap();
         re.set_input_tape_index(0);
         re.set_output_tape_index(1);
         re.allocate_and_init_weights(&mi);
@@ -221,47 +223,9 @@ mod tests {
         assert_eq!(pb.tapes[0][0], 1.0);
         assert_eq!(pb.tapes[1].len(), 0);
         assert_eq!(pb.tapes[2].len(), 0);
-
-        pb.tapes[0].push(2.0);
-        assert_epsilon!(slearn  (&mut re, &mut ib, &fb, &mut pb, true), 1.6);
-        
-
-    }
-
-    #[test]
-    fn test_two_neurons() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
-        mi.learning_rate = 0.1;
-        mi.power_t = 0.0;
-        mi.optimizer = Optimizer::SGD;
-        
-        
-        let NUM_NEURONS = 2;
-        let mut re = new_without_weights(&mi, 1, NeuronType::WeightedSum, NUM_NEURONS).unwrap();
-        re.set_input_tape_index(0);
-        re.set_output_tape_index(1);
-        re.allocate_and_init_weights(&mi);
-        
-        let mut ib = block_loss_functions::new_identity_block(&mi, NUM_NEURONS).unwrap();
-        ib.set_input_tape_index(1);
-        ib.set_output_tape_index(2);
-
-        
-        let mut pb = port_buffer::PortBuffer::new(&mi);
-        let fb = fb_vec();
-        pb.tapes[0].push(2.0);
-        assert_epsilon!(slearn  (&mut re, &mut ib, &fb, &mut pb, true), 2.0);
-        // what do we expect:
-        // on tape 0 input of 2.0 will be replaced with the gradient of 2.0
-        // on tape 1 input has been consumed by returning function
-        // on tape 2 the output was consumed by slearn
-        assert_eq!(pb.tapes[0][0], 2.0);
-        assert_eq!(pb.tapes[1].len(), 0);
-        assert_eq!(pb.tapes[2].len(), 1); // since we are using identity loss function, only one was consumed by slearn
-
         pb.reset();
         pb.tapes[0].push(2.0);
-        assert_epsilon!(slearn  (&mut re, &mut ib, &fb, &mut pb, false), 1.6);
+        assert_epsilon!(slearn  (&mut re, &mut ib, &fb, &mut pb, true), 2.0); // relu desnt learn
         
 
     }

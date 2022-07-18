@@ -142,7 +142,7 @@ impl BlockTrait for BlockSigmoid {
         let len = pb.tapes[self.input_tape_index as usize].len();
         // Technically it needs to be longer. but for debugging we want to consume all of them
         if (self.num_inputs as usize) != len {
-            panic!("BlockSigmoid::forward_backward() Number of inputs is different than number of values on the input tape");
+            panic!("BlockSigmoid::forward_backward() Number of inputs is different than number of values on the input tape: self.num_inputs: {} input tape: {}", self.num_inputs, len);
         }
         
         let wsum:f32 = {

@@ -103,7 +103,7 @@ impl Regressor  {
         
         let FINAL_OUTPUTS_TAPE = 5;
         let mut inputs:u32 = 0;
-        if false {
+        if true {
             let mut reg = block_neuron::new_without_weights(mi, embedding_outputs, block_neuron::NeuronType::Sum).unwrap();
             inputs += reg.get_num_outputs();
             reg.set_input_tape_index(0);
