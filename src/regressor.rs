@@ -22,6 +22,7 @@ use crate::block_loss_functions;
 use crate::block_neuron;
 use crate::block_neuronlayer;
 use crate::block_relu;
+use crate::block_copy;
 
 
 
@@ -99,7 +100,8 @@ impl Regressor  {
         // If we put sum function here, it has to be neutral
 //        let mut reg = block_neuronlayer::new_without_weights(mi, embedding_outputs, block_neuronlayer::NeuronType::WeightedSum, 1).unwrap();
 //        let mut reg = block_neuron::new_without_weights(mi, embedding_outputs, block_neuron::NeuronType::WeightedSum).unwrap();
-    
+        
+        let FINAL_OUTPUTS_TAPE = 5;
         let mut inputs:u32 = 0;
         if false {
             let mut reg = block_neuron::new_without_weights(mi, embedding_outputs, block_neuron::NeuronType::Sum).unwrap();
@@ -108,12 +110,22 @@ impl Regressor  {
             reg.set_output_tape_index(1);
             rg.blocks_boxes.push(reg);
         } else {
-            let neuron_layer_width = 20;
+// Copy to tape 6
+            let mut reg = block_copy::new_without_weights(mi, embedding_outputs).unwrap();
+            let additional_inputs = reg.get_num_outputs();
+            reg.set_input_tape_index(0);
+            reg.set_output_tape_index(FINAL_OUTPUTS_TAPE);
+            rg.blocks_boxes.push(reg);
+
+
+
+
+            let neuron_layer_width = 30;
             let mut reg = block_neuronlayer::new_without_weights(mi, 
                                                                 embedding_outputs, // number of inputs 
                                                                 block_neuronlayer::NeuronType::WeightedSum, 
                                                                 neuron_layer_width,
-                                                                block_neuronlayer::InitType::RandomFirstNeuron1,
+                                                                block_neuronlayer::InitType::Random,
                                                                 0.0, // dropout
                                                                 0.0, // max norm
                                                                 ).unwrap();
@@ -122,10 +134,30 @@ impl Regressor  {
             reg.set_output_tape_index(1);
             rg.blocks_boxes.push(reg);
 
-/*            let mut reg = block_relu::new_without_weights(mi, inputs).unwrap();
+            let mut reg = block_relu::new_without_weights(mi, neuron_layer_width).unwrap();
           //  inputs += reg.get_num_outputs();
             reg.set_input_tape_index(1);
             reg.set_output_tape_index(2);
+            rg.blocks_boxes.push(reg);
+            
+
+            let mut reg = block_neuronlayer::new_without_weights(mi, 
+                                                                neuron_layer_width, 
+                                                                block_neuronlayer::NeuronType::WeightedSum, 
+                                                                neuron_layer_width,
+                                                                block_neuronlayer::InitType::Random,
+                                                                0.1, // dropout
+                                                                5.0, // max norm
+                                                                ).unwrap();
+            inputs = additional_inputs + reg.get_num_outputs();
+            reg.set_input_tape_index(2);
+            reg.set_output_tape_index(4);
+            rg.blocks_boxes.push(reg);
+
+/*            let mut reg = block_relu::new_without_weights(mi, neuron_layer_width).unwrap();
+          //  inputs += reg.get_num_outputs();
+            reg.set_input_tape_index(3);
+            reg.set_output_tape_index(4);
             rg.blocks_boxes.push(reg);
 */
 
@@ -133,22 +165,53 @@ impl Regressor  {
                                                                 neuron_layer_width, 
                                                                 block_neuronlayer::NeuronType::WeightedSum, 
                                                                 neuron_layer_width,
-                                                                block_neuronlayer::InitType::RandomFirstNeuron1,
+                                                                block_neuronlayer::InitType::Random,
                                                                 0.0, // dropout
                                                                 0.0, // max norm
                                                                 ).unwrap();
-            inputs = reg.get_num_outputs();
-            reg.set_input_tape_index(1);
-            reg.set_output_tape_index(3);
+            inputs = additional_inputs + neuron_layer_width;
+            reg.set_input_tape_index(4);
+            reg.set_output_tape_index(FINAL_OUTPUTS_TAPE);
             rg.blocks_boxes.push(reg);
 
 
+
+/*
+            let mut reg = block_neuronlayer::new_without_weights(mi, 
+                                                                inputs, // number of inputs 
+                                                                block_neuronlayer::NeuronType::WeightedSum, 
+                                                                1,
+                                                                block_neuronlayer::InitType::Random,
+                                                                0.0, // dropout
+                                                                0.0, // max norm
+                                                                ).unwrap();
+
+*/
+/*
+            let mut reg = block_neuronlayer::new_without_weights(mi, 
+                                                            inputs, // number of inputs 
+                                                            block_neuronlayer::NeuronType::WeightedSum, 
+                                                            1,
+                                                            block_neuronlayer::InitType::RandomFirstNeuron1,
+                                                            0.0, // dropout
+                                                            0.0, // max norm
+                                                            ).unwrap();
+            reg.set_input_tape_index(FINAL_OUTPUTS_TAPE);
+            reg.set_output_tape_index(FINAL_OUTPUTS_TAPE+1);
+
+            num_inputs = 1;
+            rg.blocks_boxes.push(reg);
+*/
+
         }          
+
+
+
         // now sigmoid has a single input
 //        println!("INPUTS : {}", inputs);
         let mut reg_sigmoid = block_loss_functions::new_without_weights(mi, inputs).unwrap();
-        reg_sigmoid.set_input_tape_index(3);
-        reg_sigmoid.set_output_tape_index(4);
+        reg_sigmoid.set_input_tape_index(FINAL_OUTPUTS_TAPE);
+        reg_sigmoid.set_output_tape_index(FINAL_OUTPUTS_TAPE + 1);
         rg.result_tape_index = reg_sigmoid.get_output_tape_index();
         rg.blocks_boxes.push(reg_sigmoid);
 

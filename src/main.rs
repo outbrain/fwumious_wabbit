@@ -26,6 +26,7 @@ mod block_lr;
 mod block_neuron;
 mod block_neuronlayer;
 mod block_relu;
+mod block_copy;
 mod cache;
 mod cmdline;
 mod consts;

@@ -240,7 +240,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                             }
                             
                             
-                            if self.max_norm != 0.0 && fb.example_number % 1 == 0 {
+                            if self.max_norm != 0.0 && fb.example_number % 10 == 0 {
                                 let mut wsumsquared = 0.0;
                                 for i in 0..self.num_inputs as usize {
                                     let w = self.weights.get_unchecked_mut(i + j_offset).weight;
