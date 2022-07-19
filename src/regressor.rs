@@ -107,7 +107,7 @@ impl Regressor  {
             let mut reg = block_neuron::new_without_weights(mi, embedding_outputs, block_neuron::NeuronType::Sum).unwrap();
             inputs += reg.get_num_outputs();
             reg.set_input_tape_index(0);
-            reg.set_output_tape_index(1);
+            reg.set_output_tape_index(FINAL_OUTPUTS_TAPE);
             rg.blocks_boxes.push(reg);
         } else {
 // Copy to tape 6
