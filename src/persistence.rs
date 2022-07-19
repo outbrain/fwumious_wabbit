@@ -230,10 +230,12 @@ B,featureB
             HashAndValue {
                 hash: 1,
                 value: 1.0,
+                combo_index: 0,
             },
             HashAndValue {
                 hash: 2,
                 value: 1.0,
+                combo_index: 0,
             },
         ]);
         assert_eq!(re.learn(fbuf, &mut pb, true), 0.5);
@@ -429,10 +431,12 @@ B,featureB
                 HashAndValue {
                     hash: 52,
                     value: 0.5,
+                    combo_index: 0,
                 },
                 HashAndValue {
                     hash: 2,
                     value: 1.0,
+                    combo_index: 0,
                 },
             ],
             vec![
@@ -459,10 +463,12 @@ B,featureB
                 HashAndValue {
                     hash: 1,
                     value: 1.0,
+                    combo_index: 0,
                 },
                 HashAndValue {
                     hash: 2,
                     value: 1.0,
+                    combo_index: 0,
                 },
             ],
             vec![

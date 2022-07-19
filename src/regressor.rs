@@ -380,8 +380,8 @@ mod tests {
         let mut pb = re.new_portbuffer(&mi);
         // Empty model: no matter how many features, prediction is 0.5
         assert_eq!(re.learn(&lr_vec(vec![]), &mut pb, false), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), &mut pb, false), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), &mut pb, false), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0,}]), &mut pb, false), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0,}, HashAndValue{hash:2, value: 1.0, combo_index: 0,}]), &mut pb, false), 0.5);
     }
 
     #[test]
@@ -392,7 +392,7 @@ mod tests {
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
         
-        let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);
+        let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0,}]);
         
         // Here learning rate mechanism does not affect the results, so let's verify three different ones
         mi.optimizer = model_instance::Optimizer::AdagradFlex;
@@ -424,7 +424,7 @@ mod tests {
         
         let mut re = Regressor::new(&mi);
         let mut pb = re.new_portbuffer(&mi);
-        let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash: 1, value: 2.0}]);
+        let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}, HashAndValue{hash: 1, value: 2.0, combo_index: 0,}]);
 
         assert_eq!(re.learn(vec_in, &mut pb, true), 0.5);
         assert_eq!(re.learn(vec_in, &mut pb, true), 0.38936076);
@@ -442,9 +442,9 @@ mod tests {
         let mut re = Regressor::new(&mi);
         let mut pb = re.new_portbuffer(&mi);
         
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), &mut pb, true), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), &mut pb, true), 0.4750208);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), &mut pb, true), 0.45788094);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0, combo_index: 0}]), &mut pb, true), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0, combo_index: 0}]), &mut pb, true), 0.4750208);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0, combo_index: 0}]), &mut pb, true), 0.45788094);
     }
 
     #[test]
@@ -460,9 +460,9 @@ mod tests {
         let mut pb = re.new_portbuffer(&mi);
         let mut p: f32;
         
-        p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), &mut pb, true);
+        p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0, combo_index: 0}]), &mut pb, true);
         assert_eq!(p, 0.5);
-        p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), &mut pb, true);
+        p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0, combo_index: 0}]), &mut pb, true);
         if optimizer::FASTMATH_LR_LUT_BITS == 12 { 
             assert_eq!(p, 0.47539312);
         } else if optimizer::FASTMATH_LR_LUT_BITS == 11 { 
@@ -484,9 +484,9 @@ mod tests {
         let mut re = Regressor::new(&mi);
         let mut pb = re.new_portbuffer(&mi);
         // Here we take twice two features and then once just one
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), &mut pb, true), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), &mut pb, true), 0.45016602);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]), &mut pb,  true), 0.45836908);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}, HashAndValue{hash:2, value: 1.0, combo_index: 1}]), &mut pb, true), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}, HashAndValue{hash:2, value: 1.0, combo_index: 1}]), &mut pb, true), 0.45016602);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}]), &mut pb,  true), 0.45836908);
     }
 
     #[test]
@@ -500,9 +500,9 @@ mod tests {
         let mut re = Regressor::new(&mi);
         let mut pb = re.new_portbuffer(&mi);
         
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), &mut pb, true), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), &mut pb, true), 0.45016602);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), &mut pb, true), 0.40611085);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0, combo_index: 0}]), &mut pb, true), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0, combo_index: 0}]), &mut pb, true), 0.45016602);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0, combo_index: 0}]), &mut pb, true), 0.40611085);
     }
 
     #[test]
@@ -517,7 +517,7 @@ mod tests {
         let mut re = Regressor::new(&mi);
         let mut pb = re.new_portbuffer(&mi);
         
-        let mut fb_instance = lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);
+        let mut fb_instance = lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}]);
         fb_instance.example_importance = 0.5;
         assert_eq!(re.learn(&fb_instance, &mut pb, true), 0.5);
         assert_eq!(re.learn(&fb_instance, &mut pb, true), 0.49375027);
