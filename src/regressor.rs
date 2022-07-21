@@ -484,8 +484,8 @@ mod tests {
         let mut re = Regressor::new(&mi);
         let mut pb = re.new_portbuffer(&mi);
         // Here we take twice two features and then once just one
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}, HashAndValue{hash:2, value: 1.0, combo_index: 1}]), &mut pb, true), 0.5);
-        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}, HashAndValue{hash:2, value: 1.0, combo_index: 1}]), &mut pb, true), 0.45016602);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}, HashAndValue{hash:2, value: 1.0, combo_index: 0}]), &mut pb, true), 0.5);
+        assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}, HashAndValue{hash:2, value: 1.0, combo_index: 0}]), &mut pb, true), 0.45016602);
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}]), &mut pb,  true), 0.45836908);
     }
 
