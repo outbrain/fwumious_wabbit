@@ -49,7 +49,7 @@ impl BlockGraph {
         for i in 0..num_output_connectors {
             let bo = BlockPtrOutput(b, BlockOutput(i));
             vo.push(bo);
-            self.edges_in[b.0].push(Vec::new()); // make empty space
+            self.edges_out[b.0].push(Vec::new()); // make empty spaceg
         }
         
         return vo;
