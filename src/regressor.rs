@@ -103,7 +103,7 @@ impl Regressor  {
         
         let FINAL_OUTPUTS_TAPE = 5;
         let mut inputs:u32 = 0;
-        if true {
+        if false {
             let mut reg = block_neuron::new_without_weights(mi, embedding_outputs, block_neuron::NeuronType::Sum).unwrap();
             inputs += reg.get_num_outputs();
             reg.set_input_tape_index(0);
@@ -116,8 +116,6 @@ impl Regressor  {
             reg.set_input_tape_index(0);
             reg.set_output_tape_index(FINAL_OUTPUTS_TAPE);
             rg.blocks_boxes.push(reg);
-
-
 
 
             let neuron_layer_width = 30;
@@ -185,7 +183,7 @@ impl Regressor  {
                                                                 0.0, // dropout
                                                                 0.0, // max norm
                                                                 ).unwrap();
-
+                                                                
 */
 /*
             let mut reg = block_neuronlayer::new_without_weights(mi, 

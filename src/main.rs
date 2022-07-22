@@ -44,7 +44,7 @@ mod serving;
 mod version;
 mod vwmap;
 mod port_buffer;
-
+mod graph;
 
 fn main() {
     match main2() {
