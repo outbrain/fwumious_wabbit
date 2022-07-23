@@ -88,6 +88,9 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuron<L>
         
     }
 
+    fn get_num_output_tapes(&self) -> usize {1}   
+
+
     fn get_num_outputs(&self) -> u32 {
         return 1
     }

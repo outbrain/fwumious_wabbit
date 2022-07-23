@@ -56,6 +56,9 @@ impl BlockTrait for BlockSigmoid {
         self
     }
 
+    fn get_num_output_tapes(&self) -> usize {1}   
+
+
     fn get_num_outputs(&self) -> u32 {
         return 0
     }
@@ -231,6 +234,8 @@ impl BlockTrait for BlockResult {
         self
     }
 
+    fn get_num_output_tapes(&self) -> usize {0}   
+
     fn get_num_outputs(&self) -> u32 {
         // this means outputs on regular tapes
         return 0
@@ -356,6 +361,9 @@ impl BlockTrait for BlockZeros {
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
+
+    fn get_num_output_tapes(&self) -> usize {1}   
+
 
     fn get_num_outputs(&self) -> u32 {
         self.num_outputs

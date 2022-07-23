@@ -44,6 +44,7 @@ pub trait BlockTrait {
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>>;
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>;
     fn get_num_outputs(&self) -> u32;
+    fn get_num_output_tapes(&self) -> usize;
     fn set_input_tape_index(&mut self, input_tape_index: i32);
     fn set_output_tape_index(&mut self, output_tape_index: i32);
 

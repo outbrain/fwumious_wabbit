@@ -152,9 +152,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
     }
 
 
-    fn get_num_outputs(&self) -> u32 {
-        return self.ffm_num_fields * self.ffm_num_fields;
-    }
+    fn get_num_outputs(&self) -> u32 { return self.ffm_num_fields * self.ffm_num_fields; }
+    fn get_num_output_tapes(&self) -> usize { 1 }   
     
     fn set_input_tape_index(&mut self, output_tape_index: i32) {
         panic!("You cannnot set input_tape_index for BlockFFM");

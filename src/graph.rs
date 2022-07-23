@@ -36,7 +36,6 @@ impl BlockGraph {
                     ) -> Vec<BlockPtrOutput> {
                     
         let bp = BlockPtr(self.blocks.len());
-        self.blocks.push(block);
         for (i, edges_in2) in edges_in.iter().enumerate() {
             let bi = BlockInput(i);
             for e in edges_in2.iter() {
@@ -46,13 +45,14 @@ impl BlockGraph {
         }
         self.edges_in.push(edges_in);
         self.edges_out.push(Vec::new());
-        let num_output_connectors = 1;        
+        let num_output_connectors = block.get_num_output_tapes();
         let mut vo:Vec<BlockPtrOutput> = Vec::new();
         for i in 0..num_output_connectors {
             let bo = BlockPtrOutput(bp, BlockOutput(i));
             vo.push(bo);
             self.edges_out[bp.0].push(Vec::new()); // make empty spaceg
         }
+        self.blocks.push(block);
         
         return vo;        
     }
@@ -103,17 +103,54 @@ mod tests {
         let mut bg = BlockGraph::new();
         
         let mut ib = block_loss_functions::new_zero_block(1).unwrap();
-        let output_nodes = bg.add_node(ib, vec![]);
-        assert_eq!(output_nodes, vec![BlockPtrOutput(BlockPtr(0), BlockOutput(0))]);
+        let zero_block_outputs = bg.add_node(ib, vec![]);
+        assert_eq!(zero_block_outputs, vec![BlockPtrOutput(BlockPtr(0), BlockOutput(0))]);
         assert_eq!(bg.edges_in[0].len(), 0);      // basically []
-        assert_eq!(bg.edges_out[0].len(), 1);	  // basically [[]]	
+        assert_eq!(bg.edges_out[0].len(), 1);	  // basically [[]] -- meaning there is one output tape	
         assert_eq!(bg.edges_out[0][0].len(), 0);  
 
+        // Let's add one result block 
         let mut ib = block_loss_functions::new_result_block(1, 1.0).unwrap();
-        let output_nodes = bg.add_node(ib, vec![output_nodes]);
-        assert_eq!(output_nodes, vec![BlockPtrOutput(BlockPtr(1), BlockOutput(0))]);
+        let output_nodes = bg.add_node(ib, vec![zero_block_outputs.clone()]);
+        assert_eq!(output_nodes, vec![]);
 //        println!("Output nodes: {:?}", output_nodes);
-        println!("edges_in: {:?}, edges_out: {:?}", bg.edges_in[0], bg.edges_out[0]);
-        println!("edges_in: {:?}, edges_out: {:?}", bg.edges_in[1], bg.edges_out[1]);
+        //println!("Block 0: edges_in: {:?}, edges_out: {:?}", bg.edges_in[0], bg.edges_out[0]);
+        assert_eq!(bg.edges_in[0].len(), 0);      // basically []
+        assert_eq!(bg.edges_out[0].len(), 1);	  // basically [[]] -- meaning there is one output tape	
+        assert_eq!(bg.edges_out[0][0].len(), 1);  
+
+        //println!("Block 1: edges_in: {:?}, edges_out: {:?}", bg.edges_in[1], bg.edges_out[1]);
+        assert_eq!(bg.edges_in[1].len(), 1);      // basically []
+        assert_eq!(bg.edges_in[1][0].len(), 1);  
+        assert_eq!(bg.edges_out[1].len(), 0);	  // basically [] -- there are no output tapes	
+
+        // Let's add second result block to see what happens
+
+        let mut ib = block_loss_functions::new_result_block(1, 1.0).unwrap();
+        let output_nodes = bg.add_node(ib, vec![zero_block_outputs.clone()]);
+        assert_eq!(output_nodes, vec![]);
+//        println!("Output nodes: {:?}", output_nodes);
+//        println!("Block 0: edges_in: {:?}, edges_out: {:?}", bg.edges_in[0], bg.edges_out[0]);
+        assert_eq!(bg.edges_in[0].len(), 0);      // basically []
+        assert_eq!(bg.edges_out[0].len(), 1);	  // basically [[]] -- meaning there is one output tape	
+        assert_eq!(bg.edges_out[0][0].len(), 2);  
+
+//        println!("Block 1: edges_in: {:?}, edges_out: {:?}", bg.edges_in[1], bg.edges_out[1]);
+        assert_eq!(bg.edges_in[1].len(), 1);      // basically []
+        assert_eq!(bg.edges_in[1][0].len(), 1);  
+        assert_eq!(bg.edges_out[1].len(), 0);	  // basically [] -- there are no output tapes	
+
+//        println!("Block 2: edges_in: {:?}, edges_out: {:?}", bg.edges_in[1], bg.edges_out[1]);
+        assert_eq!(bg.edges_in[1].len(), 1);      // basically []
+        assert_eq!(bg.edges_in[1][0].len(), 1);  
+        assert_eq!(bg.edges_out[1].len(), 0);	  // basically [] -- there are no output tapes	
+
+
+
+
+
+
+
+
     }
 }
