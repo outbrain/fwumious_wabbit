@@ -75,10 +75,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
         self.output_tape_index = output_tape_index;
     }
 
-    fn get_output_tape_index(&self) -> i32 {
-        self.output_tape_index
-    }
-
     #[inline(always)]
     fn forward_backward(&mut self, 
                             further_regressors: &mut [Box<dyn BlockTrait>], 

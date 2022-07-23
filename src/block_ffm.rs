@@ -61,9 +61,10 @@ macro_rules! specialize_k {
       $wsumbuf: ident,
       $code_block: block  ) => {
          match $input_expr {
+// TODO UNCOMMENT USEFUL ONES
 //                2 => {const $output_const:u32 = 2;   let mut $wsumbuf: [f32;$output_const as usize] = [0.0;$output_const as usize]; $code_block},
-                4 => {const $output_const:u32 = 4;   let mut $wsumbuf: [f32;$output_const as usize] = [0.0;$output_const as usize]; $code_block},
-                8 => {const $output_const:u32 = 8;   let mut $wsumbuf: [f32;$output_const as usize] = [0.0;$output_const as usize]; $code_block},
+//                4 => {const $output_const:u32 = 4;   let mut $wsumbuf: [f32;$output_const as usize] = [0.0;$output_const as usize]; $code_block},
+//                8 => {const $output_const:u32 = 8;   let mut $wsumbuf: [f32;$output_const as usize] = [0.0;$output_const as usize]; $code_block},
                 val => {let $output_const:u32 = val; let mut $wsumbuf: [f32;consts::FFM_MAX_K] = [0.0;consts::FFM_MAX_K];      $code_block},
             }
     };
@@ -162,11 +163,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
     fn set_output_tape_index(&mut self, output_tape_index: i32) {
         self.output_tape_index = output_tape_index;
     }
-
-    fn get_output_tape_index(&self) -> i32 {
-        self.output_tape_index
-    }
-
 
 
     #[inline(always)]
@@ -599,7 +595,7 @@ mod tests {
         re.allocate_and_init_weights(&mi);
         re.set_output_tape_index(0);
 
-        let mut lossf = block_loss_functions::new_without_weights(&mi, re.get_num_outputs()).unwrap();
+        let mut lossf = block_loss_functions::new_without_weights(&mi, re.get_num_outputs(), true).unwrap();
         lossf.set_input_tape_index(0);
         lossf.set_output_tape_index(1);
 
@@ -664,7 +660,7 @@ mod tests {
         re.allocate_and_init_weights(&mi);
         re.set_output_tape_index(0);
 
-        let mut lossf = block_loss_functions::new_without_weights(&mi, re.get_num_outputs()).unwrap();
+        let mut lossf = block_loss_functions::new_without_weights(&mi, re.get_num_outputs(), true).unwrap();
         lossf.set_input_tape_index(0);
         lossf.set_output_tape_index(1);
 
@@ -734,7 +730,7 @@ B,featureB
         re.allocate_and_init_weights(&mi);
         re.set_output_tape_index(0);
 
-        let mut lossf = block_loss_functions::new_without_weights(&mi, re.get_num_outputs()).unwrap();
+        let mut lossf = block_loss_functions::new_without_weights(&mi, re.get_num_outputs(), true).unwrap();
         lossf.set_input_tape_index(0);
         lossf.set_output_tape_index(1);
 
@@ -774,7 +770,7 @@ B,featureB
         re.allocate_and_init_weights(&mi);
         re.set_output_tape_index(0);
 
-        let mut lossf = block_loss_functions::new_without_weights(&mi, re.get_num_outputs()).unwrap();
+        let mut lossf = block_loss_functions::new_without_weights(&mi, re.get_num_outputs(), true).unwrap();
         lossf.set_input_tape_index(0);
         lossf.set_output_tape_index(1);
 
@@ -815,7 +811,7 @@ B,featureB
         re.allocate_and_init_weights(&mi);
         re.set_output_tape_index(0);
 
-        let mut lossf = block_loss_functions::new_without_weights(&mi, re.get_num_outputs()).unwrap();
+        let mut lossf = block_loss_functions::new_without_weights(&mi, re.get_num_outputs(), true).unwrap();
         lossf.set_input_tape_index(0);
         lossf.set_output_tape_index(1);
 

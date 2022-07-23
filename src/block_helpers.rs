@@ -106,12 +106,13 @@ pub fn slearn<'a>(block_run: &mut Box<dyn BlockTrait>,
                     update: bool) -> f32 {
 
     unsafe {
-        let output_tape_index = block_loss_function.get_output_tape_index() as usize;
         let block_loss_function: Box<dyn BlockTrait> = mem::transmute(& *block_loss_function.deref().deref());
         let mut further_blocks_v: Vec<Box<dyn BlockTrait>> = vec![block_loss_function];
         let further_blocks = &mut further_blocks_v[..];
+        pb.results.truncate(0);
         block_run.forward_backward(further_blocks, fb, pb, update);
-        let prediction_probability = pb.tapes[output_tape_index].pop().unwrap();
+//        assert_eq!(pb.results.len(), 1);
+        let prediction_probability = pb.results[0];
         // black magic here: forget about further blocks that we got through transmute:
         further_blocks_v.set_len(0);
         return prediction_probability
@@ -126,13 +127,13 @@ pub fn spredict<'a>(block_run: &mut Box<dyn BlockTrait>,
                     update: bool) -> f32 {
 
     unsafe {
-        let output_tape_index = block_loss_function.get_output_tape_index() as usize;
         let block_loss_function: Box<dyn BlockTrait> = mem::transmute(& *block_loss_function.deref().deref());
         let mut further_blocks_v: Vec<Box<dyn BlockTrait>> = vec![block_loss_function];
         let further_blocks = & further_blocks_v[..];
+        pb.results.truncate(0);
         block_run.forward(further_blocks, fb, pb);
-        let prediction_probability = pb.tapes[output_tape_index].pop().unwrap();
-
+//        assert_eq!(pb.results.len(), 1);
+        let prediction_probability = pb.results[0];
         // black magic here: forget about further blocks that we got through transmute:
         further_blocks_v.set_len(0);
         return prediction_probability

@@ -101,11 +101,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuron<L>
         self.output_tape_index = output_tape_index;
     }
 
-    fn get_output_tape_index(&self) -> i32 {
-        self.output_tape_index
-    }
-
-
 
     #[inline(always)]
     fn forward_backward(&mut self, 
@@ -284,9 +279,8 @@ mod tests {
         re.set_output_tape_index(1);
         re.allocate_and_init_weights(&mi);
         
-        let mut ib = block_loss_functions::new_identity_block(&mi, 1).unwrap();
+        let mut ib = block_loss_functions::new_result_block(1, 1.0).unwrap();
         ib.set_input_tape_index(1);
-        ib.set_output_tape_index(2);
 
         
         let mut pb = port_buffer::PortBuffer::new(&mi);
@@ -299,7 +293,7 @@ mod tests {
         // on tape 2 the output was consumed by slearn
         assert_eq!(pb.tapes[0][0], 1.0);
         assert_eq!(pb.tapes[1].len(), 0);
-        assert_eq!(pb.tapes[2].len(), 0);
+        assert_eq!(pb.results.len(), 1);
 
         pb.reset();
         pb.tapes[0].push(2.0);

@@ -46,7 +46,6 @@ pub trait BlockTrait {
     fn get_num_outputs(&self) -> u32;
     fn set_input_tape_index(&mut self, input_tape_index: i32);
     fn set_output_tape_index(&mut self, output_tape_index: i32);
-    fn get_output_tape_index(&self) -> i32;
 
     fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>>;
 
@@ -59,7 +58,6 @@ pub struct Regressor {
     pub regressor_name: String,
     pub blocks_boxes: Vec<Box<dyn BlockTrait>>,
     pub immutable: bool,
-    pub result_tape_index: i32,
 }
 
 
@@ -80,7 +78,6 @@ impl Regressor  {
             blocks_boxes: Vec::new(),
             regressor_name: format!("Regressor with optimizer \"{:?}\"", mi.optimizer),
             immutable: false,
-            result_tape_index: -1,
         };
 
         let mut embedding_outputs = 0;
@@ -103,7 +100,7 @@ impl Regressor  {
         
         let FINAL_OUTPUTS_TAPE = 5;
         let mut inputs:u32 = 0;
-        if false {
+        if true {
             let mut reg = block_neuron::new_without_weights(mi, embedding_outputs, block_neuron::NeuronType::Sum).unwrap();
             inputs += reg.get_num_outputs();
             reg.set_input_tape_index(0);
@@ -127,7 +124,7 @@ impl Regressor  {
                                                                 0.0, // dropout
                                                                 0.0, // max norm
                                                                 ).unwrap();
-            inputs = reg.get_num_outputs();
+            //inputs = reg.get_num_outputs();
             reg.set_input_tape_index(0);
             reg.set_output_tape_index(1);
             rg.blocks_boxes.push(reg);
@@ -147,7 +144,7 @@ impl Regressor  {
                                                                 0.1, // dropout
                                                                 5.0, // max norm
                                                                 ).unwrap();
-            inputs = additional_inputs + reg.get_num_outputs();
+//            inputs = additional_inputs + reg.get_num_outputs();
             reg.set_input_tape_index(2);
             reg.set_output_tape_index(4);
             rg.blocks_boxes.push(reg);
@@ -207,10 +204,9 @@ impl Regressor  {
 
         // now sigmoid has a single input
 //        println!("INPUTS : {}", inputs);
-        let mut reg_sigmoid = block_loss_functions::new_without_weights(mi, inputs).unwrap();
+        let mut reg_sigmoid = block_loss_functions::new_without_weights(mi, inputs, true).unwrap();
         reg_sigmoid.set_input_tape_index(FINAL_OUTPUTS_TAPE);
-        reg_sigmoid.set_output_tape_index(FINAL_OUTPUTS_TAPE + 1);
-        rg.result_tape_index = reg_sigmoid.get_output_tape_index();
+        reg_sigmoid.set_output_tape_index(FINAL_OUTPUTS_TAPE+1);
         rg.blocks_boxes.push(reg_sigmoid);
 
         rg
@@ -259,7 +255,8 @@ impl Regressor  {
         pb.reset(); // empty the tape
 
         current[0].forward_backward(further_blocks, fb, pb, update);
-        let prediction_probability = pb.tapes[self.result_tape_index as usize].pop().unwrap();
+        assert_eq!(pb.results.len(), 1);
+        let prediction_probability = pb.results.pop().unwrap();
     
         return prediction_probability
     }
@@ -271,7 +268,8 @@ impl Regressor  {
         pb.reset(); // empty the tape
 
         current[0].forward(further_blocks, fb, pb);
-        let prediction_probability = pb.tapes[self.result_tape_index as usize].pop().unwrap();
+        assert_eq!(pb.results.len(), 1);
+        let prediction_probability = pb.results.pop().unwrap();
 
         return prediction_probability
     }
