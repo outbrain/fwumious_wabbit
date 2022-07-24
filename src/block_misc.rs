@@ -6,6 +6,7 @@ use crate::regressor;
 use crate::feature_buffer;
 use crate::port_buffer;
 use crate::model_instance;
+use crate::graph;
 
 use regressor::BlockTrait;
 
@@ -14,6 +15,22 @@ pub struct BlockResult {
     input_tape_index: i32,
     replace_input_with: f32,
 }
+
+
+pub fn new_result_block2(bg: &mut graph::BlockGraph,
+                        input: graph::BlockPtrOutput,
+                        replace_input_with: f32) 
+                        -> Result<(), Box<dyn Error>> {
+
+    let num_inputs = bg.get_num_outputs(vec![&input]);
+    let block = Box::new(BlockResult {num_inputs: num_inputs,
+                         input_tape_index: -1,
+                         replace_input_with: replace_input_with});
+    let block_outputs = bg.add_node(block, vec![input]);
+    assert_eq!(block_outputs.len(), 0);
+    Ok(())
+}
+
 
 pub fn new_result_block(num_inputs: u32, replace_input_with: f32) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
     Ok(Box::new(BlockResult {num_inputs: num_inputs,
@@ -35,6 +52,12 @@ impl BlockTrait for BlockResult {
         // this means outputs on regular tapes
         return 0
     }
+
+    fn get_num_outputs2(&self, output_id: graph::BlockOutput) -> u32 {
+        // this means outputs on regular tapes
+        return 0
+    }
+
     
     fn set_input_tape_index(&mut self, input_tape_index: i32) {
         self.input_tape_index = input_tape_index;
@@ -143,11 +166,24 @@ pub struct BlockConsts {
     output_tape_index: i32,
     consts: Vec<f32>,
 }
-
+/*
 pub fn new_const_block(consts: Vec<f32>) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
     Ok(Box::new(BlockConsts {   output_tape_index: -1,
                                 consts: consts}))
+}*/
+
+pub fn new_const_block( bg: &mut graph::BlockGraph, 
+                        consts: Vec<f32>) 
+                        -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
+    let block = Box::new(BlockConsts {   output_tape_index: -1,
+                                         consts: consts});
+    let mut block_outputs = bg.add_node(block, vec![]);
+    assert_eq!(block_outputs.len(), 1);
+    Ok(block_outputs.pop().unwrap())
+
+
 }
+
 
 
 impl BlockTrait for BlockConsts {
@@ -159,6 +195,10 @@ impl BlockTrait for BlockConsts {
 
     fn get_num_output_tapes(&self) -> usize {1}   
 
+    fn get_num_outputs2(&self, output_id: graph::BlockOutput) -> u32 {
+        assert_eq!(output_id.get_output_id(), 0); // Only one tape available
+        self.consts.len() as u32
+    }
 
     fn get_num_outputs(&self) -> u32 {
         self.consts.len() as u32
@@ -245,6 +285,22 @@ pub struct BlockCopy {
 }
 
 
+pub fn new_copy_block2(bg: &mut graph::BlockGraph,
+                       input: graph::BlockPtrOutput
+                       ) -> Result<Vec<graph::BlockPtrOutput>, Box<dyn Error>> {
+    let num_inputs = bg.get_num_outputs(vec![&input]);
+    assert!(num_inputs != 0);
+
+    let mut block = Box::new(BlockCopy {
+        output_tape_index: -1,
+        input_tape_index: -1,
+        num_inputs: num_inputs,
+    });
+    let block_outputs = bg.add_node(block, vec![input]);
+    assert_eq!(block_outputs.len(), 2);
+    Ok(block_outputs)
+}
+
 pub fn new_copy_block(mi: &model_instance::ModelInstance, 
                                                     num_inputs: u32, 
                                                     ) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
@@ -272,7 +328,12 @@ impl BlockTrait for BlockCopy
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
     }
 
-    fn get_num_output_tapes(&self) -> usize {1}   
+    fn get_num_output_tapes(&self) -> usize {2}   
+
+    fn get_num_outputs2(&self, output_id: graph::BlockOutput) -> u32 {
+        assert!(output_id.get_output_id() <= 1); // Copying to two tapes
+        self.num_inputs
+    }
 
 
     fn get_num_outputs(&self) -> u32 {
@@ -362,4 +423,117 @@ impl BlockTrait for BlockCopy
         Ok(())
     }
 }
+
+
+
+
+pub struct BlockJoin {    
+    pub num_inputs: u32,
+    pub input_tape_index: i32,
+    pub output_tape_index: i32,
+}
+
+
+pub fn new_join_block2(bg: &mut graph::BlockGraph,
+                       inputs: Vec<graph::BlockPtrOutput>,
+                       ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
+    let num_inputs = bg.get_num_outputs(inputs.iter().collect());
+    assert!(num_inputs != 0);
+
+    let mut block = Box::new(BlockJoin {
+        output_tape_index: -1,
+        input_tape_index: -1,
+        num_inputs: num_inputs,
+    });
+    let mut block_outputs = bg.add_node(block, inputs);
+    assert_eq!(block_outputs.len(), 1);
+    Ok(block_outputs.pop().unwrap())
+}
+
+impl BlockTrait for BlockJoin
+
+ {
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
+    }
+
+    fn get_num_output_tapes(&self) -> usize {1}
+    
+    fn get_num_outputs2(&self, output_id: graph::BlockOutput) -> u32 {
+        assert!(output_id.get_output_id() == 0); // Joining  two tapes
+        self.num_inputs
+    }
+
+    fn get_num_outputs(&self) -> u32 {
+        return self.num_inputs
+    }
+    
+    fn set_input_tape_index(&mut self, input_tape_index: i32) {
+        self.input_tape_index = input_tape_index;
+    }
+
+    fn set_output_tape_index(&mut self, output_tape_index: i32) {
+        self.output_tape_index = output_tape_index;
+    }
+
+
+
+    #[inline(always)]
+    fn forward_backward(&mut self, 
+                        further_blocks: &mut [Box<dyn BlockTrait>], 
+                        fb: &feature_buffer::FeatureBuffer, 
+                        pb: &mut port_buffer::PortBuffer, 
+                        update:bool) {
+        debug_assert!(self.output_tape_index >= 0);
+        debug_assert!(self.input_tape_index >= 0);
+        debug_assert!(self.input_tape_index == self.output_tape_index);
+        debug_assert!(self.num_inputs > 0);
+        
+        let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
+        next_regressor[0].forward_backward(further_blocks, fb, pb, update);
+    }
+    
+    fn forward(&self, further_blocks: &[Box<dyn BlockTrait>], 
+                        fb: &feature_buffer::FeatureBuffer, 
+                        pb: &mut port_buffer::PortBuffer, 
+                        ) {
+        assert!(false, "Unimplemented");    
+    }
+    
+    fn get_serialized_len(&self) -> usize {
+        return 0;
+    }
+
+    fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+
+    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+
+    fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+
+    /// Sets internal state of weights based on some completely object-dependent parameters
+    fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
 

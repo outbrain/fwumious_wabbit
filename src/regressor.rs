@@ -23,7 +23,7 @@ use crate::block_neuron;
 use crate::block_neuronlayer;
 use crate::block_relu;
 use crate::block_misc;
-
+use crate::graph;
 
 
 pub trait BlockTrait {
@@ -40,15 +40,16 @@ pub trait BlockTrait {
                          pb: &mut port_buffer::PortBuffer, );
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance);
-    fn get_serialized_len(&self) -> usize;
-    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>>;
-    fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>>;
+    fn get_serialized_len(&self) -> usize {0}
+    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {Ok(())}
+    fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {Ok(())}
     fn get_num_outputs(&self) -> u32;
+    fn get_num_outputs2(&self, output: graph::BlockOutput) -> u32 {0}
     fn get_num_output_tapes(&self) -> usize;
     fn set_input_tape_index(&mut self, input_tape_index: i32);
     fn set_output_tape_index(&mut self, output_tape_index: i32);
 
-    fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>>;
+    fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>> {Ok(())}
 
     /// Sets internal state of weights based on some completely object-dependent parameters
     fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>>;

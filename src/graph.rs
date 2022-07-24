@@ -1,4 +1,4 @@
-
+ 
 use crate::regressor::BlockTrait;
 
 
@@ -8,63 +8,103 @@ pub struct BlockOutput(usize);
 pub struct BlockInput(usize);
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct BlockPtr(usize);	// just an id in a graph
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct BlockPtrOutput(BlockPtr, BlockOutput); // since blocks can have multiple outputs, separate between them
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct BlockPtrInput(BlockPtr, BlockInput); // since blocks can have multiple inputs, separate between them
 
+pub struct BlockGraphNode {
+    pub block: Box<dyn BlockTrait>,
+    pub edges_in: Vec<BlockPtrOutput>,	// each block can have multiple input edges
+    pub edges_out: Vec<BlockPtrInput>,  // each block can have multiple output edges
+
+}
 
 pub struct BlockGraph {
-    pub blocks: Vec<Box<dyn BlockTrait>>,
-    pub edges_in: Vec<Vec<Vec<BlockPtrOutput>>>,	// each block can have multiple input edge groups
-    pub edges_out: Vec<Vec<Vec<BlockPtrInput>>>,  // each block can have multiple output edge groups
+    pub nodes: Vec<BlockGraphNode>,
 }
 
 
+impl BlockPtr {
+    pub fn get_node_id(&self) -> usize {self.0}
+}
+
+impl BlockOutput {
+    pub fn get_output_id(&self) -> usize {self.0}
+}
+
+impl BlockInput {
+    pub fn get_input_id(&self) -> usize {self.0}
+}
+
+impl BlockPtrOutput {
+    pub fn get_node_id(&self) -> usize {self.0.get_node_id()}
+    pub fn get_output_id(&self) -> usize {self.1.get_output_id()}
+    pub fn get_output(&self) -> BlockOutput {self.1}
+}
+
+impl BlockPtrInput {
+    pub fn get_node_id(&self) -> usize {self.0.get_node_id()}
+    pub fn get_input_id(&self) -> usize {self.1.get_input_id()}
+    pub fn get_input(&self) -> BlockInput {self.1}
+}
+
+const BLOCK_PTR_INPUT_DEFAULT:BlockPtrInput = BlockPtrInput(BlockPtr(usize::MAX), BlockInput(usize::MAX));
 
 impl BlockGraph {
     pub fn new() -> BlockGraph {
-        BlockGraph {blocks: Vec::new(),
-                    edges_in: Vec::new(),
-                    edges_out: Vec::new()
-                    }
+        BlockGraph {nodes: Vec::new()}
     }
 
     pub fn add_node(&mut self, 
                     mut block: Box<dyn BlockTrait>, 
-                    edges_in: Vec<Vec<BlockPtrOutput>>
+                    edges_in: Vec<BlockPtrOutput>
                     ) -> Vec<BlockPtrOutput> {
                     
-        let bp = BlockPtr(self.blocks.len());
-        for (i, edges_in2) in edges_in.iter().enumerate() {
-            let bi = BlockInput(i);
-            for e in edges_in2.iter() {
-                let bpi = BlockPtrInput(bp, bi);
-                self.edges_out[e.0.0][e.1.0].push(bpi)
-            }
-        }
-        self.edges_in.push(edges_in);
-        self.edges_out.push(Vec::new());
         let num_output_connectors = block.get_num_output_tapes();
+//        let num_input_connectors = block.get_num_input_tapes();
+        let bp = BlockPtr(self.nodes.len());     // id of current node
+        for (i, e) in edges_in.iter().enumerate() {
+            let bi = BlockInput(i);
+            let bpi = BlockPtrInput(bp, bi);
+            self.nodes[e.get_node_id()].edges_out[e.get_output_id()] = bpi;
+        }
+        let mut newnode = BlockGraphNode {
+                            block: block,
+                            edges_in: edges_in,
+                            edges_out: Vec::new(),
+                        };
+
+
+        self.nodes.push(newnode);
         let mut vo:Vec<BlockPtrOutput> = Vec::new();
         for i in 0..num_output_connectors {
             let bo = BlockPtrOutput(bp, BlockOutput(i));
             vo.push(bo);
-            self.edges_out[bp.0].push(Vec::new()); // make empty spaceg
+            self.nodes[bp.get_node_id()].edges_out.push(BLOCK_PTR_INPUT_DEFAULT); // make empty spaceg
         }
-        self.blocks.push(block);
-        
         return vo;        
     }
     
-    fn get_num_input_connections(&self, bp: BlockPtr) -> usize {
-        self.edges_in[bp.0].len()
+    
+    
+    
+    pub fn get_num_input_connections(&self, bp: BlockPtr) -> usize {
+        self.nodes[bp.get_node_id()].edges_in.len()
     }
     
+    pub fn get_num_outputs(&self, outputs: Vec<&BlockPtrOutput>) -> u32 {
+        let mut t = 0;
+        for x in outputs {
+            let node = &self.nodes[x.get_node_id()];
+            t += node.block.get_num_outputs2(x.get_output());
+        }
+        t
+    }
+
+
     fn len(&self) -> usize {
-        assert!(self.blocks.len() == self.edges_in.len());
-        assert!(self.blocks.len() == self.edges_out.len());
-        self.blocks.len()
+        self.nodes.len()
     }
     
     pub fn to_block_list(self) {
@@ -80,7 +120,7 @@ impl BlockGraph {
         
         while remaining_list.len() > 0 {
             for bp in remaining_list.iter() {
-                if self.edges_in[bp.0].len() == num_inputs_done[bp.0] {
+                if self.nodes[bp.get_node_id()].edges_in.len() == num_inputs_done[bp.0] {
                     output_list.push(BlockPtr(bp.0));
                 }
             }
@@ -102,55 +142,88 @@ mod tests {
     fn graph_creation() {
         let mut bg = BlockGraph::new();
         
-        let mut ib = block_misc::new_const_block(vec![1.0]).unwrap();
-        let zero_block_outputs = bg.add_node(ib, vec![]);
-        assert_eq!(zero_block_outputs, vec![BlockPtrOutput(BlockPtr(0), BlockOutput(0))]);
-        assert_eq!(bg.edges_in[0].len(), 0);      // basically []
-        assert_eq!(bg.edges_out[0].len(), 1);	  // basically [[]] -- meaning there is one output tape	
-        assert_eq!(bg.edges_out[0][0].len(), 0);  
+        let const_block_output = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
+        assert_eq!(const_block_output, BlockPtrOutput(BlockPtr(0), BlockOutput(0)));
+        assert_eq!(bg.nodes[0].edges_in, vec![]);      // basically []
+        assert_eq!(bg.nodes[0].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);  
+    }
+    
+    #[test]
+    fn graph_one_sink() {
+        let mut bg = BlockGraph::new();
+        
+        let const_block_output = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
+        assert_eq!(const_block_output, BlockPtrOutput(BlockPtr(0), BlockOutput(0)));
+        assert_eq!(bg.nodes[0].edges_in.len(), 0);      // basically []
+        assert_eq!(bg.nodes[0].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);  
 
         // Let's add one result block 
-        let mut ib = block_misc::new_result_block(1, 1.0).unwrap();
-        let output_nodes = bg.add_node(ib, vec![zero_block_outputs.clone()]);
-        assert_eq!(output_nodes, vec![]);
+        let mut output_node = block_misc::new_result_block2(&mut bg, const_block_output, 1.0).unwrap();
+        assert_eq!(output_node, ());
 //        println!("Output nodes: {:?}", output_nodes);
         //println!("Block 0: edges_in: {:?}, edges_out: {:?}", bg.edges_in[0], bg.edges_out[0]);
-        assert_eq!(bg.edges_in[0].len(), 0);      // basically []
-        assert_eq!(bg.edges_out[0].len(), 1);	  // basically [[]] -- meaning there is one output tape	
-        assert_eq!(bg.edges_out[0][0].len(), 1);  
+        assert_eq!(bg.nodes[0].edges_in, vec![]);      // basically []
+        assert_eq!(bg.nodes[0].edges_out, vec![BlockPtrInput(BlockPtr(1), BlockInput(0))]);  
 
-        //println!("Block 1: edges_in: {:?}, edges_out: {:?}", bg.edges_in[1], bg.edges_out[1]);
-        assert_eq!(bg.edges_in[1].len(), 1);      // basically []
-        assert_eq!(bg.edges_in[1][0].len(), 1);  
-        assert_eq!(bg.edges_out[1].len(), 0);	  // basically [] -- there are no output tapes	
+        assert_eq!(bg.nodes[1].edges_in, vec![BlockPtrOutput(BlockPtr(0), BlockOutput(0))]);
+        assert_eq!(bg.nodes[1].edges_out, vec![]);  
+    }
+    
+    #[test]
+    fn graph_two_sinks() {
+        let mut bg = BlockGraph::new();
+        
+        let const_block_output = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
+        assert_eq!(const_block_output, BlockPtrOutput(BlockPtr(0), BlockOutput(0)));
+        assert_eq!(bg.nodes[0].edges_in, vec![]);
+        assert_eq!(bg.nodes[0].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);
+
+        // We need to add a copy block to have two sinks
+        let mut copies = block_misc::new_copy_block2(&mut bg, const_block_output).unwrap();
+        let c2 = copies.pop().unwrap();
+        let c1 = copies.pop().unwrap();
+        
+        
+        // Let's add one result block 
+        let mut output_node = block_misc::new_result_block2(&mut bg, c1, 1.0).unwrap();
+        assert_eq!(output_node, ());
+//        println!("Output nodes: {:?}", output_nodes);
+        //println!("Block 0: edges_in: {:?}, edges_out: {:?}", bg.edges_in[0], bg.edges_out[0]);
+        assert_eq!(bg.nodes[0].edges_in.len(), 0);      
+        assert_eq!(bg.nodes[0].edges_out, vec![BlockPtrInput(BlockPtr(1), BlockInput(0))]);	  	
 
         // Let's add second result block to see what happens
 
-        let mut ib = block_misc::new_result_block(1, 1.0).unwrap();
-        let output_nodes = bg.add_node(ib, vec![zero_block_outputs.clone()]);
-        assert_eq!(output_nodes, vec![]);
-//        println!("Output nodes: {:?}", output_nodes);
-//        println!("Block 0: edges_in: {:?}, edges_out: {:?}", bg.edges_in[0], bg.edges_out[0]);
-        assert_eq!(bg.edges_in[0].len(), 0);      // basically []
-        assert_eq!(bg.edges_out[0].len(), 1);	  // basically [[]] -- meaning there is one output tape	
-        assert_eq!(bg.edges_out[0][0].len(), 2);  
-
-//        println!("Block 1: edges_in: {:?}, edges_out: {:?}", bg.edges_in[1], bg.edges_out[1]);
-        assert_eq!(bg.edges_in[1].len(), 1);      // basically []
-        assert_eq!(bg.edges_in[1][0].len(), 1);  
-        assert_eq!(bg.edges_out[1].len(), 0);	  // basically [] -- there are no output tapes	
-
-//        println!("Block 2: edges_in: {:?}, edges_out: {:?}", bg.edges_in[1], bg.edges_out[1]);
-        assert_eq!(bg.edges_in[1].len(), 1);      // basically []
-        assert_eq!(bg.edges_in[1][0].len(), 1);  
-        assert_eq!(bg.edges_out[1].len(), 0);	  // basically [] -- there are no output tapes	
-
-
-
-
-
-
-
-
+        let mut output_node = block_misc::new_result_block2(&mut bg, c2, 1.0).unwrap();
+        assert_eq!(output_node, ());
+        assert_eq!(bg.nodes[0].edges_in, vec![]);      
+        assert_eq!(bg.nodes[0].edges_out, vec![BlockPtrInput(BlockPtr(1), BlockInput(0))]);
+        // copy block
+        assert_eq!(bg.nodes[1].edges_in, vec![BlockPtrOutput(BlockPtr(0), BlockOutput(0))]);
+        assert_eq!(bg.nodes[1].edges_out, vec![BlockPtrInput(BlockPtr(2), BlockInput(0)), BlockPtrInput(BlockPtr(3), BlockInput(0))]);
+        // result block 1
+        assert_eq!(bg.nodes[2].edges_in, vec![BlockPtrOutput(BlockPtr(1), BlockOutput(0))]);
+        assert_eq!(bg.nodes[2].edges_out, vec![]);
+        // result bock 2
+        assert_eq!(bg.nodes[3].edges_in, vec![BlockPtrOutput(BlockPtr(1), BlockOutput(1))]);
+        assert_eq!(bg.nodes[3].edges_out, vec![]);
     }
+    
+    
+    
+/*    #[test]
+    fn graph_two_sources() {
+        let mut bg = BlockGraph::new();
+        
+        let const_block_output1 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
+        let const_block_output2 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
+
+        // Let's add one copy block that takes two inputs
+        let mut output_node = block_misc::new_copy_block2(&mut bg, vec![const_block_output1, const_block_output2]).unwrap();
+        //assert_eq!(output_node, ());
+        assert_eq(bg.nodes[2].block
+
+    }    */
+    
+    
 }
