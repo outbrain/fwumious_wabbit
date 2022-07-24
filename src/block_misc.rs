@@ -131,31 +131,6 @@ impl BlockTrait for BlockResult {
 
     }
 
-    
-    
-    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
-        // empty
-    }
-    fn get_serialized_len(&self) -> usize {
-        return 0
-    }
-
-    fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
-
-    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
-
-    fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>> {
-        Ok(())        
-    }
-
-    /// Sets internal state of weights based on some completely object-dependent parameters
-    fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
 }
 
 
@@ -250,31 +225,6 @@ impl BlockTrait for BlockConsts {
         pb.tapes[self.output_tape_index as usize].truncate(original_size );
     }
 
-    
-    
-    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
-        // empty
-    }
-    fn get_serialized_len(&self) -> usize {
-        return 0
-    }
-
-    fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
-
-    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
-
-    fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>> {
-        Ok(())        
-    }
-
-    /// Sets internal state of weights based on some completely object-dependent parameters
-    fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
 }
 
 
@@ -402,26 +352,6 @@ impl BlockTrait for BlockCopy
         assert!(false, "Unimplemented");    
     }
     
-    fn get_serialized_len(&self) -> usize {
-        return 0;
-    }
-
-    fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
-
-    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
-
-    fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
-
-    /// Sets internal state of weights based on some completely object-dependent parameters
-    fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
 }
 
 
@@ -503,26 +433,6 @@ impl BlockTrait for BlockJoin
         assert!(false, "Unimplemented");    
     }
     
-    fn get_serialized_len(&self) -> usize {
-        return 0;
-    }
-
-    fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
-
-    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
-
-    fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
-
-    /// Sets internal state of weights based on some completely object-dependent parameters
-    fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
 }
 
 
