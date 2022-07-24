@@ -339,7 +339,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::block_loss_functions;
+    use crate::block_misc;
     use crate::model_instance::Optimizer;
     use crate::feature_buffer;
     use crate::feature_buffer::HashAndValueAndSeq;
@@ -380,7 +380,7 @@ mod tests {
         re.set_output_tape_index(1);
         re.allocate_and_init_weights(&mi);
         
-        let mut ib = block_loss_functions::new_result_block(1, 1.0).unwrap();
+        let mut ib = block_misc::new_result_block(1, 1.0).unwrap();
         ib.set_input_tape_index(1);
         
         let mut pb = port_buffer::PortBuffer::new(&mi);
@@ -422,7 +422,7 @@ mod tests {
         re.set_output_tape_index(1);
         re.allocate_and_init_weights(&mi);
         
-        let mut ib = block_loss_functions::new_result_block(NUM_NEURONS, 1.0).unwrap();
+        let mut ib = block_misc::new_result_block(NUM_NEURONS, 1.0).unwrap();
         ib.set_input_tape_index(1);
 
         

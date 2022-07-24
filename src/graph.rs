@@ -95,14 +95,14 @@ impl BlockGraph {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::block_loss_functions;
+    use crate::block_misc;
    
     
     #[test]
     fn graph_creation() {
         let mut bg = BlockGraph::new();
         
-        let mut ib = block_loss_functions::new_zero_block(1).unwrap();
+        let mut ib = block_misc::new_const_block(vec![1.0]).unwrap();
         let zero_block_outputs = bg.add_node(ib, vec![]);
         assert_eq!(zero_block_outputs, vec![BlockPtrOutput(BlockPtr(0), BlockOutput(0))]);
         assert_eq!(bg.edges_in[0].len(), 0);      // basically []
@@ -110,7 +110,7 @@ mod tests {
         assert_eq!(bg.edges_out[0][0].len(), 0);  
 
         // Let's add one result block 
-        let mut ib = block_loss_functions::new_result_block(1, 1.0).unwrap();
+        let mut ib = block_misc::new_result_block(1, 1.0).unwrap();
         let output_nodes = bg.add_node(ib, vec![zero_block_outputs.clone()]);
         assert_eq!(output_nodes, vec![]);
 //        println!("Output nodes: {:?}", output_nodes);
@@ -126,7 +126,7 @@ mod tests {
 
         // Let's add second result block to see what happens
 
-        let mut ib = block_loss_functions::new_result_block(1, 1.0).unwrap();
+        let mut ib = block_misc::new_result_block(1, 1.0).unwrap();
         let output_nodes = bg.add_node(ib, vec![zero_block_outputs.clone()]);
         assert_eq!(output_nodes, vec![]);
 //        println!("Output nodes: {:?}", output_nodes);

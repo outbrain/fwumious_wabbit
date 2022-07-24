@@ -22,7 +22,7 @@ use crate::block_loss_functions;
 use crate::block_neuron;
 use crate::block_neuronlayer;
 use crate::block_relu;
-use crate::block_copy;
+use crate::block_misc;
 
 
 
@@ -109,7 +109,7 @@ impl Regressor  {
             rg.blocks_boxes.push(reg);
         } else {
 // Copy to tape 6
-            let mut reg = block_copy::new_without_weights(mi, embedding_outputs).unwrap();
+            let mut reg = block_misc::new_copy_block(mi, embedding_outputs).unwrap();
             let additional_inputs = reg.get_num_outputs();
             reg.set_input_tape_index(0);
             reg.set_output_tape_index(FINAL_OUTPUTS_TAPE);
