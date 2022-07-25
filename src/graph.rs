@@ -211,19 +211,35 @@ mod tests {
     
     
     
-/*    #[test]
+    #[test]
     fn graph_two_sources() {
         let mut bg = BlockGraph::new();
         
         let const_block_output1 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
-        let const_block_output2 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
+        assert_eq!(const_block_output1, BlockPtrOutput(BlockPtr(0), BlockOutput(0)));
+        assert_eq!(bg.nodes[0].edges_in, vec![]);
+        assert_eq!(bg.nodes[0].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);
 
-        // Let's add one copy block that takes two inputs
-        let mut output_node = block_misc::new_copy_block2(&mut bg, vec![const_block_output1, const_block_output2]).unwrap();
-        //assert_eq!(output_node, ());
-        assert_eq(bg.nodes[2].block
+        let const_block_output2 = block_misc::new_const_block(&mut bg, vec![1.0, 2.0]).unwrap();
+        assert_eq!(const_block_output2, BlockPtrOutput(BlockPtr(1), BlockOutput(0)));
+        assert_eq!(bg.nodes[1].edges_in, vec![]);
+        assert_eq!(bg.nodes[1].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);
 
-    }    */
+        // We need to add a copy block to have two sinks
+        let mut union_output = block_misc::new_join_block2(&mut bg, vec![const_block_output1, const_block_output2]).unwrap();
+        assert_eq!(union_output, BlockPtrOutput(BlockPtr(2), BlockOutput(0)));
+        assert_eq!(bg.nodes[0].edges_in, vec![]);
+        assert_eq!(bg.nodes[0].edges_out, vec![BlockPtrInput(BlockPtr(2), BlockInput(0))]);
+        assert_eq!(bg.nodes[1].edges_in, vec![]);
+        assert_eq!(bg.nodes[1].edges_out, vec![BlockPtrInput(BlockPtr(2), BlockInput(1))]);
+        
+        // the join block 
+        assert_eq!(bg.nodes[2].edges_in, vec![BlockPtrOutput(BlockPtr(0), BlockOutput(0)), BlockPtrOutput(BlockPtr(1), BlockOutput(0))]);
+        assert_eq!(bg.nodes[2].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);
+        
+        
+
+    }    
     
     
 }
