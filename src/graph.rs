@@ -1,6 +1,7 @@
  
 use crate::regressor::BlockTrait;
 
+use std::mem::swap;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct BlockOutput(usize);
@@ -38,12 +39,14 @@ impl BlockInput {
 }
 
 impl BlockPtrOutput {
+    pub fn get_block_ptr(&self) -> BlockPtr {self.0}
     pub fn get_node_id(&self) -> usize {self.0.get_node_id()}
     pub fn get_output_id(&self) -> usize {self.1.get_output_id()}
     pub fn get_output(&self) -> BlockOutput {self.1}
 }
 
 impl BlockPtrInput {
+    pub fn get_block_ptr(&self) -> BlockPtr {self.0}
     pub fn get_node_id(&self) -> usize {self.0.get_node_id()}
     pub fn get_input_id(&self) -> usize {self.1.get_input_id()}
     pub fn get_input(&self) -> BlockInput {self.1}
@@ -107,23 +110,42 @@ impl BlockGraph {
         self.nodes.len()
     }
     
-    pub fn to_block_list(self) {
+    pub fn schedule(self) {
         // we  need to figure out the order
         // first find nodes with no inputs
         let mut output_list: Vec<BlockPtr> = Vec::new();
-        let mut remaining_list: Vec<BlockPtr> = Vec::new();
+        let mut ready: Vec<BlockPtr> = Vec::new(); // we will use this as a list of ready nodes to choose from
         let mut num_inputs_done: Vec<usize> = Vec::new();
         for i in 0..self.len() {
-            remaining_list.push(BlockPtr(i));
+            if self.nodes[i].edges_in.len() == 0 {ready.push(BlockPtr(i))};
             num_inputs_done.push(0);
         }
         
-        while remaining_list.len() > 0 {
-            for bp in remaining_list.iter() {
-                if self.nodes[bp.get_node_id()].edges_in.len() == num_inputs_done[bp.0] {
-                    output_list.push(BlockPtr(bp.0));
+        
+        let mut num_steps: u32 = 0;
+        let mut new_ready : Vec<BlockPtr> = Vec::new();
+            
+        while (ready.len() > 0) && (num_steps < 1000) {
+            num_steps += 1;
+            new_ready.truncate(0);
+            for bp in ready.iter() {
+                let current_node_id = bp.get_node_id();
+                output_list.push(*bp);
+                for x in self.nodes[bp.get_node_id()].edges_out.iter() {
+                    let out_node_id = x.get_node_id();
+                    num_inputs_done[out_node_id] += 1;
+                    if self.nodes[out_node_id].edges_in.len() == num_inputs_done[out_node_id] {
+                        new_ready.push(BlockPtr(out_node_id));
+                    }
                 }
             }
+            swap(&mut new_ready, &mut ready)
+            
+        }
+        
+        println!("Outputs: {:?}", output_list);
+        if ready.len() > 0 && num_steps == 1000 {
+            panic!("Couldn't resolve the graph in 1000 steps");
         }
          
         
@@ -225,7 +247,7 @@ mod tests {
         assert_eq!(bg.nodes[1].edges_in, vec![]);
         assert_eq!(bg.nodes[1].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);
 
-        // We need to add a copy block to have two sinks
+        // Using the join block, we merge two outputs into one single output (copy-less implementation)
         let mut union_output = block_misc::new_join_block2(&mut bg, vec![const_block_output1, const_block_output2]).unwrap();
         assert_eq!(union_output, BlockPtrOutput(BlockPtr(2), BlockOutput(0)));
         assert_eq!(bg.nodes[0].edges_in, vec![]);
@@ -236,10 +258,20 @@ mod tests {
         // the join block 
         assert_eq!(bg.nodes[2].edges_in, vec![BlockPtrOutput(BlockPtr(0), BlockOutput(0)), BlockPtrOutput(BlockPtr(1), BlockOutput(0))]);
         assert_eq!(bg.nodes[2].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);
-        
-        
-
     }    
+
+
+    #[test]
+    fn schedule_simple() {
+        let mut bg = BlockGraph::new();
+        
+        let const_block_output = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
+        let output_node = block_misc::new_result_block2(&mut bg, const_block_output, 1.0).unwrap();
+        assert_eq!(output_node, ());
+        let list = bg.schedule();
+        
+    }
+
     
     
 }
