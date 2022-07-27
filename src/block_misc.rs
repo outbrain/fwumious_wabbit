@@ -51,6 +51,8 @@ impl BlockTrait for BlockObserve {
         self
     }
 
+    fn get_block_type(&self) -> graph::BlockType {graph::BlockType::Observe}  
+
     fn get_num_output_slots(&self) -> usize {0}   
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
@@ -64,6 +66,14 @@ impl BlockTrait for BlockObserve {
         self.input_offset = offset;
     }
 
+    fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize)  {
+        assert!(output.get_output_index() == 0);
+        assert_eq!(self.input_offset, offset); // this block type has special treatment
+    }
+
+
+
+
     
     #[inline(always)]
     fn forward_backward(&mut self, 
@@ -76,9 +86,7 @@ impl BlockTrait for BlockObserve {
         // copy inputs to result
 //        println!("Result block with Num inputs: {}", self.num_inputs);
         if self.observe == Observe::Forward {
-            for i in 0..self.num_inputs {
-                pb.observations.push(pb.tape[self.input_offset + i]);
-            }
+            pb.observations.extend_from_slice(&pb.tape[self.input_offset .. (self.input_offset + self.num_inputs)]);
         }
 
         if further_blocks.len() > 0 {
@@ -87,9 +95,7 @@ impl BlockTrait for BlockObserve {
         }
         
         if self.observe == Observe::Backward {
-            for i in 0..self.num_inputs {
-                pb.observations.push(pb.tape[self.input_offset + i]);
-            }
+            pb.observations.extend_from_slice(&pb.tape[self.input_offset .. (self.input_offset + self.num_inputs)]);
         }
 
         // replace inputs with whatever we wanted
@@ -108,9 +114,7 @@ impl BlockTrait for BlockObserve {
         debug_assert!(self.input_offset != usize::MAX);
         
         if self.observe == Observe::Forward {
-            for i in 0..self.num_inputs {
-                pb.observations.push(pb.tape[self.input_offset + i]);
-            }
+            pb.observations.extend_from_slice(&pb.tape[self.input_offset .. (self.input_offset + self.num_inputs)]);
         }
 
         
@@ -121,9 +125,7 @@ impl BlockTrait for BlockObserve {
 
 
         if self.observe == Observe::Backward {
-            for i in 0..self.num_inputs {
-                pb.observations.push(pb.tape[self.input_offset + i]);
-            }
+            pb.observations.extend_from_slice(&pb.tape[self.input_offset .. (self.input_offset + self.num_inputs)]);
         }
 
         // replace inputs with whatever we wanted

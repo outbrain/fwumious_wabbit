@@ -34,6 +34,7 @@ pub struct BlockGraph {
 pub enum BlockType {
     Regular,
     Join,
+    Observe,
 }
 
 impl BlockPtr {
@@ -153,7 +154,7 @@ impl BlockGraph {
                     self.blocks[bptr].set_output_offset(bo, offset);
                     self.blocks[i].set_input_offset(InputSlot(input_index), offset);
                     offset += output_len as usize; 
-                } else if input_block_type == BlockType::Join {
+                } else if (input_block_type == BlockType::Join) || (input_block_type == BlockType::Observe) {
                     // we are special casing Join block
                     // It is zero-copy joining of inputs, which means inputs and outputs share exactly the same space
                     let fake_offset = self.blocks[bptr].get_input_offset(InputSlot(0)).unwrap();
@@ -178,6 +179,7 @@ impl BlockGraph {
                 }
             }
         }
+        self.tape_size = offset;
         
   //      println!("Nodes: {:?}", self.nodes);     
         /*for i in 0..self.len() {
@@ -194,7 +196,6 @@ impl BlockGraph {
                 offset += output_len as usize;
             }
         }*/
-        self.tape_size = offset;
         
         // we  need to figure out the order
         // first find nodes with no inputs
@@ -354,6 +355,7 @@ mod tests {
         let output_node = block_misc::new_observe_block(&mut bg, const_block_output, Observe::Forward, Some(1.0)).unwrap();
         assert_eq!(output_node, ());
         let list = bg.schedule();
+        assert_eq!(bg.tape_size, 1);
         
     }
 
