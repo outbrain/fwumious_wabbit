@@ -29,6 +29,13 @@ pub struct BlockGraph {
 }
 
 
+// We need to treat join type in a special way - all inputs need to be consequtive
+#[derive(PartialEq)]
+pub enum BlockType {
+    Regular,
+    Join,
+}
+
 impl BlockPtr {
     pub fn get_node_id(&self) -> usize {self.0}
 }
@@ -69,7 +76,7 @@ impl BlockGraph {
                     edges_in: Vec<BlockPtrOutput>
                     ) -> Vec<BlockPtrOutput> {
                     
-        let num_output_connectors = block.get_num_output_tapes();
+        let num_output_connectors = block.get_num_output_slots();
 //        let num_input_connectors = block.get_num_input_tapes();
         let bp = BlockPtr(self.nodes.len());     // id of current node
         for (i, e) in edges_in.iter().enumerate() {
@@ -102,7 +109,7 @@ impl BlockGraph {
     pub fn new_port_buffer(&self) -> port_buffer::PortBuffer {
         port_buffer::PortBuffer::new(self.get_tape_size())
     }
-    pub fn get_num_input_connections(&self, bp: BlockPtr) -> usize {
+    pub fn get_num_input_slots(&self, bp: BlockPtr) -> usize {
         self.nodes[bp.get_node_id()].edges_in.len()
     }
     
@@ -132,21 +139,56 @@ impl BlockGraph {
     
     pub fn schedule(&mut self) {
         let mut offset: usize = 0;
+        // We allocate offsets based on input tapes. 
+        // This assures that for each block, inputs are placed conesquitvely are consequtive
+        // Which is importnat for the JoinBlock that has that requirement
         for i in 0..self.len() {
-            let num_output_connectors = self.blocks[i].get_num_output_tapes();
+            for (input_id, edge_in) in self.nodes[i].edges_in.iter().enumerate() {
+                let bo = edge_in.get_output();
+                let bptr = edge_in.get_node_id();
+                let output_len = self.blocks[bptr].get_num_outputs(bo);
+//                println!("Block: {}, output: {:?},  output offset: {} ouptut_len: {}", i, bo, offset, output_len);
+                if self.blocks[bptr].get_block_type() == BlockType::Regular {
+                    self.blocks[bptr].set_output_offset(bo, offset);
+                    self.blocks[i].set_input_offset(BlockInput(input_id), offset);
+                    offset += output_len as usize; 
+                } else if self.blocks[bptr].get_block_type() == BlockType::Join {
+                    let fake_offset = self.blocks[bptr].get_input_offset(BlockInput(0)).unwrap();
+                    self.blocks[bptr].set_output_offset(bo, fake_offset);
+                    self.blocks[i].set_input_offset(BlockInput(input_id), fake_offset);
+                }
+                
+            }
+        }    
+        // now allocate for dead-end outputs
+        for i in 0..self.len() {
+            for (output_id, edge_out) in self.nodes[i].edges_out.iter().enumerate() {
+                if *edge_out == BLOCK_PTR_INPUT_DEFAULT {
+                    let bo = BlockOutput(output_id);
+                    let output_len = self.blocks[i].get_num_outputs(bo);
+ //                   println!("setting block {}, output {:?} to offset {}", i, bo, offset);
+                    self.blocks[i].set_output_offset(bo, offset);
+                    offset += output_len as usize;
+        
+                }
+            }
+        }
+        
+  //      println!("Nodes: {:?}", self.nodes);     
+        /*for i in 0..self.len() {
+            let num_output_connectors = self.blocks[i].get_num_output_slots();
             for j in 0..num_output_connectors {
                 let bo = BlockOutput(j);
                 let output_len = self.blocks[i].get_num_outputs(bo);
-//                println!("Block: {}, output: {:?},  output offset: {} ouptut_len: {}", i, bo, offset, output_len);
+                println!("Block: {}, output: {:?},  output offset: {} ouptut_len: {}", i, bo, offset, output_len);
                 self.blocks[i].set_output_offset(bo, offset);
-//                println!("Edge out: {}",
                 if self.nodes[i].edges_out[j].get_node_id() != usize::MAX {
                     // you can have dangling outputs... why not
                     self.blocks[self.nodes[i].edges_out[j].get_node_id()].set_input_offset(self.nodes[i].edges_out[j].get_input(), offset);
                 }
                 offset += output_len as usize;
             }
-        }
+        }*/
         self.tape_size = offset;
         
         // we  need to figure out the order

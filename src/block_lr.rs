@@ -28,15 +28,7 @@ pub struct BlockLR<L:OptimizerTrait> {
     pub num_combos: u32,
 }
 
-pub fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-    match mi.optimizer {
-        model_instance::Optimizer::AdagradLUT => new_without_weights_2::<optimizer::OptimizerAdagradLUT>(&mi),
-        model_instance::Optimizer::AdagradFlex => new_without_weights_2::<optimizer::OptimizerAdagradFlex>(&mi),
-        model_instance::Optimizer::SGD => new_without_weights_2::<optimizer::OptimizerSGD>(&mi)
-    }
-}
-
-fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+fn new_lr_block_without_weights<L:OptimizerTrait + 'static>(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
     let mut num_combos = mi.feature_combo_descs.len() as u32;
     if mi.add_constant_feature {
         num_combos += 1;
@@ -54,26 +46,19 @@ fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelI
     Ok(Box::new(reg_lr))
 }
 
-pub fn new_lr_block2<L:OptimizerTrait + 'static>(
+pub fn new_lr_block(
                         bg: &mut graph::BlockGraph, 
                         mi: &model_instance::ModelInstance)                         
                         -> Result<graph::BlockPtrOutput, Box<dyn Error>> {    
-    let block = new_without_weights_2::<L>(&mi).unwrap();
+    let block = match mi.optimizer {
+        model_instance::Optimizer::AdagradLUT => new_lr_block_without_weights::<optimizer::OptimizerAdagradLUT>(&mi),
+        model_instance::Optimizer::AdagradFlex => new_lr_block_without_weights::<optimizer::OptimizerAdagradFlex>(&mi),
+        model_instance::Optimizer::SGD => new_lr_block_without_weights::<optimizer::OptimizerSGD>(&mi)
+    }.unwrap();
     let mut block_outputs = bg.add_node(block, vec![]);
     assert_eq!(block_outputs.len(), 1);
     Ok(block_outputs.pop().unwrap())
 }
-
-pub fn new_lr_block(bg: &mut graph::BlockGraph, mi: &model_instance::ModelInstance)
-                        -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
-    match mi.optimizer {
-        model_instance::Optimizer::AdagradLUT => new_lr_block2::<optimizer::OptimizerAdagradLUT>(bg, &mi),
-        model_instance::Optimizer::AdagradFlex => new_lr_block2::<optimizer::OptimizerAdagradFlex>(bg, &mi),
-        model_instance::Optimizer::SGD => new_lr_block2::<optimizer::OptimizerSGD>(bg, &mi)
-    }
-}
-
-
 
 
 
@@ -89,7 +74,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
         
     }
 
-    fn get_num_output_tapes(&self) -> usize {1}   
+    fn get_num_output_slots(&self) -> usize {1}   
 
 
     fn get_num_outputs(&self, output_id: graph::BlockOutput) -> usize {

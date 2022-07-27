@@ -74,7 +74,7 @@ impl BlockTrait for BlockSigmoid {
         self
     }
 
-    fn get_num_output_tapes(&self) -> usize {1}   
+    fn get_num_output_slots(&self) -> usize {1}   
 
 
     fn get_num_outputs(&self, output_id: graph::BlockOutput) -> usize {

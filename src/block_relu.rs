@@ -68,7 +68,7 @@ impl BlockTrait for BlockRELU
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
     }
 
-    fn get_num_output_tapes(&self) -> usize {1}   
+    fn get_num_output_slots(&self) -> usize {1}   
 
 
     fn get_num_outputs(&self) -> u32 {

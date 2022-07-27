@@ -43,10 +43,11 @@ pub trait BlockTrait {
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {Ok(())}
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {Ok(())}
     fn get_num_outputs(&self, output: graph::BlockOutput) -> usize;
-    fn get_num_output_tapes(&self) -> usize;
+    fn get_num_output_slots(&self) -> usize;
+    fn get_input_offset(&mut self, input_index: graph::BlockInput) -> Result<usize, Box<dyn Error>> {Err(format!("get_input_offset() is only supported by CopyBlock"))?}
     fn set_input_offset(&mut self, input_index: graph::BlockInput, offset: usize) {}
     fn set_output_offset(&mut self, output_index: graph::BlockOutput, offset: usize) {}
-    
+    fn get_block_type(&self) -> graph::BlockType {graph::BlockType::Regular}  
 
     fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>> {Ok(())}
 
@@ -97,7 +98,7 @@ impl Regressor  {
 //        let mut reg = block_neuron::new_without_weights(mi, embedding_outputs, block_neuron::NeuronType::WeightedSum).unwrap();
         
 //        if true {
-        let mut reg = block_neuron::new_neuron_block(&mut bg, mi, output, block_neuron::NeuronType::Sum).unwrap();
+//        let mut reg = block_neuron::new_neuron_block(&mut bg, mi, output, block_neuron::NeuronType::Sum).unwrap();
 //        } 
 /*else {
 // Copy to tape 6
@@ -183,7 +184,7 @@ impl Regressor  {
 
         // now sigmoid has a single input
 //        println!("INPUTS : {}", inputs);
-        let lossf = block_loss_functions::new_logloss_block(&mut bg, reg, true).unwrap();
+        let lossf = block_loss_functions::new_logloss_block(&mut bg, output, true).unwrap();
         bg.schedule();
 
         rg.tape_len = bg.get_tape_size();

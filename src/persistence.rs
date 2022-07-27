@@ -346,6 +346,7 @@ B,featureB
             ],
             2,
         );
+        pb.reset();
         p = re.learn(fbuf, &mut pb, true);
         assert_eq!(p, 0.9933072);
         let CONST_RESULT = 0.9395168;

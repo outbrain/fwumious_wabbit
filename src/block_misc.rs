@@ -48,7 +48,7 @@ impl BlockTrait for BlockResult {
         self
     }
 
-    fn get_num_output_tapes(&self) -> usize {0}   
+    fn get_num_output_slots(&self) -> usize {0}   
 
     fn get_num_outputs(&self, output: graph::BlockOutput) -> usize {
         assert!(output.get_output_id() == 0);
@@ -153,7 +153,7 @@ impl BlockTrait for BlockConsts {
         self
     }
 
-    fn get_num_output_tapes(&self) -> usize {1}   
+    fn get_num_output_slots(&self) -> usize {1}   
 
     fn get_num_outputs(&self, output: graph::BlockOutput) -> usize {
         assert!(output.get_output_id() == 0);
@@ -253,7 +253,7 @@ impl BlockTrait for BlockCopy
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
     }
 
-    fn get_num_output_tapes(&self) -> usize {2}   
+    fn get_num_output_slots(&self) -> usize {2}   
 
     fn get_num_outputs(&self, output_id: graph::BlockOutput) -> usize {
         assert!(output_id.get_output_id() <= 1);
@@ -349,29 +349,34 @@ pub fn new_join_block2(bg: &mut graph::BlockGraph,
     Ok(block_outputs.pop().unwrap())
 }
 
-impl BlockTrait for BlockJoin
-
- {
+impl BlockTrait for BlockJoin {
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
+    
+    fn get_block_type(&self) -> graph::BlockType {graph::BlockType::Join}  
 
-    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
-    }
 
-    fn get_num_output_tapes(&self) -> usize {1}
+    fn get_num_output_slots(&self) -> usize {1}
     
     fn get_num_outputs(&self, output_id: graph::BlockOutput) -> usize {
         assert!(output_id.get_output_id() == 0);
         self.num_inputs
     }
 
+    fn get_input_offset(&mut self, input_index: graph::BlockInput) -> Result<usize, Box<dyn Error>> {
+        assert!(input_index.get_input_id() <= 1);
+        Ok(self.input_offset)
+    }
+
+
     fn set_input_offset(&mut self, input: graph::BlockInput, offset: usize)  {
         assert!(input.get_input_id() <= 1);
         if input.get_input_id() == 0 {
             self.input_offset = offset;
         } else if input.get_input_id() == 1 {
-            assert!(self.input_offset == offset);
+            assert!(self.input_offset <= offset);
+            assert!(self.input_offset + self.num_inputs >= offset);
         }
         
     } 
@@ -403,7 +408,11 @@ impl BlockTrait for BlockJoin
                         fb: &feature_buffer::FeatureBuffer, 
                         pb: &mut port_buffer::PortBuffer, 
                         ) {
-        assert!(false, "Unimplemented");    
+        if further_blocks.len() > 0 {
+            let (next_regressor, further_blocks) = further_blocks.split_at(1);
+            next_regressor[0].forward(further_blocks, fb, pb);
+        }
+
     }
     
 }

@@ -73,16 +73,24 @@ macro_rules! specialize_k {
     };
 }
 
-pub fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-    match mi.optimizer {
-        model_instance::Optimizer::AdagradLUT => new_without_weights_2::<optimizer::OptimizerAdagradLUT>(&mi),
-        model_instance::Optimizer::AdagradFlex => new_without_weights_2::<optimizer::OptimizerAdagradFlex>(&mi),
-        model_instance::Optimizer::SGD => new_without_weights_2::<optimizer::OptimizerSGD>(&mi)
-    }
+pub fn new_ffm_block(
+                        bg: &mut graph::BlockGraph, 
+                        mi: &model_instance::ModelInstance)                         
+                        -> Result<graph::BlockPtrOutput, Box<dyn Error>> {    
+    
+    let block = match mi.optimizer {
+        model_instance::Optimizer::AdagradLUT => new_ffm_block_without_weights::<optimizer::OptimizerAdagradLUT>(&mi),
+        model_instance::Optimizer::AdagradFlex => new_ffm_block_without_weights::<optimizer::OptimizerAdagradFlex>(&mi),
+        model_instance::Optimizer::SGD => new_ffm_block_without_weights::<optimizer::OptimizerSGD>(&mi)
+    }.unwrap();
+    let mut block_outputs = bg.add_node(block, vec![]);
+    assert_eq!(block_outputs.len(), 1);
+    Ok(block_outputs.pop().unwrap())
 }
 
 
-fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+
+fn new_ffm_block_without_weights<L:OptimizerTrait + 'static>(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
 
     let ffm_num_fields = mi.ffm_fields.len() as u32;
     let mut reg_ffm = BlockFFM::<L> {
@@ -102,7 +110,6 @@ fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelI
         reg_ffm.optimizer_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
         // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
         reg_ffm.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * reg_ffm.ffm_k);
-        println!("FFM WEIGHTS: {}", reg_ffm.ffm_weights_len);
     }
 
     // Verify that forward pass will have enough stack for temporary buffer
@@ -114,35 +121,13 @@ fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelI
     Ok(Box::new(reg_ffm))
 }
 
-pub fn new_ffm_block(bg: &mut graph::BlockGraph, 
-                      mi: &model_instance::ModelInstance,
-                      ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
-    match mi.optimizer {
-        model_instance::Optimizer::AdagradLUT => new_ffm_block2::<optimizer::OptimizerAdagradLUT>(bg, &mi),
-        model_instance::Optimizer::AdagradFlex => new_ffm_block2::<optimizer::OptimizerAdagradFlex>(bg, &mi),
-        model_instance::Optimizer::SGD => new_ffm_block2::<optimizer::OptimizerSGD>(bg, &mi)
-    }
-}
-
-
-pub fn new_ffm_block2<L:OptimizerTrait + 'static>(
-                        bg: &mut graph::BlockGraph, 
-                        mi: &model_instance::ModelInstance)                         
-                        -> Result<graph::BlockPtrOutput, Box<dyn Error>> {    
-    let block = new_without_weights_2::<L>(&mi).unwrap();
-    let mut block_outputs = bg.add_node(block, vec![]);
-    assert_eq!(block_outputs.len(), 1);
-    Ok(block_outputs.pop().unwrap())
-}
 
 
 
 
 
 
-impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
-
- {
+impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
@@ -183,7 +168,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         return (self.ffm_num_fields * self.ffm_num_fields) as usize; 
     }
 
-    fn get_num_output_tapes(&self) -> usize { 1 }   
+    fn get_num_output_slots(&self) -> usize { 1 }   
     
     fn set_input_offset(&mut self, input: graph::BlockInput, offset: usize) {
         panic!("You cannnot set_input_offset() for BlockFFM");

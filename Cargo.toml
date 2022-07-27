@@ -44,7 +44,7 @@ debug = false
 #codegen-units=1
 
 [profile.dev]
-opt-level = 3
+opt-level = 2
 debug = true
 debug-assertions = true
 overflow-checks = true
