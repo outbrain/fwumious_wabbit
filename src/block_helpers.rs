@@ -108,7 +108,7 @@ pub fn slearn2<'a>(bg: &mut graph::BlockGraph,
         pb.reset();
         let (block_run, further_blocks) = bg.blocks.split_at_mut(1);
         block_run[0].forward_backward(further_blocks, fb, pb, update);
-        let prediction_probability = pb.results[0];
+        let prediction_probability = pb.observations[0];
         return prediction_probability
 }
 
@@ -120,7 +120,7 @@ pub fn spredict2<'a>(bg: &mut graph::BlockGraph,
         pb.reset();
         let (block_run, further_blocks) = bg.blocks.split_at(1);
         block_run[0].forward(further_blocks, fb, pb);
-        let prediction_probability = pb.results[0];
+        let prediction_probability = pb.observations[0];
         return prediction_probability
 }
 

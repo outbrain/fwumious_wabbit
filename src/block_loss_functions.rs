@@ -77,8 +77,8 @@ impl BlockTrait for BlockSigmoid {
     fn get_num_output_slots(&self) -> usize {1}   
 
 
-    fn get_num_output_values(&self, output_id: graph::OutputSlot) -> usize {
-        assert!(output_id.get_output_index() == 0);
+    fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
+        assert!(output.get_output_index() == 0);
         1
     }
     
@@ -134,7 +134,7 @@ impl BlockTrait for BlockSigmoid {
         //println!("General gradient: {}", general_gradient);
         pb.tape[self.output_offset] = prediction_probability;
         if self.copy_to_result {
-            pb.results.push(prediction_probability);
+            pb.observations.push(prediction_probability);
         }
         if further_blocks.len() > 0 {
             let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
@@ -180,7 +180,7 @@ impl BlockTrait for BlockSigmoid {
         
         pb.tape[self.output_offset] = prediction_probability;
         if self.copy_to_result {
-            pb.results.push(prediction_probability);
+            pb.observations.push(prediction_probability);
         }
         if further_blocks.len() > 0 {
             let (next_regressor, further_blocks) = further_blocks.split_at(1);

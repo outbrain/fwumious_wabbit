@@ -157,7 +157,7 @@ mod tests {
     use crate::feature_buffer::HashAndValueAndSeq;
     use crate::vwmap;
     use block_helpers::{slearn2, spredict2};
-
+    use block_misc::{Observe};
     use crate::assert_epsilon;
 
     fn fb_vec() -> feature_buffer::FeatureBuffer {
@@ -178,7 +178,7 @@ mod tests {
         let mut bg = BlockGraph::new();
         let input_block = block_misc::new_const_block(&mut bg, vec![2.0]).unwrap();
         let relu_block = new_relu_block(&mut bg, &mi, input_block).unwrap();
-        let result_block = block_misc::new_result_block(&mut bg, relu_block, 1.0).unwrap();
+        let observe_block = block_misc::new_observe_block(&mut bg, relu_block, Observe::Forward, Some(1.0)).unwrap();
         bg.schedule();
         bg.allocate_and_init_weights(&mi);
         
@@ -193,7 +193,7 @@ mod tests {
         let mut bg = BlockGraph::new();
         let input_block = block_misc::new_const_block(&mut bg, vec![-2.0]).unwrap();
         let relu_block = new_relu_block(&mut bg, &mi, input_block).unwrap();
-        let result_block = block_misc::new_result_block(&mut bg, relu_block, 1.0).unwrap();
+        let observe_block = block_misc::new_observe_block(&mut bg, relu_block, Observe::Forward, Some(1.0)).unwrap();
         bg.schedule();
         bg.allocate_and_init_weights(&mi);
         

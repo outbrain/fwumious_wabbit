@@ -163,8 +163,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
     }
 
 
-    fn get_num_output_values(&self, output_id: graph::OutputSlot) -> usize {
-        assert!(output_id.get_output_index() == 0);
+    fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
+        assert!(output.get_output_index() == 0);
         return (self.ffm_num_fields * self.ffm_num_fields) as usize; 
     }
 

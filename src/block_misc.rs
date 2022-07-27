@@ -10,24 +10,33 @@ use crate::graph;
 
 use regressor::BlockTrait;
 
-pub struct BlockResult {
+#[derive(PartialEq)]
+pub enum Observe {
+    Forward,
+    Backward
+}
+
+pub struct BlockObserve {
     num_inputs: usize,
     input_offset: usize,
-    replace_input_with: f32,
+    observe: Observe,
+    replace_backward_with: Option<f32>,
 }
 
 
-pub fn new_result_block(bg: &mut graph::BlockGraph,
+pub fn new_observe_block(bg: &mut graph::BlockGraph,
                         input: graph::BlockPtrOutput,
-                        replace_input_with: f32) 
+                        observe: Observe,
+                        replace_backward_with: Option<f32>) 
                         -> Result<(), Box<dyn Error>> {
 
     let num_inputs = bg.get_num_output_values(vec![&input]);
-    println!("Inputs: {} vec: {:?}", num_inputs, input);
-    let block = Box::new(BlockResult {
+//    println!("Inputs: {} vec: {:?}", num_inputs, input);
+    let block = Box::new(BlockObserve {
                          num_inputs: num_inputs as usize,
                          input_offset: usize::MAX,
-                         replace_input_with: replace_input_with});
+                         observe: observe,
+                         replace_backward_with: replace_backward_with});
     let block_outputs = bg.add_node(block, vec![input]);
     assert_eq!(block_outputs.len(), 0);
     Ok(())
@@ -35,7 +44,7 @@ pub fn new_result_block(bg: &mut graph::BlockGraph,
 
 
 
-impl BlockTrait for BlockResult {
+impl BlockTrait for BlockObserve {
     // Warning: It does not confirm to regular clean-up after itself
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -65,10 +74,11 @@ impl BlockTrait for BlockResult {
         debug_assert!(self.input_offset != usize::MAX);
 
         // copy inputs to result
-        println!("Result block with Num inputs: {}", self.num_inputs);
-        for i in 0..self.num_inputs {
-            let s = pb.tape[self.input_offset + i];
-            pb.results.push(s);
+//        println!("Result block with Num inputs: {}", self.num_inputs);
+        if self.observe == Observe::Forward {
+            for i in 0..self.num_inputs {
+                pb.observations.push(pb.tape[self.input_offset + i]);
+            }
         }
 
         if further_blocks.len() > 0 {
@@ -76,9 +86,16 @@ impl BlockTrait for BlockResult {
             next_regressor[0].forward_backward(further_blocks, fb, pb, update);
         }
         
+        if self.observe == Observe::Backward {
+            for i in 0..self.num_inputs {
+                pb.observations.push(pb.tape[self.input_offset + i]);
+            }
+        }
+
         // replace inputs with whatever we wanted
-        for i in 0..self.num_inputs {
-            pb.tape[self.input_offset + i] = self.replace_input_with;
+        match self.replace_backward_with {
+            Some(value) => pb.tape[self.input_offset..(self.input_offset + self.num_inputs)].fill(value),
+            None => {},
         }
 
     }
@@ -90,20 +107,29 @@ impl BlockTrait for BlockResult {
                      ) {
         debug_assert!(self.input_offset != usize::MAX);
         
-        // copy inputs to result
-        for i in 0..self.num_inputs {
-            let s = pb.tape[self.input_offset + i];
-            pb.results.push(s);
+        if self.observe == Observe::Forward {
+            for i in 0..self.num_inputs {
+                pb.observations.push(pb.tape[self.input_offset + i]);
+            }
         }
+
         
         if further_blocks.len() > 0 {
             let (next_regressor, further_blocks) = further_blocks.split_at(1);
             next_regressor[0].forward(further_blocks, fb, pb);
         }
 
+
+        if self.observe == Observe::Backward {
+            for i in 0..self.num_inputs {
+                pb.observations.push(pb.tape[self.input_offset + i]);
+            }
+        }
+
         // replace inputs with whatever we wanted
-        for i in 0..self.num_inputs {
-            pb.tape[self.input_offset + i] = self.replace_input_with;
+        match self.replace_backward_with {
+            Some(value) => pb.tape[self.input_offset..(self.input_offset + self.num_inputs)].fill(value),
+            None => {},
         }
 
 
@@ -204,7 +230,7 @@ pub struct BlockCopy {
 }
 
 
-pub fn new_copy_block2(bg: &mut graph::BlockGraph,
+pub fn new_copy_block(bg: &mut graph::BlockGraph,
                        input: graph::BlockPtrOutput
                        ) -> Result<Vec<graph::BlockPtrOutput>, Box<dyn Error>> {
     let num_inputs = bg.get_num_output_values(vec![&input]);
@@ -219,19 +245,6 @@ pub fn new_copy_block2(bg: &mut graph::BlockGraph,
     assert_eq!(block_outputs.len(), 2);
     Ok(block_outputs)
 }
-
-pub fn new_copy_block(mi: &model_instance::ModelInstance, 
-                                                    num_inputs: u32, 
-                                                    ) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-    assert!(num_inputs != 0);
-    let mut rg = BlockCopy {
-        output_offset: usize::MAX,
-        input_offset: usize::MAX,
-        num_inputs: num_inputs as usize,
-    };
-    Ok(Box::new(rg))
-}
-
 
 
 
@@ -249,8 +262,8 @@ impl BlockTrait for BlockCopy
 
     fn get_num_output_slots(&self) -> usize {2}   
 
-    fn get_num_output_values(&self, output_id: graph::OutputSlot) -> usize {
-        assert!(output_id.get_output_index() <= 1);
+    fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
+        assert!(output.get_output_index() <= 1);
         self.num_inputs
     }
 
@@ -327,7 +340,7 @@ pub struct BlockJoin {
 }
 
 
-pub fn new_join_block2(bg: &mut graph::BlockGraph,
+pub fn new_join_block(bg: &mut graph::BlockGraph,
                        inputs: Vec<graph::BlockPtrOutput>,
                        ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
     let num_inputs = bg.get_num_output_values(inputs.iter().collect());
@@ -353,8 +366,8 @@ impl BlockTrait for BlockJoin {
 
     fn get_num_output_slots(&self) -> usize {1}
     
-    fn get_num_output_values(&self, output_id: graph::OutputSlot) -> usize {
-        assert!(output_id.get_output_index() == 0);
+    fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
+        assert!(output.get_output_index() == 0);
         self.num_inputs
     }
 

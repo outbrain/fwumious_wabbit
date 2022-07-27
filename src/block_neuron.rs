@@ -101,8 +101,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuron<L>
 
     fn get_num_output_slots(&self) -> usize {1}   
 
-    fn get_num_output_values(&self, output_id: graph::OutputSlot) -> usize {
-        assert!(output_id.get_output_index() == 0);
+    fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
+        assert!(output.get_output_index() == 0);
         1
     }
 
@@ -262,7 +262,7 @@ mod tests {
     use block_helpers::{slearn2, spredict2};
     use crate::graph;
     use crate::graph::{BlockGraph};
-
+    use crate::block_misc::Observe;
     use crate::assert_epsilon;
 
     fn fb_vec() -> feature_buffer::FeatureBuffer {
@@ -288,14 +288,14 @@ mod tests {
         let mut bg = BlockGraph::new();
         let input_block = block_misc::new_const_block(&mut bg, vec![2.0]).unwrap();
         let neuron_block = new_neuron_block(&mut bg, &mi, input_block, NeuronType::WeightedSum).unwrap();
-        let result_block = block_misc::new_result_block(&mut bg, neuron_block, 1.0).unwrap();
+        let observe_block = block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0)).unwrap();
         bg.schedule();
         bg.allocate_and_init_weights(&mi);
         
         let mut pb = bg.new_port_buffer();
         let fb = fb_vec();
         assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 2.0);
-        assert_eq!(pb.results.len(), 1);
+        assert_eq!(pb.observations.len(), 1);
         
         assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 1.6);
         

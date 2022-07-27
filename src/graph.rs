@@ -243,7 +243,7 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use crate::block_misc;
-   
+    use crate::block_misc::Observe;   
     
     #[test]
     fn graph_creation() {
@@ -265,7 +265,7 @@ mod tests {
         assert_eq!(bg.nodes[0].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);  
 
         // Let's add one result block 
-        let mut output_node = block_misc::new_result_block(&mut bg, const_block_output, 1.0).unwrap();
+        let output_node = block_misc::new_observe_block(&mut bg, const_block_output, Observe::Forward, Some(1.0)).unwrap();
         assert_eq!(output_node, ());
 //        println!("Output nodes: {:?}", output_nodes);
         //println!("Block 0: edges_in: {:?}, edges_out: {:?}", bg.edges_in[0], bg.edges_out[0]);
@@ -286,13 +286,13 @@ mod tests {
         assert_eq!(bg.nodes[0].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);
 
         // We need to add a copy block to have two sinks
-        let mut copies = block_misc::new_copy_block2(&mut bg, const_block_output).unwrap();
+        let mut copies = block_misc::new_copy_block(&mut bg, const_block_output).unwrap();
         let c2 = copies.pop().unwrap();
         let c1 = copies.pop().unwrap();
         
         
         // Let's add one result block 
-        let mut output_node = block_misc::new_result_block(&mut bg, c1, 1.0).unwrap();
+        let output_node = block_misc::new_observe_block(&mut bg, c1, Observe::Forward, Some(1.0)).unwrap();
         assert_eq!(output_node, ());
 //        println!("Output nodes: {:?}", output_nodes);
         //println!("Block 0: edges_in: {:?}, edges_out: {:?}", bg.edges_in[0], bg.edges_out[0]);
@@ -301,7 +301,7 @@ mod tests {
 
         // Let's add second result block to see what happens
 
-        let mut output_node = block_misc::new_result_block(&mut bg, c2, 1.0).unwrap();
+        let output_node = block_misc::new_observe_block(&mut bg, c2, Observe::Forward, Some(1.0)).unwrap();
         assert_eq!(output_node, ());
         assert_eq!(bg.nodes[0].edges_in, vec![]);      
         assert_eq!(bg.nodes[0].edges_out, vec![BlockPtrInput(BlockPtr(1), InputSlot(0))]);
@@ -333,7 +333,7 @@ mod tests {
         assert_eq!(bg.nodes[1].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);
 
         // Using the join block, we merge two outputs into one single output (copy-less implementation)
-        let mut union_output = block_misc::new_join_block2(&mut bg, vec![const_block_output1, const_block_output2]).unwrap();
+        let mut union_output = block_misc::new_join_block(&mut bg, vec![const_block_output1, const_block_output2]).unwrap();
         assert_eq!(union_output, BlockPtrOutput(BlockPtr(2), OutputSlot(0)));
         assert_eq!(bg.nodes[0].edges_in, vec![]);
         assert_eq!(bg.nodes[0].edges_out, vec![BlockPtrInput(BlockPtr(2), InputSlot(0))]);
@@ -351,7 +351,7 @@ mod tests {
         let mut bg = BlockGraph::new();
         
         let const_block_output = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
-        let output_node = block_misc::new_result_block(&mut bg, const_block_output, 1.0).unwrap();
+        let output_node = block_misc::new_observe_block(&mut bg, const_block_output, Observe::Forward, Some(1.0)).unwrap();
         assert_eq!(output_node, ());
         let list = bg.schedule();
         

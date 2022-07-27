@@ -90,7 +90,7 @@ impl Regressor  {
 
         if mi.ffm_k > 0 {
             let mut reg_ffm = block_ffm::new_ffm_block(&mut bg, mi).unwrap();
-            output = block_misc::new_join_block2(&mut bg, vec![output, reg_ffm]).unwrap();
+            output = block_misc::new_join_block(&mut bg, vec![output, reg_ffm]).unwrap();
         }
          
         // If we put sum function here, it has to be neutral
@@ -236,8 +236,8 @@ impl Regressor  {
         pb.reset(); // empty the tape
 
         current[0].forward_backward(further_blocks, fb, pb, update);
-        assert_eq!(pb.results.len(), 1);
-        let prediction_probability = pb.results.pop().unwrap();
+        assert_eq!(pb.observations.len(), 1);
+        let prediction_probability = pb.observations.pop().unwrap();
     
         return prediction_probability
     }
@@ -249,8 +249,8 @@ impl Regressor  {
         pb.reset(); // empty the tape
 
         current[0].forward(further_blocks, fb, pb);
-        assert_eq!(pb.results.len(), 1);
-        let prediction_probability = pb.results.pop().unwrap();
+        assert_eq!(pb.observations.len(), 1);
+        let prediction_probability = pb.observations.pop().unwrap();
 
         return prediction_probability
     }
@@ -371,7 +371,7 @@ mod tests {
         
         let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0,}]);
         
-        // Here learning rate mechanism does not affect the results, so let's verify three different ones
+        // Here learning rate mechanism does not affect the observations, so let's verify three different ones
         mi.optimizer = model_instance::Optimizer::AdagradFlex;
 
         let mut regressors: Vec<Box<Regressor>> = vec![
@@ -392,7 +392,7 @@ mod tests {
     #[test]
     fn test_double_same_feature() {
         // this is a tricky test - what happens on collision
-        // depending on the order of math, results are different
+        // depending on the order of math, observations are different
         // so this is here, to make sure the math is always the same
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
