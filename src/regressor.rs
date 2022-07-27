@@ -21,10 +21,9 @@ use crate::block_lr;
 use crate::block_loss_functions;
 use crate::block_neuron;
 use crate::block_neuronlayer;
-use crate::block_relu;
+//use crate::block_relu;
 use crate::block_misc;
 use crate::graph;
-
 
 pub trait BlockTrait {
     fn as_any(&mut self) -> &mut dyn Any; // This enables downcasting
@@ -43,11 +42,11 @@ pub trait BlockTrait {
     fn get_serialized_len(&self) -> usize {0}
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {Ok(())}
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {Ok(())}
-    fn get_num_outputs(&self) -> u32;
-    fn get_num_outputs2(&self, output: graph::BlockOutput) -> u32 {0}
+    fn get_num_outputs(&self, output: graph::BlockOutput) -> usize;
     fn get_num_output_tapes(&self) -> usize;
-    fn set_input_tape_index(&mut self, input_tape_index: i32);
-    fn set_output_tape_index(&mut self, output_tape_index: i32);
+    fn set_input_offset(&mut self, input_index: graph::BlockInput, offset: usize) {}
+    fn set_output_offset(&mut self, output_index: graph::BlockOutput, offset: usize) {}
+    
 
     fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>> {Ok(())}
 
@@ -59,6 +58,7 @@ pub trait BlockTrait {
 pub struct Regressor {
     pub regressor_name: String,
     pub blocks_boxes: Vec<Box<dyn BlockTrait>>,
+    pub tape_len: usize,
     pub immutable: bool,
 }
 
@@ -80,40 +80,34 @@ impl Regressor  {
             blocks_boxes: Vec::new(),
             regressor_name: format!("Regressor with optimizer \"{:?}\"", mi.optimizer),
             immutable: false,
+            tape_len: usize::MAX,
         };
 
-        let mut embedding_outputs = 0;
+        let mut bg = graph::BlockGraph::new();
+        let re_ffm = block_ffm::new_ffm_block(&mut bg, &mi).unwrap();
+        let lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        bg.schedule();
+
         // A bit more elaborate than necessary. Let's really make it clear what's happening
-        let mut reg_lr = block_lr::new_without_weights(mi).unwrap();
-        embedding_outputs += reg_lr.get_num_outputs();
-        reg_lr.set_output_tape_index(0);
-        rg.blocks_boxes.push(reg_lr);
+        let mut output = block_lr::new_lr_block(&mut bg, mi).unwrap();
+        
 
         if mi.ffm_k > 0 {
-            let mut reg_ffm = block_ffm::new_without_weights(mi).unwrap();
-            embedding_outputs += reg_ffm.get_num_outputs();
-            reg_ffm.set_output_tape_index(0);
-            rg.blocks_boxes.push(reg_ffm);
+            let mut reg_ffm = block_ffm::new_ffm_block(&mut bg, mi).unwrap();
+            output = block_misc::new_join_block2(&mut bg, vec![output, reg_ffm]).unwrap();
         }
          
         // If we put sum function here, it has to be neutral
 //        let mut reg = block_neuronlayer::new_without_weights(mi, embedding_outputs, block_neuronlayer::NeuronType::WeightedSum, 1).unwrap();
 //        let mut reg = block_neuron::new_without_weights(mi, embedding_outputs, block_neuron::NeuronType::WeightedSum).unwrap();
         
-        let FINAL_OUTPUTS_TAPE = 5;
-        let mut inputs:u32 = 0;
-        if true {
-            let mut reg = block_neuron::new_without_weights(mi, embedding_outputs, block_neuron::NeuronType::Sum).unwrap();
-            inputs += reg.get_num_outputs();
-            reg.set_input_tape_index(0);
-            reg.set_output_tape_index(FINAL_OUTPUTS_TAPE);
-            rg.blocks_boxes.push(reg);
-        } else {
+//        if true {
+        let mut reg = block_neuron::new_neuron_block(&mut bg, mi, output, block_neuron::NeuronType::Sum).unwrap();
+//        } 
+/*else {
 // Copy to tape 6
             let mut reg = block_misc::new_copy_block(mi, embedding_outputs).unwrap();
             let additional_inputs = reg.get_num_outputs();
-            reg.set_input_tape_index(0);
-            reg.set_output_tape_index(FINAL_OUTPUTS_TAPE);
             rg.blocks_boxes.push(reg);
 
 
@@ -127,14 +121,10 @@ impl Regressor  {
                                                                 0.0, // max norm
                                                                 ).unwrap();
             //inputs = reg.get_num_outputs();
-            reg.set_input_tape_index(0);
-            reg.set_output_tape_index(1);
             rg.blocks_boxes.push(reg);
 
             let mut reg = block_relu::new_without_weights(mi, neuron_layer_width).unwrap();
           //  inputs += reg.get_num_outputs();
-            reg.set_input_tape_index(1);
-            reg.set_output_tape_index(2);
             rg.blocks_boxes.push(reg);
             
 
@@ -147,16 +137,12 @@ impl Regressor  {
                                                                 5.0, // max norm
                                                                 ).unwrap();
 //            inputs = additional_inputs + reg.get_num_outputs();
-            reg.set_input_tape_index(2);
-            reg.set_output_tape_index(4);
             rg.blocks_boxes.push(reg);
 
-/*            let mut reg = block_relu::new_without_weights(mi, neuron_layer_width).unwrap();
+//            let mut reg = block_relu::new_without_weights(mi, neuron_layer_width).unwrap();
           //  inputs += reg.get_num_outputs();
-            reg.set_input_tape_index(3);
-            reg.set_output_tape_index(4);
-            rg.blocks_boxes.push(reg);
-*/
+//            rg.blocks_boxes.push(reg);
+
 
             let mut reg = block_neuronlayer::new_without_weights(mi, 
                                                                 neuron_layer_width, 
@@ -167,13 +153,11 @@ impl Regressor  {
                                                                 0.0, // max norm
                                                                 ).unwrap();
             inputs = additional_inputs + neuron_layer_width;
-            reg.set_input_tape_index(4);
-            reg.set_output_tape_index(FINAL_OUTPUTS_TAPE);
             rg.blocks_boxes.push(reg);
 
 
 
-/*
+/x*
             let mut reg = block_neuronlayer::new_without_weights(mi, 
                                                                 inputs, // number of inputs 
                                                                 block_neuronlayer::NeuronType::WeightedSum, 
@@ -183,8 +167,8 @@ impl Regressor  {
                                                                 0.0, // max norm
                                                                 ).unwrap();
                                                                 
-*/
-/*
+*x/
+/x*
             let mut reg = block_neuronlayer::new_without_weights(mi, 
                                                             inputs, // number of inputs 
                                                             block_neuronlayer::NeuronType::WeightedSum, 
@@ -193,24 +177,23 @@ impl Regressor  {
                                                             0.0, // dropout
                                                             0.0, // max norm
                                                             ).unwrap();
-            reg.set_input_tape_index(FINAL_OUTPUTS_TAPE);
-            reg.set_output_tape_index(FINAL_OUTPUTS_TAPE+1);
 
             num_inputs = 1;
             rg.blocks_boxes.push(reg);
-*/
+*x/
 
         }          
-
+*/
 
 
         // now sigmoid has a single input
 //        println!("INPUTS : {}", inputs);
-        let mut reg_sigmoid = block_loss_functions::new_without_weights(mi, inputs, true).unwrap();
-        reg_sigmoid.set_input_tape_index(FINAL_OUTPUTS_TAPE);
-        reg_sigmoid.set_output_tape_index(FINAL_OUTPUTS_TAPE+1);
-        rg.blocks_boxes.push(reg_sigmoid);
+        let lossf = block_loss_functions::new_logloss_block(&mut bg, reg, true).unwrap();
+        bg.schedule();
 
+        rg.tape_len = bg.get_tape_size();
+        rg.blocks_boxes = bg.take_blocks();
+        
         rg
     }
     
@@ -233,9 +216,9 @@ impl Regressor  {
     }
 
 
-    pub fn new_portbuffer(&self, mi: &model_instance::ModelInstance) -> port_buffer::PortBuffer
+    pub fn new_portbuffer(&self) -> port_buffer::PortBuffer
     {
-        port_buffer::PortBuffer::new(mi)
+        port_buffer::PortBuffer::new(self.tape_len)
     }
 
     pub fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
@@ -375,7 +358,7 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap(); 
         mi.optimizer = model_instance::Optimizer::AdagradLUT;
         let mut re = Regressor::new(&mi);
-        let mut pb = re.new_portbuffer(&mi);
+        let mut pb = re.new_portbuffer();
         // Empty model: no matter how many features, prediction is 0.5
         assert_eq!(re.learn(&lr_vec(vec![]), &mut pb, false), 0.5);
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0,}]), &mut pb, false), 0.5);
@@ -401,7 +384,7 @@ mod tests {
             //Box::new(Regressor::<optimizer::OptimizerSGD>::new(&mi))
             ];
         
-        let mut pb = regressors[0].new_portbuffer(&mi);
+        let mut pb = regressors[0].new_portbuffer();
         
         for re in &mut regressors {
             assert_eq!(re.learn(vec_in, &mut pb, true), 0.5);
@@ -421,7 +404,7 @@ mod tests {
         mi.optimizer = model_instance::Optimizer::AdagradLUT;
         
         let mut re = Regressor::new(&mi);
-        let mut pb = re.new_portbuffer(&mi);
+        let mut pb = re.new_portbuffer();
         let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}, HashAndValue{hash: 1, value: 2.0, combo_index: 0,}]);
 
         assert_eq!(re.learn(vec_in, &mut pb, true), 0.5);
@@ -438,7 +421,7 @@ mod tests {
         mi.init_acc_gradient = 0.0;
         mi.optimizer = model_instance::Optimizer::AdagradFlex;
         let mut re = Regressor::new(&mi);
-        let mut pb = re.new_portbuffer(&mi);
+        let mut pb = re.new_portbuffer();
         
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0, combo_index: 0}]), &mut pb, true), 0.5);
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0, combo_index: 0}]), &mut pb, true), 0.4750208);
@@ -455,7 +438,7 @@ mod tests {
         mi.init_acc_gradient = 0.0;
         
         let mut re = get_regressor_with_weights(&mi);
-        let mut pb = re.new_portbuffer(&mi);
+        let mut pb = re.new_portbuffer();
         let mut p: f32;
         
         p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0, combo_index: 0}]), &mut pb, true);
@@ -480,7 +463,7 @@ mod tests {
         mi.optimizer = model_instance::Optimizer::AdagradFlex;
         
         let mut re = Regressor::new(&mi);
-        let mut pb = re.new_portbuffer(&mi);
+        let mut pb = re.new_portbuffer();
         // Here we take twice two features and then once just one
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}, HashAndValue{hash:2, value: 1.0, combo_index: 0}]), &mut pb, true), 0.5);
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}, HashAndValue{hash:2, value: 1.0, combo_index: 0}]), &mut pb, true), 0.45016602);
@@ -496,7 +479,7 @@ mod tests {
         mi.optimizer = model_instance::Optimizer::AdagradLUT;
         
         let mut re = Regressor::new(&mi);
-        let mut pb = re.new_portbuffer(&mi);
+        let mut pb = re.new_portbuffer();
         
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0, combo_index: 0}]), &mut pb, true), 0.5);
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0, combo_index: 0}]), &mut pb, true), 0.45016602);
@@ -513,7 +496,7 @@ mod tests {
         mi.fastmath = true;
         
         let mut re = Regressor::new(&mi);
-        let mut pb = re.new_portbuffer(&mi);
+        let mut pb = re.new_portbuffer();
         
         let mut fb_instance = lr_vec(vec![HashAndValue{hash: 1, value: 1.0, combo_index: 0}]);
         fb_instance.example_importance = 0.5;

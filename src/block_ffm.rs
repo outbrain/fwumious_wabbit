@@ -13,6 +13,9 @@ use crate::feature_buffer;
 use crate::port_buffer;
 use crate::consts;
 use crate::block_helpers;
+use crate::graph;
+use crate::graph::BlockGraph;
+
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 use block_helpers::{Weight, WeightAndOptimizerData};
@@ -36,7 +39,7 @@ pub struct BlockFFM<L:OptimizerTrait> {
     pub ffm_num_fields: u32,
     pub field_embedding_len: u32,
     pub weights: Vec<WeightAndOptimizerData<L>>,
-    pub output_tape_index: i32,
+    pub output_offset: usize,
 }
 
 
@@ -90,7 +93,7 @@ fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelI
         ffm_num_fields: ffm_num_fields,
         field_embedding_len: mi.ffm_k * ffm_num_fields,
         optimizer_ffm: L::new(),
-        output_tape_index: -1
+        output_offset: usize::MAX,
     };
 
     if mi.ffm_k > 0 {
@@ -107,6 +110,27 @@ fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelI
     }
 
     Ok(Box::new(reg_ffm))
+}
+
+pub fn new_ffm_block(bg: &mut graph::BlockGraph, 
+                      mi: &model_instance::ModelInstance,
+                      ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
+    match mi.optimizer {
+        model_instance::Optimizer::AdagradLUT => new_ffm_block2::<optimizer::OptimizerAdagradLUT>(bg, &mi),
+        model_instance::Optimizer::AdagradFlex => new_ffm_block2::<optimizer::OptimizerAdagradFlex>(bg, &mi),
+        model_instance::Optimizer::SGD => new_ffm_block2::<optimizer::OptimizerSGD>(bg, &mi)
+    }
+}
+
+
+pub fn new_ffm_block2<L:OptimizerTrait + 'static>(
+                        bg: &mut graph::BlockGraph, 
+                        mi: &model_instance::ModelInstance)                         
+                        -> Result<graph::BlockPtrOutput, Box<dyn Error>> {    
+    let block = new_without_weights_2::<L>(&mi).unwrap();
+    let mut block_outputs = bg.add_node(block, vec![]);
+    assert_eq!(block_outputs.len(), 1);
+    Ok(block_outputs.pop().unwrap())
 }
 
 
@@ -152,15 +176,20 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
     }
 
 
-    fn get_num_outputs(&self) -> u32 { return self.ffm_num_fields * self.ffm_num_fields; }
-    fn get_num_output_tapes(&self) -> usize { 1 }   
-    
-    fn set_input_tape_index(&mut self, output_tape_index: i32) {
-        panic!("You cannnot set input_tape_index for BlockFFM");
+    fn get_num_outputs(&self, output_id: graph::BlockOutput) -> usize {
+        assert!(output_id.get_output_id() == 0);
+        return (self.ffm_num_fields * self.ffm_num_fields) as usize; 
     }
 
-    fn set_output_tape_index(&mut self, output_tape_index: i32) {
-        self.output_tape_index = output_tape_index;
+    fn get_num_output_tapes(&self) -> usize { 1 }   
+    
+    fn set_input_offset(&mut self, input: graph::BlockInput, offset: usize) {
+        panic!("You cannnot set_input_offset() for BlockFFM");
+    }
+
+    fn set_output_offset(&mut self, output: graph::BlockOutput, offset: usize) {
+        assert!(output.get_output_id() == 0);
+        self.output_offset = offset;
     }
 
 
@@ -170,7 +199,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                         fb: &feature_buffer::FeatureBuffer, 
                         pb: &mut port_buffer::PortBuffer, 
                         update:bool) {
-        debug_assert!(self.output_tape_index >= 0);
+        debug_assert!(self.output_offset != usize::MAX);
         
         let mut wsum = 0.0;
         let local_data_ffm_len = fb.ffm_buffer.len() * (self.ffm_k * fb.ffm_fields_count) as usize;
@@ -182,9 +211,9 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                 $local_data_ffm_values:ident
                 ) => {
                     // number of outputs
-                    let original_size = pb.tapes[self.output_tape_index as usize].len();
-                    pb.tapes[self.output_tape_index as usize].resize_with(original_size + (self.ffm_num_fields * self.ffm_num_fields) as usize, || {0.0});
-                    let myslice = &mut pb.tapes[self.output_tape_index as usize][original_size..];
+                    let num_outputs = (self.ffm_num_fields * self.ffm_num_fields) as usize;
+                    let myslice = &mut pb.tape[self.output_offset .. (self.output_offset + num_outputs)];
+                    myslice.fill(0.0); // TODO : is this really needed?
 
                     let mut local_data_ffm_values = $local_data_ffm_values;
                     //   let mut local_data_ffm_values = &mut $local_data_ffm_values;
@@ -303,7 +332,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                     
                     if update {
                         let mut local_index: usize = 0;
-                        let myslice = &mut pb.tapes[self.output_tape_index as usize][original_size..];
+                        let myslice = &mut pb.tape[self.output_offset..(self.output_offset + num_outputs)];
 
                         let wsumbuf: bool;
                         specialize_k!(self.ffm_k, FFMK, wsumbuf, {
@@ -342,7 +371,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                             }
                         });
                     }
-                    pb.tapes[self.output_tape_index as usize].truncate(original_size );
                     // The only exit point
                     return
                 }
@@ -370,10 +398,10 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                       fb: &feature_buffer::FeatureBuffer,
                       pb: &mut port_buffer::PortBuffer, 
                       )  {
+        debug_assert!(self.output_offset != usize::MAX);
 
-        let original_size = pb.tapes[self.output_tape_index as usize].len();
-        pb.tapes[self.output_tape_index as usize].resize_with(original_size + (self.ffm_num_fields * self.ffm_num_fields) as usize, || {0.0});
-        let myslice = &mut pb.tapes[self.output_tape_index as usize][original_size..];
+        let num_outputs = (self.ffm_num_fields * self.ffm_num_fields) as usize;
+        let myslice = &mut pb.tape[self.output_offset .. (self.output_offset + num_outputs)];
 
         unsafe {
             let ffm_weights = &self.weights;
@@ -510,7 +538,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         }
         let (next_regressor, further_blocks) = further_blocks.split_at(1);
         next_regressor[0].forward(further_blocks, fb, pb);
-        pb.tapes[self.output_tape_index as usize].truncate(original_size );
                  
     }
     
@@ -550,7 +577,7 @@ mod tests {
     use crate::feature_buffer;
     use crate::feature_buffer::HashAndValueAndSeq;
     use crate::vwmap;
-    use block_helpers::{slearn, spredict};
+    use block_helpers::{slearn, spredict, slearn2, spredict2};
 
     use crate::assert_epsilon;
 
@@ -589,56 +616,59 @@ mod tests {
         mi.optimizer = Optimizer::AdagradLUT;
         
         
+
         // Nothing can be learned from a single field in FFMs
-        let mut re = new_without_weights(&mi).unwrap();
-        re.allocate_and_init_weights(&mi);
-        re.set_output_tape_index(0);
-
-        let mut lossf = block_loss_functions::new_without_weights(&mi, re.get_num_outputs(), true).unwrap();
-        lossf.set_input_tape_index(0);
-        lossf.set_output_tape_index(1);
-
-
-        let mut pb = port_buffer::PortBuffer::new(&mi);
+        let mut bg = BlockGraph::new(); 
+        let ffm_block = new_ffm_block(&mut bg, &mi).unwrap(); 
+        let loss_block = block_loss_functions::new_logloss_block(&mut bg, ffm_block, true);
+        bg.schedule(); 
+        bg.allocate_and_init_weights(&mi);
+        let mut pb = bg.new_port_buffer();
 
         let fb = ffm_vec(vec![HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0}], 
                         1); // saying we have 1 field isn't entirely correct
-        assert_epsilon!(spredict(&mut re, &mut lossf, &fb, &mut pb,true), 0.5);
-        assert_epsilon!(slearn  (&mut re, &mut lossf, &fb, &mut pb, true), 0.5);
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true), 0.5);
+        assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 0.5);
 
         // With two fields, things start to happen
         // Since fields depend on initial randomization, these tests are ... peculiar.
         mi.optimizer = Optimizer::AdagradFlex;
-        let mut re = new_without_weights(&mi).unwrap();
-        re.allocate_and_init_weights(&mi);
-        re.set_output_tape_index(0);
+        let mut bg = BlockGraph::new();
         
-        ffm_init::<optimizer::OptimizerAdagradFlex>(&mut re);
+        let ffm_block = new_ffm_block(&mut bg, &mi).unwrap();
+        let lossf = block_loss_functions::new_logloss_block(&mut bg, ffm_block, true);
+        bg.schedule();
+        bg.allocate_and_init_weights(&mi);
+        let mut pb = bg.new_port_buffer();
+        
+        ffm_init::<optimizer::OptimizerAdagradFlex>(&mut bg.blocks[0]);
         let fb = ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: mi.ffm_k}
                                   ], 2);
-        assert_epsilon!(spredict(&mut re, &mut lossf, &fb, &mut pb,true), 0.7310586); 
-        assert_eq!(slearn  (&mut re, &mut lossf, &fb, &mut pb, true), 0.7310586); 
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true), 0.7310586); 
+        assert_eq!(slearn2  (&mut bg, &fb, &mut pb, true), 0.7310586); 
         
-        assert_epsilon!(spredict(&mut re, &mut lossf, &fb, &mut pb,true), 0.7024794);
-        assert_eq!(slearn  (&mut re, &mut lossf, &fb, &mut pb, true), 0.7024794);
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb,true), 0.7024794);
+        assert_eq!(slearn2  (&mut bg, &fb, &mut pb, true), 0.7024794);
 
         // Two fields, use values
         mi.optimizer = Optimizer::AdagradLUT;
-        let mut re = new_without_weights(&mi).unwrap();
-        re.allocate_and_init_weights(&mi);
-        re.set_output_tape_index(0);
+        let mut bg = BlockGraph::new();
+        let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
+        let lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        bg.schedule();
+        bg.allocate_and_init_weights(&mi);
         
-        ffm_init::<optimizer::OptimizerAdagradLUT>(&mut re);
+        ffm_init::<optimizer::OptimizerAdagradLUT>(&mut bg.blocks[0]);
         let fb = ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 2.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: mi.ffm_k * 1}
                                   ], 2);
-        assert_eq!(spredict(&mut re, &mut lossf, &fb, &mut pb,true), 0.98201376);
-        assert_eq!(slearn(&mut re, &mut lossf, &fb, &mut pb, true), 0.98201376);
-        assert_eq!(spredict(&mut re, &mut lossf, &fb, &mut pb,true), 0.81377685);
-        assert_eq!(slearn(&mut re, &mut lossf, &fb, &mut pb, true), 0.81377685);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb,true), 0.98201376);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.98201376);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb,true), 0.81377685);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.81377685);
     }
 
 
@@ -655,56 +685,58 @@ mod tests {
 
         // Nothing can be learned from a single field in FFMs
         mi.optimizer = Optimizer::AdagradLUT;
-        let mut re = new_without_weights(&mi).unwrap();
-        re.allocate_and_init_weights(&mi);
-        re.set_output_tape_index(0);
-
-        let mut lossf = block_loss_functions::new_without_weights(&mi, re.get_num_outputs(), true).unwrap();
-        lossf.set_input_tape_index(0);
-        lossf.set_output_tape_index(1);
+        let mut bg = BlockGraph::new();
+        let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
+        let lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        bg.schedule();
+        bg.allocate_and_init_weights(&mi);
 
 
 
-        let mut pb = port_buffer::PortBuffer::new(&mi);
+        let mut pb = bg.new_port_buffer();
 
         let fb = ffm_vec(vec![HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0}], 1);
-        assert_eq!(spredict(&mut re, &mut lossf, &fb, &mut pb,true), 0.5);
-        assert_eq!(slearn(&mut re, &mut lossf, &fb, &mut pb, true), 0.5);
-        assert_eq!(spredict(&mut re, &mut lossf, &fb, &mut pb,true), 0.5);
-        assert_eq!(slearn(&mut re, &mut lossf, &fb, &mut pb, true), 0.5);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb,true), 0.5);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.5);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb,true), 0.5);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.5);
 
         // With two fields, things start to happen
         // Since fields depend on initial randomization, these tests are ... peculiar.
         mi.optimizer = Optimizer::AdagradFlex;
-        let mut re = new_without_weights(&mi).unwrap();
-        re.allocate_and_init_weights(&mi);
-        re.set_output_tape_index(0);
+        let mut bg = BlockGraph::new();
+        let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
+        let lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        bg.schedule();
+        bg.allocate_and_init_weights(&mi);
         
-        ffm_init::<optimizer::OptimizerAdagradFlex>(&mut re);
+        ffm_init::<optimizer::OptimizerAdagradFlex>(&mut bg.blocks[0]);
         let fb = ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: mi.ffm_k * 1}
                                   ], 2);
-        assert_eq!(spredict(&mut re, &mut lossf, &fb, &mut pb,true), 0.98201376); 
-        assert_eq!(slearn  (&mut re, &mut lossf, &fb, &mut pb, true), 0.98201376); 
-        assert_eq!(spredict(&mut re, &mut lossf, &fb, &mut pb,true), 0.96277946);
-        assert_eq!(slearn  (&mut re, &mut lossf, &fb, &mut pb, true), 0.96277946);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb,true), 0.98201376); 
+        assert_eq!(slearn2  (&mut bg, &fb, &mut pb, true), 0.98201376); 
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb,true), 0.96277946);
+        assert_eq!(slearn2  (&mut bg, &fb, &mut pb, true), 0.96277946);
 
         // Two fields, use values
         mi.optimizer = Optimizer::AdagradLUT;
-        let mut re = new_without_weights(&mi).unwrap();
-        re.allocate_and_init_weights(&mi);
-        re.set_output_tape_index(0);
+        let mut bg = BlockGraph::new();
+        let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
+        let lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        bg.schedule();
+        bg.allocate_and_init_weights(&mi);
 
-        ffm_init::<optimizer::OptimizerAdagradLUT>(&mut re);
+        ffm_init::<optimizer::OptimizerAdagradLUT>(&mut bg.blocks[0]);
         let fb = ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 2.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: mi.ffm_k * 1}
                                   ], 2);
-        assert_eq!(spredict(&mut re, &mut lossf, &fb, &mut pb,true), 0.9999999);
-        assert_eq!(slearn(&mut re, &mut lossf, &fb, &mut pb, true), 0.9999999);
-        assert_eq!(spredict(&mut re, &mut lossf, &fb, &mut pb,true), 0.99685884);
-        assert_eq!(slearn(&mut re, &mut lossf, &fb, &mut pb, true), 0.99685884);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb,true), 0.9999999);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.9999999);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb,true), 0.99685884);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.99685884);
     }
 
 
@@ -725,31 +757,29 @@ B,featureB
         mi.ffm_fields = vec![vec![],vec![]]; 
 
         mi.optimizer = Optimizer::AdagradLUT;
-        let mut re = new_without_weights(&mi).unwrap();
-        re.allocate_and_init_weights(&mi);
-        re.set_output_tape_index(0);
-
-        let mut lossf = block_loss_functions::new_without_weights(&mi, re.get_num_outputs(), true).unwrap();
-        lossf.set_input_tape_index(0);
-        lossf.set_output_tape_index(1);
+        let mut bg = BlockGraph::new();
+        let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
+        let lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        bg.schedule();
+        bg.allocate_and_init_weights(&mi);
 
 
-        let mut pb = port_buffer::PortBuffer::new(&mi);
+        let mut pb = bg.new_port_buffer();
 
         let mut p: f32;
 
-        ffm_init::<optimizer::OptimizerAdagradLUT>(&mut re);
+        ffm_init::<optimizer::OptimizerAdagradLUT>(&mut bg.blocks[0]);
         let fbuf = &ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:3 * 1000, value: 1.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: mi.ffm_k * 1}
                                   ], 2);
-        assert_epsilon!(spredict(&mut re, &mut lossf, &fbuf, &mut pb,true), 0.9933072);
-        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, &mut pb, true), 0.9933072);
-        assert_epsilon!(spredict(&mut re, &mut lossf, &fbuf, &mut pb,false), 0.9395168);
-        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, &mut pb, false), 0.9395168);
-        assert_epsilon!(spredict(&mut re, &mut lossf, &fbuf, &mut pb,false), 0.9395168);
-        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, &mut pb, false), 0.9395168);
+        assert_epsilon!(spredict2(&mut bg, &fbuf, &mut pb,true), 0.9933072);
+        assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, true), 0.9933072);
+        assert_epsilon!(spredict2(&mut bg, &fbuf, &mut pb,false), 0.9395168);
+        assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, false), 0.9395168);
+        assert_epsilon!(spredict2(&mut bg, &fbuf, &mut pb,false), 0.9395168);
+        assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, false), 0.9395168);
     }
 
     #[test]
@@ -765,28 +795,26 @@ B,featureB
         mi.ffm_fields = vec![vec![],vec![]]; 
 
         mi.optimizer = Optimizer::AdagradLUT;
-        let mut re = new_without_weights(&mi).unwrap();
-        re.allocate_and_init_weights(&mi);
-        re.set_output_tape_index(0);
+        let mut bg = BlockGraph::new();
+        let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
+        let lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        bg.schedule();
+        bg.allocate_and_init_weights(&mi);
 
-        let mut lossf = block_loss_functions::new_without_weights(&mi, re.get_num_outputs(), true).unwrap();
-        lossf.set_input_tape_index(0);
-        lossf.set_output_tape_index(1);
+        let mut pb = bg.new_port_buffer();
 
-        let mut pb = port_buffer::PortBuffer::new(&mi);
-
-        ffm_init::<optimizer::OptimizerAdagradLUT>(&mut re);
+        ffm_init::<optimizer::OptimizerAdagradLUT>(&mut bg.blocks[0]);
         let fbuf = &ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:3 * 1000, value: 1.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: mi.ffm_k * 1}
                                   ], 2);
 
-        assert_eq!(spredict(&mut re, &mut lossf, &fbuf,&mut pb, true), 1.0);
-        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, &mut pb, true), 1.0);
-        assert_eq!(spredict(&mut re, &mut lossf, &fbuf,&mut pb, false), 0.9949837);
-        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, &mut pb, false), 0.9949837);
-        assert_eq!(slearn(&mut re, &mut lossf, &fbuf, &mut pb, false), 0.9949837);
+        assert_eq!(spredict2(&mut bg, &fbuf,&mut pb, true), 1.0);
+        assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, true), 1.0);
+        assert_eq!(spredict2(&mut bg, &fbuf,&mut pb, false), 0.9949837);
+        assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, false), 0.9949837);
+        assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, false), 0.9949837);
     }
 
     #[test]
@@ -806,38 +834,38 @@ B,featureB
         
         // Nothing can be learned from a single field in FFMs
         mi.optimizer = Optimizer::AdagradLUT;
-        let mut re = new_without_weights(&mi).unwrap();
-        re.allocate_and_init_weights(&mi);
-        re.set_output_tape_index(0);
-
-        let mut lossf = block_loss_functions::new_without_weights(&mi, re.get_num_outputs(), true).unwrap();
-        lossf.set_input_tape_index(0);
-        lossf.set_output_tape_index(1);
+        let mut bg = BlockGraph::new();
+        let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
+        let lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        bg.schedule();
+        bg.allocate_and_init_weights(&mi);
 
 
-        let mut pb = port_buffer::PortBuffer::new(&mi);
+        let mut pb = bg.new_port_buffer();
 
 
         // With two fields, things start to happen
         // Since fields depend on initial randomization, these tests are ... peculiar.
         mi.optimizer = Optimizer::AdagradFlex;
-        let mut re = new_without_weights(&mi).unwrap();
-        re.allocate_and_init_weights(&mi);
-        re.set_output_tape_index(0);
+        let mut bg = BlockGraph::new();
+        let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
+        let lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        bg.schedule();
+        bg.allocate_and_init_weights(&mi);
         
-        ffm_init::<optimizer::OptimizerAdagradFlex>(&mut re);
+        ffm_init::<optimizer::OptimizerAdagradFlex>(&mut bg.blocks[0]);
         let fb = ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:5, value: 1.0, contra_field_index: mi.ffm_k * 1},
                                   HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: mi.ffm_k * 2}
                                   ], 3);
-        assert_epsilon!(spredict(&mut re, &mut lossf, &fb, &mut pb, true), 0.95257413); 
-        assert_eq!(slearn  (&mut re, &mut lossf, &fb, &mut pb, false), 0.95257413); 
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true), 0.95257413); 
+        assert_eq!(slearn2  (&mut bg, &fb, &mut pb, false), 0.95257413); 
 
         // here we intentionally have just the middle field
         let fb = ffm_vec(vec![HashAndValueAndSeq{hash:5, value: 1.0, contra_field_index: mi.ffm_k * 1}], 3);
-        assert_eq!(spredict(&mut re, &mut lossf, &fb,&mut pb,true), 0.5);
-        assert_eq!(slearn  (&mut re, &mut lossf, &fb, &mut pb, true), 0.5);
+        assert_eq!(spredict2(&mut bg, &fb,&mut pb,true), 0.5);
+        assert_eq!(slearn2  (&mut bg, &fb, &mut pb, true), 0.5);
 
     }
 }

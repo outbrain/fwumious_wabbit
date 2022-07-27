@@ -1,7 +1,8 @@
  
 use crate::regressor::BlockTrait;
-
-use std::mem::swap;
+use crate::model_instance;
+use crate::port_buffer;
+use std::mem;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct BlockOutput(usize);
@@ -14,8 +15,8 @@ pub struct BlockPtrOutput(BlockPtr, BlockOutput); // since blocks can have multi
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct BlockPtrInput(BlockPtr, BlockInput); // since blocks can have multiple inputs, separate between them
 
+#[derive(Debug)]
 pub struct BlockGraphNode {
-    pub block: Box<dyn BlockTrait>,
     pub edges_in: Vec<BlockPtrOutput>,	// each block can have multiple input edges
     pub edges_out: Vec<BlockPtrInput>,  // each block can have multiple output edges
 
@@ -23,6 +24,8 @@ pub struct BlockGraphNode {
 
 pub struct BlockGraph {
     pub nodes: Vec<BlockGraphNode>,
+    pub blocks: Vec<Box<dyn BlockTrait>>,
+    pub tape_size: usize,
 }
 
 
@@ -56,7 +59,9 @@ const BLOCK_PTR_INPUT_DEFAULT:BlockPtrInput = BlockPtrInput(BlockPtr(usize::MAX)
 
 impl BlockGraph {
     pub fn new() -> BlockGraph {
-        BlockGraph {nodes: Vec::new()}
+        BlockGraph {nodes: Vec::new(),
+                    blocks: Vec::new(),
+                    tape_size: 0}
     }
 
     pub fn add_node(&mut self, 
@@ -73,13 +78,13 @@ impl BlockGraph {
             self.nodes[e.get_node_id()].edges_out[e.get_output_id()] = bpi;
         }
         let mut newnode = BlockGraphNode {
-                            block: block,
                             edges_in: edges_in,
                             edges_out: Vec::new(),
                         };
 
 
         self.nodes.push(newnode);
+        self.blocks.push(block);
         let mut vo:Vec<BlockPtrOutput> = Vec::new();
         for i in 0..num_output_connectors {
             let bo = BlockPtrOutput(bp, BlockOutput(i));
@@ -90,17 +95,21 @@ impl BlockGraph {
     }
     
     
-    
-    
+    pub fn get_tape_size(&self) -> usize {
+        self.tape_size
+    }
+
+    pub fn new_port_buffer(&self) -> port_buffer::PortBuffer {
+        port_buffer::PortBuffer::new(self.get_tape_size())
+    }
     pub fn get_num_input_connections(&self, bp: BlockPtr) -> usize {
         self.nodes[bp.get_node_id()].edges_in.len()
     }
     
-    pub fn get_num_outputs(&self, outputs: Vec<&BlockPtrOutput>) -> u32 {
+    pub fn get_num_outputs(&self, outputs: Vec<&BlockPtrOutput>) -> usize {
         let mut t = 0;
         for x in outputs {
-            let node = &self.nodes[x.get_node_id()];
-            t += node.block.get_num_outputs2(x.get_output());
+            t += self.blocks[x.get_node_id()].get_num_outputs(x.get_output());
         }
         t
     }
@@ -109,11 +118,40 @@ impl BlockGraph {
     fn len(&self) -> usize {
         self.nodes.len()
     }
+
+    pub fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
+        for i in 0..self.len() { 
+            self.blocks[i].allocate_and_init_weights(&mi);
+        }
+    }
     
-    pub fn schedule(self) {
+    pub fn take_blocks(&mut self) -> Vec<Box<dyn BlockTrait>> {
+        mem::take(&mut self.blocks)
+    
+    }
+    
+    pub fn schedule(&mut self) {
+        let mut offset: usize = 0;
+        for i in 0..self.len() {
+            let num_output_connectors = self.blocks[i].get_num_output_tapes();
+            for j in 0..num_output_connectors {
+                let bo = BlockOutput(j);
+                let output_len = self.blocks[i].get_num_outputs(bo);
+//                println!("Block: {}, output: {:?},  output offset: {} ouptut_len: {}", i, bo, offset, output_len);
+                self.blocks[i].set_output_offset(bo, offset);
+//                println!("Edge out: {}",
+                if self.nodes[i].edges_out[j].get_node_id() != usize::MAX {
+                    // you can have dangling outputs... why not
+                    self.blocks[self.nodes[i].edges_out[j].get_node_id()].set_input_offset(self.nodes[i].edges_out[j].get_input(), offset);
+                }
+                offset += output_len as usize;
+            }
+        }
+        self.tape_size = offset;
+        
         // we  need to figure out the order
         // first find nodes with no inputs
-        let mut output_list: Vec<BlockPtr> = Vec::new();
+        /*let mut output_list: Vec<BlockPtr> = Vec::new();
         let mut ready: Vec<BlockPtr> = Vec::new(); // we will use this as a list of ready nodes to choose from
         let mut num_inputs_done: Vec<usize> = Vec::new();
         for i in 0..self.len() {
@@ -148,7 +186,7 @@ impl BlockGraph {
             panic!("Couldn't resolve the graph in 1000 steps");
         }
          
-        
+        */
                 
     }
    

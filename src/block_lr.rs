@@ -4,6 +4,8 @@ use crate::optimizer;
 use crate::regressor;
 use crate::model_instance;
 use crate::feature_buffer;
+use crate::graph;
+
 use std::io;
 use core::arch::x86_64::*;
 use std::error::Error;
@@ -22,7 +24,7 @@ pub struct BlockLR<L:OptimizerTrait> {
     pub weights: Vec<WeightAndOptimizerData<L>>,
     pub weights_len: u32,
     pub optimizer_lr: L,
-    pub output_tape_index: i32,
+    pub output_offset: usize,
     pub num_combos: u32,
 }
 
@@ -43,7 +45,7 @@ fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelI
         weights: Vec::new(),
         weights_len: 0, 
         optimizer_lr: L::new(),
-        output_tape_index: -1, 
+        output_offset: usize::MAX, 
         num_combos: num_combos,
 
     };
@@ -51,6 +53,30 @@ fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelI
     reg_lr.weights_len = 1 << mi.bit_precision;
     Ok(Box::new(reg_lr))
 }
+
+pub fn new_lr_block2<L:OptimizerTrait + 'static>(
+                        bg: &mut graph::BlockGraph, 
+                        mi: &model_instance::ModelInstance)                         
+                        -> Result<graph::BlockPtrOutput, Box<dyn Error>> {    
+    let block = new_without_weights_2::<L>(&mi).unwrap();
+    let mut block_outputs = bg.add_node(block, vec![]);
+    assert_eq!(block_outputs.len(), 1);
+    Ok(block_outputs.pop().unwrap())
+}
+
+pub fn new_lr_block(bg: &mut graph::BlockGraph, mi: &model_instance::ModelInstance)
+                        -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
+    match mi.optimizer {
+        model_instance::Optimizer::AdagradLUT => new_lr_block2::<optimizer::OptimizerAdagradLUT>(bg, &mi),
+        model_instance::Optimizer::AdagradFlex => new_lr_block2::<optimizer::OptimizerAdagradFlex>(bg, &mi),
+        model_instance::Optimizer::SGD => new_lr_block2::<optimizer::OptimizerSGD>(bg, &mi)
+    }
+}
+
+
+
+
+
 
 impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L> 
 {
@@ -65,17 +91,22 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
 
     fn get_num_output_tapes(&self) -> usize {1}   
 
-    fn get_num_outputs(&self) -> u32 {
-        return self.num_combos;
-    }
-    
-    fn set_input_tape_index(&mut self, output_tape_index: i32) {
-        panic!("You cannnot set input_tape_index for BlockLR");
+
+    fn get_num_outputs(&self, output_id: graph::BlockOutput) -> usize {
+        assert!(output_id.get_output_id() == 0);
+        self.num_combos as usize
     }
 
-    fn set_output_tape_index(&mut self, output_tape_index: i32) {
-        self.output_tape_index = output_tape_index;
+
+    fn set_input_offset(&mut self, input: graph::BlockInput, offset: usize)  {
+        panic!("You cannnot set_input_offset() for BlockLR");
     }
+
+    fn set_output_offset(&mut self, output: graph::BlockOutput, offset: usize)  {
+        assert!(output.get_output_id() == 0);
+        self.output_offset = offset;
+    }
+
 
     #[inline(always)]
     fn forward_backward(&mut self, 
@@ -83,14 +114,13 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
                             fb: &feature_buffer::FeatureBuffer, 
                             pb: &mut port_buffer::PortBuffer,                             
                             update:bool) {
-        debug_assert!(self.output_tape_index >= 0);
+        debug_assert!(self.output_offset != usize::MAX);
 
         let mut wsum:f32 = 0.0;
         unsafe {
-            let original_size = pb.tapes[self.output_tape_index as usize].len();
             {
-                pb.tapes[self.output_tape_index as usize].resize_with(original_size + self.num_combos as usize, || {0.0});
-                let myslice = &mut pb.tapes.get_unchecked_mut(self.output_tape_index as usize).get_unchecked_mut(original_size..);
+                let myslice = &mut pb.tape[self.output_offset .. (self.output_offset + self.num_combos as usize)];
+                myslice.fill(0.0);
 
                 for hashvalue in fb.lr_buffer.iter() {
                     // Prefetch couple of indexes from the future to prevent pipeline stalls due to memory latencies
@@ -110,7 +140,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
 //            let general_gradient = pb.tapes[self.output_tape_index as usize].pop().unwrap();
 
             if update {
-                let myslice = &mut pb.tapes.get_unchecked(self.output_tape_index as usize).get_unchecked(original_size..);
+                let myslice = &mut pb.tape[self.output_offset .. (self.output_offset + self.num_combos as usize)];
 
                 for hashvalue in fb.lr_buffer.iter() {
                     let feature_index     = hashvalue.hash as usize;
@@ -121,7 +151,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
                     self.weights.get_unchecked_mut(feature_index).weight -= update;
                 }
             }
-            pb.tapes[self.output_tape_index as usize].truncate(original_size );
 
             return
         } // end of unsafe
@@ -132,15 +161,16 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
              further_blocks: &[Box<dyn BlockTrait>], 
              fb: &feature_buffer::FeatureBuffer,
              pb: &mut port_buffer::PortBuffer) {
+        debug_assert!(self.output_offset != usize::MAX);
+
         let fbuf = &fb.lr_buffer;
         let mut wsum:f32 = 0.0;
         
-        let original_size = pb.tapes[self.output_tape_index as usize].len();
-        pb.tapes[self.output_tape_index as usize].resize_with(original_size + self.num_combos as usize, || {0.0});
         {
 
             unsafe {
-                let myslice = &mut pb.tapes.get_unchecked_mut(self.output_tape_index as usize).get_unchecked_mut(original_size..);
+                let myslice = &mut pb.tape[self.output_offset .. (self.output_offset + self.num_combos as usize)];
+                myslice.fill(0.0);
                 for val in fbuf {
                     let hash = val.hash as usize;
                     let feature_value:f32 = val.value;
@@ -149,10 +179,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
             }
         }
         let (next_regressor, further_blocks) = further_blocks.split_at(1);
-//        pb.tapes[self.output_tape_index as usize].push(wsum);
         next_regressor[0].forward(further_blocks, fb, pb);
-//        pb.tapes[self.output_tape_index as usize].pop().unwrap();
-        pb.tapes[self.output_tape_index as usize].truncate(original_size );
     }
     
     

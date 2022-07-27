@@ -224,7 +224,7 @@ B,featureB
         mi.optimizer = model_instance::Optimizer::AdagradFlex;
         mi.init_acc_gradient = 0.0;
         let mut re = regressor::Regressor::new(&mi);
-        let mut pb = re.new_portbuffer(&mi);
+        let mut pb = re.new_portbuffer();
         
         let fbuf = &lr_vec(vec![
             HashAndValue {
@@ -321,7 +321,7 @@ B,featureB
         mi.ffm_fields = vec![vec![], vec![]];
         mi.optimizer = Optimizer::AdagradFlex;
         let mut re = regressor::Regressor::new(&mi);
-        let mut pb = re.new_portbuffer(&mi);
+        let mut pb = re.new_portbuffer();
 
         let mut p: f32;
 
@@ -420,8 +420,8 @@ B,featureB
         
         let mut re_1 = regressor::Regressor::new(&mi);
         let mut re_2 = regressor::Regressor::new(&mi);
-        let mut pb_1 = re_1.new_portbuffer(&mi);
-        let mut pb_2 = re_2.new_portbuffer(&mi);
+        let mut pb_1 = re_1.new_portbuffer();
+        let mut pb_2 = re_2.new_portbuffer();
         let mut p: f32;
 
         ffm_fixed_init(&mut re_1);

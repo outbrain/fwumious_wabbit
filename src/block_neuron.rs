@@ -13,6 +13,7 @@ use crate::feature_buffer;
 use crate::port_buffer;
 use crate::consts;
 use crate::block_helpers;
+use crate::graph;
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 use block_helpers::{Weight, WeightAndOptimizerData};
@@ -28,9 +29,9 @@ pub enum NeuronType {
 
 
 pub struct BlockNeuron<L:OptimizerTrait> {    
-    pub num_inputs: u32,
-    pub input_tape_index: i32,
-    pub output_tape_index: i32,
+    pub num_inputs: usize,
+    pub input_offset: usize,
+    pub output_offset: usize,
     pub weights_len: u32, 
     pub weights: Vec<WeightAndOptimizerData<L>>,
     pub optimizer: L,
@@ -41,7 +42,7 @@ pub struct BlockNeuron<L:OptimizerTrait> {
 
 
 pub fn new_without_weights(mi: &model_instance::ModelInstance, 
-                            num_inputs: u32,
+                            num_inputs: usize,
                             ntype: NeuronType) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
     match mi.optimizer {
         model_instance::Optimizer::AdagradLUT => new_without_weights_2::<optimizer::OptimizerAdagradLUT>(&mi, num_inputs, ntype),
@@ -52,17 +53,16 @@ pub fn new_without_weights(mi: &model_instance::ModelInstance,
 
 
 fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelInstance, 
-                                                    num_inputs: u32, 
+                                                    num_inputs: usize, 
                                                     ntype: NeuronType) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
     assert!(num_inputs > 0);
-    let weights_len = num_inputs;
     let mut rg = BlockNeuron::<L> {
         weights: Vec::new(),
-        output_tape_index: -1,
-        input_tape_index: -1,
+        output_offset: usize::MAX,
+        input_offset: usize::MAX,
         num_inputs: num_inputs,
         optimizer: L::new(),
-        weights_len: weights_len,
+        weights_len: num_inputs as u32,
         bias_term: false,
         neuron_type: ntype,
     };
@@ -70,6 +70,35 @@ fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelI
 
     Ok(Box::new(rg))
 }
+
+
+
+pub fn new_neuron_block2<L:OptimizerTrait + 'static>(
+                        bg: &mut graph::BlockGraph, 
+                        mi: &model_instance::ModelInstance,
+                        input: graph::BlockPtrOutput,
+                        ntype: NeuronType
+                        ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {    
+    let num_inputs = bg.get_num_outputs(vec![&input]);
+    let block = new_without_weights_2::<L>(&mi, num_inputs, ntype).unwrap();
+    let mut block_outputs = bg.add_node(block, vec![input]);
+    assert_eq!(block_outputs.len(), 1);
+    Ok(block_outputs.pop().unwrap())
+}
+
+pub fn new_neuron_block(bg: &mut graph::BlockGraph, 
+                        mi: &model_instance::ModelInstance,
+                        input: graph::BlockPtrOutput,
+                        ntype: NeuronType)
+                        -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
+
+    match mi.optimizer {
+        model_instance::Optimizer::AdagradLUT => new_neuron_block2::<optimizer::OptimizerAdagradLUT>(bg, &mi, input, ntype),
+        model_instance::Optimizer::AdagradFlex => new_neuron_block2::<optimizer::OptimizerAdagradFlex>(bg, &mi, input, ntype),
+        model_instance::Optimizer::SGD => new_neuron_block2::<optimizer::OptimizerSGD>(bg, &mi, input, ntype)
+    }
+}
+
 
 
 
@@ -91,20 +120,21 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuron<L>
 
     fn get_num_output_tapes(&self) -> usize {1}   
 
-
-    fn get_num_outputs(&self) -> u32 {
-        return 1
-    }
-    
-
-    fn set_input_tape_index(&mut self, input_tape_index: i32) {
-        self.input_tape_index = input_tape_index;
+    fn get_num_outputs(&self, output_id: graph::BlockOutput) -> usize {
+        assert!(output_id.get_output_id() == 0);
+        1
     }
 
-    fn set_output_tape_index(&mut self, output_tape_index: i32) {
-        self.output_tape_index = output_tape_index;
+
+    fn set_input_offset(&mut self, input: graph::BlockInput, offset: usize)  {
+        assert!(input.get_input_id() == 0);
+        self.input_offset = offset;
     }
 
+    fn set_output_offset(&mut self, output: graph::BlockOutput, offset: usize)  {
+        assert!(output.get_output_id() == 0);
+        self.output_offset = offset;
+    }
 
     #[inline(always)]
     fn forward_backward(&mut self, 
@@ -112,32 +142,30 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuron<L>
                         fb: &feature_buffer::FeatureBuffer, 
                         pb: &mut port_buffer::PortBuffer, 
                         update:bool) {
-        debug_assert!(self.output_tape_index >= 0);
-        debug_assert!(self.input_tape_index >= 0);
-        debug_assert!(self.input_tape_index != self.output_tape_index);
         debug_assert!(self.num_inputs > 0);
+        debug_assert!(self.output_offset != usize::MAX);
+        debug_assert!(self.input_offset != usize::MAX);
         
         unsafe {
             let mut wsum:f32 = 0.0;
-            let len = pb.tapes[self.input_tape_index as usize].len();
 //            println!("len: {}, num inputs: {}, input_tape_indeX: {}", len, self.num_inputs, self.input_tape_index);
 
             {
-                let myslice = &pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..];
+                let myslice = &pb.tape[self.input_offset .. (self.input_offset + self.num_inputs as usize)];
                 for i in 0..myslice.len() {
                     wsum += myslice.get_unchecked(i) * self.weights.get_unchecked(i).weight;
                 }
 //                println!("wsum: {}", wsum);
             }
             let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
-            pb.tapes[self.output_tape_index as usize].push(wsum);
+            pb.tape[self.output_offset as usize] = wsum;
             next_regressor[0].forward_backward(further_blocks, fb, pb, update);
-            let general_gradient = pb.tapes[self.output_tape_index as usize].pop().unwrap();
+            let general_gradient = pb.tape[self.output_offset];
   //          println!("GG: {}", general_gradient);
             if update {
             {
+                let mut myslice = &mut pb.tape[self.input_offset..self.input_offset + self.num_inputs as usize];
                 if self.neuron_type == NeuronType::WeightedSum {
-                    let mut myslice = &mut pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..];
                     for i in 0..myslice.len() {
                         let w = self.weights.get_unchecked(i).weight;
                         let feature_value = myslice.get_unchecked(i);
@@ -148,7 +176,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuron<L>
                      }
                 } else if self.neuron_type == NeuronType::Sum {
                     // Do nothing, as we don't update the weights away from 1.0
-                    let mut myslice = &mut pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..];
                     for i in 0..myslice.len() {
                         *myslice.get_unchecked_mut(i) = general_gradient;    // put the gradient on the tape in place of the value
                      }
@@ -156,7 +183,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuron<L>
 
                 } else if self.neuron_type == NeuronType::LimitedWeightedSum {
                     // Here it is like WeightedSum, but weights are limited to the maximum
-                    let mut myslice = &mut pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..];
                     for i in 0..myslice.len() {
                         let w = self.weights.get_unchecked(i).weight;
                         let feature_value = myslice.get_unchecked(i);
@@ -187,24 +213,21 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuron<L>
                             pb: &mut port_buffer::PortBuffer, 
                            ) {
 //            assert!(false, "Not implemented yet");
-        debug_assert!(self.output_tape_index >= 0);
-        debug_assert!(self.input_tape_index >= 0);
-        debug_assert!(self.input_tape_index != self.output_tape_index);
         debug_assert!(self.num_inputs > 0);
+        debug_assert!(self.output_offset != usize::MAX);
+        debug_assert!(self.input_offset != usize::MAX);
         
         unsafe {
             let mut wsum:f32 = 0.0;
-            let len = pb.tapes[self.input_tape_index as usize].len();
             {
-                let myslice = &pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..];
+                let mut myslice = &mut pb.tape[self.input_offset..self.input_offset + self.num_inputs as usize];
                 for i in 0..myslice.len() {
                     wsum += myslice.get_unchecked(i) * self.weights.get_unchecked(i).weight;
                 }
             }
             let (next_regressor, further_blocks) = further_blocks.split_at(1);
-            pb.tapes[self.output_tape_index as usize].push(wsum);
+            pb.tape[self.output_offset] = wsum;
             next_regressor[0].forward(further_blocks, fb, pb);
-            pb.tapes[self.output_tape_index as usize].pop().unwrap();
             return
             
         } // unsafe end
@@ -255,7 +278,9 @@ mod tests {
     use crate::feature_buffer;
     use crate::feature_buffer::HashAndValueAndSeq;
     use crate::vwmap;
-    use block_helpers::{slearn, spredict};
+    use block_helpers::{slearn2, spredict2};
+    use crate::graph;
+    use crate::graph::{BlockGraph};
 
     use crate::assert_epsilon;
 
@@ -278,31 +303,23 @@ mod tests {
         mi.power_t = 0.0;
         mi.optimizer = Optimizer::SGD;
         
+       
+        let mut bg = BlockGraph::new();
+        let input_block = block_misc::new_const_block(&mut bg, vec![2.0]).unwrap();
+//        println!("Graph1: {:?}", bg.nodes); 
+        let neuron_block = new_neuron_block(&mut bg, &mi, input_block, NeuronType::WeightedSum).unwrap();
+//        println!("Graph2: {:?}", bg.nodes); 
+        let result_block = block_misc::new_result_block2(&mut bg, neuron_block, 1.0).unwrap();
+//        println!("Graph3: {:?}", bg.nodes); 
+        bg.schedule();
+        bg.allocate_and_init_weights(&mi);
         
-        let mut re = new_without_weights(&mi, 1, NeuronType::WeightedSum).unwrap();
-        re.set_input_tape_index(0);
-        re.set_output_tape_index(1);
-        re.allocate_and_init_weights(&mi);
-        
-        let mut ib = block_misc::new_result_block(1, 1.0).unwrap();
-        ib.set_input_tape_index(1);
-
-        
-        let mut pb = port_buffer::PortBuffer::new(&mi);
+        let mut pb = bg.new_port_buffer();
         let fb = fb_vec();
-        pb.tapes[0].push(2.0);
-        assert_epsilon!(slearn  (&mut re, &mut ib, &fb, &mut pb, true), 2.0);
-        // what do we expect:
-        // on tape 0 input of 2.0 will be replaced with the gradient of 1.0
-        // on tape 1 input has been consumed by returning function
-        // on tape 2 the output was consumed by slearn
-        assert_eq!(pb.tapes[0][0], 1.0);
-        assert_eq!(pb.tapes[1].len(), 0);
+        assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 2.0);
         assert_eq!(pb.results.len(), 1);
-
-        pb.reset();
-        pb.tapes[0].push(2.0);
-        assert_epsilon!(slearn  (&mut re, &mut ib, &fb, &mut pb, true), 1.6);
+        
+        assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 1.6);
         
 
     }

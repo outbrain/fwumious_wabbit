@@ -25,7 +25,7 @@ mod block_loss_functions;
 mod block_lr;
 mod block_neuron;
 mod block_neuronlayer;
-mod block_relu;
+//mod block_relu;
 mod block_misc;
 mod cache;
 mod cmdline;
@@ -140,7 +140,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
         let input_filename = cl.value_of("data").expect("--data expected");
         let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"), &vw);
         let mut fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
-        let mut pb = re.new_portbuffer(&mi);
+        let mut pb = re.new_portbuffer();
 
         let predictions_after: u64 = match cl.value_of("predictions_after") {
             Some(examples) => examples.parse()?,

@@ -6,6 +6,7 @@ use crate::regressor;
 use crate::feature_buffer;
 use crate::port_buffer;
 use crate::model_instance;
+use crate::graph;
 
 use regressor::BlockTrait;
 
@@ -34,18 +35,35 @@ pub fn logistic(t: f32) -> f32 {
 
 
 pub struct BlockSigmoid {
-    num_inputs: u32,
-    input_tape_index: i32,
-    output_tape_index: i32,
+    num_inputs: usize,
+    input_offset: usize,
+    output_offset: usize,
     copy_to_result: bool
 }
+
+
+pub fn new_logloss_block(  bg: &mut graph::BlockGraph, 
+                           input: graph::BlockPtrOutput,
+                           copy_to_result: bool) 
+                        -> Result<graph::BlockPtrOutput, Box<dyn Error>> {    
+    let num_inputs = bg.get_num_outputs(vec![&input]);
+    let block = Box::new(BlockSigmoid {num_inputs: num_inputs as usize,
+                                input_offset: usize::MAX,
+                                output_offset: usize::MAX,
+                                copy_to_result: copy_to_result});
+    let mut block_outputs = bg.add_node(block, vec![input]);
+    assert_eq!(block_outputs.len(), 1);
+    Ok(block_outputs.pop().unwrap())
+
+}
+
 
 pub fn new_without_weights(mi: &model_instance::ModelInstance, 
                             num_inputs: u32,
                             copy_to_result: bool) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-    Ok(Box::new(BlockSigmoid {num_inputs: num_inputs,
-                                input_tape_index: -1,
-                                output_tape_index: -1,
+    Ok(Box::new(BlockSigmoid {num_inputs: num_inputs as usize,
+                                input_offset: usize::MAX,
+                                output_offset: usize::MAX,
                                 copy_to_result: copy_to_result}))
 }
 
@@ -59,16 +77,19 @@ impl BlockTrait for BlockSigmoid {
     fn get_num_output_tapes(&self) -> usize {1}   
 
 
-    fn get_num_outputs(&self) -> u32 {
-        return 1
+    fn get_num_outputs(&self, output_id: graph::BlockOutput) -> usize {
+        assert!(output_id.get_output_id() == 0);
+        1
     }
     
-    fn set_input_tape_index(&mut self, input_tape_index: i32) {
-        self.input_tape_index = input_tape_index;
+    fn set_input_offset(&mut self, input: graph::BlockInput, offset: usize)  {
+        assert!(input.get_input_id() == 0);
+        self.input_offset = offset;
     }
 
-    fn set_output_tape_index(&mut self, output_tape_index: i32) {
-        self.output_tape_index = output_tape_index;
+    fn set_output_offset(&mut self, output: graph::BlockOutput, offset: usize)  {
+        assert!(output.get_output_id() == 0);
+        self.output_offset = offset;
     }
 
 
@@ -82,20 +103,13 @@ impl BlockTrait for BlockSigmoid {
         if further_blocks.len() != 0 {
             panic!("RegSigmoid can only be at the end of the chain!");
         }
-        debug_assert!(self.output_tape_index >= 0);
-        debug_assert!(self.input_tape_index >= 0);
-        debug_assert!(self.input_tape_index != self.output_tape_index);
+        debug_assert!(self.input_offset != usize::MAX);
+        debug_assert!(self.output_offset != usize::MAX);
 
 
-        let len = pb.tapes[self.input_tape_index as usize].len();
-        // Technically it needs to be longer. but for debugging we want to consume all of them
-        if (self.num_inputs as usize) != len {
-            panic!("BlockSigmoid::forward_backward() Number of inputs is different than number of values on the input tape: self.num_inputs: {} input tape: {}", self.num_inputs, len);
-        }
-        
 //        println!("AAA: {}", len);
         let wsum:f32 = {
-            let myslice = &pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..];
+            let myslice = &pb.tape[self.input_offset .. (self.input_offset + self.num_inputs)];
             myslice.iter().sum()
         };
         // vowpal compatibility
@@ -118,7 +132,7 @@ impl BlockTrait for BlockSigmoid {
             general_gradient = - (fb.label - prediction_probability) * fb.example_importance;
         }
         //println!("General gradient: {}", general_gradient);
-        pb.tapes[self.output_tape_index as usize].push(prediction_probability);
+        pb.tape[self.output_offset] = prediction_probability;
         if self.copy_to_result {
             pb.results.push(prediction_probability);
         }
@@ -127,10 +141,9 @@ impl BlockTrait for BlockSigmoid {
             next_regressor[0].forward_backward(further_blocks, fb, pb, update);
         }
 
-
         {
             // replace inputs with their gradients
-            let mut myslice = &mut pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..];
+            let mut myslice = &mut pb.tape[self.input_offset .. (self.input_offset + self.num_inputs)];
             for s in myslice.iter_mut() {
                 *s = general_gradient;
             }
@@ -145,19 +158,11 @@ impl BlockTrait for BlockSigmoid {
         if further_blocks.len() != 0 {
             panic!("RegSigmoid can only be at the end of the chain!");
         }
-        debug_assert!(self.output_tape_index >= 0);
-        debug_assert!(self.input_tape_index >= 0);
-        debug_assert!(self.input_tape_index != self.output_tape_index);
+        debug_assert!(self.input_offset != usize::MAX);
+        debug_assert!(self.output_offset != usize::MAX);
 
-
-        let len = pb.tapes[self.input_tape_index as usize].len();
-        // Technically it needs to be longer. but for debugging we want to consume all of them
-        if (self.num_inputs as usize) != len {
-            panic!("BlockSigmoid::forward_backward() Number of inputs is different than number of values on the input tape: self.num_inputs: {} input tape: {}", self.num_inputs, len);
-        }
-        
         let wsum:f32 = {
-            let myslice = &pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..];
+            let myslice = &pb.tape[self.input_offset .. (self.input_offset + self.num_inputs)];
             myslice.iter().sum()
         };
         
@@ -173,7 +178,7 @@ impl BlockTrait for BlockSigmoid {
             prediction_probability = logistic(wsum);
         }
         
-        pb.tapes[self.output_tape_index as usize].push(prediction_probability);
+        pb.tape[self.output_offset] = prediction_probability;
         if self.copy_to_result {
             pb.results.push(prediction_probability);
         }

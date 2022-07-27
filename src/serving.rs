@@ -211,7 +211,7 @@ impl Serving {
         }
 
         let re_fixed2 = BoxedRegressorTrait::new(re_fixed);
-        let pb = re_fixed2.new_portbuffer(mi);
+        let pb = re_fixed2.new_portbuffer();
         let fbt = feature_buffer::FeatureBufferTranslator::new(mi);
         let pa = parser::VowpalParser::new(&vw);
         for i in 0..num_children {
@@ -279,7 +279,7 @@ C,featureC
         let re_fixed = BoxedRegressorTrait::new(Box::new(re.immutable_regressor(&mi).unwrap()));
         let fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
         let pa = parser::VowpalParser::new(&vw);
-        let pb = re_fixed.new_portbuffer(&mi);
+        let pb = re_fixed.new_portbuffer();
 
         let mut newt = WorkerThread {id: 1,
                                  fbt: fbt,
@@ -387,7 +387,7 @@ C,featureC
         let re_fixed = BoxedRegressorTrait::new(Box::new(re.immutable_regressor(&mi).unwrap()));
         let fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
         let pa = parser::VowpalParser::new(&vw);
-        let pb = re_fixed.new_portbuffer(&mi);
+        let pb = re_fixed.new_portbuffer();
 
         let mut newt = WorkerThread {id: 1,
                                  fbt: fbt,
