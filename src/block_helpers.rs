@@ -60,6 +60,7 @@ pub fn read_weights_from_buf<L:OptimizerTrait>(weights: &mut Vec<WeightAndOptimi
 
 pub fn write_weights_to_buf<L:OptimizerTrait>(weights: &Vec<WeightAndOptimizerData<L>>, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
     if weights.len() == 0 {
+        assert!(false);
         return Err(format!("Writing weights of unallocated weights buffer"))?;
     }
     unsafe {

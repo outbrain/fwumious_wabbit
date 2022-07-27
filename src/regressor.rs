@@ -84,13 +84,8 @@ impl Regressor  {
         };
 
         let mut bg = graph::BlockGraph::new();
-        let re_ffm = block_ffm::new_ffm_block(&mut bg, &mi).unwrap();
-        let lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
-        bg.schedule();
-
         // A bit more elaborate than necessary. Let's really make it clear what's happening
         let mut output = block_lr::new_lr_block(&mut bg, mi).unwrap();
-        
 
         if mi.ffm_k > 0 {
             let mut reg_ffm = block_ffm::new_ffm_block(&mut bg, mi).unwrap();

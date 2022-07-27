@@ -97,10 +97,12 @@ fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelI
     };
 
     if mi.ffm_k > 0 {
+        
         //reg_ffm.optimizer_ffm.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
         reg_ffm.optimizer_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
         // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
         reg_ffm.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * reg_ffm.ffm_k);
+        println!("FFM WEIGHTS: {}", reg_ffm.ffm_weights_len);
     }
 
     // Verify that forward pass will have enough stack for temporary buffer
@@ -343,14 +345,14 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
                                                            
                                 for z in 0..fb.ffm_fields_count as usize {
                                     let general_gradient = myslice.get_unchecked(contra_offset2 + z);
-          //                        println!("UPD: Gradient: {}", general_gradient);
+  //                                println!("UPD: Gradient: {}", general_gradient);
                                     for k in 0..FFMK as usize {
                                         let feature_value = *local_data_ffm_values.get_unchecked(local_index);
                                         let gradient = general_gradient * feature_value;
                                         let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
 
-          //                            println!("Local index: {}, feature index {}", local_index, feature_index);
-          //                            println!("UPD: Feature value: {}, update: {}", feature_value, update);
+    //                                  println!("Local index: {}, feature index {}", local_index, feature_index);
+      //                                println!("UPD: Feature value: {}, update: {}", feature_value, update);
                                         ffm_weights.get_unchecked_mut(feature_index).weight -= update;
                                         local_index += 1;
                                         feature_index += 1;
@@ -402,6 +404,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
 
         let num_outputs = (self.ffm_num_fields * self.ffm_num_fields) as usize;
         let myslice = &mut pb.tape[self.output_offset .. (self.output_offset + num_outputs)];
+        myslice.fill(0.0);
 
         unsafe {
             let ffm_weights = &self.weights;
