@@ -17,12 +17,12 @@ pub struct BlockResult {
 }
 
 
-pub fn new_result_block2(bg: &mut graph::BlockGraph,
+pub fn new_result_block(bg: &mut graph::BlockGraph,
                         input: graph::BlockPtrOutput,
                         replace_input_with: f32) 
                         -> Result<(), Box<dyn Error>> {
 
-    let num_inputs = bg.get_num_outputs(vec![&input]);
+    let num_inputs = bg.get_num_output_values(vec![&input]);
     println!("Inputs: {} vec: {:?}", num_inputs, input);
     let block = Box::new(BlockResult {
                          num_inputs: num_inputs as usize,
@@ -34,12 +34,6 @@ pub fn new_result_block2(bg: &mut graph::BlockGraph,
 }
 
 
-pub fn new_result_block(num_inputs: usize, replace_input_with: f32) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-    Ok(Box::new(BlockResult {num_inputs: num_inputs,
-                             input_offset: usize::MAX,
-                             replace_input_with: replace_input_with}))
-}
-
 
 impl BlockTrait for BlockResult {
     // Warning: It does not confirm to regular clean-up after itself
@@ -50,14 +44,14 @@ impl BlockTrait for BlockResult {
 
     fn get_num_output_slots(&self) -> usize {0}   
 
-    fn get_num_outputs(&self, output: graph::BlockOutput) -> usize {
-        assert!(output.get_output_id() == 0);
+    fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
+        assert!(output.get_output_index() == 0);
         // this means outputs on regular tapes
         return self.num_inputs
     }
 
-    fn set_input_offset(&mut self, input: graph::BlockInput, offset: usize)  {
-        assert!(input.get_input_id() == 0);
+    fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize)  {
+        assert!(input.get_input_index() == 0);
         self.input_offset = offset;
     }
 
@@ -155,17 +149,17 @@ impl BlockTrait for BlockConsts {
 
     fn get_num_output_slots(&self) -> usize {1}   
 
-    fn get_num_outputs(&self, output: graph::BlockOutput) -> usize {
-        assert!(output.get_output_id() == 0);
+    fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
+        assert!(output.get_output_index() == 0);
         self.consts.len() as usize
     }
     
-    fn set_input_offset(&mut self, input: graph::BlockInput, offset: usize)  {
+    fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize)  {
         panic!("You cannnot set input_tape_index for BlockConsts");
     }
 
-    fn set_output_offset(&mut self, output: graph::BlockOutput, offset: usize) {
-        assert!(output.get_output_id() == 0, "Only supports a single output for BlockConsts");
+    fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
+        assert!(output.get_output_index() == 0, "Only supports a single output for BlockConsts");
         self.output_offset = offset;
     }
 
@@ -213,7 +207,7 @@ pub struct BlockCopy {
 pub fn new_copy_block2(bg: &mut graph::BlockGraph,
                        input: graph::BlockPtrOutput
                        ) -> Result<Vec<graph::BlockPtrOutput>, Box<dyn Error>> {
-    let num_inputs = bg.get_num_outputs(vec![&input]);
+    let num_inputs = bg.get_num_output_values(vec![&input]);
     assert!(num_inputs != 0);
 
     let mut block = Box::new(BlockCopy {
@@ -255,21 +249,21 @@ impl BlockTrait for BlockCopy
 
     fn get_num_output_slots(&self) -> usize {2}   
 
-    fn get_num_outputs(&self, output_id: graph::BlockOutput) -> usize {
-        assert!(output_id.get_output_id() <= 1);
+    fn get_num_output_values(&self, output_id: graph::OutputSlot) -> usize {
+        assert!(output_id.get_output_index() <= 1);
         self.num_inputs
     }
 
-    fn set_input_offset(&mut self, input: graph::BlockInput, offset: usize)  {
-        assert!(input.get_input_id() == 0);
+    fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize)  {
+        assert!(input.get_input_index() == 0);
         self.input_offset = offset;
     }
 
-    fn set_output_offset(&mut self, output: graph::BlockOutput, offset: usize) {
-/*        if output.get_output_id() == 0 {
+    fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
+/*        if output.get_output_index() == 0 {
             assert!(self.input_offset == offset)
         } else */
-        if output.get_output_id() == 1 {
+        if output.get_output_index() == 1 {
             self.output_offset = offset;
         } else {
             panic!("only two outputs supported for BlockCopy");
@@ -336,7 +330,7 @@ pub struct BlockJoin {
 pub fn new_join_block2(bg: &mut graph::BlockGraph,
                        inputs: Vec<graph::BlockPtrOutput>,
                        ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
-    let num_inputs = bg.get_num_outputs(inputs.iter().collect());
+    let num_inputs = bg.get_num_output_values(inputs.iter().collect());
     assert!(num_inputs != 0);
 
     let mut block = Box::new(BlockJoin {
@@ -359,30 +353,30 @@ impl BlockTrait for BlockJoin {
 
     fn get_num_output_slots(&self) -> usize {1}
     
-    fn get_num_outputs(&self, output_id: graph::BlockOutput) -> usize {
-        assert!(output_id.get_output_id() == 0);
+    fn get_num_output_values(&self, output_id: graph::OutputSlot) -> usize {
+        assert!(output_id.get_output_index() == 0);
         self.num_inputs
     }
 
-    fn get_input_offset(&mut self, input_index: graph::BlockInput) -> Result<usize, Box<dyn Error>> {
-        assert!(input_index.get_input_id() <= 1);
+    fn get_input_offset(&mut self, input: graph::InputSlot) -> Result<usize, Box<dyn Error>> {
+        assert!(input.get_input_index() <= 1);
         Ok(self.input_offset)
     }
 
 
-    fn set_input_offset(&mut self, input: graph::BlockInput, offset: usize)  {
-        assert!(input.get_input_id() <= 1);
-        if input.get_input_id() == 0 {
+    fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize)  {
+        assert!(input.get_input_index() <= 1);
+        if input.get_input_index() == 0 {
             self.input_offset = offset;
-        } else if input.get_input_id() == 1 {
+        } else if input.get_input_index() == 1 {
             assert!(self.input_offset <= offset);
             assert!(self.input_offset + self.num_inputs >= offset);
         }
         
     } 
 
-    fn set_output_offset(&mut self, output: graph::BlockOutput, offset: usize) {
-        if output.get_output_id() == 0 {
+    fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
+        if output.get_output_index() == 0 {
             self.output_offset = offset;
         } else {
             panic!("only two outputs supported for BlockCopy");

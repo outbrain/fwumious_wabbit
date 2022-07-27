@@ -100,48 +100,6 @@ pub fn read_weights_only_from_buf2<L:OptimizerTrait>(weights_len: usize, out_wei
 }
 
 
-/// This function is used only in tests to run a single block with given loss function
-pub fn slearn<'a>(block_run: &mut Box<dyn BlockTrait>, 
-                    block_loss_function: &mut Box<dyn BlockTrait>,
-                    fb: &feature_buffer::FeatureBuffer, 
-                    pb: &mut port_buffer::PortBuffer,                             
-                    update: bool) -> f32 {
-
-    unsafe {
-        let block_loss_function: Box<dyn BlockTrait> = mem::transmute(& *block_loss_function.deref().deref());
-        let mut further_blocks_v: Vec<Box<dyn BlockTrait>> = vec![block_loss_function];
-        let further_blocks = &mut further_blocks_v[..];
-        pb.results.truncate(0);
-        block_run.forward_backward(further_blocks, fb, pb, update);
-//        assert_eq!(pb.results.len(), 1);
-        let prediction_probability = pb.results[0];
-        // black magic here: forget about further blocks that we got through transmute:
-        further_blocks_v.set_len(0);
-        return prediction_probability
-    }
-}
-
-/// This function is used only in tests to run a single block with given loss function
-pub fn spredict<'a>(block_run: &mut Box<dyn BlockTrait>, 
-                    block_loss_function: &mut Box<dyn BlockTrait>,
-                    fb: &feature_buffer::FeatureBuffer, 
-                    pb: &mut port_buffer::PortBuffer,                             
-                    update: bool) -> f32 {
-
-    unsafe {
-        let block_loss_function: Box<dyn BlockTrait> = mem::transmute(& *block_loss_function.deref().deref());
-        let mut further_blocks_v: Vec<Box<dyn BlockTrait>> = vec![block_loss_function];
-        let further_blocks = & further_blocks_v[..];
-        pb.results.truncate(0);
-        block_run.forward(further_blocks, fb, pb);
-//        assert_eq!(pb.results.len(), 1);
-        let prediction_probability = pb.results[0];
-        // black magic here: forget about further blocks that we got through transmute:
-        further_blocks_v.set_len(0);
-        return prediction_probability
-    }
-}
-
 pub fn slearn2<'a>(bg: &mut graph::BlockGraph,
                     fb: &feature_buffer::FeatureBuffer, 
                     pb: &mut port_buffer::PortBuffer,                             

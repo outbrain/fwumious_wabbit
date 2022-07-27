@@ -42,11 +42,11 @@ pub trait BlockTrait {
     fn get_serialized_len(&self) -> usize {0}
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {Ok(())}
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {Ok(())}
-    fn get_num_outputs(&self, output: graph::BlockOutput) -> usize;
+    fn get_num_output_values(&self, output: graph::OutputSlot) -> usize;
     fn get_num_output_slots(&self) -> usize;
-    fn get_input_offset(&mut self, input_index: graph::BlockInput) -> Result<usize, Box<dyn Error>> {Err(format!("get_input_offset() is only supported by CopyBlock"))?}
-    fn set_input_offset(&mut self, input_index: graph::BlockInput, offset: usize) {}
-    fn set_output_offset(&mut self, output_index: graph::BlockOutput, offset: usize) {}
+    fn get_input_offset(&mut self, input: graph::InputSlot) -> Result<usize, Box<dyn Error>> {Err(format!("get_input_offset() is only supported by CopyBlock"))?}
+    fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {}
+    fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {}
     fn get_block_type(&self) -> graph::BlockType {graph::BlockType::Regular}  
 
     fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>> {Ok(())}
@@ -103,7 +103,7 @@ impl Regressor  {
 /*else {
 // Copy to tape 6
             let mut reg = block_misc::new_copy_block(mi, embedding_outputs).unwrap();
-            let additional_inputs = reg.get_num_outputs();
+            let additional_inputs = reg.get_num_output_values();
             rg.blocks_boxes.push(reg);
 
 
@@ -116,11 +116,11 @@ impl Regressor  {
                                                                 0.0, // dropout
                                                                 0.0, // max norm
                                                                 ).unwrap();
-            //inputs = reg.get_num_outputs();
+            //inputs = reg.get_num_output_values();
             rg.blocks_boxes.push(reg);
 
             let mut reg = block_relu::new_without_weights(mi, neuron_layer_width).unwrap();
-          //  inputs += reg.get_num_outputs();
+          //  inputs += reg.get_num_output_values();
             rg.blocks_boxes.push(reg);
             
 
@@ -132,11 +132,11 @@ impl Regressor  {
                                                                 0.1, // dropout
                                                                 5.0, // max norm
                                                                 ).unwrap();
-//            inputs = additional_inputs + reg.get_num_outputs();
+//            inputs = additional_inputs + reg.get_num_output_values();
             rg.blocks_boxes.push(reg);
 
 //            let mut reg = block_relu::new_without_weights(mi, neuron_layer_width).unwrap();
-          //  inputs += reg.get_num_outputs();
+          //  inputs += reg.get_num_output_values();
 //            rg.blocks_boxes.push(reg);
 
 

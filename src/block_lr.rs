@@ -77,18 +77,18 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
     fn get_num_output_slots(&self) -> usize {1}   
 
 
-    fn get_num_outputs(&self, output_id: graph::BlockOutput) -> usize {
-        assert!(output_id.get_output_id() == 0);
+    fn get_num_output_values(&self, output_id: graph::OutputSlot) -> usize {
+        assert!(output_id.get_output_index() == 0);
         self.num_combos as usize
     }
 
 
-    fn set_input_offset(&mut self, input: graph::BlockInput, offset: usize)  {
+    fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize)  {
         panic!("You cannnot set_input_offset() for BlockLR");
     }
 
-    fn set_output_offset(&mut self, output: graph::BlockOutput, offset: usize)  {
-        assert!(output.get_output_id() == 0);
+    fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize)  {
+        assert!(output.get_output_index() == 0);
         self.output_offset = offset;
     }
 

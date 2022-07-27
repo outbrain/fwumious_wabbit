@@ -163,19 +163,19 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
     }
 
 
-    fn get_num_outputs(&self, output_id: graph::BlockOutput) -> usize {
-        assert!(output_id.get_output_id() == 0);
+    fn get_num_output_values(&self, output_id: graph::OutputSlot) -> usize {
+        assert!(output_id.get_output_index() == 0);
         return (self.ffm_num_fields * self.ffm_num_fields) as usize; 
     }
 
     fn get_num_output_slots(&self) -> usize { 1 }   
     
-    fn set_input_offset(&mut self, input: graph::BlockInput, offset: usize) {
+    fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
         panic!("You cannnot set_input_offset() for BlockFFM");
     }
 
-    fn set_output_offset(&mut self, output: graph::BlockOutput, offset: usize) {
-        assert!(output.get_output_id() == 0);
+    fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
+        assert!(output.get_output_index() == 0);
         self.output_offset = offset;
     }
 
@@ -565,7 +565,7 @@ mod tests {
     use crate::feature_buffer;
     use crate::feature_buffer::HashAndValueAndSeq;
     use crate::vwmap;
-    use block_helpers::{slearn, spredict, slearn2, spredict2};
+    use block_helpers::{slearn2, spredict2};
 
     use crate::assert_epsilon;
 

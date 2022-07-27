@@ -25,7 +25,7 @@ mod block_loss_functions;
 mod block_lr;
 mod block_neuron;
 mod block_neuronlayer;
-//mod block_relu;
+mod block_relu;
 mod block_misc;
 mod cache;
 mod cmdline;

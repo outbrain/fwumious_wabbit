@@ -5,15 +5,15 @@ use crate::port_buffer;
 use std::mem;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub struct BlockOutput(usize);
+pub struct OutputSlot(usize);
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub struct BlockInput(usize);
+pub struct InputSlot(usize);
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct BlockPtr(usize);	// just an id in a graph
 #[derive(Debug, PartialEq)]
-pub struct BlockPtrOutput(BlockPtr, BlockOutput); // since blocks can have multiple outputs, separate between them
+pub struct BlockPtrOutput(BlockPtr, OutputSlot); // since blocks can have multiple outputs, separate between them
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub struct BlockPtrInput(BlockPtr, BlockInput); // since blocks can have multiple inputs, separate between them
+pub struct BlockPtrInput(BlockPtr, InputSlot); // since blocks can have multiple inputs, separate between them
 
 #[derive(Debug)]
 pub struct BlockGraphNode {
@@ -30,7 +30,7 @@ pub struct BlockGraph {
 
 
 // We need to treat join type in a special way - all inputs need to be consequtive
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum BlockType {
     Regular,
     Join,
@@ -40,29 +40,29 @@ impl BlockPtr {
     pub fn get_node_id(&self) -> usize {self.0}
 }
 
-impl BlockOutput {
-    pub fn get_output_id(&self) -> usize {self.0}
+impl OutputSlot {
+    pub fn get_output_index(&self) -> usize {self.0}
 }
 
-impl BlockInput {
-    pub fn get_input_id(&self) -> usize {self.0}
+impl InputSlot {
+    pub fn get_input_index(&self) -> usize {self.0}
 }
 
 impl BlockPtrOutput {
     pub fn get_block_ptr(&self) -> BlockPtr {self.0}
     pub fn get_node_id(&self) -> usize {self.0.get_node_id()}
-    pub fn get_output_id(&self) -> usize {self.1.get_output_id()}
-    pub fn get_output(&self) -> BlockOutput {self.1}
+    pub fn get_output_index(&self) -> usize {self.1.get_output_index()}
+    pub fn get_output(&self) -> OutputSlot {self.1}
 }
 
 impl BlockPtrInput {
     pub fn get_block_ptr(&self) -> BlockPtr {self.0}
     pub fn get_node_id(&self) -> usize {self.0.get_node_id()}
-    pub fn get_input_id(&self) -> usize {self.1.get_input_id()}
-    pub fn get_input(&self) -> BlockInput {self.1}
+    pub fn get_input_index(&self) -> usize {self.1.get_input_index()}
+    pub fn get_input(&self) -> InputSlot {self.1}
 }
 
-const BLOCK_PTR_INPUT_DEFAULT:BlockPtrInput = BlockPtrInput(BlockPtr(usize::MAX), BlockInput(usize::MAX));
+const BLOCK_PTR_INPUT_DEFAULT:BlockPtrInput = BlockPtrInput(BlockPtr(usize::MAX), InputSlot(usize::MAX));
 
 impl BlockGraph {
     pub fn new() -> BlockGraph {
@@ -80,9 +80,9 @@ impl BlockGraph {
 //        let num_input_connectors = block.get_num_input_tapes();
         let bp = BlockPtr(self.nodes.len());     // id of current node
         for (i, e) in edges_in.iter().enumerate() {
-            let bi = BlockInput(i);
+            let bi = InputSlot(i);
             let bpi = BlockPtrInput(bp, bi);
-            self.nodes[e.get_node_id()].edges_out[e.get_output_id()] = bpi;
+            self.nodes[e.get_node_id()].edges_out[e.get_output_index()] = bpi;
         }
         let mut newnode = BlockGraphNode {
                             edges_in: edges_in,
@@ -94,7 +94,7 @@ impl BlockGraph {
         self.blocks.push(block);
         let mut vo:Vec<BlockPtrOutput> = Vec::new();
         for i in 0..num_output_connectors {
-            let bo = BlockPtrOutput(bp, BlockOutput(i));
+            let bo = BlockPtrOutput(bp, OutputSlot(i));
             vo.push(bo);
             self.nodes[bp.get_node_id()].edges_out.push(BLOCK_PTR_INPUT_DEFAULT); // make empty spaceg
         }
@@ -113,10 +113,10 @@ impl BlockGraph {
         self.nodes[bp.get_node_id()].edges_in.len()
     }
     
-    pub fn get_num_outputs(&self, outputs: Vec<&BlockPtrOutput>) -> usize {
+    pub fn get_num_output_values(&self, outputs: Vec<&BlockPtrOutput>) -> usize {
         let mut t = 0;
         for x in outputs {
-            t += self.blocks[x.get_node_id()].get_num_outputs(x.get_output());
+            t += self.blocks[x.get_node_id()].get_num_output_values(x.get_output());
         }
         t
     }
@@ -143,29 +143,34 @@ impl BlockGraph {
         // This assures that for each block, inputs are placed conesquitvely are consequtive
         // Which is importnat for the JoinBlock that has that requirement
         for i in 0..self.len() {
-            for (input_id, edge_in) in self.nodes[i].edges_in.iter().enumerate() {
+            for (input_index, edge_in) in self.nodes[i].edges_in.iter().enumerate() {
                 let bo = edge_in.get_output();
                 let bptr = edge_in.get_node_id();
-                let output_len = self.blocks[bptr].get_num_outputs(bo);
+                let output_len = self.blocks[bptr].get_num_output_values(bo);
 //                println!("Block: {}, output: {:?},  output offset: {} ouptut_len: {}", i, bo, offset, output_len);
-                if self.blocks[bptr].get_block_type() == BlockType::Regular {
+                let input_block_type = self.blocks[bptr].get_block_type();
+                if input_block_type  == BlockType::Regular {
                     self.blocks[bptr].set_output_offset(bo, offset);
-                    self.blocks[i].set_input_offset(BlockInput(input_id), offset);
+                    self.blocks[i].set_input_offset(InputSlot(input_index), offset);
                     offset += output_len as usize; 
-                } else if self.blocks[bptr].get_block_type() == BlockType::Join {
-                    let fake_offset = self.blocks[bptr].get_input_offset(BlockInput(0)).unwrap();
+                } else if input_block_type == BlockType::Join {
+                    // we are special casing Join block
+                    // It is zero-copy joining of inputs, which means inputs and outputs share exactly the same space
+                    let fake_offset = self.blocks[bptr].get_input_offset(InputSlot(0)).unwrap();
                     self.blocks[bptr].set_output_offset(bo, fake_offset);
-                    self.blocks[i].set_input_offset(BlockInput(input_id), fake_offset);
+                    self.blocks[i].set_input_offset(InputSlot(input_index), fake_offset);
+                } else {
+                    panic!("Type of block not supported in scheduling: {:?}", input_block_type);
                 }
                 
             }
         }    
         // now allocate for dead-end outputs
         for i in 0..self.len() {
-            for (output_id, edge_out) in self.nodes[i].edges_out.iter().enumerate() {
+            for (output_index, edge_out) in self.nodes[i].edges_out.iter().enumerate() {
                 if *edge_out == BLOCK_PTR_INPUT_DEFAULT {
-                    let bo = BlockOutput(output_id);
-                    let output_len = self.blocks[i].get_num_outputs(bo);
+                    let bo = OutputSlot(output_index);
+                    let output_len = self.blocks[i].get_num_output_values(bo);
  //                   println!("setting block {}, output {:?} to offset {}", i, bo, offset);
                     self.blocks[i].set_output_offset(bo, offset);
                     offset += output_len as usize;
@@ -178,8 +183,8 @@ impl BlockGraph {
         /*for i in 0..self.len() {
             let num_output_connectors = self.blocks[i].get_num_output_slots();
             for j in 0..num_output_connectors {
-                let bo = BlockOutput(j);
-                let output_len = self.blocks[i].get_num_outputs(bo);
+                let bo = OutputSlot(j);
+                let output_len = self.blocks[i].get_num_output_values(bo);
                 println!("Block: {}, output: {:?},  output offset: {} ouptut_len: {}", i, bo, offset, output_len);
                 self.blocks[i].set_output_offset(bo, offset);
                 if self.nodes[i].edges_out[j].get_node_id() != usize::MAX {
@@ -245,7 +250,7 @@ mod tests {
         let mut bg = BlockGraph::new();
         
         let const_block_output = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
-        assert_eq!(const_block_output, BlockPtrOutput(BlockPtr(0), BlockOutput(0)));
+        assert_eq!(const_block_output, BlockPtrOutput(BlockPtr(0), OutputSlot(0)));
         assert_eq!(bg.nodes[0].edges_in, vec![]);      // basically []
         assert_eq!(bg.nodes[0].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);  
     }
@@ -255,19 +260,19 @@ mod tests {
         let mut bg = BlockGraph::new();
         
         let const_block_output = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
-        assert_eq!(const_block_output, BlockPtrOutput(BlockPtr(0), BlockOutput(0)));
+        assert_eq!(const_block_output, BlockPtrOutput(BlockPtr(0), OutputSlot(0)));
         assert_eq!(bg.nodes[0].edges_in.len(), 0);      // basically []
         assert_eq!(bg.nodes[0].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);  
 
         // Let's add one result block 
-        let mut output_node = block_misc::new_result_block2(&mut bg, const_block_output, 1.0).unwrap();
+        let mut output_node = block_misc::new_result_block(&mut bg, const_block_output, 1.0).unwrap();
         assert_eq!(output_node, ());
 //        println!("Output nodes: {:?}", output_nodes);
         //println!("Block 0: edges_in: {:?}, edges_out: {:?}", bg.edges_in[0], bg.edges_out[0]);
         assert_eq!(bg.nodes[0].edges_in, vec![]);      // basically []
-        assert_eq!(bg.nodes[0].edges_out, vec![BlockPtrInput(BlockPtr(1), BlockInput(0))]);  
+        assert_eq!(bg.nodes[0].edges_out, vec![BlockPtrInput(BlockPtr(1), InputSlot(0))]);  
 
-        assert_eq!(bg.nodes[1].edges_in, vec![BlockPtrOutput(BlockPtr(0), BlockOutput(0))]);
+        assert_eq!(bg.nodes[1].edges_in, vec![BlockPtrOutput(BlockPtr(0), OutputSlot(0))]);
         assert_eq!(bg.nodes[1].edges_out, vec![]);  
     }
     
@@ -276,7 +281,7 @@ mod tests {
         let mut bg = BlockGraph::new();
         
         let const_block_output = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
-        assert_eq!(const_block_output, BlockPtrOutput(BlockPtr(0), BlockOutput(0)));
+        assert_eq!(const_block_output, BlockPtrOutput(BlockPtr(0), OutputSlot(0)));
         assert_eq!(bg.nodes[0].edges_in, vec![]);
         assert_eq!(bg.nodes[0].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);
 
@@ -287,27 +292,27 @@ mod tests {
         
         
         // Let's add one result block 
-        let mut output_node = block_misc::new_result_block2(&mut bg, c1, 1.0).unwrap();
+        let mut output_node = block_misc::new_result_block(&mut bg, c1, 1.0).unwrap();
         assert_eq!(output_node, ());
 //        println!("Output nodes: {:?}", output_nodes);
         //println!("Block 0: edges_in: {:?}, edges_out: {:?}", bg.edges_in[0], bg.edges_out[0]);
         assert_eq!(bg.nodes[0].edges_in.len(), 0);      
-        assert_eq!(bg.nodes[0].edges_out, vec![BlockPtrInput(BlockPtr(1), BlockInput(0))]);	  	
+        assert_eq!(bg.nodes[0].edges_out, vec![BlockPtrInput(BlockPtr(1), InputSlot(0))]);	  	
 
         // Let's add second result block to see what happens
 
-        let mut output_node = block_misc::new_result_block2(&mut bg, c2, 1.0).unwrap();
+        let mut output_node = block_misc::new_result_block(&mut bg, c2, 1.0).unwrap();
         assert_eq!(output_node, ());
         assert_eq!(bg.nodes[0].edges_in, vec![]);      
-        assert_eq!(bg.nodes[0].edges_out, vec![BlockPtrInput(BlockPtr(1), BlockInput(0))]);
+        assert_eq!(bg.nodes[0].edges_out, vec![BlockPtrInput(BlockPtr(1), InputSlot(0))]);
         // copy block
-        assert_eq!(bg.nodes[1].edges_in, vec![BlockPtrOutput(BlockPtr(0), BlockOutput(0))]);
-        assert_eq!(bg.nodes[1].edges_out, vec![BlockPtrInput(BlockPtr(2), BlockInput(0)), BlockPtrInput(BlockPtr(3), BlockInput(0))]);
+        assert_eq!(bg.nodes[1].edges_in, vec![BlockPtrOutput(BlockPtr(0), OutputSlot(0))]);
+        assert_eq!(bg.nodes[1].edges_out, vec![BlockPtrInput(BlockPtr(2), InputSlot(0)), BlockPtrInput(BlockPtr(3), InputSlot(0))]);
         // result block 1
-        assert_eq!(bg.nodes[2].edges_in, vec![BlockPtrOutput(BlockPtr(1), BlockOutput(0))]);
+        assert_eq!(bg.nodes[2].edges_in, vec![BlockPtrOutput(BlockPtr(1), OutputSlot(0))]);
         assert_eq!(bg.nodes[2].edges_out, vec![]);
         // result bock 2
-        assert_eq!(bg.nodes[3].edges_in, vec![BlockPtrOutput(BlockPtr(1), BlockOutput(1))]);
+        assert_eq!(bg.nodes[3].edges_in, vec![BlockPtrOutput(BlockPtr(1), OutputSlot(1))]);
         assert_eq!(bg.nodes[3].edges_out, vec![]);
     }
     
@@ -318,25 +323,25 @@ mod tests {
         let mut bg = BlockGraph::new();
         
         let const_block_output1 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
-        assert_eq!(const_block_output1, BlockPtrOutput(BlockPtr(0), BlockOutput(0)));
+        assert_eq!(const_block_output1, BlockPtrOutput(BlockPtr(0), OutputSlot(0)));
         assert_eq!(bg.nodes[0].edges_in, vec![]);
         assert_eq!(bg.nodes[0].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);
 
         let const_block_output2 = block_misc::new_const_block(&mut bg, vec![1.0, 2.0]).unwrap();
-        assert_eq!(const_block_output2, BlockPtrOutput(BlockPtr(1), BlockOutput(0)));
+        assert_eq!(const_block_output2, BlockPtrOutput(BlockPtr(1), OutputSlot(0)));
         assert_eq!(bg.nodes[1].edges_in, vec![]);
         assert_eq!(bg.nodes[1].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);
 
         // Using the join block, we merge two outputs into one single output (copy-less implementation)
         let mut union_output = block_misc::new_join_block2(&mut bg, vec![const_block_output1, const_block_output2]).unwrap();
-        assert_eq!(union_output, BlockPtrOutput(BlockPtr(2), BlockOutput(0)));
+        assert_eq!(union_output, BlockPtrOutput(BlockPtr(2), OutputSlot(0)));
         assert_eq!(bg.nodes[0].edges_in, vec![]);
-        assert_eq!(bg.nodes[0].edges_out, vec![BlockPtrInput(BlockPtr(2), BlockInput(0))]);
+        assert_eq!(bg.nodes[0].edges_out, vec![BlockPtrInput(BlockPtr(2), InputSlot(0))]);
         assert_eq!(bg.nodes[1].edges_in, vec![]);
-        assert_eq!(bg.nodes[1].edges_out, vec![BlockPtrInput(BlockPtr(2), BlockInput(1))]);
+        assert_eq!(bg.nodes[1].edges_out, vec![BlockPtrInput(BlockPtr(2), InputSlot(1))]);
         
         // the join block 
-        assert_eq!(bg.nodes[2].edges_in, vec![BlockPtrOutput(BlockPtr(0), BlockOutput(0)), BlockPtrOutput(BlockPtr(1), BlockOutput(0))]);
+        assert_eq!(bg.nodes[2].edges_in, vec![BlockPtrOutput(BlockPtr(0), OutputSlot(0)), BlockPtrOutput(BlockPtr(1), OutputSlot(0))]);
         assert_eq!(bg.nodes[2].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);
     }    
 
@@ -346,7 +351,7 @@ mod tests {
         let mut bg = BlockGraph::new();
         
         let const_block_output = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
-        let output_node = block_misc::new_result_block2(&mut bg, const_block_output, 1.0).unwrap();
+        let output_node = block_misc::new_result_block(&mut bg, const_block_output, 1.0).unwrap();
         assert_eq!(output_node, ());
         let list = bg.schedule();
         

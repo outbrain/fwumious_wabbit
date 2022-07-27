@@ -17,6 +17,7 @@ use crate::graph;
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 use block_helpers::{Weight, WeightAndOptimizerData};
+use crate::graph::{BlockGraph};
 
 
 #[derive(PartialEq)]
@@ -35,22 +36,26 @@ pub enum InitType {
 
 
 pub struct BlockRELU {    
-    pub num_inputs: u32,
+    pub num_inputs: usize,
     pub input_offset: usize,
     pub output_offset: usize,
 }
 
 
-pub fn new_without_weights(mi: &model_instance::ModelInstance, 
-                                                    num_inputs: u32, 
-                                                    ) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+pub fn new_relu_block(  bg: &mut graph::BlockGraph, 
+                        mi: &model_instance::ModelInstance,
+                        input: graph::BlockPtrOutput
+                        ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {    
+    let num_inputs = bg.get_num_output_values(vec![&input]);
     assert!(num_inputs != 0);
-    let mut rg = BlockRELU {
+    let mut block = Box::new(BlockRELU {
         output_offset: usize::MAX,
         input_offset: usize::MAX,
         num_inputs: num_inputs,
-    };
-    Ok(Box::new(rg))
+    });
+    let mut block_outputs = bg.add_node(block, vec![input]);
+    assert_eq!(block_outputs.len(), 1);
+    Ok(block_outputs.pop().unwrap())
 }
 
 
@@ -71,17 +76,18 @@ impl BlockTrait for BlockRELU
     fn get_num_output_slots(&self) -> usize {1}   
 
 
-    fn get_num_outputs(&self) -> u32 {
+    fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
+        assert!(output.get_output_index() == 0);
         return self.num_inputs
     }
     
-    fn set_input_offset(&mut self, input: graph::BlockInput, offset: usize)  {
-        assert!(input.get_input_id() == 0);
+    fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize)  {
+        assert!(input.get_input_index() == 0);
         self.input_offset = offset;
     }
 
-    fn set_output_offset(&mut self, output: graph::BlockOutput, offset: usize)  {
-        assert!(output.get_output_id() == 0);
+    fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize)  {
+        assert!(output.get_output_index() == 0);
         self.output_offset = offset;
     }
 
@@ -150,7 +156,7 @@ mod tests {
     use crate::feature_buffer;
     use crate::feature_buffer::HashAndValueAndSeq;
     use crate::vwmap;
-    use block_helpers::{slearn, spredict};
+    use block_helpers::{slearn2, spredict2};
 
     use crate::assert_epsilon;
 
@@ -167,40 +173,35 @@ mod tests {
 
 
     #[test]
-    fn test_simple() {
+    fn test_simple_positive() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
-        mi.learning_rate = 0.1;
-        mi.power_t = 0.0;
-        mi.optimizer = model_instance::Optimizer::SGD;
+        let mut bg = BlockGraph::new();
+        let input_block = block_misc::new_const_block(&mut bg, vec![2.0]).unwrap();
+        let relu_block = new_relu_block(&mut bg, &mi, input_block).unwrap();
+        let result_block = block_misc::new_result_block(&mut bg, relu_block, 1.0).unwrap();
+        bg.schedule();
+        bg.allocate_and_init_weights(&mi);
         
+        let mut pb = bg.new_port_buffer();
         
-        let mut re = new_without_weights(&mi, 
-                                            1, 
-                                        ).unwrap();
-        re.set_input_tape_index(0);
-        re.set_output_tape_index(1);
-        re.allocate_and_init_weights(&mi);
-        
-        let mut ib = block_misc::new_result_block(1, 1.0).unwrap();
-        ib.set_input_tape_index(1);
-
-        
-        let mut pb = port_buffer::PortBuffer::new(&mi);
         let fb = fb_vec();
-        pb.tapes[0].push(2.0);
-        assert_epsilon!(slearn  (&mut re, &mut ib, &fb, &mut pb, true), 2.0);
-        // what do we expect:
-        // on tape 0 input of 2.0 will be replaced with the gradient of 1.0
-        // on tape 1 input has been consumed by returning function
-        // on tape 2 the output was consumed by slearn
-        //assert_eq!(pb.tapes[0][0], 1.0);
-        //assert_eq!(pb.tapes[1].len(), 0);
-        assert_eq!(pb.results[0], 2.0);
-        pb.reset();
-        pb.tapes[0].push(2.0);
-        assert_epsilon!(slearn  (&mut re, &mut ib, &fb, &mut pb, true), 2.0); // relu desnt learn
+        assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 2.0);
+        assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 2.0); // relu desnt learn
+    }
+    fn test_simple_negative() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        let mut bg = BlockGraph::new();
+        let input_block = block_misc::new_const_block(&mut bg, vec![-2.0]).unwrap();
+        let relu_block = new_relu_block(&mut bg, &mi, input_block).unwrap();
+        let result_block = block_misc::new_result_block(&mut bg, relu_block, 1.0).unwrap();
+        bg.schedule();
+        bg.allocate_and_init_weights(&mi);
         
-
+        let mut pb = bg.new_port_buffer();
+        
+        let fb = fb_vec();
+        assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 0.0);
+        assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 0.0); // relu desnt learn
     }
 
 

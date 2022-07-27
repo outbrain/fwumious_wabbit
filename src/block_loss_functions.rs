@@ -46,7 +46,7 @@ pub fn new_logloss_block(  bg: &mut graph::BlockGraph,
                            input: graph::BlockPtrOutput,
                            copy_to_result: bool) 
                         -> Result<graph::BlockPtrOutput, Box<dyn Error>> {    
-    let num_inputs = bg.get_num_outputs(vec![&input]);
+    let num_inputs = bg.get_num_output_values(vec![&input]);
     let block = Box::new(BlockSigmoid {num_inputs: num_inputs as usize,
                                 input_offset: usize::MAX,
                                 output_offset: usize::MAX,
@@ -77,18 +77,18 @@ impl BlockTrait for BlockSigmoid {
     fn get_num_output_slots(&self) -> usize {1}   
 
 
-    fn get_num_outputs(&self, output_id: graph::BlockOutput) -> usize {
-        assert!(output_id.get_output_id() == 0);
+    fn get_num_output_values(&self, output_id: graph::OutputSlot) -> usize {
+        assert!(output_id.get_output_index() == 0);
         1
     }
     
-    fn set_input_offset(&mut self, input: graph::BlockInput, offset: usize)  {
-        assert!(input.get_input_id() == 0);
+    fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize)  {
+        assert!(input.get_input_index() == 0);
         self.input_offset = offset;
     }
 
-    fn set_output_offset(&mut self, output: graph::BlockOutput, offset: usize)  {
-        assert!(output.get_output_id() == 0);
+    fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize)  {
+        assert!(output.get_output_index() == 0);
         self.output_offset = offset;
     }
 

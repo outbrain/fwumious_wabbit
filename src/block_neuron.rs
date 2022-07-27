@@ -41,18 +41,7 @@ pub struct BlockNeuron<L:OptimizerTrait> {
 }
 
 
-pub fn new_without_weights(mi: &model_instance::ModelInstance, 
-                            num_inputs: usize,
-                            ntype: NeuronType) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-    match mi.optimizer {
-        model_instance::Optimizer::AdagradLUT => new_without_weights_2::<optimizer::OptimizerAdagradLUT>(&mi, num_inputs, ntype),
-        model_instance::Optimizer::AdagradFlex => new_without_weights_2::<optimizer::OptimizerAdagradFlex>(&mi, num_inputs, ntype),
-        model_instance::Optimizer::SGD => new_without_weights_2::<optimizer::OptimizerSGD>(&mi, num_inputs, ntype)
-    }
-}
-
-
-fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelInstance, 
+fn new_neuron_without_weights<L:OptimizerTrait + 'static>(mi: &model_instance::ModelInstance, 
                                                     num_inputs: usize, 
                                                     ntype: NeuronType) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
     assert!(num_inputs > 0);
@@ -73,30 +62,22 @@ fn new_without_weights_2<L:OptimizerTrait + 'static>(mi: &model_instance::ModelI
 
 
 
-pub fn new_neuron_block2<L:OptimizerTrait + 'static>(
+pub fn new_neuron_block(
                         bg: &mut graph::BlockGraph, 
                         mi: &model_instance::ModelInstance,
                         input: graph::BlockPtrOutput,
                         ntype: NeuronType
                         ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {    
-    let num_inputs = bg.get_num_outputs(vec![&input]);
-    let block = new_without_weights_2::<L>(&mi, num_inputs, ntype).unwrap();
+    let num_inputs = bg.get_num_output_values(vec![&input]);
+    let block = match mi.optimizer {
+        model_instance::Optimizer::AdagradLUT => new_neuron_without_weights::<optimizer::OptimizerAdagradLUT>(&mi, num_inputs, ntype),
+        model_instance::Optimizer::AdagradFlex => new_neuron_without_weights::<optimizer::OptimizerAdagradFlex>(&mi, num_inputs, ntype),
+        model_instance::Optimizer::SGD => new_neuron_without_weights::<optimizer::OptimizerSGD>(&mi, num_inputs, ntype)
+    }.unwrap();
+
     let mut block_outputs = bg.add_node(block, vec![input]);
     assert_eq!(block_outputs.len(), 1);
     Ok(block_outputs.pop().unwrap())
-}
-
-pub fn new_neuron_block(bg: &mut graph::BlockGraph, 
-                        mi: &model_instance::ModelInstance,
-                        input: graph::BlockPtrOutput,
-                        ntype: NeuronType)
-                        -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
-
-    match mi.optimizer {
-        model_instance::Optimizer::AdagradLUT => new_neuron_block2::<optimizer::OptimizerAdagradLUT>(bg, &mi, input, ntype),
-        model_instance::Optimizer::AdagradFlex => new_neuron_block2::<optimizer::OptimizerAdagradFlex>(bg, &mi, input, ntype),
-        model_instance::Optimizer::SGD => new_neuron_block2::<optimizer::OptimizerSGD>(bg, &mi, input, ntype)
-    }
 }
 
 
@@ -120,19 +101,19 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuron<L>
 
     fn get_num_output_slots(&self) -> usize {1}   
 
-    fn get_num_outputs(&self, output_id: graph::BlockOutput) -> usize {
-        assert!(output_id.get_output_id() == 0);
+    fn get_num_output_values(&self, output_id: graph::OutputSlot) -> usize {
+        assert!(output_id.get_output_index() == 0);
         1
     }
 
 
-    fn set_input_offset(&mut self, input: graph::BlockInput, offset: usize)  {
-        assert!(input.get_input_id() == 0);
+    fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize)  {
+        assert!(input.get_input_index() == 0);
         self.input_offset = offset;
     }
 
-    fn set_output_offset(&mut self, output: graph::BlockOutput, offset: usize)  {
-        assert!(output.get_output_id() == 0);
+    fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize)  {
+        assert!(output.get_output_index() == 0);
         self.output_offset = offset;
     }
 
@@ -306,11 +287,8 @@ mod tests {
        
         let mut bg = BlockGraph::new();
         let input_block = block_misc::new_const_block(&mut bg, vec![2.0]).unwrap();
-//        println!("Graph1: {:?}", bg.nodes); 
         let neuron_block = new_neuron_block(&mut bg, &mi, input_block, NeuronType::WeightedSum).unwrap();
-//        println!("Graph2: {:?}", bg.nodes); 
-        let result_block = block_misc::new_result_block2(&mut bg, neuron_block, 1.0).unwrap();
-//        println!("Graph3: {:?}", bg.nodes); 
+        let result_block = block_misc::new_result_block(&mut bg, neuron_block, 1.0).unwrap();
         bg.schedule();
         bg.allocate_and_init_weights(&mi);
         
