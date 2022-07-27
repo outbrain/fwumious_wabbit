@@ -44,7 +44,7 @@ pub trait BlockTrait {
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {Ok(())}
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize;
     fn get_num_output_slots(&self) -> usize;
-    fn get_input_offset(&mut self, input: graph::InputSlot) -> Result<usize, Box<dyn Error>> {Err(format!("get_input_offset() is only supported by CopyBlock"))?}
+    fn get_input_offset(&mut self, input: graph::InputSlot) -> Result<usize, Box<dyn Error>> {Err(format!("get_input_offset() is only supported by JoinBlock and ObserveBlock"))?}
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {}
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {}
     fn get_block_type(&self) -> graph::BlockType {graph::BlockType::Regular}  

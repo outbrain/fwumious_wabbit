@@ -38,7 +38,7 @@ pub fn new_observe_block(bg: &mut graph::BlockGraph,
                          observe: observe,
                          replace_backward_with: replace_backward_with});
     let block_outputs = bg.add_node(block, vec![input]);
-    assert_eq!(block_outputs.len(), 0);
+    assert_eq!(block_outputs.len(), 1);
     Ok(())
 }
 
@@ -53,7 +53,7 @@ impl BlockTrait for BlockObserve {
 
     fn get_block_type(&self) -> graph::BlockType {graph::BlockType::Observe}  
 
-    fn get_num_output_slots(&self) -> usize {0}   
+    fn get_num_output_slots(&self) -> usize {1} // It is a pass-through   
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert!(output.get_output_index() == 0);
@@ -71,6 +71,10 @@ impl BlockTrait for BlockObserve {
         assert_eq!(self.input_offset, offset); // this block type has special treatment
     }
 
+    fn get_input_offset(&mut self, input: graph::InputSlot) -> Result<usize, Box<dyn Error>> {
+        assert!(input.get_input_index() == 0);
+        Ok(self.input_offset)
+    }
 
 
 

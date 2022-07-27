@@ -173,8 +173,22 @@ impl BlockGraph {
                     let bo = OutputSlot(output_index);
                     let output_len = self.blocks[i].get_num_output_values(bo);
  //                   println!("setting block {}, output {:?} to offset {}", i, bo, offset);
-                    self.blocks[i].set_output_offset(bo, offset);
-                    offset += output_len as usize;
+//                    self.blocks[i].set_output_offset(bo, offset);
+//                    offset += output_len as usize;
+                    let input_block_type = self.blocks[i].get_block_type();
+                    if input_block_type  == BlockType::Regular {
+                        self.blocks[i].set_output_offset(bo, offset);
+                        offset += output_len as usize; 
+                    } else if (input_block_type == BlockType::Join) || (input_block_type == BlockType::Observe) {
+                        // we are special casing Join block
+                        // It is zero-copy joining of inputs, which means inputs and outputs share exactly the same space
+                        let fake_offset = self.blocks[i].get_input_offset(InputSlot(0)).unwrap();
+                        self.blocks[i].set_output_offset(bo, fake_offset);
+                    } else {
+                        panic!("Type of block not supported in scheduling: {:?}", input_block_type);
+                    }
+
+
         
                 }
             }
@@ -274,7 +288,7 @@ mod tests {
         assert_eq!(bg.nodes[0].edges_out, vec![BlockPtrInput(BlockPtr(1), InputSlot(0))]);  
 
         assert_eq!(bg.nodes[1].edges_in, vec![BlockPtrOutput(BlockPtr(0), OutputSlot(0))]);
-        assert_eq!(bg.nodes[1].edges_out, vec![]);  
+        assert_eq!(bg.nodes[1].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);  
     }
     
     #[test]
@@ -311,10 +325,10 @@ mod tests {
         assert_eq!(bg.nodes[1].edges_out, vec![BlockPtrInput(BlockPtr(2), InputSlot(0)), BlockPtrInput(BlockPtr(3), InputSlot(0))]);
         // result block 1
         assert_eq!(bg.nodes[2].edges_in, vec![BlockPtrOutput(BlockPtr(1), OutputSlot(0))]);
-        assert_eq!(bg.nodes[2].edges_out, vec![]);
+        assert_eq!(bg.nodes[2].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);
         // result bock 2
         assert_eq!(bg.nodes[3].edges_in, vec![BlockPtrOutput(BlockPtr(1), OutputSlot(1))]);
-        assert_eq!(bg.nodes[3].edges_out, vec![]);
+        assert_eq!(bg.nodes[3].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);
     }
     
     
