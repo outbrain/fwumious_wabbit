@@ -21,9 +21,10 @@ use crate::block_lr;
 use crate::block_loss_functions;
 use crate::block_neuron;
 use crate::block_neuronlayer;
-//use crate::block_relu;
+use crate::block_relu;
 use crate::block_misc;
 use crate::graph;
+use crate::block_neuronlayer::{InitType};
 
 pub trait BlockTrait {
     fn as_any(&mut self) -> &mut dyn Any; // This enables downcasting
@@ -74,6 +75,12 @@ pub fn get_regressor_with_weights(mi: &model_instance::ModelInstance) -> Regress
     re
 }
 
+#[derive(PartialEq)]
+enum NNActivation {
+    None,
+    Relu
+}
+
 impl Regressor  {
     pub fn new_without_weights(mi: &model_instance::ModelInstance) -> Regressor {
 
@@ -92,101 +99,80 @@ impl Regressor  {
             let mut block_ffm = block_ffm::new_ffm_block(&mut bg, mi).unwrap();
             output = block_misc::new_join_block(&mut bg, vec![output, block_ffm]).unwrap();
         }
-         
-        // If we put sum function here, it has to be neutral
-//        let mut reg = block_neuronlayer::new_without_weights(mi, embedding_outputs, block_neuronlayer::NeuronType::WeightedSum, 1).unwrap();
-//        let mut reg = block_neuron::new_without_weights(mi, embedding_outputs, block_neuron::NeuronType::WeightedSum).unwrap();
-        
-//        if true {
-//        let mut reg = block_neuron::new_neuron_block(&mut bg, mi, output, block_neuron::NeuronType::Sum).unwrap();
-//        } 
-/*else {
-// Copy to tape 6
-            let mut reg = block_misc::new_copy_block(mi, embedding_outputs).unwrap();
-            let additional_inputs = reg.get_num_output_values();
-            rg.blocks_boxes.push(reg);
 
 
-            let neuron_layer_width = 30;
-            let mut reg = block_neuronlayer::new_without_weights(mi, 
-                                                                embedding_outputs, // number of inputs 
-                                                                block_neuronlayer::NeuronType::WeightedSum, 
-                                                                neuron_layer_width,
-                                                                block_neuronlayer::InitType::Random,
-                                                                0.0, // dropout
-                                                                0.0, // max norm
-                                                                ).unwrap();
-            //inputs = reg.get_num_output_values();
-            rg.blocks_boxes.push(reg);
-
-            let mut reg = block_relu::new_without_weights(mi, neuron_layer_width).unwrap();
-          //  inputs += reg.get_num_output_values();
-            rg.blocks_boxes.push(reg);
+        if mi.nn_config.layers.len() > 0 {
+            let mut join_block : Option<graph::BlockPtrOutput> = None;
+            if mi.nn_config.topology == "one" {
+                let mut outputs = block_misc::new_copy_block(&mut bg, output).unwrap();
+                join_block = Some(outputs.pop().unwrap());
+                output = outputs.pop().unwrap();
+            } else if mi.nn_config.topology == "two" {
+            
+            } else {
+                Err(format!("unknown nn topology: \"{}\"", mi.nn_config.topology)).unwrap()
+            }
             
 
-            let mut reg = block_neuronlayer::new_without_weights(mi, 
-                                                                neuron_layer_width, 
-                                                                block_neuronlayer::NeuronType::WeightedSum, 
-                                                                neuron_layer_width,
-                                                                block_neuronlayer::InitType::Random,
-                                                                0.1, // dropout
-                                                                5.0, // max norm
-                                                                ).unwrap();
-//            inputs = additional_inputs + reg.get_num_output_values();
-            rg.blocks_boxes.push(reg);
 
-//            let mut reg = block_relu::new_without_weights(mi, neuron_layer_width).unwrap();
-          //  inputs += reg.get_num_output_values();
-//            rg.blocks_boxes.push(reg);
+            for (layer_num, layer) in mi.nn_config.layers.iter().enumerate() {
+                let mut layer = layer.clone();
+                let activation_str: String = layer.remove("activation").unwrap_or("none".to_string()).to_string();
+                let width: usize = layer.remove("width").unwrap_or("20".to_string()).parse().unwrap();
+                let maxnorm: f32 = layer.remove("maxnorm").unwrap_or("0.0".to_string()).parse().unwrap();
+                let dropout: f32 = layer.remove("dropout").unwrap_or("0.0".to_string()).parse().unwrap();
+                let init_type_str: String = layer.remove("init").unwrap_or("hu".to_string()).to_string();
+                
+                if layer.len() > 0 {
+                    panic!("Unknown --nn parameter for layer number {} : {:?}", layer_num, layer); 
+                }
+                
+                let activation = match &*activation_str {
+                    "none" => NNActivation::None,
+                    "relu" => NNActivation::Relu,
+                    _ => Err(format!("unknown nn activation type: \"{}\"", activation_str)).unwrap()
+                };
+                
+                let init_type = match &*init_type_str {
+                    "xavier" => InitType::Xavier,
+                    "hu" => InitType::Hu,
+                    "one" => InitType::One,
+                    "zero" => InitType::Zero,
+                    _ => Err(format!("unknown nn activation type: \"{}\"", init_type_str)).unwrap()
+                };
+                let neuron_type = block_neuronlayer::NeuronType::WeightedSum;
+                println!("Neuron layer: width: {}, neuron type: {:?}, dropout: {}, maxnorm: {}, init_type: {:?}",
+                                        width, neuron_type, dropout, maxnorm, init_type);
+                output =  block_neuronlayer::new_neuronlayer_block(&mut bg, 
+                                            &mi, 
+                                            output,
+                                            neuron_type, 
+                                            width,
+                                            init_type,
+                                            dropout, // dropout
+                                            maxnorm, // max norm
+                                            ).unwrap();
+
+                if activation == NNActivation::Relu {
+                    output = block_relu::new_relu_block(&mut bg, &mi, output).unwrap();
+                    println!("Relu layer");
+                }
 
 
-            let mut reg = block_neuronlayer::new_without_weights(mi, 
-                                                                neuron_layer_width, 
-                                                                block_neuronlayer::NeuronType::WeightedSum, 
-                                                                neuron_layer_width,
-                                                                block_neuronlayer::InitType::Random,
-                                                                0.0, // dropout
-                                                                0.0, // max norm
-                                                                ).unwrap();
-            inputs = additional_inputs + neuron_layer_width;
-            rg.blocks_boxes.push(reg);
-
-
-
-/x*
-            let mut reg = block_neuronlayer::new_without_weights(mi, 
-                                                                inputs, // number of inputs 
-                                                                block_neuronlayer::NeuronType::WeightedSum, 
-                                                                1,
-                                                                block_neuronlayer::InitType::Random,
-                                                                0.0, // dropout
-                                                                0.0, // max norm
-                                                                ).unwrap();
-                                                                
-*x/
-/x*
-            let mut reg = block_neuronlayer::new_without_weights(mi, 
-                                                            inputs, // number of inputs 
-                                                            block_neuronlayer::NeuronType::WeightedSum, 
-                                                            1,
-                                                            block_neuronlayer::InitType::RandomFirstNeuron1,
-                                                            0.0, // dropout
-                                                            0.0, // max norm
-                                                            ).unwrap();
-
-            num_inputs = 1;
-            rg.blocks_boxes.push(reg);
-*x/
-
-        }          
-*/
-
+            }
+            // If we have split
+            if join_block.is_some() {
+                output = block_misc::new_join_block(&mut bg, vec![output, join_block.unwrap()]).unwrap();
+            }
+            output = block_neuron::new_neuron_block(&mut bg, &mi, output, block_neuron::NeuronType::WeightedSum).unwrap();
+        }
+         
 
         // now sigmoid has a single input
 //        println!("INPUTS : {}", inputs);
         let lossf = block_loss_functions::new_logloss_block(&mut bg, output, true).unwrap();
         bg.schedule();
-
+        bg.println();
         rg.tape_len = bg.get_tape_size();
         rg.blocks_boxes = bg.take_blocks();
         

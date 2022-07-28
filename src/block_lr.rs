@@ -119,7 +119,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
                 }
             }
             let (next_regressor, further_regressors) = further_regressors.split_at_mut(1);
-//            pb.tapes[self.output_tape_index as usize].push(wsum);
 //            println!("Pushing feature value: {}", wsum);
             next_regressor[0].forward_backward(further_regressors, fb, pb, update);
 //            let general_gradient = pb.tapes[self.output_tape_index as usize].pop().unwrap();

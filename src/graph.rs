@@ -35,6 +35,7 @@ pub enum BlockType {
     Regular,
     Join,
     Observe,
+    Copy
 }
 
 impl BlockPtr {
@@ -103,6 +104,14 @@ impl BlockGraph {
     }
     
     
+    pub fn println(&self) {
+        println!("Graph nodes:\n");
+        for n in self.nodes.iter() {
+         println!("  {:?}", n); 
+        }
+    }
+
+    
     pub fn get_tape_size(&self) -> usize {
         self.tape_size
     }
@@ -150,16 +159,26 @@ impl BlockGraph {
                 let output_len = self.blocks[bptr].get_num_output_values(bo);
 //                println!("Block: {}, output: {:?},  output offset: {} ouptut_len: {}", i, bo, offset, output_len);
                 let input_block_type = self.blocks[bptr].get_block_type();
-                if input_block_type  == BlockType::Regular {
+                if (input_block_type  == BlockType::Regular) || (input_block_type == BlockType::Copy && bo.get_output_index() > 0) {
                     self.blocks[bptr].set_output_offset(bo, offset);
                     self.blocks[i].set_input_offset(InputSlot(input_index), offset);
+//                    println!("A Input offset of {}.{} is {}, length is {}", i, input_index, offset, output_len);
                     offset += output_len as usize; 
                 } else if (input_block_type == BlockType::Join) || (input_block_type == BlockType::Observe) {
                     // we are special casing Join block
                     // It is zero-copy joining of inputs, which means inputs and outputs share exactly the same space
+//                    println!("Get input offset of: {}", bptr);
                     let fake_offset = self.blocks[bptr].get_input_offset(InputSlot(0)).unwrap();
                     self.blocks[bptr].set_output_offset(bo, fake_offset);
                     self.blocks[i].set_input_offset(InputSlot(input_index), fake_offset);
+//                    println!("B Input offset of {}.{} is {}, length is {}", i, input_index, fake_offset, output_len);
+                } else if (input_block_type == BlockType::Copy) && (bo.get_output_index() == 0) {
+                    // we are special casing Copy 
+                    // It is zero-copy joining of inputs, which means inputs and outputs share exactly the same space
+                    let fake_offset = self.blocks[bptr].get_input_offset(InputSlot(0)).unwrap();
+                    self.blocks[bptr].set_output_offset(bo, fake_offset);
+                    self.blocks[i].set_input_offset(InputSlot(input_index), fake_offset);
+ //                   println!("C Input offset of {}.{} is {}, length is {}", i, input_index, fake_offset, output_len);
                 } else {
                     panic!("Type of block not supported in scheduling: {:?}", input_block_type);
                 }
@@ -184,6 +203,7 @@ impl BlockGraph {
                         // It is zero-copy joining of inputs, which means inputs and outputs share exactly the same space
                         let fake_offset = self.blocks[i].get_input_offset(InputSlot(0)).unwrap();
                         self.blocks[i].set_output_offset(bo, fake_offset);
+
                     } else {
                         panic!("Type of block not supported in scheduling: {:?}", input_block_type);
                     }
@@ -259,6 +279,14 @@ mod tests {
     use super::*;
     use crate::block_misc;
     use crate::block_misc::Observe;   
+    use crate::model_instance;
+    use crate::block_loss_functions;
+    use crate::model_instance::Optimizer;
+    use crate::feature_buffer;
+    use crate::feature_buffer::HashAndValueAndSeq;
+    use crate::vwmap;
+    use crate::block_lr;
+    use crate::block_ffm;
     
     #[test]
     fn graph_creation() {
@@ -370,6 +398,30 @@ mod tests {
         assert_eq!(output_node, ());
         let list = bg.schedule();
         assert_eq!(bg.tape_size, 1);
+        
+    }
+
+    #[test]
+    fn schedule_realistic() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.learning_rate = 0.1;
+        mi.ffm_learning_rate = 0.1;
+        mi.power_t = 0.0;
+        mi.ffm_power_t = 0.0;
+        mi.bit_precision = 18;
+        mi.ffm_k = 1;
+        mi.ffm_bit_precision = 18;
+        mi.ffm_fields = vec![vec![], vec![], vec![]]; // This isn't really used
+        
+        // Nothing can be learned from a single field in FFMs
+        mi.optimizer = Optimizer::AdagradLUT;
+        let mut bg = BlockGraph::new();
+        
+        let re_lr = block_lr::new_lr_block(&mut bg, &mi).unwrap();
+        let re_ffm = block_ffm::new_ffm_block(&mut bg, &mi).unwrap();
+        let joined = block_misc::new_join_block(&mut bg, vec![re_lr, re_ffm]).unwrap();
+        let lossf = block_loss_functions::new_logloss_block(&mut bg, joined, true);
+        let list = bg.schedule();
         
     }
 

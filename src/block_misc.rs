@@ -263,6 +263,8 @@ impl BlockTrait for BlockCopy
         self
     }
 
+    fn get_block_type(&self) -> graph::BlockType {graph::BlockType::Copy}  
+
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
     }
 
@@ -273,15 +275,21 @@ impl BlockTrait for BlockCopy
         self.num_inputs
     }
 
+    fn get_input_offset(&mut self, input: graph::InputSlot) -> Result<usize, Box<dyn Error>> {
+        assert!(input.get_input_index() == 0);
+        Ok(self.input_offset)
+    }
+
+
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize)  {
         assert!(input.get_input_index() == 0);
         self.input_offset = offset;
     }
 
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
-/*        if output.get_output_index() == 0 {
+        if output.get_output_index() == 0 {
             assert!(self.input_offset == offset)
-        } else */
+        } else 
         if output.get_output_index() == 1 {
             self.output_offset = offset;
         } else {
@@ -370,6 +378,7 @@ impl BlockTrait for BlockJoin {
     fn get_block_type(&self) -> graph::BlockType {graph::BlockType::Join}  
 
 
+
     fn get_num_output_slots(&self) -> usize {1}
     
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
@@ -388,8 +397,8 @@ impl BlockTrait for BlockJoin {
         if input.get_input_index() == 0 {
             self.input_offset = offset;
         } else if input.get_input_index() == 1 {
-            assert!(self.input_offset <= offset);
-            assert!(self.input_offset + self.num_inputs >= offset);
+            assert!(self.input_offset <= offset, "Output 1, error 1: Input offset: {}, num_inputs: {}, offset: {}", self.input_offset, self.num_inputs, offset);
+            assert!(self.input_offset + self.num_inputs >= offset, "Output 1, error 2: Input offset: {}, num_inputs: {}, offset: {}", self.input_offset, self.num_inputs, offset);
         }
         
     } 

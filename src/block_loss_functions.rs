@@ -100,9 +100,6 @@ impl BlockTrait for BlockSigmoid {
                     pb: &mut port_buffer::PortBuffer, 
                     update:bool) {
 
-        if further_blocks.len() != 0 {
-            panic!("RegSigmoid can only be at the end of the chain!");
-        }
         debug_assert!(self.input_offset != usize::MAX);
         debug_assert!(self.output_offset != usize::MAX);
 
@@ -141,13 +138,8 @@ impl BlockTrait for BlockSigmoid {
             next_regressor[0].forward_backward(further_blocks, fb, pb, update);
         }
 
-        {
-            // replace inputs with their gradients
-            let mut myslice = &mut pb.tape[self.input_offset .. (self.input_offset + self.num_inputs)];
-            for s in myslice.iter_mut() {
-                *s = general_gradient;
-            }
-        }
+        // replace inputs with their gradients
+        pb.tape[self.input_offset .. (self.input_offset + self.num_inputs)].fill(general_gradient);
     }
 
     fn forward(&self, 

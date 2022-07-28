@@ -36,11 +36,14 @@ pub type FieldDesc = Vec<vwmap::NamespaceDescriptor>;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct NNConfig {
     pub layers: Vec<HashMap<String, String>>,
+    pub topology: String,
 }
 
 impl NNConfig {
     pub fn new() -> NNConfig {
-        NNConfig{layers:Vec::new()}
+        NNConfig{	
+                layers:Vec::new(), 
+                topology: "one".to_string()}
     }
 }
 
@@ -101,10 +104,14 @@ fn default_optimizer_adagrad() -> Optimizer{Optimizer::AdagradFlex}
 
 
 fn parse_float(s: &str, default: f32, cl: &clap::ArgMatches) -> f32{
-    match cl.value_of(s) {
+    let a = match cl.value_of(s) {
         Some(val) => val.parse().unwrap(),
         None => default
-    }
+    };
+    
+    
+    println!("S: {} value: {}", s, a); 
+    a
 }
 
 impl ModelInstance {
@@ -327,9 +334,9 @@ impl ModelInstance {
             println!("Num weight bits = {}", mi.bit_precision); // vwcompat
         }
 
-        mi.learning_rate 	 = parse_float("ffm_learning_rate", 	mi.learning_rate, &cl);
-        mi.init_acc_gradient 	 = parse_float("ffm_init_acc_gradient", mi.init_acc_gradient, &cl);
-        mi.power_t 		 = parse_float("ffm_power_t", 		mi.power_t, &cl);
+        mi.learning_rate 	 = parse_float("learning_rate", 	mi.learning_rate, &cl);
+        mi.init_acc_gradient 	 = parse_float("init_acc_gradient", 	mi.init_acc_gradient, &cl);
+        mi.power_t 		 = parse_float("power_t", 		mi.power_t, &cl);
         
         mi.ffm_learning_rate 	 = parse_float("ffm_learning_rate", 	mi.learning_rate, &cl);
         mi.ffm_init_acc_gradient = parse_float("ffm_init_acc_gradient", mi.init_acc_gradient, &cl);
@@ -345,6 +352,10 @@ impl ModelInstance {
             for i in 0..nn_layers {
                 mi.nn_config.layers.push(HashMap::new());
             } 
+        }
+
+        if let Some(val) = cl.value_of("nn_topology") {
+                mi.nn_config.topology = val.to_string();
         }
 
         if let Some(in_v) = cl.values_of("nn") {

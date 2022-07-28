@@ -240,6 +240,12 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .multiple(false)
                      .takes_value(true))
                      
+                    .arg(Arg::with_name("nn_topology")
+                     .long("nn_topology")
+                     .help("How should connections be organized - possiblities 'one' and 'two'")
+                     .multiple(false)
+                     .takes_value(true))
+
 
                      // Daemon parameterts
                     .arg(Arg::with_name("daemon")

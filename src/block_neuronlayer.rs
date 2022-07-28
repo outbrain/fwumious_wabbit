@@ -4,7 +4,7 @@ use merand48::*;
 use core::arch::x86_64::*;
 use std::error::Error;
 use std::mem::{self, MaybeUninit};
-use rand::distributions::{Normal, Distribution};
+use rand::distributions::{Normal, Distribution, Uniform};
 
 
 use crate::optimizer;
@@ -24,18 +24,20 @@ use block_helpers::{Weight, WeightAndOptimizerData};
 const MAX_NUM_INPUTS:usize= 16000;
 
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum NeuronType {
     WeightedSum,
     LimitedWeightedSum,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum InitType {
-    Random,
-    RandomFirstNeuron1,
-    RandomFirstNeuron10,
+    Xavier,
+    Hu,
+//    RandomFirst1,
+//    RandomFirst10,
     One,
+    Zero,
 }
 
 
@@ -87,8 +89,8 @@ fn new_neuronlayer_without_weights<L:OptimizerTrait + 'static>(mi: &model_instan
         dropout_1: 1.0 - dropout,
         max_norm: max_norm,
     };
-    rg.optimizer.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
-//    rg.optimizer.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
+    rg.optimizer.init(mi.nn_learning_rate, mi.nn_power_t, mi.nn_init_acc_gradient);
+  //  rg.optimizer.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
     Ok(Box::new(rg))
 }
 
@@ -133,20 +135,34 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
         self.weights =vec![WeightAndOptimizerData::<L>{weight:1.0, optimizer_data: self.optimizer.initial_data()}; self.weights_len as usize];
         // now set bias terms to zero
         
-        // first neuron is always set to 1.0  
-        let normal = Normal::new(0.0, (2.0/self.num_inputs as f32).sqrt() as f64);
-
-        for i in 0..self.num_neurons * self.num_inputs {
     //            self.weights[i as usize].weight = (2.0 * merand48(((i*i+i) as usize) as u64)-1.0) * (1.0/(self.num_inputs as f32)).sqrt();
-            self.weights[i as usize].weight = normal.sample(&mut rand::thread_rng()) as f32;
-        }
+        // first neuron is always set to 1.0  
+        
+//                for i in 0..self.num_neurons * self.num_inputs {
+     //            self.weights[i as usize].weight = (2.0 * merand48(((i*i+i) as usize) as u64)-1.0) * (1.0/(self.num_inputs as f32)).sqrt();
+  //          self.weights[i as usize].weight = normal.sample(&mut rand::thread_rng()) as f32;
+    //    }
+
         
         match self.init_type {
-            InitType::Random => {},
-            InitType::RandomFirstNeuron1 => { for i in 0..self.num_inputs { self.weights[i as usize].weight = 1.0}},
-            InitType::RandomFirstNeuron10 => { for i in 0..self.num_inputs { self.weights[i as usize].weight = 0.0}; self.weights[0].weight = 1.0;},
+            
+            InitType::Xavier => {
+                let bound = 6.0_f64.sqrt()   /   ((self.num_inputs+self.num_neurons) as f64).sqrt();
+                let normal = Uniform::new(-bound, bound);
+                for i in 0..self.num_neurons * self.num_inputs {
+                        self.weights[i as usize].weight = normal.sample(&mut rand::thread_rng()) as f32;
+                }   
+            },
+            InitType::Hu => {
+                let normal = Normal::new(0.0, (2.0/self.num_inputs as f64).sqrt() as f64);
+                for i in 0..self.num_neurons * self.num_inputs {
+                        self.weights[i as usize].weight = normal.sample(&mut rand::thread_rng()) as f32;
+                }   
+            }
+//            InitType::RandomFirst1 => { for i in 0..self.num_inputs { self.weights[i as usize].weight = 1.0}},
+//            InitType::RandomFirst10 => { for i in 0..self.num_inputs { self.weights[i as usize].weight = 0.0}; self.weights[0].weight = 1.0;},
             InitType::One => { for i in 0..self.weights_len { self.weights[i as usize].weight = 1.0}},
-
+            InitType::Zero => { for i in 0..self.weights_len { self.weights[i as usize].weight = 0.0}},
         }
         
         
@@ -378,8 +394,8 @@ mod tests {
     #[test]
     fn test_simple() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
-        mi.learning_rate = 0.1;
-        mi.power_t = 0.0;
+        mi.nn_learning_rate = 0.1;
+        mi.nn_power_t = 0.0;
         mi.optimizer = Optimizer::SGD;
         
         let mut bg = BlockGraph::new();
@@ -407,8 +423,8 @@ mod tests {
     #[test]
     fn test_two_neurons() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
-        mi.learning_rate = 0.1;
-        mi.power_t = 0.0;
+        mi.nn_learning_rate = 0.1;
+        mi.nn_power_t = 0.0;
         mi.optimizer = Optimizer::SGD;
         
         
