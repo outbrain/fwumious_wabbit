@@ -237,7 +237,7 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                     .arg(Arg::with_name("nn")
                      .long("nn")
                      .help("Parameters of layers, for example 1:activation:relu or 2:width:20")
-                     .multiple(false)
+                     .multiple(true)
                      .takes_value(true))
                      
                     .arg(Arg::with_name("nn_topology")

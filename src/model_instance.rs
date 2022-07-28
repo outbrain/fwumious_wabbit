@@ -104,14 +104,10 @@ fn default_optimizer_adagrad() -> Optimizer{Optimizer::AdagradFlex}
 
 
 fn parse_float(s: &str, default: f32, cl: &clap::ArgMatches) -> f32{
-    let a = match cl.value_of(s) {
+    match cl.value_of(s) {
         Some(val) => val.parse().unwrap(),
         None => default
-    };
-    
-    
-    println!("S: {} value: {}", s, a); 
-    a
+    }
 }
 
 impl ModelInstance {
@@ -298,13 +294,9 @@ impl ModelInstance {
             }
         }        
 
-        if let Some(val) = cl.value_of("ffm_init_center") {
-            mi.ffm_init_center = val.parse()?;
-        }
-
-        if let Some(val) = cl.value_of("ffm_init_width") {
-            mi.ffm_init_width = val.parse()?;
-        }
+        mi.ffm_init_center 	 = parse_float("ffm_init_center", 	mi.ffm_init_center, &cl);
+        mi.ffm_init_width 	 = parse_float("ffm_init_width", 	mi.ffm_init_width, &cl);
+        mi.ffm_init_zero_band 	 = parse_float("ffm_init_zero_band", 	mi.ffm_init_zero_band, &cl);
 
         if let Some(in_v) = cl.values_of("ffm_field") {
             for namespaces_str in in_v {          

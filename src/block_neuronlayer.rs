@@ -237,9 +237,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                     // first we need to initialize inputs to zero
                     // TODO - what to think about this buffer
                     let mut output_errors: [f32; MAX_NUM_INPUTS] = MaybeUninit::uninit().assume_init();
-                    for i in 0..self.num_inputs as usize {
-                        output_errors[i] = 0.0; 
-                    }
+                    output_errors.get_unchecked_mut(0..self.num_inputs).fill(0.0);
 
                     let output_tape = pb.tape.get_unchecked(self.output_offset..(self.output_offset + self.num_neurons as usize));
                     let input_tape = pb.tape.get_unchecked(self.input_offset..(self.input_offset + self.num_inputs as usize));

@@ -20,21 +20,6 @@ use block_helpers::{Weight, WeightAndOptimizerData};
 use crate::graph::{BlockGraph};
 
 
-#[derive(PartialEq)]
-pub enum NeuronType {
-    WeightedSum,
-    LimitedWeightedSum,
-}
-
-#[derive(PartialEq)]
-pub enum InitType {
-    Random,
-    RandomFirstNeuron1,
-    RandomFirstNeuron10
-}
-
-
-
 pub struct BlockRELU {    
     pub num_inputs: usize,
     pub input_offset: usize,
@@ -100,7 +85,6 @@ impl BlockTrait for BlockRELU
                         update:bool) {
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.input_offset != usize::MAX);
-
         debug_assert!(self.num_inputs > 0);
         
         unsafe {
@@ -119,9 +103,8 @@ impl BlockTrait for BlockRELU
 
             if update {
                 for i in 0..self.num_inputs as usize {
-                    let w = pb.tape.get_unchecked(self.input_offset + i);
-                    let gradient = pb.tape.get_unchecked(self.output_offset + i);
-                    *pb.tape.get_unchecked_mut(self.input_offset + i) = gradient * w;
+                    let gradient = *pb.tape.get_unchecked(self.output_offset + i);
+                    *pb.tape.get_unchecked_mut(self.input_offset + i) *= gradient;
                 }
 
             }

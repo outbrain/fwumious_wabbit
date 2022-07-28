@@ -108,7 +108,7 @@ impl Regressor  {
                 join_block = Some(outputs.pop().unwrap());
                 output = outputs.pop().unwrap();
             } else if mi.nn_config.topology == "two" {
-            
+                // do not copy out the 
             } else {
                 Err(format!("unknown nn topology: \"{}\"", mi.nn_config.topology)).unwrap()
             }
@@ -172,7 +172,7 @@ impl Regressor  {
 //        println!("INPUTS : {}", inputs);
         let lossf = block_loss_functions::new_logloss_block(&mut bg, output, true).unwrap();
         bg.schedule();
-        bg.println();
+//        bg.println();
         rg.tape_len = bg.get_tape_size();
         rg.blocks_boxes = bg.take_blocks();
         
