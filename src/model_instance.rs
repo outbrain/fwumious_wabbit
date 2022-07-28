@@ -34,14 +34,13 @@ pub enum Optimizer {
 pub type FieldDesc = Vec<vwmap::NamespaceDescriptor>;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct NNLayerConfig (HashMap<String, f32>);
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct NNConfig (HashMap<usize, NNLayerConfig>);
+pub struct NNConfig {
+    pub layers: Vec<HashMap<String, String>>,
+}
 
 impl NNConfig {
     pub fn new() -> NNConfig {
-        NNConfig(HashMap::new())
+        NNConfig{layers:Vec::new()}
     }
 }
 
@@ -87,7 +86,6 @@ pub struct ModelInstance {
     pub nn_power_t: f32,
 
     pub nn_config: NNConfig,
-    pub nn_layers: usize,
 
     #[serde(default = "default_optimizer_adagrad")]
     pub optimizer: Optimizer,
@@ -136,7 +134,6 @@ impl ModelInstance {
             optimizer: Optimizer::SGD,
             transform_namespaces: feature_transform_parser::NamespaceTransforms::new(),
             nn_config: NNConfig::new(),
-            nn_layers: 0,
         };
         Ok(mi)
     }
@@ -208,15 +205,19 @@ impl ModelInstance {
 
 
     fn parse_nn(&mut self, s: &str) -> Result<(), Box<dyn Error>> {
-        // Examples: 1:activation:relu
+        // Examples: 0:activation:relu
         // Examples: 4:maxnorm:5.0
         // Examples: 6:width:20
         let vsplit : Vec<&str> = s.split(":").collect();
         if vsplit.len() != 3 {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("--nn parameters have to be of form layer:parameter_name:parameter_value: {}", s))));
         }
+        let layer_number: usize = vsplit[0].parse().expect(&format!("--nn can not parse the layer number: {}", vsplit[0]));
+        if layer_number > self.nn_config.layers.len() {
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("--nn parameter addressing layer {}, but we have only {} layers", layer_number, self.nn_config.layers.len()))));
+        }	
+        self.nn_config.layers[layer_number].insert(vsplit[1].to_string(), vsplit[2].to_string());
         Ok(())
-            
     }
 
     
@@ -340,7 +341,10 @@ impl ModelInstance {
 
 
         if let Some(val) = cl.value_of("nn_layers") {
-            mi.nn_layers = val.parse()?;
+            let nn_layers = val.parse()?;
+            for i in 0..nn_layers {
+                mi.nn_config.layers.push(HashMap::new());
+            } 
         }
 
         if let Some(in_v) = cl.values_of("nn") {
@@ -554,6 +558,32 @@ C,featureC
         let result = mi.create_field_desc_from_verbose(&vw, "featureA,featureC:3");
         assert!(result.is_err());
         assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Fields currently do not support passing a value via : \\\"featureA,featureC:3\\\"\" })");
+        
+    }	
+
+    #[test]
+    fn test_nn_parsing() {
+        let mut mi = ModelInstance::new_empty().unwrap();        
+
+        let LAYERS = 4;
+        for i in 0..LAYERS {
+                mi.nn_config.layers.push(HashMap::new());
+        } 
+        assert!(mi.parse_nn("1:foo:bar").is_ok());
+        assert!(mi.parse_nn("0::").is_ok());
+//        println!("AAA: {:?}", mi.nn_config.layers);
+        assert_eq!(mi.nn_config.layers[0].get("").unwrap(), "");
+        assert_eq!(mi.nn_config.layers[1].get("foo").unwrap(), "bar");
+        assert_eq!(mi.nn_config.layers[2].len(), 0);
+        assert_eq!(mi.nn_config.layers[3].len(), 0);
+
+        let result = mi.parse_nn("0:");
+        assert!(result.is_err());
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"--nn parameters have to be of form layer:parameter_name:parameter_value: 0:\" })");
+        let result = mi.parse_nn("8:a:b");
+        assert!(result.is_err());
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"--nn parameter addressing layer 8, but we have only 4 layers\" })");
+
         
     }	
         
