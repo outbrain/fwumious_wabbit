@@ -44,7 +44,7 @@ pub trait BlockTrait {
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {Ok(())}
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize;
     fn get_num_output_slots(&self) -> usize;
-    fn get_input_offset(&mut self, input: graph::InputSlot) -> Result<usize, Box<dyn Error>> {Err(format!("get_input_offset() is only supported by JoinBlock and ObserveBlock"))?}
+    fn get_input_offset(&mut self, input: graph::InputSlot) -> Result<usize, Box<dyn Error>> {Err(format!("get_input_offset() is only supported by CopyBlock"))?}
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {}
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {}
     fn get_block_type(&self) -> graph::BlockType {graph::BlockType::Regular}  
@@ -89,8 +89,8 @@ impl Regressor  {
         let mut output = block_lr::new_lr_block(&mut bg, mi).unwrap();
 
         if mi.ffm_k > 0 {
-            let mut reg_ffm = block_ffm::new_ffm_block(&mut bg, mi).unwrap();
-            output = block_misc::new_join_block(&mut bg, vec![output, reg_ffm]).unwrap();
+            let mut block_ffm = block_ffm::new_ffm_block(&mut bg, mi).unwrap();
+            output = block_misc::new_join_block(&mut bg, vec![output, block_ffm]).unwrap();
         }
          
         // If we put sum function here, it has to be neutral

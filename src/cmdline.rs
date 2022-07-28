@@ -61,6 +61,12 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .value_name("0.5")
                      .help("Learning rate")
                      .takes_value(true))
+                    .arg(Arg::with_name("nn_learning_rate")
+                     .long("nn_learning_rate")
+                     .value_name("0.5")
+                     .help("Learning rate")
+                     .takes_value(true))
+
                     .arg(Arg::with_name("minimum_learning_rate")
                      .long("minimum_learning_rate")
                      .value_name("0.0")
@@ -73,6 +79,11 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .takes_value(true))
                     .arg(Arg::with_name("ffm_power_t")
                      .long("ffm_power_t")
+                     .value_name("0.5")
+                     .help("How to apply Adagrad (0.5 = sqrt)")
+                     .takes_value(true))
+                    .arg(Arg::with_name("nn_power_t")
+                     .long("nn_power_t")
                      .value_name("0.5")
                      .help("How to apply Adagrad (0.5 = sqrt)")
                      .takes_value(true))
@@ -199,6 +210,11 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .multiple(false)
                      .takes_value(true))
 
+                    .arg(Arg::with_name("nn_init_acc_gradient")
+                     .long("nn_init_acc_gradient")
+                     .help("Adagrad initial accumulated gradient for nn")
+                     .multiple(false)
+                     .takes_value(true))
                     .arg(Arg::with_name("ffm_init_acc_gradient")
                      .long("ffm_init_acc_gradient")
                      .help("Adagrad initial accumulated gradient for ffm")
@@ -211,6 +227,18 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .takes_value(true))
 
 
+                    .arg(Arg::with_name("nn_layers")
+                     .long("nn_layers")
+                     .help("Enable deep neural network on top of LR+FFM")
+                     .multiple(false)
+                     .takes_value(true))
+                     
+
+                    .arg(Arg::with_name("nn")
+                     .long("nn")
+                     .help("Parameters of layers, for example 1:activation:relu or 2:width:20")
+                     .multiple(false)
+                     .takes_value(true))
                      
 
                      // Daemon parameterts

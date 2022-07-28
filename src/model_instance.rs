@@ -6,6 +6,7 @@ use std::io::Read;
 use std::io;
 use std::fs;
 use std::fs::File;
+use std::collections::HashMap;
 use serde::{Serialize,Deserialize};//, Deserialize};
 use serde_json::{Value};
 
@@ -32,6 +33,17 @@ pub enum Optimizer {
 
 pub type FieldDesc = Vec<vwmap::NamespaceDescriptor>;
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct NNLayerConfig (HashMap<String, f32>);
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct NNConfig (HashMap<usize, NNLayerConfig>);
+
+impl NNConfig {
+    pub fn new() -> NNConfig {
+        NNConfig(HashMap::new())
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ModelInstance {
@@ -40,7 +52,6 @@ pub struct ModelInstance {
     pub minimum_learning_rate: f32,
     pub power_t: f32,
     pub bit_precision: u8,
-    pub hash_mask: u32,		// DEPRECATED, UNUSED -- this is recalculated in feature_buffer.rs
     pub add_constant_feature: bool,
     pub feature_combo_descs: Vec<FeatureComboDesc>,
     pub ffm_fields: Vec<FieldDesc>,
@@ -48,8 +59,6 @@ pub struct ModelInstance {
     pub ffm_k: u32,
     #[serde(default = "default_u32_zero")]
     pub ffm_bit_precision: u32,
-    #[serde(default = "default_bool_false")]
-    pub ffm_separate_vectors: bool, // DEPRECATED, UNUSED
     #[serde(default = "default_bool_false")]
     pub fastmath: bool,
 
@@ -65,11 +74,20 @@ pub struct ModelInstance {
     pub ffm_init_acc_gradient: f32,
     #[serde(default = "default_f32_zero")]
     pub init_acc_gradient: f32,
-    // these are only used for learning, so it doesnt matter they got set to zero as default        
     #[serde(default = "default_f32_zero")]
     pub ffm_learning_rate: f32,    
     #[serde(default = "default_f32_zero")]
     pub ffm_power_t: f32,
+
+    #[serde(default = "default_f32_zero")]
+    pub nn_init_acc_gradient: f32,
+    #[serde(default = "default_f32_zero")]
+    pub nn_learning_rate: f32,    
+    #[serde(default = "default_f32_zero")]
+    pub nn_power_t: f32,
+
+    pub nn_config: NNConfig,
+    pub nn_layers: usize,
 
     #[serde(default = "default_optimizer_adagrad")]
     pub optimizer: Optimizer,
@@ -83,6 +101,14 @@ fn default_f32_zero() -> f32{0.0}
 fn default_bool_false() -> bool{false}
 fn default_optimizer_adagrad() -> Optimizer{Optimizer::AdagradFlex}
 
+
+fn parse_float(s: &str, default: f32, cl: &clap::ArgMatches) -> f32{
+    match cl.value_of(s) {
+        Some(val) => val.parse().unwrap(),
+        None => default
+    }
+}
+
 impl ModelInstance {
     pub fn new_empty() -> Result<ModelInstance, Box<dyn Error>> {
         let mi = ModelInstance {
@@ -90,7 +116,6 @@ impl ModelInstance {
             ffm_learning_rate: 0.5, // vw default
             minimum_learning_rate: 0.0, 
             bit_precision: 18,      // vw default
-            hash_mask: 0, // DEPRECATED, UNUSED
             power_t: 0.5,
             ffm_power_t: 0.5,
             add_constant_feature: true,
@@ -98,16 +123,20 @@ impl ModelInstance {
             ffm_fields: Vec::new(),
             ffm_k: 0,
             ffm_bit_precision: 18,
-            ffm_separate_vectors: false, // DEPRECATED, UNUSED
             fastmath: true,
             ffm_k_threshold: 0.0,
             ffm_init_center: 0.0,
             ffm_init_width: 0.0,
             ffm_init_zero_band: 0.0,
             ffm_init_acc_gradient: 0.0,
+            nn_init_acc_gradient: 0.0,
+            nn_learning_rate: 0.02,
+            nn_power_t: 0.45,
             init_acc_gradient: 1.0,
             optimizer: Optimizer::SGD,
             transform_namespaces: feature_transform_parser::NamespaceTransforms::new(),
+            nn_config: NNConfig::new(),
+            nn_layers: 0,
         };
         Ok(mi)
     }
@@ -175,6 +204,19 @@ impl ModelInstance {
             field.push(namespace_descriptor);
         }
         Ok(field)
+    }
+
+
+    fn parse_nn(&mut self, s: &str) -> Result<(), Box<dyn Error>> {
+        // Examples: 1:activation:relu
+        // Examples: 4:maxnorm:5.0
+        // Examples: 6:width:20
+        let vsplit : Vec<&str> = s.split(":").collect();
+        if vsplit.len() != 3 {
+            return Err(Box::new(IOError::new(ErrorKind::Other, format!("--nn parameters have to be of form layer:parameter_name:parameter_value: {}", s))));
+        }
+        Ok(())
+            
     }
 
     
@@ -256,19 +298,6 @@ impl ModelInstance {
             mi.ffm_init_width = val.parse()?;
         }
 
-        if let Some(val) = cl.value_of("init_acc_gradient") {
-            if vwcompat {
-                return Err(Box::new(IOError::new(ErrorKind::Other, "Initial accumulated gradient is not supported in --vwcompat mode")))
-            }
-            mi.init_acc_gradient = val.parse()?;
-        }
-        
-        if let Some(val) = cl.value_of("ffm_init_acc_gradient") {
-            mi.ffm_init_acc_gradient = val.parse()?;
-        } else {
-            mi.ffm_init_acc_gradient = mi.init_acc_gradient;
-        }
-
         if let Some(in_v) = cl.values_of("ffm_field") {
             for namespaces_str in in_v {          
                 let mut field: Vec<vwmap::NamespaceDescriptor>= Vec::new();
@@ -297,15 +326,28 @@ impl ModelInstance {
             println!("Num weight bits = {}", mi.bit_precision); // vwcompat
         }
 
-        if let Some(val) = cl.value_of("learning_rate") {
-            mi.learning_rate = val.parse()?;
-        }
-        if let Some(val) = cl.value_of("ffm_learning_rate") {
-            mi.ffm_learning_rate = val.parse()?;
-        } else {
-            mi.ffm_learning_rate = mi.learning_rate;
+        mi.learning_rate 	 = parse_float("ffm_learning_rate", 	mi.learning_rate, &cl);
+        mi.init_acc_gradient 	 = parse_float("ffm_init_acc_gradient", mi.init_acc_gradient, &cl);
+        mi.power_t 		 = parse_float("ffm_power_t", 		mi.power_t, &cl);
+        
+        mi.ffm_learning_rate 	 = parse_float("ffm_learning_rate", 	mi.learning_rate, &cl);
+        mi.ffm_init_acc_gradient = parse_float("ffm_init_acc_gradient", mi.init_acc_gradient, &cl);
+        mi.ffm_power_t 		 = parse_float("ffm_power_t", 		mi.power_t, &cl);
+
+        mi.nn_learning_rate 	 = parse_float("nn_learning_rate", 	mi.ffm_learning_rate, &cl);
+        mi.nn_init_acc_gradient  = parse_float("nn_init_acc_gradient",	mi.ffm_init_acc_gradient, &cl);
+        mi.nn_power_t 		 = parse_float("nn_power_t", 		mi.ffm_power_t, &cl);
+
+
+        if let Some(val) = cl.value_of("nn_layers") {
+            mi.nn_layers = val.parse()?;
         }
 
+        if let Some(in_v) = cl.values_of("nn") {
+            for value_str in in_v {                
+                mi.parse_nn(value_str)?;
+            }
+        }
 
 
 
@@ -313,15 +355,6 @@ impl ModelInstance {
             mi.minimum_learning_rate = val.parse()?;
         }
 
-        if let Some(val) = cl.value_of("power_t") {
-            mi.power_t = val.parse()?;
-        }
-        if let Some(val) = cl.value_of("ffm_power_t") {
-            mi.ffm_power_t = val.parse()?;
-        } else {
-            mi.ffm_power_t = mi.power_t;
-        }
-        
         if let Some(val) = cl.value_of("link") {
             if val != "logistic" {
                 return Err(Box::new(IOError::new(ErrorKind::Other, format!("--link only supports 'logistic'"))))
