@@ -317,9 +317,10 @@ impl BlockTrait for BlockCopy
             pb.tape.copy_within(self.input_offset .. (self.input_offset + self.num_inputs), self.output_offset);
                         
             //pb.tapes[self.output_tape_index as usize].extend_from_slice(pb.tapes.get_unchecked(self.input_tape_index as usize).get_unchecked(input_tape_start .. input_tape_start + self.num_inputs as usize));
-            let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
-            next_regressor[0].forward_backward(further_blocks, fb, pb, update);
-
+            if further_blocks.len() > 0 {
+                let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
+                next_regressor[0].forward_backward(further_blocks, fb, pb, update);
+            }
             if update {
                 // Sum up the gradients from output to input
                 for i in 0..self.num_inputs as usize {
@@ -339,7 +340,14 @@ impl BlockTrait for BlockCopy
                         fb: &feature_buffer::FeatureBuffer, 
                         pb: &mut port_buffer::PortBuffer, 
                         ) {
-        assert!(false, "Unimplemented");    
+            // plain copy from input to output
+            pb.tape.copy_within(self.input_offset .. (self.input_offset + self.num_inputs), self.output_offset);
+                        
+            //pb.tapes[self.output_tape_index as usize].extend_from_slice(pb.tapes.get_unchecked(self.input_tape_index as usize).get_unchecked(input_tape_start .. input_tape_start + self.num_inputs as usize));
+            if further_blocks.len() > 0 {
+                let (next_regressor, further_blocks) = further_blocks.split_at(1);
+                next_regressor[0].forward(further_blocks, fb, pb);
+            }
     }
     
 }

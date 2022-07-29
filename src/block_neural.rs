@@ -3,10 +3,13 @@ use std::io;
 use merand48::*;
 use core::arch::x86_64::*;
 use std::mem::{self, MaybeUninit};
-use rand::distributions::{Normal, Distribution, Uniform};
+use rand_distr::{Normal, Distribution, Uniform};
+use rand_xoshiro::rand_core::SeedableRng;
+use rand_xoshiro::Xoshiro256PlusPlus;
 use std::error::Error;
 use std::io::Error as IOError;
 use std::io::ErrorKind;
+
 
 
 use crate::optimizer;
@@ -113,9 +116,9 @@ pub fn new_neuronlayer_block(
         return Err(Box::new(IOError::new(ErrorKind::Other, "You should not use new_neuronlayer_block with the type NeuronType::Sum, it makes no sense - use block_misc::new_sum_block()")));
     }
     let block = match mi.optimizer {
-        model_instance::Optimizer::AdagradLUT => new_neuronlayer_without_weights::<optimizer::OptimizerAdagradLUT>(&mi, num_inputs, ntype, num_neurons, init_type, dropout, max_norm),
+        model_instance::Optimizer::AdagradLUT =>  new_neuronlayer_without_weights::<optimizer::OptimizerAdagradLUT> (&mi, num_inputs, ntype, num_neurons, init_type, dropout, max_norm),
         model_instance::Optimizer::AdagradFlex => new_neuronlayer_without_weights::<optimizer::OptimizerAdagradFlex>(&mi, num_inputs, ntype, num_neurons, init_type, dropout, max_norm),
-        model_instance::Optimizer::SGD => new_neuronlayer_without_weights::<optimizer::OptimizerSGD>(&mi, num_inputs, ntype, num_neurons, init_type, dropout, max_norm)
+        model_instance::Optimizer::SGD =>         new_neuronlayer_without_weights::<optimizer::OptimizerSGD>        (&mi, num_inputs, ntype, num_neurons, init_type, dropout, max_norm)
     }.unwrap();
 
     let mut block_outputs = bg.add_node(block, vec![input]).unwrap();
@@ -156,32 +159,29 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
     }
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
+        debug_assert!(self.output_offset != usize::MAX);
+        debug_assert!(self.input_offset != usize::MAX);
+
         assert!(self.weights_len != 0, "allocate_and_init_weights(): Have you forgotten to call set_num_inputs()?");
         self.weights =vec![WeightAndOptimizerData::<L>{weight:1.0, optimizer_data: self.optimizer.initial_data()}; self.weights_len as usize];
-        // now set bias terms to zero
-        
-    //            self.weights[i as usize].weight = (2.0 * merand48(((i*i+i) as usize) as u64)-1.0) * (1.0/(self.num_inputs as f32)).sqrt();
-        // first neuron is always set to 1.0  
-        
-//                for i in 0..self.num_neurons * self.num_inputs {
-     //            self.weights[i as usize].weight = (2.0 * merand48(((i*i+i) as usize) as u64)-1.0) * (1.0/(self.num_inputs as f32)).sqrt();
-  //          self.weights[i as usize].weight = normal.sample(&mut rand::thread_rng()) as f32;
-    //    }
 
-        
+        // We need to seed each layer with a separate seed... how?
+        // by the time we call this function input_offset and output_offset are set and are unique. L
+        let mut rng = Xoshiro256PlusPlus::seed_from_u64((self.input_offset * self.output_offset + self.num_inputs + self.weights_len as usize) as u64);
+
         match self.init_type {
             
             InitType::Xavier => {
                 let bound = 6.0_f64.sqrt()   /   ((self.num_inputs+self.num_neurons) as f64).sqrt();
                 let normal = Uniform::new(-bound, bound);
                 for i in 0..self.num_neurons * self.num_inputs {
-                        self.weights[i as usize].weight = normal.sample(&mut rand::thread_rng()) as f32;
+                        self.weights[i as usize].weight = normal.sample(&mut rng) as f32;
                 }   
             },
             InitType::Hu => {
-                let normal = Normal::new(0.0, (2.0/self.num_inputs as f64).sqrt() as f64);
+                let normal = Normal::new(0.0, (2.0/self.num_inputs as f64).sqrt() as f64).unwrap();
                 for i in 0..self.num_neurons * self.num_inputs {
-                        self.weights[i as usize].weight = normal.sample(&mut rand::thread_rng()) as f32;
+                        self.weights[i as usize].weight = normal.sample(&mut rng) as f32;
                 }   
             }
 //            InitType::RandomFirst1 => { for i in 0..self.num_inputs { self.weights[i as usize].weight = 1.0}},
@@ -325,7 +325,32 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                         fb: &feature_buffer::FeatureBuffer, 
                         pb: &mut port_buffer::PortBuffer, 
                         ) {
-        assert!(false, "Unimplemented");    
+        unsafe {
+
+//          println!("len: {}, num inputs: {}, input_tape_indeX: {}", len, self.num_inputs, self.input_tape_index);
+            let frandseed = fb.example_number * fb.example_number;
+            let bias_offset = self.num_inputs * self.num_neurons;
+            let mut j_offset:u32 = 0;
+            for j in 0..self.num_neurons {
+                let mut wsum:f32 = 0.0;
+                if self.dropout == 0.0 || merand48(j as u64 + frandseed) > self.dropout {
+                    wsum = self.weights.get_unchecked((bias_offset + j) as usize).weight; // bias term
+                    let input_tape = pb.tape.get_unchecked(self.input_offset..(self.input_offset + self.num_inputs as usize));
+                    for i in 0..self.num_inputs {                                 
+                        wsum += input_tape.get_unchecked(i as usize) * self.weights.get_unchecked(i + j_offset as usize).weight;
+                    }
+                }
+                j_offset += self.num_inputs as u32;
+                wsum *= self.dropout_1; // fix for overexcitment if we are just predicting and not learning
+                *pb.tape.get_unchecked_mut(self.output_offset + j as usize) = wsum;
+            }
+            let (next_regressor, further_blocks) = further_blocks.split_at(1);
+            next_regressor[0].forward(further_blocks, fb, pb);
+
+            
+            
+        } // unsafe end
+
     }
     
     fn get_serialized_len(&self) -> usize {

@@ -108,9 +108,6 @@ impl BlockTrait for BlockRELU
                 }
 
             }
-            // The only exit point
-            return
-            
         } // unsafe end
     }
     
@@ -118,7 +115,22 @@ impl BlockTrait for BlockRELU
                         fb: &feature_buffer::FeatureBuffer, 
                         pb: &mut port_buffer::PortBuffer, 
                         ) {
-        assert!(false, "Unimplemented");    
+        debug_assert!(self.output_offset != usize::MAX);
+        debug_assert!(self.input_offset != usize::MAX);
+        debug_assert!(self.num_inputs > 0);
+        
+        unsafe {
+            for i in 0..self.num_inputs as usize {                                 
+                let w = *pb.tape.get_unchecked_mut(self.input_offset + i);
+                if w < 0.0 {
+                    *pb.tape.get_unchecked_mut(self.output_offset + i) = 0.0;
+                } else {
+                    *pb.tape.get_unchecked_mut(self.output_offset + i) = w;
+                }
+            }
+            let (next_regressor, further_blocks) = further_blocks.split_at(1);
+            next_regressor[0].forward(further_blocks, fb, pb);
+        } // unsafe end
     }
     
 }

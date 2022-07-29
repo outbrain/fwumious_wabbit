@@ -217,9 +217,9 @@ impl Regressor  {
         }
         let update:bool = update && (fb.example_importance != 0.0);
 /*        if !update { // Fast-path for no-update case
-            return self.predict(fb);
-        }
-*/
+            return self.predict(fb, pb);
+        }*/
+
         let blocks_list = &mut self.blocks_boxes[..];
         let (current, further_blocks) = &mut blocks_list.split_at_mut(1);
         pb.reset(); // empty the tape
