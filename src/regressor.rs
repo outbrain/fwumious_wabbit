@@ -164,7 +164,7 @@ impl Regressor  {
             if join_block.is_some() {
                 output = block_misc::new_join_block(&mut bg, vec![output, join_block.unwrap()]).unwrap();
             }
-            output = block_neuron::new_neuron_block(&mut bg, &mi, output, block_neuron::NeuronType::WeightedSum).unwrap();
+            output = block_neuronlayer::new_neuron_block(&mut bg, &mi, output, block_neuronlayer::NeuronType::WeightedSum, block_neuronlayer::InitType::One).unwrap();
         }
          
 

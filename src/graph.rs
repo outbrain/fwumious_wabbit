@@ -86,7 +86,8 @@ impl BlockGraph {
         // TODO we could just insert TrueCopy block here...
         if block.get_block_type() == BlockType::Join {
             for edge_in in edges_in.iter() {
-                if self.blocks[edge_in.get_node_id()].get_block_type() == BlockType::Copy && edge_in.get_output_index() == 0 {
+                if (self.blocks[edge_in.get_node_id()].get_block_type() == BlockType::Copy && edge_in.get_output_index() == 0) || 
+                   (self.blocks[edge_in.get_node_id()].get_block_type() == BlockType::Observe) {
                     return Err(Box::new(IOError::new(ErrorKind::Other, "First output of a CopyBlock can not go to a JoinBlock (reasons are complicited). Using second output is ok.")));
                 }                    
             }
@@ -164,9 +165,8 @@ impl BlockGraph {
             }
         }
         blocks 
-    
     }
-    
+
     pub fn schedule(&mut self) {
         let mut offset: usize = 0;
         // We allocate offsets based on input tapes. 
@@ -182,23 +182,16 @@ impl BlockGraph {
                 if (input_block_type  == BlockType::Regular) || (input_block_type == BlockType::Copy && bo.get_output_index() > 0) {
                     self.blocks[bptr].set_output_offset(bo, offset);
                     self.blocks[i].set_input_offset(InputSlot(input_index), offset);
-//                    println!("A Input offset of {}.{} is {}, length is {}", i, input_index, offset, output_len);
                     offset += output_len as usize; 
-                } else if (input_block_type == BlockType::Join) || (input_block_type == BlockType::Observe) {
+                } else if   (input_block_type == BlockType::Join) || 
+                            (input_block_type == BlockType::Observe) ||
+                            (input_block_type == BlockType::Copy) && (bo.get_output_index() == 0) {
                     // we are special casing Join block
                     // It is zero-copy joining of inputs, which means inputs and outputs share exactly the same space
 //                    println!("Get input offset of: {}", bptr);
                     let fake_offset = self.blocks[bptr].get_input_offset(InputSlot(0)).unwrap();
                     self.blocks[bptr].set_output_offset(bo, fake_offset);
                     self.blocks[i].set_input_offset(InputSlot(input_index), fake_offset);
-//                    println!("B Input offset of {}.{} is {}, length is {}", i, input_index, fake_offset, output_len);
-                } else if (input_block_type == BlockType::Copy) && (bo.get_output_index() == 0) {
-                    // we are special casing Copy 
-                    // It is zero-copy joining of inputs, which means inputs and outputs share exactly the same space
-                    let fake_offset = self.blocks[bptr].get_input_offset(InputSlot(0)).unwrap();
-                    self.blocks[bptr].set_output_offset(bo, fake_offset);
-                    self.blocks[i].set_input_offset(InputSlot(input_index), fake_offset);
- //                   println!("C Input offset of {}.{} is {}, length is {}", i, input_index, fake_offset, output_len);
                 } else {
                     panic!("Type of block not supported in scheduling: {:?}", input_block_type);
                 }
@@ -234,9 +227,7 @@ impl BlockGraph {
             }
         }
         self.tape_size = offset;
-        
-    }
-   
+    }   
 }
 
 mod tests {

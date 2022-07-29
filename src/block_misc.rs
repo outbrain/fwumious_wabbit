@@ -436,9 +436,172 @@ impl BlockTrait for BlockJoin {
 }
 
 
+pub struct BlockSum {    
+    pub num_inputs: usize,
+    pub input_offset: usize,
+    pub output_offset: usize,
+
+}
+
+
+fn new_sum_without_weights(
+                          num_inputs: usize, 
+                          ) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+    assert!(num_inputs > 0);
+    let mut rg = BlockSum {
+        output_offset: usize::MAX,
+        input_offset: usize::MAX,
+        num_inputs: num_inputs,
+    };
+    Ok(Box::new(rg))
+}
 
 
 
+
+pub fn new_sum_block(   bg: &mut graph::BlockGraph, 
+                        input: graph::BlockPtrOutput,
+                        ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {    
+    let num_inputs = bg.get_num_output_values(vec![&input]);
+    let block = new_sum_without_weights(num_inputs).unwrap(); 
+    let mut block_outputs = bg.add_node(block, vec![input]).unwrap();
+    assert_eq!(block_outputs.len(), 1);
+    Ok(block_outputs.pop().unwrap())
+}
+
+
+
+
+
+
+
+impl BlockTrait for BlockSum {
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn get_num_output_slots(&self) -> usize {1}   
+
+    fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
+        assert!(output.get_output_index() == 0);
+        1
+    }
+
+    fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize)  {
+        assert!(input.get_input_index() == 0);
+        self.input_offset = offset;
+    }
+
+    fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize)  {
+        assert!(output.get_output_index() == 0);
+        self.output_offset = offset;
+    }
+
+    #[inline(always)]
+    fn forward_backward(&mut self, 
+                        further_blocks: &mut [Box<dyn BlockTrait>], 
+                        fb: &feature_buffer::FeatureBuffer, 
+                        pb: &mut port_buffer::PortBuffer, 
+                        update:bool) {
+        debug_assert!(self.num_inputs > 0);
+        debug_assert!(self.output_offset != usize::MAX);
+        debug_assert!(self.input_offset != usize::MAX);
+        
+        let wsum:f32 = pb.tape[self.input_offset .. (self.input_offset + self.num_inputs as usize)].iter().sum();
+        pb.tape[self.output_offset as usize] = wsum;
+        
+        if further_blocks.len() > 0 {
+            let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
+            next_regressor[0].forward_backward(further_blocks, fb, pb, update);
+        }
+
+        let general_gradient = pb.tape[self.output_offset];
+        if update {
+            pb.tape[self.input_offset .. (self.input_offset + self.num_inputs as usize)].fill(general_gradient);
+        } // unsafe end
+    }
+    
+    fn forward(		    &self, 		
+                            further_blocks: &[Box<dyn BlockTrait>], 
+                            fb: &feature_buffer::FeatureBuffer,
+                            pb: &mut port_buffer::PortBuffer, 
+                           ) {
+        debug_assert!(self.num_inputs > 0);
+        debug_assert!(self.output_offset != usize::MAX);
+        debug_assert!(self.input_offset != usize::MAX);
+        
+        let wsum:f32 = pb.tape[self.input_offset .. (self.input_offset + self.num_inputs as usize)].iter().sum();
+        pb.tape[self.output_offset as usize] = wsum;
+
+        if further_blocks.len() > 0 {
+            let (next_regressor, further_blocks) = further_blocks.split_at(1);
+            next_regressor[0].forward(further_blocks, fb, pb);
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+mod tests {
+    // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
+    use crate::block_loss_functions;
+    use crate::block_misc;
+    use crate::model_instance::Optimizer;
+    use crate::feature_buffer;
+    use crate::feature_buffer::HashAndValueAndSeq;
+    use crate::vwmap;
+    use crate::block_helpers::{slearn2, spredict2};
+    use crate::graph;
+    use crate::graph::{BlockGraph};
+    use crate::block_misc::Observe;
+    use crate::assert_epsilon;
+
+    fn fb_vec() -> feature_buffer::FeatureBuffer {
+        feature_buffer::FeatureBuffer {
+                    label: 0.0,
+                    example_importance: 1.0,
+                    example_number: 0,
+                    lr_buffer: Vec::new(),
+                    ffm_buffer: Vec::new(),
+                    ffm_fields_count: 0,
+        }
+    }
+
+
+    #[test]
+    fn test_sum_block() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.learning_rate = 0.1;
+        mi.power_t = 0.0;
+        mi.optimizer = Optimizer::SGD;
+        
+       
+        let mut bg = BlockGraph::new();
+        let input_block = block_misc::new_const_block(&mut bg, vec![2.0]).unwrap();
+        let sum_block = new_sum_block(&mut bg, input_block).unwrap();
+        let observe_block = block_misc::new_observe_block(&mut bg, sum_block, Observe::Forward, Some(1.0)).unwrap();
+        bg.schedule();
+        bg.allocate_and_init_weights(&mi);
+        
+        let mut pb = bg.new_port_buffer();
+        let fb = fb_vec();
+        assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 2.0);
+        assert_eq!(pb.observations.len(), 1);
+        assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 2.0);
+        
+
+    }
+
+
+}
 
 
 

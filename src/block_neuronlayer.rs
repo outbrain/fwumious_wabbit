@@ -2,9 +2,11 @@ use std::any::Any;
 use std::io;
 use merand48::*;
 use core::arch::x86_64::*;
-use std::error::Error;
 use std::mem::{self, MaybeUninit};
 use rand::distributions::{Normal, Distribution, Uniform};
+use std::error::Error;
+use std::io::Error as IOError;
+use std::io::ErrorKind;
 
 
 use crate::optimizer;
@@ -15,7 +17,7 @@ use crate::port_buffer;
 use crate::consts;
 use crate::block_helpers;
 use crate::graph;
-
+use crate::block_misc;
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 use block_helpers::{Weight, WeightAndOptimizerData};
@@ -27,7 +29,7 @@ const MAX_NUM_INPUTS:usize= 16000;
 #[derive(PartialEq, Debug)]
 pub enum NeuronType {
     WeightedSum,
-    LimitedWeightedSum,
+    Sum,
 }
 
 #[derive(PartialEq, Debug)]
@@ -90,7 +92,6 @@ fn new_neuronlayer_without_weights<L:OptimizerTrait + 'static>(mi: &model_instan
         max_norm: max_norm,
     };
     rg.optimizer.init(mi.nn_learning_rate, mi.nn_power_t, mi.nn_init_acc_gradient);
-  //  rg.optimizer.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
     Ok(Box::new(rg))
 }
 
@@ -108,7 +109,9 @@ pub fn new_neuronlayer_block(
                         ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {    
 
     let num_inputs = bg.get_num_output_values(vec![&input]);
-
+    if ntype == NeuronType::Sum {
+        return Err(Box::new(IOError::new(ErrorKind::Other, "You should not use new_neuronlayer_block with the type NeuronType::Sum, it makes no sense - use block_misc::new_sum_block()")));
+    }
     let block = match mi.optimizer {
         model_instance::Optimizer::AdagradLUT => new_neuronlayer_without_weights::<optimizer::OptimizerAdagradLUT>(&mi, num_inputs, ntype, num_neurons, init_type, dropout, max_norm),
         model_instance::Optimizer::AdagradFlex => new_neuronlayer_without_weights::<optimizer::OptimizerAdagradFlex>(&mi, num_inputs, ntype, num_neurons, init_type, dropout, max_norm),
@@ -118,6 +121,28 @@ pub fn new_neuronlayer_block(
     let mut block_outputs = bg.add_node(block, vec![input]).unwrap();
     assert_eq!(block_outputs.len(), 1);
     Ok(block_outputs.pop().unwrap())
+}
+
+
+pub fn new_neuron_block(
+                        bg: &mut graph::BlockGraph, 
+                        mi: &model_instance::ModelInstance,
+                        input: graph::BlockPtrOutput,
+                        ntype: NeuronType,
+                        init_type: InitType, 
+                        ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {    
+    match ntype {
+        NeuronType::Sum => block_misc::new_sum_block( bg, input),
+        _ 		=> new_neuronlayer_block(     bg, 
+                                                      mi,
+                                                      input,
+                                                      ntype,
+                                                      1, // a single neuron
+                                                      init_type,
+                                                      0.0, // dropout
+                                                      0.0, // maxnorm
+                                                      ),
+    }
 }
 
 
@@ -230,7 +255,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
 
             if update {
             {
-//                let general_gradient = pb.tapes[self.output_tape_index as usize].pop().unwrap();
             
                 if self.neuron_type == NeuronType::WeightedSum {
                     //let mut myslice = &mut pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..];
@@ -247,13 +271,9 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
 
                             let general_gradient = output_tape.get_unchecked(j);
                             let j_offset = j * self.num_inputs as usize;
-   //                         println!("General gradient: {}", general_gradient);
                             for i in 0..self.num_inputs as usize {
                                 let feature_value = input_tape.get_unchecked(i);
-  //                              println!("input tape index: {}, input tape start: {}, i: {}", self.input_tape_index, input_tape_start, i);
- //                               println!("Wieght: {}, feature value: {}", self.weights.get_unchecked_mut(i + j_offset).weight, feature_value);
                                 let gradient = general_gradient * feature_value;
-//                            println!("Final gradient: {}", gradient);
                                 let update = self.optimizer.calculate_update(gradient, 
                                                                         &mut self.weights.get_unchecked_mut(i + j_offset).optimizer_data);
                                 *output_errors.get_unchecked_mut(i)  += self.weights.get_unchecked(i + j_offset).weight * general_gradient;
@@ -292,31 +312,10 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
 
 
                 
-                } else if self.neuron_type == NeuronType::LimitedWeightedSum {
                 }
-/*                    // Here it is like WeightedSum, but weights are limited to the maximum
-                    let mut myslice = &mut pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..];
-                    for i in 0..myslice.len() {
-                        let w = self.weights.get_unchecked(i).weight;
-                        let feature_value = myslice.get_unchecked(i);
-                        let gradient = general_gradient * feature_value;
-                        let update = self.optimizer.calculate_update(gradient, &mut self.weights.get_unchecked_mut(i).optimizer_data);
-                        self.weights.get_unchecked_mut(i).weight -= update;
-                        if self.weights.get_unchecked_mut(i).weight > 1.0 {
-                            self.weights.get_unchecked_mut(i).weight = 1.0;
-                        } else if self.weights.get_unchecked_mut(i).weight < -1.0 {
-                            self.weights.get_unchecked_mut(i).weight = -1.0;
-                        }
-                        
-                        *myslice.get_unchecked_mut(i) = w * general_gradient;    // put the gradient on the tape in place of the value
-                     }
-                    
-                }*/
 
             }
             
-            // The only exit point
-            return
         }
             
         } // unsafe end
@@ -458,6 +457,30 @@ mod tests {
         
 
     }
+
+    #[test]
+    fn test_neuron() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.nn_learning_rate = 0.1;
+        mi.nn_power_t = 0.0;
+        mi.nn_init_acc_gradient = mi.init_acc_gradient;
+        mi.optimizer = Optimizer::SGD;
+        
+       
+        let mut bg = BlockGraph::new();
+        let input_block = block_misc::new_const_block(&mut bg, vec![2.0]).unwrap();
+        let neuron_block = new_neuron_block(&mut bg, &mi, input_block, NeuronType::WeightedSum, InitType::One).unwrap();
+        let observe_block = block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0)).unwrap();
+        bg.schedule();
+        bg.allocate_and_init_weights(&mi);
+        
+        let mut pb = bg.new_port_buffer();
+        let fb = fb_vec();
+        assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 2.0);
+        assert_eq!(pb.observations.len(), 1);
+        assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 1.5);
+    }
+
 
 
 }
