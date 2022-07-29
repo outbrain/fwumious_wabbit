@@ -19,12 +19,11 @@ use optimizer::OptimizerTrait;
 use crate::block_ffm;
 use crate::block_lr;
 use crate::block_loss_functions;
-use crate::block_neuron;
-use crate::block_neuronlayer;
+use crate::block_neural;
 use crate::block_relu;
 use crate::block_misc;
 use crate::graph;
-use crate::block_neuronlayer::{InitType};
+use crate::block_neural::{InitType};
 
 pub trait BlockTrait {
     fn as_any(&mut self) -> &mut dyn Any; // This enables downcasting
@@ -140,10 +139,10 @@ impl Regressor  {
                     "zero" => InitType::Zero,
                     _ => Err(format!("unknown nn activation type: \"{}\"", init_type_str)).unwrap()
                 };
-                let neuron_type = block_neuronlayer::NeuronType::WeightedSum;
+                let neuron_type = block_neural::NeuronType::WeightedSum;
                 println!("Neuron layer: width: {}, neuron type: {:?}, dropout: {}, maxnorm: {}, init_type: {:?}",
                                         width, neuron_type, dropout, maxnorm, init_type);
-                output =  block_neuronlayer::new_neuronlayer_block(&mut bg, 
+                output =  block_neural::new_neuronlayer_block(&mut bg, 
                                             &mi, 
                                             output,
                                             neuron_type, 
@@ -164,7 +163,7 @@ impl Regressor  {
             if join_block.is_some() {
                 output = block_misc::new_join_block(&mut bg, vec![output, join_block.unwrap()]).unwrap();
             }
-            output = block_neuronlayer::new_neuron_block(&mut bg, &mi, output, block_neuronlayer::NeuronType::WeightedSum, block_neuronlayer::InitType::One).unwrap();
+            output = block_neural::new_neuron_block(&mut bg, &mi, output, block_neural::NeuronType::WeightedSum, block_neural::InitType::One).unwrap();
         }
          
 
