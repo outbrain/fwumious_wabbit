@@ -37,7 +37,7 @@ pub fn new_observe_block(bg: &mut graph::BlockGraph,
                          input_offset: usize::MAX,
                          observe: observe,
                          replace_backward_with: replace_backward_with});
-    let block_outputs = bg.add_node(block, vec![input]);
+    let block_outputs = bg.add_node(block, vec![input])?;
     assert_eq!(block_outputs.len(), 1);
     Ok(())
 }
@@ -163,7 +163,7 @@ pub fn new_const_block( bg: &mut graph::BlockGraph,
                         -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
     let block = Box::new(BlockConsts {   output_offset: usize::MAX,
                                          consts: consts});
-    let mut block_outputs = bg.add_node(block, vec![]);
+    let mut block_outputs = bg.add_node(block, vec![])?;
     assert_eq!(block_outputs.len(), 1);
     Ok(block_outputs.pop().unwrap())
 
@@ -247,7 +247,7 @@ pub fn new_copy_block(bg: &mut graph::BlockGraph,
         input_offset: usize::MAX,
         num_inputs: num_inputs as usize,
     });
-    let block_outputs = bg.add_node(block, vec![input]);
+    let block_outputs = bg.add_node(block, vec![input])?;
     assert_eq!(block_outputs.len(), 2);
     Ok(block_outputs)
 }
@@ -365,7 +365,7 @@ pub fn new_join_block(bg: &mut graph::BlockGraph,
         input_offset: usize::MAX,
         num_inputs: num_inputs,
     });
-    let mut block_outputs = bg.add_node(block, inputs);
+    let mut block_outputs = bg.add_node(block, inputs)?;
     assert_eq!(block_outputs.len(), 1);
     Ok(block_outputs.pop().unwrap())
 }
@@ -376,8 +376,6 @@ impl BlockTrait for BlockJoin {
     }
     
     fn get_block_type(&self) -> graph::BlockType {graph::BlockType::Join}  
-
-
 
     fn get_num_output_slots(&self) -> usize {1}
     
@@ -391,7 +389,6 @@ impl BlockTrait for BlockJoin {
         Ok(self.input_offset)
     }
 
-
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize)  {
         assert!(input.get_input_index() <= 1);
         if input.get_input_index() == 0 {
@@ -404,14 +401,11 @@ impl BlockTrait for BlockJoin {
     } 
 
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
-        if output.get_output_index() == 0 {
-            self.output_offset = offset;
-        } else {
-            panic!("only two outputs supported for BlockCopy");
-        }
+        assert!(output.get_output_index() == 0);
+        self.output_offset = offset;
     }
 
-
+    // WARNING: These two functions are automatically removed from the graph when executing, since they are a no-op
     #[inline(always)]
     fn forward_backward(&mut self, 
                         further_blocks: &mut [Box<dyn BlockTrait>], 
@@ -422,8 +416,10 @@ impl BlockTrait for BlockJoin {
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.num_inputs > 0);
         
-        let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
-        next_regressor[0].forward_backward(further_blocks, fb, pb, update);
+        if further_blocks.len() > 0 {
+            let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
+            next_regressor[0].forward_backward(further_blocks, fb, pb, update);
+        }
     }
     
     fn forward(&self, further_blocks: &[Box<dyn BlockTrait>], 

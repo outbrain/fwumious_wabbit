@@ -38,7 +38,7 @@ pub fn new_relu_block(  bg: &mut graph::BlockGraph,
         input_offset: usize::MAX,
         num_inputs: num_inputs,
     });
-    let mut block_outputs = bg.add_node(block, vec![input]);
+    let mut block_outputs = bg.add_node(block, vec![input])?;
     assert_eq!(block_outputs.len(), 1);
     Ok(block_outputs.pop().unwrap())
 }

@@ -83,7 +83,7 @@ pub fn new_ffm_block(
         model_instance::Optimizer::AdagradFlex => new_ffm_block_without_weights::<optimizer::OptimizerAdagradFlex>(&mi),
         model_instance::Optimizer::SGD => new_ffm_block_without_weights::<optimizer::OptimizerSGD>(&mi)
     }.unwrap();
-    let mut block_outputs = bg.add_node(block, vec![]);
+    let mut block_outputs = bg.add_node(block, vec![]).unwrap();
     assert_eq!(block_outputs.len(), 1);
     Ok(block_outputs.pop().unwrap())
 }

@@ -2,6 +2,9 @@
 use crate::regressor::BlockTrait;
 use crate::model_instance;
 use crate::port_buffer;
+use std::error::Error;
+use std::io::Error as IOError;
+use std::io::ErrorKind;
 use std::mem;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -76,10 +79,20 @@ impl BlockGraph {
     pub fn add_node(&mut self, 
                     mut block: Box<dyn BlockTrait>, 
                     edges_in: Vec<BlockPtrOutput>
-                    ) -> Vec<BlockPtrOutput> {
+                    ) -> Result<Vec<BlockPtrOutput>, Box<dyn Error>> {
+
+                
+        // Due to how CopyBlock works (zero-copy first ouptut), it's first output cannot go to a Join block since join block needs to control its inputs 
+        // TODO we could just insert TrueCopy block here...
+        if block.get_block_type() == BlockType::Join {
+            for edge_in in edges_in.iter() {
+                if self.blocks[edge_in.get_node_id()].get_block_type() == BlockType::Copy && edge_in.get_output_index() == 0 {
+                    return Err(Box::new(IOError::new(ErrorKind::Other, "First output of a CopyBlock can not go to a JoinBlock (reasons are complicited). Using second output is ok.")));
+                }                    
+            }
+        }
                     
         let num_output_connectors = block.get_num_output_slots();
-//        let num_input_connectors = block.get_num_input_tapes();
         let bp = BlockPtr(self.nodes.len());     // id of current node
         for (i, e) in edges_in.iter().enumerate() {
             let bi = InputSlot(i);
@@ -100,7 +113,7 @@ impl BlockGraph {
             vo.push(bo);
             self.nodes[bp.get_node_id()].edges_out.push(BLOCK_PTR_INPUT_DEFAULT); // make empty spaceg
         }
-        return vo;        
+        return Ok(vo);        
     }
     
     
@@ -143,7 +156,14 @@ impl BlockGraph {
     }
     
     pub fn take_blocks(&mut self) -> Vec<Box<dyn BlockTrait>> {
-        mem::take(&mut self.blocks)
+        let mut blocks : Vec<Box<dyn BlockTrait>> = Vec::new();
+        for block in mem::take(&mut self.blocks).into_iter() {
+            // Join Block is a no-op, so it doesn't need to be executed. This is a super small optimization.  
+            if block.get_block_type() != BlockType::Join {
+                blocks.push(block);
+            }
+        }
+        blocks 
     
     }
     
@@ -215,61 +235,6 @@ impl BlockGraph {
         }
         self.tape_size = offset;
         
-  //      println!("Nodes: {:?}", self.nodes);     
-        /*for i in 0..self.len() {
-            let num_output_connectors = self.blocks[i].get_num_output_slots();
-            for j in 0..num_output_connectors {
-                let bo = OutputSlot(j);
-                let output_len = self.blocks[i].get_num_output_values(bo);
-                println!("Block: {}, output: {:?},  output offset: {} ouptut_len: {}", i, bo, offset, output_len);
-                self.blocks[i].set_output_offset(bo, offset);
-                if self.nodes[i].edges_out[j].get_node_id() != usize::MAX {
-                    // you can have dangling outputs... why not
-                    self.blocks[self.nodes[i].edges_out[j].get_node_id()].set_input_offset(self.nodes[i].edges_out[j].get_input(), offset);
-                }
-                offset += output_len as usize;
-            }
-        }*/
-        
-        // we  need to figure out the order
-        // first find nodes with no inputs
-        /*let mut output_list: Vec<BlockPtr> = Vec::new();
-        let mut ready: Vec<BlockPtr> = Vec::new(); // we will use this as a list of ready nodes to choose from
-        let mut num_inputs_done: Vec<usize> = Vec::new();
-        for i in 0..self.len() {
-            if self.nodes[i].edges_in.len() == 0 {ready.push(BlockPtr(i))};
-            num_inputs_done.push(0);
-        }
-        
-        
-        let mut num_steps: u32 = 0;
-        let mut new_ready : Vec<BlockPtr> = Vec::new();
-            
-        while (ready.len() > 0) && (num_steps < 1000) {
-            num_steps += 1;
-            new_ready.truncate(0);
-            for bp in ready.iter() {
-                let current_node_id = bp.get_node_id();
-                output_list.push(*bp);
-                for x in self.nodes[bp.get_node_id()].edges_out.iter() {
-                    let out_node_id = x.get_node_id();
-                    num_inputs_done[out_node_id] += 1;
-                    if self.nodes[out_node_id].edges_in.len() == num_inputs_done[out_node_id] {
-                        new_ready.push(BlockPtr(out_node_id));
-                    }
-                }
-            }
-            swap(&mut new_ready, &mut ready)
-            
-        }
-        
-        println!("Outputs: {:?}", output_list);
-        if ready.len() > 0 && num_steps == 1000 {
-            panic!("Couldn't resolve the graph in 1000 steps");
-        }
-         
-        */
-                
     }
    
 }
@@ -413,7 +378,6 @@ mod tests {
         mi.ffm_bit_precision = 18;
         mi.ffm_fields = vec![vec![], vec![], vec![]]; // This isn't really used
         
-        // Nothing can be learned from a single field in FFMs
         mi.optimizer = Optimizer::AdagradLUT;
         let mut bg = BlockGraph::new();
         
@@ -422,8 +386,40 @@ mod tests {
         let joined = block_misc::new_join_block(&mut bg, vec![re_lr, re_ffm]).unwrap();
         let lossf = block_loss_functions::new_logloss_block(&mut bg, joined, true);
         let list = bg.schedule();
-        
     }
+
+    #[test]
+    fn schedule_fail_copy_to_join() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.learning_rate = 0.1;
+        mi.ffm_learning_rate = 0.1;
+        mi.power_t = 0.0;
+        mi.ffm_power_t = 0.0;
+        mi.bit_precision = 18;
+        mi.ffm_k = 1;
+        mi.ffm_bit_precision = 18;
+        mi.ffm_fields = vec![vec![], vec![], vec![]]; // This isn't really used
+        
+        mi.optimizer = Optimizer::AdagradLUT;
+        let mut bg = BlockGraph::new();
+        
+        let const_1 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
+        let mut copy_block = block_misc::new_copy_block(&mut bg, const_1).unwrap();
+        let copy_output_2 = copy_block.pop().unwrap();
+        let copy_output_1 = copy_block.pop().unwrap();
+        let const_2 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();       
+        let const_3 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();       
+        // This join works, since we are using copy_output_2
+        let joined1 = block_misc::new_join_block(&mut bg, vec![copy_output_2, const_2]).unwrap();
+        // This join fails, since we are using copy_output_1 which can never go to a join
+        let result = block_misc::new_join_block(&mut bg, vec![copy_output_1, const_3]);
+        assert!(result.is_err());
+        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"First output of a CopyBlock can not go to a JoinBlock (reasons are complicited). Using second output is ok.\" })");
+
+//        let lossf = block_loss_functions::new_logloss_block(&mut bg, joined, true);
+//        let list = bg.schedule();
+    }
+
 
     
     

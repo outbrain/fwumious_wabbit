@@ -51,7 +51,7 @@ pub fn new_logloss_block(  bg: &mut graph::BlockGraph,
                                 input_offset: usize::MAX,
                                 output_offset: usize::MAX,
                                 copy_to_result: copy_to_result});
-    let mut block_outputs = bg.add_node(block, vec![input]);
+    let mut block_outputs = bg.add_node(block, vec![input]).unwrap();
     assert_eq!(block_outputs.len(), 1);
     Ok(block_outputs.pop().unwrap())
 

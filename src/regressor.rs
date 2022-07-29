@@ -174,7 +174,11 @@ impl Regressor  {
         bg.schedule();
 //        bg.println();
         rg.tape_len = bg.get_tape_size();
-        rg.blocks_boxes = bg.take_blocks();
+        
+        //rg.blocks_boxes = bg.take_blocks();
+        for (i, block) in bg.blocks.into_iter().enumerate() {
+            rg.blocks_boxes.push(block);
+        }
         
         rg
     }

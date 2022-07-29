@@ -115,7 +115,7 @@ pub fn new_neuronlayer_block(
         model_instance::Optimizer::SGD => new_neuronlayer_without_weights::<optimizer::OptimizerSGD>(&mi, num_inputs, ntype, num_neurons, init_type, dropout, max_norm)
     }.unwrap();
 
-    let mut block_outputs = bg.add_node(block, vec![input]);
+    let mut block_outputs = bg.add_node(block, vec![input]).unwrap();
     assert_eq!(block_outputs.len(), 1);
     Ok(block_outputs.pop().unwrap())
 }
