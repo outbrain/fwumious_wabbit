@@ -562,7 +562,8 @@ impl BlockTrait for BlockSum {
 // From a square only keep weights that are on the lower left triangle + diagonal
 // Why is this useful?
 // Because in FFM you get a square matrix of outputs, but it is symetrical across the diagonal
-// This means that when you bring FFM to the first neural layer, you have double parameters needlessly
+// This means that when you bring FFM to the first neural layer, you have double parameters needlessly -slowing things down
+// It would be possible to modify BlockFFM output, but that is excessively complex to do.
 
 pub struct BlockTriangle {    
     pub square_width: usize,
@@ -629,9 +630,6 @@ impl BlockTrait for BlockTriangle
         self
     }
 
-    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
-    }
-
     fn get_num_output_slots(&self) -> usize {1}
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
@@ -648,10 +646,6 @@ impl BlockTrait for BlockTriangle
         assert!(output.get_output_index() == 0);
         self.output_offset = offset;
     }
-
-
-
-
 
 
     #[inline(always)]
@@ -686,7 +680,7 @@ impl BlockTrait for BlockTriangle
                     output_index += 1;
                 }
             }
-            //pb.tapes[self.output_tape_index as usize].extend_from_slice(pb.tapes.get_unchecked(self.input_tape_index as usize).get_unchecked(input_tape_start .. input_tape_start + self.num_inputs as usize));
+
             if further_blocks.len() > 0 {
                 let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
                 next_regressor[0].forward_backward(further_blocks, fb, pb, update);
@@ -713,10 +707,26 @@ impl BlockTrait for BlockTriangle
                         fb: &feature_buffer::FeatureBuffer, 
                         pb: &mut port_buffer::PortBuffer, 
                         ) {
-            // plain copy from input to output
-            pb.tape.copy_within(self.input_offset .. (self.input_offset + self.num_inputs), self.output_offset);
-                        
-            //pb.tapes[self.output_tape_index as usize].extend_from_slice(pb.tapes.get_unchecked(self.input_tape_index as usize).get_unchecked(input_tape_start .. input_tape_start + self.num_inputs as usize));
+           unsafe {
+                let (input_tape, output_tape) = borrow_two(&mut pb.tape, 
+                                                            self.input_offset, self.num_inputs,
+                                                            self.output_offset, self.num_outputs); 
+      
+      
+                let mut output_index: usize = 0;
+                for i in 0..self.square_width {
+//                    println!("AAAAA i: {}", i);
+                    for j in 0..i {
+//                        let input = input_tape.get_unchecked(i * self.square_width + j);
+ //                       println!("Output index: i: {}, j: {}, A: {}, B: {}", i, j, input_tape[i * self.square_width + j], input_tape[j * self.square_width + i]);
+                        *output_tape.get_unchecked_mut(output_index) = *input_tape.get_unchecked(i * self.square_width + j) * 2.0;
+                        output_index += 1;
+                    }
+                    *output_tape.get_unchecked_mut(output_index) = *input_tape.get_unchecked(i * self.square_width + i);
+                    output_index += 1;
+                }
+            }
+
             if further_blocks.len() > 0 {
                 let (next_regressor, further_blocks) = further_blocks.split_at(1);
                 next_regressor[0].forward(further_blocks, fb, pb);
