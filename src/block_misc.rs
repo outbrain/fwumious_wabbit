@@ -560,6 +560,10 @@ impl BlockTrait for BlockSum {
 
 
 // From a square only keep weights that are on the lower left triangle + diagonal
+// Why is this useful?
+// Because in FFM you get a square matrix of outputs, but it is symetrical across the diagonal
+// This means that when you bring FFM to the first neural layer, you have double parameters needlessly
+
 pub struct BlockTriangle {    
     pub square_width: usize,
     pub num_inputs: usize,
@@ -662,8 +666,8 @@ impl BlockTrait for BlockTriangle
         
         unsafe {
             {
-//            let input_tape = pb.tape.get_unchecked(self.input_offset..(self.input_offset + self.num_inputs as usize));
-//            let output_tape = pb.tape.get_unchecked_mut(self.output_offset..(self.output_offset + self.num_outputs as usize));
+//              let input_tape = pb.tape.get_unchecked(self.input_offset..(self.input_offset + self.num_inputs as usize));
+//              let output_tape = pb.tape.get_unchecked_mut(self.output_offset..(self.output_offset + self.num_outputs as usize));
                 let (input_tape, output_tape) = borrow_two(&mut pb.tape, 
                                                             self.input_offset, self.num_inputs,
                                                             self.output_offset, self.num_outputs); 
@@ -672,15 +676,16 @@ impl BlockTrait for BlockTriangle
                 let mut output_index: usize = 0;
                 for i in 0..self.square_width {
 //                    println!("AAAAA i: {}", i);
-                    for j in 0..i+1 {
-                        let input = input_tape[i * self.square_width + j];
-  //                      println!("Output index: {}, i: {}, j: {}, square_width: {}", output_index, i, j, self.square_width);
-                        output_tape[output_index] = input_tape[i * self.square_width + j];
+                    for j in 0..i {
+//                        let input = input_tape.get_unchecked(i * self.square_width + j);
+ //                       println!("Output index: i: {}, j: {}, A: {}, B: {}", i, j, input_tape[i * self.square_width + j], input_tape[j * self.square_width + i]);
+                        *output_tape.get_unchecked_mut(output_index) = *input_tape.get_unchecked(i * self.square_width + j) * 2.0;
                         output_index += 1;
                     }
+                    *output_tape.get_unchecked_mut(output_index) = *input_tape.get_unchecked(i * self.square_width + i);
+                    output_index += 1;
                 }
             }
-            
             //pb.tapes[self.output_tape_index as usize].extend_from_slice(pb.tapes.get_unchecked(self.input_tape_index as usize).get_unchecked(input_tape_start .. input_tape_start + self.num_inputs as usize));
             if further_blocks.len() > 0 {
                 let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
@@ -694,8 +699,8 @@ impl BlockTrait for BlockTriangle
                 let mut output_index: usize = 0;
                 for i in 0..self.square_width {
                     for j in 0..i+1 {
-                        input_tape[i * self.square_width + j] = output_tape[output_index];
-                        input_tape[j * self.square_width + i] = output_tape[output_index];
+                        *input_tape.get_unchecked_mut(i * self.square_width + j) = *output_tape.get_unchecked(output_index);
+                        *input_tape.get_unchecked_mut(j * self.square_width + i) = *output_tape.get_unchecked(output_index);
                         output_index += 1;
                     }
                 }
@@ -783,7 +788,7 @@ mod tests {
         
        
         let mut bg = BlockGraph::new();
-        let input_block = block_misc::new_const_block(&mut bg, vec![2.0, 3.0, 4.0, 5.0]).unwrap();
+        let input_block = block_misc::new_const_block(&mut bg, vec![2.0, 4.0, 4.0, 5.0]).unwrap();
         let observe_block_backward = block_misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
         let triangle_block = new_triangle_block(&mut bg, observe_block_backward).unwrap();
         let observe_block_forward = block_misc::new_observe_block(&mut bg, triangle_block, Observe::Forward, None).unwrap();
@@ -793,8 +798,8 @@ mod tests {
         let mut pb = bg.new_port_buffer();
         let fb = fb_vec();
         slearn2  (&mut bg, &fb, &mut pb, true);
-        assert_eq!(pb.observations, vec![2.0, 4.0, 5.0,			// forward part
-                                         2.0, 4.0, 4.0, 5.0]);		// backward part -- 3.0 gets turned into 4.0 since that is its transpose
+        assert_eq!(pb.observations, vec![2.0, 8.0, 5.0,			// forward part
+                                         2.0, 8.0, 8.0, 5.0]);		// backward part -- 3.0 gets turned into 4.0 since that is its transpose
         
 
     }

@@ -96,7 +96,10 @@ impl Regressor  {
 
         if mi.ffm_k > 0 {
             let mut block_ffm = block_ffm::new_ffm_block(&mut bg, mi).unwrap();
-            output = block_misc::new_join_block(&mut bg, vec![output, block_ffm]).unwrap();
+            let mut triangle_ffm = block_misc::new_triangle_block(&mut bg, block_ffm).unwrap();
+            output = block_misc::new_join_block(&mut bg, vec![output, triangle_ffm]).unwrap();
+            
+            //output = block_misc::new_join_block(&mut bg, vec![output, block_ffm]).unwrap();
         }
 
 
@@ -137,7 +140,7 @@ impl Regressor  {
                     "hu" => InitType::Hu,
                     "one" => InitType::One,
                     "zero" => InitType::Zero,
-                    _ => Err(format!("unknown nn activation type: \"{}\"", init_type_str)).unwrap()
+                    _ => Err(format!("unknown nn initialization type: \"{}\"", init_type_str)).unwrap()
                 };
                 let neuron_type = block_neural::NeuronType::WeightedSum;
                 println!("Neuron layer: width: {}, neuron type: {:?}, dropout: {}, maxnorm: {}, init_type: {:?}",
