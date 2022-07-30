@@ -265,7 +265,7 @@ mod tests {
 
         // Let's add one result block 
         let output_node = block_misc::new_observe_block(&mut bg, const_block_output, Observe::Forward, Some(1.0)).unwrap();
-        assert_eq!(output_node, ());
+//        assert_eq!(output_node, ());
 //        println!("Output nodes: {:?}", output_nodes);
         //println!("Block 0: edges_in: {:?}, edges_out: {:?}", bg.edges_in[0], bg.edges_out[0]);
         assert_eq!(bg.nodes[0].edges_in, vec![]);      // basically []
@@ -292,7 +292,7 @@ mod tests {
         
         // Let's add one result block 
         let output_node = block_misc::new_observe_block(&mut bg, c1, Observe::Forward, Some(1.0)).unwrap();
-        assert_eq!(output_node, ());
+//        assert_eq!(output_node, ());
 //        println!("Output nodes: {:?}", output_nodes);
         //println!("Block 0: edges_in: {:?}, edges_out: {:?}", bg.edges_in[0], bg.edges_out[0]);
         assert_eq!(bg.nodes[0].edges_in.len(), 0);      
@@ -301,7 +301,7 @@ mod tests {
         // Let's add second result block to see what happens
 
         let output_node = block_misc::new_observe_block(&mut bg, c2, Observe::Forward, Some(1.0)).unwrap();
-        assert_eq!(output_node, ());
+//        assert_eq!(output_node, ());
         assert_eq!(bg.nodes[0].edges_in, vec![]);      
         assert_eq!(bg.nodes[0].edges_out, vec![BlockPtrInput(BlockPtr(1), InputSlot(0))]);
         // copy block
@@ -351,7 +351,7 @@ mod tests {
         
         let const_block_output = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
         let output_node = block_misc::new_observe_block(&mut bg, const_block_output, Observe::Forward, Some(1.0)).unwrap();
-        assert_eq!(output_node, ());
+//        assert_eq!(output_node, ());
         let list = bg.schedule();
         assert_eq!(bg.tape_size, 1);
         

@@ -191,8 +191,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
         }
         
         
-//      
-        
+        // Bias terms are always initialized to zero      
         for i in 0..self.num_neurons {
             self.weights[(self.num_neurons * self.num_inputs + i) as usize].weight = 0.0
         }
@@ -254,8 +253,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
             next_regressor[0].forward_backward(further_blocks, fb, pb, update);
 
             if update {
-            {
-            
                 if self.neuron_type == NeuronType::WeightedSum {
                     //let mut myslice = &mut pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..];
                     // first we need to initialize inputs to zero
@@ -304,7 +301,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                             }
                             
                         }
-                     }
+                    }
                      
                     for i in 0..self.num_inputs as usize {
                         *pb.tape.get_unchecked_mut(self.input_offset + i) = *output_errors.get_unchecked(i);
@@ -312,11 +309,10 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
 
 
                 
-                }
 
-            }
+                }
             
-        }
+            }
             
         } // unsafe end
     }

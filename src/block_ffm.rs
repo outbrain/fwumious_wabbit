@@ -235,6 +235,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                 }                                
                                 continue;
                             } 
+
                             let mut feature_num = 0;
                             while ffm_buffer_index < fb.ffm_buffer.len() && fb.ffm_buffer.get_unchecked(ffm_buffer_index).contra_field_index == field_index_ffmk {
                                 _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(ffm_buffer_index+1).hash as usize).weight), _MM_HINT_T0);

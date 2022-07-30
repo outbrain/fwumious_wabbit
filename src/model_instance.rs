@@ -216,7 +216,7 @@ impl ModelInstance {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("--nn parameters have to be of form layer:parameter_name:parameter_value: {}", s))));
         }
         let layer_number: usize = vsplit[0].parse().expect(&format!("--nn can not parse the layer number: {}", vsplit[0]));
-        if layer_number > self.nn_config.layers.len() {
+        if layer_number >= self.nn_config.layers.len() {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("--nn parameter addressing layer {}, but we have only {} layers", layer_number, self.nn_config.layers.len()))));
         }	
         self.nn_config.layers[layer_number].insert(vsplit[1].to_string(), vsplit[2].to_string());
