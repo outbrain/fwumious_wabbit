@@ -1,6 +1,8 @@
 use std::error::Error;
 use crate::optimizer::OptimizerTrait;
 use std::io;
+use std::io::{Read, Seek, SeekFrom};
+
 use std::slice;
 use std::mem::{self, MaybeUninit};
 use std::cmp::min;
@@ -20,17 +22,17 @@ pub struct Weight {
 
 #[derive(Clone, Debug)]
 #[repr(C)]
+pub struct OptimizerData<L:OptimizerTrait> {
+    pub optimizer_data: L::PerWeightStore,
+}
+
+#[derive(Clone, Debug)]
+#[repr(C)]
 pub struct WeightAndOptimizerData<L:OptimizerTrait> {
     pub weight: f32, 
     pub optimizer_data: L::PerWeightStore,
 }
 
-/*#[macro_export]
-macro_rules! assert_epsilon {
-    ($x:expr, $y:expr) => {
-        if !($x - $y < 0.0000001 || $y - $x < 0.0000001) { panic!(); }
-    }
-}*/
 
 #[macro_export]
 macro_rules! assert_epsilon {
@@ -45,27 +47,43 @@ macro_rules! assert_epsilon {
 
 
 // It's OK! I am a limo driver!
-pub fn read_weights_from_buf<L:OptimizerTrait>(weights: &mut Vec<WeightAndOptimizerData<L>>, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
+pub fn read_weights_from_buf<L>(weights: &mut Vec<L>, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
     if weights.len() == 0 {
         return Err(format!("Loading weights to unallocated weighs buffer"))?;
     }
     unsafe {
         let mut buf_view:&mut [u8] = slice::from_raw_parts_mut(weights.as_mut_ptr() as *mut u8, 
-                                         weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
+                                         weights.len() *mem::size_of::<L>());
         input_bufreader.read_exact(&mut buf_view)?;
     }
     Ok(())
 }
 
+trait NewTrait: std::io::Read + std::io::Seek {}
 
-pub fn write_weights_to_buf<L:OptimizerTrait>(weights: &Vec<WeightAndOptimizerData<L>>, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
+// We get a vec here just so we easily know the type...
+// Skip amount of bytes that a weights vector would be
+pub fn skip_weights_from_buf<L>(weights_len: usize, weights: &Vec<L>, input_bufreader: &mut dyn Read) -> Result<(), Box<dyn Error>> {
+    let bytes_skip = weights_len *mem::size_of::<L>();
+//    input_bufreader.seek(io::SeekFrom::Current(bytes_skip as i64))?;
+
+    io::copy(&mut input_bufreader.take(bytes_skip as u64), &mut io::sink());
+
+    Ok(())
+}
+
+
+
+
+
+pub fn write_weights_to_buf<L>(weights: &Vec<L>, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
     if weights.len() == 0 {
         assert!(false);
         return Err(format!("Writing weights of unallocated weights buffer"))?;
     }
     unsafe {
          let buf_view:&[u8] = slice::from_raw_parts(weights.as_ptr() as *const u8, 
-                                          weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
+                                          weights.len() *mem::size_of::<L>());
          output_bufwriter.write_all(buf_view)?;
     }
     Ok(())
@@ -98,6 +116,29 @@ pub fn read_weights_only_from_buf2<L:OptimizerTrait>(weights_len: usize, out_wei
     }    
     Ok(())
 }
+
+
+pub fn get_input_output_borrows(i: &mut Vec<f32>, 
+                  start1: usize, len1: usize, 
+                  start2: usize, len2: usize) -> (&mut [f32], &mut [f32]) {
+    debug_assert!((start1 >= start2+len2) || (start2 >= start1+len1), "start1: {}, len1: {}, start2: {}, len2 {}", start1, len1, start2, len2);    
+    unsafe {
+        if start2 > start1 {
+            let (rest, second) = i.split_at_mut(start2);
+            let (rest, first) = rest.split_at_mut(start1);
+            return (first.get_unchecked_mut(0..len1), second.get_unchecked_mut(0..len2))
+    //        return (&mut first[0..len1], &mut second[0..len2]);
+        } else {
+            let (rest, first) = i.split_at_mut(start1);
+            let (rest, second) = rest.split_at_mut(start2);
+            return (first.get_unchecked_mut(0..len1), second.get_unchecked_mut(0..len2))
+    //        return (&mut first[0..len1], &mut second[0..len2]);
+        
+        }
+    }
+    
+} 
+
 
 
 pub fn slearn2<'a>(bg: &mut graph::BlockGraph,

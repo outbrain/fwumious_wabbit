@@ -313,9 +313,9 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         wsum *= 0.5;*/
                     });
                         
-                    let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
-                    //pb.tapes[self.output_tape_index as usize].push(wsum);
-                    next_regressor[0].forward_backward(further_blocks, fb, pb, update);
+                  let (next_regressor, further_blocks) = further_blocks.split_first_mut().unwrap();
+                  next_regressor.forward_backward(further_blocks, fb, pb, update);
+
 //                    let general_gradient = pb.tapes[self.output_tape_index as usize].pop().unwrap();
                     
                     if update {

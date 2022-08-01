@@ -7,6 +7,7 @@ use crate::feature_buffer;
 use crate::port_buffer;
 use crate::model_instance;
 use crate::graph;
+use crate::block_helpers;
 
 use regressor::BlockTrait;
 
@@ -94,8 +95,8 @@ impl BlockTrait for BlockObserve {
         }
 
         if further_blocks.len() > 0 {
-            let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
-            next_regressor[0].forward_backward(further_blocks, fb, pb, update);
+            let (next_regressor, further_blocks) = further_blocks.split_first_mut().unwrap();
+            next_regressor.forward_backward(further_blocks, fb, pb, update);
         }
         
         if self.observe == Observe::Backward {
@@ -206,8 +207,8 @@ impl BlockTrait for BlockConsts {
         pb.tape[self.output_offset..(self.output_offset + self.consts.len())].copy_from_slice(&self.consts);
 
         if further_blocks.len() > 0 {
-            let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
-            next_regressor[0].forward_backward(further_blocks, fb, pb, update);
+            let (next_regressor, further_blocks) = further_blocks.split_first_mut().unwrap();
+            next_regressor.forward_backward(further_blocks, fb, pb, update);
         }
     }
 
@@ -318,8 +319,8 @@ impl BlockTrait for BlockCopy
                         
             //pb.tapes[self.output_tape_index as usize].extend_from_slice(pb.tapes.get_unchecked(self.input_tape_index as usize).get_unchecked(input_tape_start .. input_tape_start + self.num_inputs as usize));
             if further_blocks.len() > 0 {
-                let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
-                next_regressor[0].forward_backward(further_blocks, fb, pb, update);
+                let (next_regressor, further_blocks) = further_blocks.split_first_mut().unwrap();
+                next_regressor.forward_backward(further_blocks, fb, pb, update);
             }
             if update {
                 // Sum up the gradients from output to input
@@ -425,8 +426,8 @@ impl BlockTrait for BlockJoin {
         debug_assert!(self.num_inputs > 0);
         
         if further_blocks.len() > 0 {
-            let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
-            next_regressor[0].forward_backward(further_blocks, fb, pb, update);
+            let (next_regressor, further_blocks) = further_blocks.split_first_mut().unwrap();
+            next_regressor.forward_backward(further_blocks, fb, pb, update);
         }
     }
     
@@ -515,17 +516,19 @@ impl BlockTrait for BlockSum {
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.input_offset != usize::MAX);
         
-        let wsum:f32 = pb.tape[self.input_offset .. (self.input_offset + self.num_inputs as usize)].iter().sum();
-        pb.tape[self.output_offset as usize] = wsum;
-        
-        if further_blocks.len() > 0 {
-            let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
-            next_regressor[0].forward_backward(further_blocks, fb, pb, update);
-        }
+        unsafe {
+            let wsum:f32 = pb.tape.get_unchecked_mut(self.input_offset .. (self.input_offset + self.num_inputs as usize)).iter().sum();
+            pb.tape[self.output_offset as usize] = wsum;
+            
+            if further_blocks.len() > 0 {
+                let (next_regressor, further_blocks) = further_blocks.split_first_mut().unwrap();
+                next_regressor.forward_backward(further_blocks, fb, pb, update);
+            }
 
-        let general_gradient = pb.tape[self.output_offset];
-        if update {
-            pb.tape[self.input_offset .. (self.input_offset + self.num_inputs as usize)].fill(general_gradient);
+            let general_gradient = pb.tape[self.output_offset];
+            if update {
+                pb.tape.get_unchecked_mut(self.input_offset .. (self.input_offset + self.num_inputs as usize)).fill(general_gradient);
+            }
         } // unsafe end
     }
     
@@ -599,27 +602,6 @@ pub fn new_triangle_block(bg: &mut graph::BlockGraph,
 }
 
 
-pub fn borrow_two(i: &mut Vec<f32>, 
-                  start1: usize, len1: usize, 
-                  start2: usize, len2: usize) -> (&mut [f32], &mut [f32]) {
-    debug_assert!((start1 >= start2+len2) || (start2 >= start1+len1), "start1: {}, len1: {}, start2: {}, len2 {}", start1, len1, start2, len2);
-    
-    unsafe {
-    if start2 > start1 {
-        let (rest, second) = i.split_at_mut(start2);
-        let (rest, first) = rest.split_at_mut(start1);
-        return (first.get_unchecked_mut(0..len1), second.get_unchecked_mut(0..len2))
-//        return (&mut first[0..len1], &mut second[0..len2]);
-    } else {
-        let (rest, first) = i.split_at_mut(start1);
-        let (rest, second) = rest.split_at_mut(start2);
-        return (first.get_unchecked_mut(0..len1), second.get_unchecked_mut(0..len2))
-//        return (&mut first[0..len1], &mut second[0..len2]);
-    
-    }
-    }
-    
-} 
 
 
 
@@ -662,7 +644,7 @@ impl BlockTrait for BlockTriangle
             {
 //              let input_tape = pb.tape.get_unchecked(self.input_offset..(self.input_offset + self.num_inputs as usize));
 //              let output_tape = pb.tape.get_unchecked_mut(self.output_offset..(self.output_offset + self.num_outputs as usize));
-                let (input_tape, output_tape) = borrow_two(&mut pb.tape, 
+                let (input_tape, output_tape) = block_helpers::get_input_output_borrows(&mut pb.tape, 
                                                             self.input_offset, self.num_inputs,
                                                             self.output_offset, self.num_outputs); 
       
@@ -686,7 +668,7 @@ impl BlockTrait for BlockTriangle
                 next_regressor[0].forward_backward(further_blocks, fb, pb, update);
             }
             if update {
-                let (input_tape, output_tape) = borrow_two(&mut pb.tape, 
+                let (input_tape, output_tape) = block_helpers::get_input_output_borrows(&mut pb.tape, 
                                                             self.input_offset, self.num_inputs,
                                                             self.output_offset, self.num_outputs); 
 
@@ -708,7 +690,7 @@ impl BlockTrait for BlockTriangle
                         pb: &mut port_buffer::PortBuffer, 
                         ) {
            unsafe {
-                let (input_tape, output_tape) = borrow_two(&mut pb.tape, 
+                let (input_tape, output_tape) = block_helpers::get_input_output_borrows(&mut pb.tape, 
                                                             self.input_offset, self.num_inputs,
                                                             self.output_offset, self.num_outputs); 
       

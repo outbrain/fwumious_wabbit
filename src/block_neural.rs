@@ -23,8 +23,9 @@ use crate::graph;
 use crate::block_misc;
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
-use block_helpers::{Weight, WeightAndOptimizerData};
+use block_helpers::{Weight, WeightAndOptimizerData, OptimizerData};
 
+use blas::*;
 
 const MAX_NUM_INPUTS:usize= 16000;
 
@@ -51,8 +52,11 @@ pub struct BlockNeuronLayer<L:OptimizerTrait> {
     pub num_inputs: usize,
     pub input_offset: usize,
     pub output_offset: usize,
-    pub weights_len: u32, 
-    pub weights: Vec<WeightAndOptimizerData<L>>,
+    pub weights_len: u32,
+    // While FFM part keeps weight and accumulation together (since memory locality is the issue)
+    // for NN part it is actually preferrable to have it separately 
+    pub weights: Vec<Weight>,
+    pub weights_optimizer: Vec<OptimizerData<L>>,
     pub optimizer: L,
     pub neuron_type: NeuronType,
     pub num_neurons: usize,
@@ -82,6 +86,7 @@ fn new_neuronlayer_without_weights<L:OptimizerTrait + 'static>(mi: &model_instan
 
     let mut rg = BlockNeuronLayer::<L> {
         weights: Vec::new(),
+        weights_optimizer: Vec::new(),
         output_offset: usize::MAX,
         input_offset: usize::MAX,
         num_inputs: num_inputs,
@@ -163,7 +168,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
         debug_assert!(self.input_offset != usize::MAX);
 
         assert!(self.weights_len != 0, "allocate_and_init_weights(): Have you forgotten to call set_num_inputs()?");
-        self.weights =vec![WeightAndOptimizerData::<L>{weight:1.0, optimizer_data: self.optimizer.initial_data()}; self.weights_len as usize];
+        self.weights =           vec![Weight{weight:1.0}; self.weights_len as usize];
+        self.weights_optimizer = vec![OptimizerData::<L>{optimizer_data: self.optimizer.initial_data()}; self.weights_len as usize];
 
         // We need to seed each layer with a separate seed... how?
         // by the time we call this function input_offset and output_offset are set and are unique. L
@@ -231,24 +237,44 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
         debug_assert!(self.input_offset != usize::MAX);
         
         unsafe {
+            let bias_offset = self.num_inputs * self.num_neurons;
 
 //          println!("len: {}, num inputs: {}, input_tape_indeX: {}", len, self.num_inputs, self.input_tape_index);
-            let frandseed = fb.example_number * fb.example_number;
-            let bias_offset = self.num_inputs * self.num_neurons;
-            let mut j_offset:u32 = 0;
-            for j in 0..self.num_neurons {
-                let mut wsum:f32 = 0.0;
-                if self.dropout == 0.0 || merand48(j as u64 + frandseed) > self.dropout {
-                    wsum = self.weights.get_unchecked((bias_offset + j) as usize).weight; // bias term
-                    let input_tape = pb.tape.get_unchecked(self.input_offset..(self.input_offset + self.num_inputs as usize));
-                    for i in 0..self.num_inputs {                                 
-                        wsum += input_tape.get_unchecked(i as usize) * self.weights.get_unchecked(i + j_offset as usize).weight;
+            {
+                let (input_tape, output_tape) = block_helpers::get_input_output_borrows(&mut pb.tape, 
+                                                            self.input_offset, self.num_inputs,
+                                                            self.output_offset, self.num_neurons); 
+      
+                if false {
+                    let mut j_offset:usize = 0;
+                    for j in 0..self.num_neurons {
+                        let mut wsum:f32 = self.weights.get_unchecked(bias_offset + j).weight; // bias term
+                        if true {
+                            for i in 0..self.num_inputs {                                 
+                                wsum += input_tape.get_unchecked(i) * self.weights.get_unchecked(i + j_offset as usize).weight;
+                            }
+                        }
+                        j_offset += self.num_inputs;
+                        *output_tape.get_unchecked_mut(j) = wsum;
                     }
+                } else {
+                // This is actually speed things up considerably. 
+                    output_tape.copy_from_slice(std::mem::transmute::<&[Weight], &[f32]>(self.weights.get_unchecked(bias_offset..)));
+                    sgemv(
+                         b'T',//   trans: u8, 
+                         self.num_inputs as i32, //   m: i32, 
+                         self.num_neurons as i32, //   n: i32, 
+                         1.0, //   alpha: f32, 
+                         std::mem::transmute::<&[Weight], &[f32]>(self.weights.get_unchecked(0..)), //  a: &[f32], 
+                         self.num_inputs  as i32,   //lda: i32, 
+                         &input_tape.get_unchecked(0..),//   x: &[f32], 
+                            1, //incx: i32, 
+                            1.0, // beta: f32, 
+                            output_tape.get_unchecked_mut(0..), //y: &mut [f32], 
+                            1,//incy: i32
+                        )
                 }
-                j_offset += self.num_inputs as u32;
-                if !update {wsum *= self.dropout_1;} // fix for overexcitment if we are just predicting and not learning
-                *pb.tape.get_unchecked_mut(self.output_offset + j as usize) = wsum;
-            }
+             }       
             let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
             next_regressor[0].forward_backward(further_blocks, fb, pb, update);
 
@@ -260,11 +286,11 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                     let mut output_errors: [f32; MAX_NUM_INPUTS] = MaybeUninit::uninit().assume_init();
                     output_errors.get_unchecked_mut(0..self.num_inputs).fill(0.0);
 
-                    let output_tape = pb.tape.get_unchecked(self.output_offset..(self.output_offset + self.num_neurons as usize));
-                    let input_tape = pb.tape.get_unchecked(self.input_offset..(self.input_offset + self.num_inputs as usize));
+                    let (input_tape, output_tape) = block_helpers::get_input_output_borrows(&mut pb.tape,
+                                                                                self.input_offset, self.num_inputs,
+                                                                                self.output_offset, self.num_neurons); 
                     
                     for j in 0..self.num_neurons as usize {
-                        if self.dropout == 0.0 || merand48(j as u64 + frandseed) > self.dropout {
 
                             let general_gradient = output_tape.get_unchecked(j);
                             let j_offset = j * self.num_inputs as usize;
@@ -272,7 +298,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                                 let feature_value = input_tape.get_unchecked(i);
                                 let gradient = general_gradient * feature_value;
                                 let update = self.optimizer.calculate_update(gradient, 
-                                                                        &mut self.weights.get_unchecked_mut(i + j_offset).optimizer_data);
+                                                                        &mut self.weights_optimizer.get_unchecked_mut(i + j_offset).optimizer_data);
                                 *output_errors.get_unchecked_mut(i)  += self.weights.get_unchecked(i + j_offset).weight * general_gradient;
                                 self.weights.get_unchecked_mut(i + j_offset).weight -= update;
                             }
@@ -280,34 +306,12 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                                 // Updating bias term:
                                 let gradient = general_gradient * 1.0;
                                 let update = self.optimizer.calculate_update(gradient, 
-                                                                            &mut self.weights.get_unchecked_mut(((self.num_inputs* self.num_neurons) as usize + j) as usize).optimizer_data);
-                                self.weights.get_unchecked_mut(((self.num_inputs * self.num_neurons) as usize + j) as usize).weight -= update;
+                                                                            &mut self.weights_optimizer.get_unchecked_mut((bias_offset + j) as usize).optimizer_data);
+                                self.weights.get_unchecked_mut((bias_offset + j) as usize).weight -= update;
                             }
-                            
-                            
-                            if self.max_norm != 0.0 && fb.example_number % 10 == 0 {
-                                let mut wsumsquared = 0.0;
-                                for i in 0..self.num_inputs as usize {
-                                    let w = self.weights.get_unchecked_mut(i + j_offset).weight;
-                                    wsumsquared += w * w;
-                                }
-                                let norm = wsumsquared.sqrt();
-                                if norm > self.max_norm {
-                                    let scaling = self.max_norm / norm;
-                                    for i in 0..self.num_inputs as usize {
-                                        self.weights.get_unchecked_mut(i + j_offset).weight *= scaling;
-                                    }
-                                } 
-                            }
-                            
-                        }
                     }
                      
-                    for i in 0..self.num_inputs as usize {
-                        *pb.tape.get_unchecked_mut(self.input_offset + i) = *output_errors.get_unchecked(i);
-                    }
-
-
+                    input_tape.copy_from_slice(output_errors.get_unchecked(0..self.num_inputs));
                 
 
                 }
@@ -352,24 +356,31 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
     fn get_serialized_len(&self) -> usize {
         return self.weights_len as usize;
     }
-
+    
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
-        block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader)
+        block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader)?;
+        block_helpers::read_weights_from_buf(&mut self.weights_optimizer, input_bufreader)?;
+        Ok(())
     }
 
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
-        block_helpers::write_weights_to_buf(&self.weights, output_bufwriter)
+        block_helpers::write_weights_to_buf(&self.weights, output_bufwriter)?;
+        block_helpers::write_weights_to_buf(&self.weights_optimizer, output_bufwriter)?;
+        Ok(())
+
     }
 
     fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>> {
         let mut forward = forward.as_any().downcast_mut::<BlockNeuronLayer<optimizer::OptimizerSGD>>().unwrap();
-        block_helpers::read_weights_only_from_buf2::<L>(self.weights_len as usize, &mut forward.weights, input_bufreader)
+        block_helpers::read_weights_from_buf(&mut forward.weights, input_bufreader)?;
+        block_helpers::skip_weights_from_buf(self.weights_len as usize, &forward.weights, input_bufreader)?;
+        Ok(())
     }
 
     /// Sets internal state of weights based on some completely object-dependent parameters
     fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {
         self.weights[index].weight = w[0];
-        self.weights[index].optimizer_data = self.optimizer.initial_data();
+        self.weights_optimizer[index].optimizer_data = self.optimizer.initial_data();
         Ok(())
     }
 }
@@ -502,8 +513,34 @@ mod tests {
         assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 1.5);
     }
 
+/*    #[test]
+    fn test_segm() {
+        unsafe {
+        let input_matrix:Vec<f32> = vec![1.0, 2.0, 
+                                         3.0, 4.0, 
+                                         5.0, 6.0];
+        let input_vec: Vec<f32> = vec![2.0, 1.0];
+        let mut output_vec : Vec<f32> = vec![0.0, 0.0, 0.0];
+        
+                    sgemv(
+                     b'T',//   trans: u8, 
+                     2, //   m: i32,          // num_neurons
+                     3, //   n: i32, 	      // num inputs
+                     1.0, //   alpha: f32, 
+                     &input_matrix, //  a: &[f32], 
+                     2,   //lda: i32, 
+                     &input_vec,//   x: &[f32], 
+                        1, //incx: i32, 
+                        1.0, // beta: f32, 
+                        &mut output_vec, //y: &mut [f32], 
+                        1,//incy: i32
+                    );
 
+    println!("Output : {:?}", output_vec); 
 
+    }
+    }
+*/
 }
 
 

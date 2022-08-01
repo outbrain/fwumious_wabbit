@@ -95,7 +95,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
 
     #[inline(always)]
     fn forward_backward(&mut self, 
-                            further_regressors: &mut [Box<dyn BlockTrait>], 
+                            further_blocks: &mut [Box<dyn BlockTrait>], 
                             fb: &feature_buffer::FeatureBuffer, 
                             pb: &mut port_buffer::PortBuffer,                             
                             update:bool) {
@@ -118,11 +118,10 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
                     *myslice.get_unchecked_mut(combo_index as usize) += feature_weight * feature_value;
                 }
             }
-            let (next_regressor, further_regressors) = further_regressors.split_at_mut(1);
-//            println!("Pushing feature value: {}", wsum);
-            next_regressor[0].forward_backward(further_regressors, fb, pb, update);
-//            let general_gradient = pb.tapes[self.output_tape_index as usize].pop().unwrap();
-
+            if further_blocks.len() > 0 {
+                let (next_regressor, further_blocks) = further_blocks.split_first_mut().unwrap();
+                next_regressor.forward_backward(further_blocks, fb, pb, update);
+            }
             if update {
                 let myslice = &mut pb.tape[self.output_offset .. (self.output_offset + self.num_combos as usize)];
 
@@ -173,7 +172,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
 
     fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
         block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader)
-    }
+   }
 
     fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
         block_helpers::write_weights_to_buf(&self.weights, output_bufwriter)
@@ -183,6 +182,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
         let mut forward = forward.as_any().downcast_mut::<BlockLR<optimizer::OptimizerSGD>>().unwrap();
         block_helpers::read_weights_only_from_buf2::<L>(self.weights_len as usize, &mut forward.weights, input_bufreader)
     }
+
     /// Sets internal state of weights based on some completely object-dependent parameters
     fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {
         self.weights[index].weight = w[0];

@@ -98,7 +98,6 @@ impl Regressor  {
             let mut block_ffm = block_ffm::new_ffm_block(&mut bg, mi).unwrap();
             let mut triangle_ffm = block_misc::new_triangle_block(&mut bg, block_ffm).unwrap();
             output = block_misc::new_join_block(&mut bg, vec![output, triangle_ffm]).unwrap();
-            
             //output = block_misc::new_join_block(&mut bg, vec![output, block_ffm]).unwrap();
         }
 
@@ -111,6 +110,8 @@ impl Regressor  {
                 output = outputs.pop().unwrap();
             } else if mi.nn_config.topology == "two" {
                 // do not copy out the 
+            } else if mi.nn_config.topology == "three" {
+
             } else {
                 Err(format!("unknown nn topology: \"{}\"", mi.nn_config.topology)).unwrap()
             }

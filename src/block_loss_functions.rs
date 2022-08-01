@@ -105,41 +105,43 @@ impl BlockTrait for BlockSigmoid {
 
 
 //        println!("AAA: {}", len);
-        let wsum:f32 = {
-            let myslice = &pb.tape[self.input_offset .. (self.input_offset + self.num_inputs)];
-            myslice.iter().sum()
-        };
-        // vowpal compatibility
-        
-        let mut prediction_probability: f32;
-        let mut general_gradient: f32;
-        
-        if wsum.is_nan() {
-            eprintln!("NAN prediction in example {}, forcing 0.0", fb.example_number);
-            prediction_probability = logistic(0.0);
-            general_gradient = 0.0;
-        } else if wsum < -50.0 {
-            prediction_probability = logistic(-50.0);
-            general_gradient = 0.0;
-        } else if wsum > 50.0 {
-            prediction_probability = logistic(50.0);
-            general_gradient = 0.0;
-        } else {
-            prediction_probability = logistic(wsum);
-            general_gradient = - (fb.label - prediction_probability) * fb.example_importance;
-        }
-        //println!("General gradient: {}", general_gradient);
-        pb.tape[self.output_offset] = prediction_probability;
-        if self.copy_to_result {
-            pb.observations.push(prediction_probability);
-        }
-        if further_blocks.len() > 0 {
-            let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
-            next_regressor[0].forward_backward(further_blocks, fb, pb, update);
-        }
+        unsafe {
 
+            let wsum:f32 = {
+                let myslice = &pb.tape.get_unchecked(self.input_offset .. (self.input_offset + self.num_inputs));
+                myslice.iter().sum()
+            };
+            // vowpal compatibility
+            
+            let mut prediction_probability: f32;
+            let mut general_gradient: f32;
+            
+            if wsum.is_nan() {
+                eprintln!("NAN prediction in example {}, forcing 0.0", fb.example_number);
+                prediction_probability = logistic(0.0);
+                general_gradient = 0.0;
+            } else if wsum < -50.0 {
+                prediction_probability = logistic(-50.0);
+                general_gradient = 0.0;
+            } else if wsum > 50.0 {
+                prediction_probability = logistic(50.0);
+                general_gradient = 0.0;
+            } else {
+                prediction_probability = logistic(wsum);
+                general_gradient = - (fb.label - prediction_probability) * fb.example_importance;
+            }
+            //println!("General gradient: {}", general_gradient);
+            *pb.tape.get_unchecked_mut(self.output_offset) = prediction_probability;
+            if self.copy_to_result {
+                pb.observations.push(prediction_probability);
+            }
+            if further_blocks.len() > 0 {
+                let (next_regressor, further_blocks) = further_blocks.split_first_mut().unwrap();
+                next_regressor.forward_backward(further_blocks, fb, pb, update);
+            }
         // replace inputs with their gradients
-        pb.tape[self.input_offset .. (self.input_offset + self.num_inputs)].fill(general_gradient);
+            pb.tape.get_unchecked_mut(self.input_offset .. (self.input_offset + self.num_inputs)).fill(general_gradient);
+        }
     }
 
     fn forward(&self, 
