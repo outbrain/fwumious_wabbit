@@ -1,7 +1,8 @@
 FROM ubuntu:18.04
 ENV IMAGENAME="fwumious-builder"
 ENV DEBIAN_FRONTEND=noninteractive
-
+ENV FW_REPO_URL=https://github.com/outbrain/fwumious_wabbit.git
+ENV FW_BRANCH=main
 RUN apt-get update &&     apt-get install gcc g++ -y &&     apt-get install libboost-dev libboost-thread-dev libboost-program-options-dev libboost-system-dev libboost-math-dev libboost-test-dev zlib1g-dev -y &&     apt-get install git python3 python3-psutil python3-matplotlib lsb-release wget software-properties-common openjdk-8-jdk curl -y
 
 ENV JAVA_HOME="/usr/lib/jvm/java-8-openjdk-amd64"
@@ -46,7 +47,7 @@ ENV PATH="/root/.cargo/bin:/vowpal_wabbit/vowpalwabbit/vowpalwabbit/cli/:${PATH}
 
 # Conduct benchmark against vw + produce --release bin
 WORKDIR /
-RUN git clone https://github.com/outbrain/fwumious_wabbit.git
+RUN git clone --branch $FW_BRANCH $FW_BRANCH
 WORKDIR /fwumious_wabbit
 RUN cargo test
 RUN cargo build --release
