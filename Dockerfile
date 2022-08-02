@@ -51,7 +51,8 @@ RUN echo 'cloning $FW_BRANCH $FW_REPO_URL'
 RUN git clone --branch $FW_BRANCH $FW_REPO_URL
 WORKDIR /fwumious_wabbit
 RUN cargo test
-RUN cargo build --release
+#RUN cargo build --release
 # VW - FW benchmarking currently disabled
-WORKDIR /fwumious_wabbit/benchmark
-ENTRYPOINT ["./run_with_plots.sh"]
+#WORKDIR /fwumious_wabbit/benchmark
+#ENTRYPOINT ["./run_with_plots.sh"]
+ENTRYPOINT ['cargo','build', '--release']
