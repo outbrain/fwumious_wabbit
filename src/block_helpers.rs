@@ -13,20 +13,24 @@ use crate::regressor::BlockTrait;
 #[derive(Clone, Debug)]
 #[repr(C)]
 pub struct Weight {
-    pub weight: f32, 
+    pub weight: f32,
 }
 
 #[derive(Clone, Debug)]
 #[repr(C)]
 pub struct WeightAndOptimizerData<L:OptimizerTrait> {
-    pub weight: f32, 
+    pub weight: f32,
     pub optimizer_data: L::PerWeightStore,
 }
 
+// Oh gawd, so many bugs were hidden here
+// Starting with mistaken solution in https://stackoverflow.com/questions/30856285/assert-eq-with-floating-point-numbers-and-delta/30866922#30866922
 #[macro_export]
 macro_rules! assert_epsilon {
     ($x:expr, $y:expr) => {
-        if !($x - $y < 0.0000001 || $y - $x < 0.0000001) { panic!(); }
+        let x = $x;       // Make sure we evaluate only once
+        let y = $y;
+        if !(x - y < 0.000005 && y - x < 0.000005) { println!("Expectation: {}, Got: {}", y, x); panic!(); }
     }
 }
 
@@ -39,7 +43,7 @@ pub fn read_weights_from_buf<L:OptimizerTrait>(weights: &mut Vec<WeightAndOptimi
         return Err(format!("Loading weights to unallocated weighs buffer"))?;
     }
     unsafe {
-        let mut buf_view:&mut [u8] = slice::from_raw_parts_mut(weights.as_mut_ptr() as *mut u8, 
+        let mut buf_view:&mut [u8] = slice::from_raw_parts_mut(weights.as_mut_ptr() as *mut u8,
                                          weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
         input_bufreader.read_exact(&mut buf_view)?;
     }
@@ -52,7 +56,7 @@ pub fn write_weights_to_buf<L:OptimizerTrait>(weights: &Vec<WeightAndOptimizerDa
         return Err(format!("Writing weights of unallocated weights buffer"))?;
     }
     unsafe {
-         let buf_view:&[u8] = slice::from_raw_parts(weights.as_ptr() as *const u8, 
+         let buf_view:&[u8] = slice::from_raw_parts(weights.as_ptr() as *const u8,
                                           weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
          output_bufwriter.write_all(buf_view)?;
     }
@@ -73,7 +77,7 @@ pub fn read_weights_only_from_buf2<L:OptimizerTrait>(weights_len: usize, out_wei
         while remaining_weights > 0 {
             let chunk_size = min(remaining_weights, BUF_LEN);
             in_weights.set_len(chunk_size);
-            let mut in_weights_view:&mut [u8] = slice::from_raw_parts_mut(in_weights.as_mut_ptr() as *mut u8, 
+            let mut in_weights_view:&mut [u8] = slice::from_raw_parts_mut(in_weights.as_mut_ptr() as *mut u8,
                                          chunk_size * mem::size_of::<WeightAndOptimizerData<L>>());
             input_bufreader.read_exact(&mut in_weights_view)?;
             for w in &in_weights {
@@ -83,15 +87,15 @@ pub fn read_weights_only_from_buf2<L:OptimizerTrait>(weights_len: usize, out_wei
             }
             remaining_weights -= chunk_size;
         }
-    }    
+    }
     Ok(())
 }
 
 
 /// This function is used only in tests to run a single block with given loss function
-pub fn slearn<'a>(block_run: &mut Box<dyn BlockTrait>, 
+pub fn slearn<'a>(block_run: &mut Box<dyn BlockTrait>,
                     block_loss_function: &mut Box<dyn BlockTrait>,
-                    fb: &feature_buffer::FeatureBuffer, 
+                    fb: &feature_buffer::FeatureBuffer,
                     update: bool) -> f32 {
 
     unsafe {
@@ -106,9 +110,9 @@ pub fn slearn<'a>(block_run: &mut Box<dyn BlockTrait>,
 }
 
 /// This function is used only in tests to run a single block with given loss function
-pub fn spredict<'a>(block_run: &mut Box<dyn BlockTrait>, 
+pub fn spredict<'a>(block_run: &mut Box<dyn BlockTrait>,
                     block_loss_function: &mut Box<dyn BlockTrait>,
-                    fb: &feature_buffer::FeatureBuffer, 
+                    fb: &feature_buffer::FeatureBuffer,
                     update: bool) -> f32 {
 
     unsafe {
@@ -121,6 +125,5 @@ pub fn spredict<'a>(block_run: &mut Box<dyn BlockTrait>,
         return prediction_probability
     }
 }
-
 
 

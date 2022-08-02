@@ -16,6 +16,7 @@ use crate::feature_buffer;
 use crate::optimizer;
 use optimizer::OptimizerTrait;
 use crate::block_ffm::BlockFFM;
+use crate::block_affm::BlockAFFM;
 use crate::block_lr::BlockLR;
 use crate::block_loss_functions::BlockSigmoid;
 
@@ -23,15 +24,15 @@ use crate::block_loss_functions::BlockSigmoid;
 
 pub trait BlockTrait {
     fn as_any(&mut self) -> &mut dyn Any; // This enables downcasting
-    fn forward_backward(&mut self, 
-                         further_blocks: &mut [Box<dyn BlockTrait>], 
-                         wsum: f32, 
+    fn forward_backward(&mut self,
+                         further_blocks: &mut [Box<dyn BlockTrait>],
+                         wsum: f32,
                          fb: &feature_buffer::FeatureBuffer,
                          update:bool) -> (f32, f32);
 
-    fn forward(&self, 
-                         further_blocks: &[Box<dyn BlockTrait>], 
-                         wsum: f32, 
+    fn forward(&self,
+                         further_blocks: &[Box<dyn BlockTrait>],
+                         wsum: f32,
                          fb: &feature_buffer::FeatureBuffer) -> f32;
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance);
@@ -63,7 +64,7 @@ pub fn get_regressor_without_weights(mi: &model_instance::ModelInstance) -> Regr
         }
     } else {
         Regressor::new_without_weights::<optimizer::OptimizerSGD>(&mi)
-    }    
+    }
 }
 
 pub fn get_regressor_with_weights(mi: &model_instance::ModelInstance) -> Regressor {
@@ -86,24 +87,30 @@ impl Regressor  {
         rg.blocks_boxes.push(reg_lr);
 
         if mi.ffm_k > 0 {
-            let mut reg_ffm = BlockFFM::<L>::new_without_weights(mi).unwrap();
-            rg.blocks_boxes.push(reg_ffm);
+            if mi.ffm_interaction_matrix == false {
+                let mut reg_ffm = BlockFFM::<L>::new_without_weights(mi).unwrap();
+                rg.blocks_boxes.push(reg_ffm);
+            } else {
+                // if we have field interaction mask, we have a separate implementation called "affm"
+                let mut reg_ffm = BlockAFFM::<L>::new_without_weights(mi).unwrap();
+                rg.blocks_boxes.push(reg_ffm);
+            }
         }
-                    
+
         let mut reg_sigmoid = BlockSigmoid::new_without_weights(mi).unwrap();
         rg.blocks_boxes.push(reg_sigmoid);
 
         rg
     }
-    
+
     pub fn allocate_and_init_weights_(&mut self, mi: &model_instance::ModelInstance) {
         for rr in &mut self.blocks_boxes {
             rr.allocate_and_init_weights(mi);
         }
     }
-    
 
-    pub fn new<L: optimizer::OptimizerTrait + 'static>(mi: &model_instance::ModelInstance) -> Regressor 
+
+    pub fn new<L: optimizer::OptimizerTrait + 'static>(mi: &model_instance::ModelInstance) -> Regressor
     {
         let mut rg = Regressor::new_without_weights::<L>(mi);
         rg.allocate_and_init_weights(mi);
@@ -111,7 +118,7 @@ impl Regressor  {
     }
 
     pub fn get_name(&self) -> String {
-        self.regressor_name.to_owned()    
+        self.regressor_name.to_owned()
     }
 
     pub fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
@@ -131,10 +138,10 @@ impl Regressor  {
         let blocks_list = &mut self.blocks_boxes[..];
         let (current, further_blocks) = &mut blocks_list.split_at_mut(1);
         let (prediction_probability, general_gradient) = current[0].forward_backward(further_blocks, 0.0, fb, update);
-    
+
         return prediction_probability
     }
-    
+
     pub fn predict(&self, fb: &feature_buffer::FeatureBuffer) -> f32 {
         // TODO: we should find a way of not using unsafe
         let blocks_list = &self.blocks_boxes[..];
@@ -142,7 +149,7 @@ impl Regressor  {
         let prediction_probability = current[0].forward(further_blocks, 0.0, fb);
         return prediction_probability
     }
-    
+
     // Yeah, this is weird. I just didn't want to break the format compatibility at this point
     pub fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
         let length = self.blocks_boxes.iter().map(|block| block.get_serialized_len()).sum::<usize>() as u64;
@@ -153,7 +160,7 @@ impl Regressor  {
         }
         Ok(())
     }
-    
+
 
     pub fn overwrite_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
         // This is a bit weird format
@@ -175,13 +182,13 @@ impl Regressor  {
     pub fn immutable_regressor_without_weights(&mut self, mi: &model_instance::ModelInstance)  -> Result<Regressor, Box<dyn Error>> {
         let mut rg = Regressor::new_without_weights::<optimizer::OptimizerSGD>(&mi);
         rg.immutable = true;
-        Ok(rg)        
+        Ok(rg)
     }
 
-    
+
     pub fn into_immutable_regressor_from_buf(&mut self, rg: &mut Regressor, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
         // TODO Ideally we would make a copy, not based on model_instance. but this is easier at the moment
-    
+
         let len = input_bufreader.read_u64::<LittleEndian>()?;
         let expected_length = self.blocks_boxes.iter().map(|bb| bb.get_serialized_len()).sum::<usize>() as u64;
         if len != expected_length {
@@ -196,7 +203,7 @@ impl Regressor  {
 
     // Create immutable regressor from current regressor
     pub fn immutable_regressor(&mut self, mi: &model_instance::ModelInstance) -> Result<Regressor, Box<dyn Error>> {
-        // Only to be used by unit tests 
+        // Only to be used by unit tests
         let mut rg = self.immutable_regressor_without_weights(&mi)?;
         rg.allocate_and_init_weights(&mi);
 
@@ -234,7 +241,7 @@ mod tests {
 
     #[test]
     fn test_learning_turned_off() {
-        let mi = model_instance::ModelInstance::new_empty().unwrap();        
+        let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
         // Empty model: no matter how many features, prediction is 0.5
         assert_eq!(re.learn(&lr_vec(vec![]), false), 0.5);
@@ -245,20 +252,20 @@ mod tests {
     #[test]
     fn test_power_t_zero() {
         // When power_t is zero, then all optimizers behave exactly like SGD
-        // So we want to test all three   
+        // So we want to test all three
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
-        
+
         let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);
-        
+
         // Here learning rate mechanism does not affect the results, so let's verify three different ones
         let mut regressors: Vec<Box<Regressor>> = vec![
             //Box::new(Regressor::<optimizer::OptimizerAdagradLUT>::new(&mi)),
             Box::new(Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi)),
             //Box::new(Regressor::<optimizer::OptimizerSGD>::new(&mi))
             ];
-        
+
         for re in &mut regressors {
             assert_eq!(re.learn(vec_in, true), 0.5);
             assert_eq!(re.learn(vec_in, true), 0.48750263);
@@ -274,7 +281,7 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
-        
+
         let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
         let vec_in = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash: 1, value: 2.0}]);
 
@@ -286,13 +293,13 @@ mod tests {
 
     #[test]
     fn test_power_t_half__() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
         mi.init_acc_gradient = 0.0;
-        
+
         let mut re = Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi);
-        
+
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true), 0.5);
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true), 0.4750208);
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true), 0.45788094);
@@ -300,22 +307,22 @@ mod tests {
 
     #[test]
     fn test_power_t_half_fastmath() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
         mi.fastmath = true;
         mi.optimizer = model_instance::Optimizer::Adagrad;
         mi.init_acc_gradient = 0.0;
-        
+
         let mut re = get_regressor_with_weights(&mi);
         let mut p: f32;
-        
+
         p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true);
         assert_eq!(p, 0.5);
         p = re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 1.0}]), true);
-        if optimizer::FASTMATH_LR_LUT_BITS == 12 { 
+        if optimizer::FASTMATH_LR_LUT_BITS == 12 {
             assert_eq!(p, 0.47539312);
-        } else if optimizer::FASTMATH_LR_LUT_BITS == 11 { 
+        } else if optimizer::FASTMATH_LR_LUT_BITS == 11 {
             assert_eq!(p, 0.475734);
         } else {
             assert!(false, "Exact value for the test is missing, please edit the test");
@@ -324,12 +331,12 @@ mod tests {
 
     #[test]
     fn test_power_t_half_two_features() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
         mi.bit_precision = 18;
         mi.init_acc_gradient = 0.0;
-        
+
         let mut re = Regressor::new::<optimizer::OptimizerAdagradFlex>(&mi);
         // Here we take twice two features and then once just one
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]), true), 0.5);
@@ -339,13 +346,13 @@ mod tests {
 
     #[test]
     fn test_non_one_weight() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
         mi.bit_precision = 18;
-        
+
         let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
-        
+
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true), 0.5);
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true), 0.45016602);
         assert_eq!(re.learn(&lr_vec(vec![HashAndValue{hash:1, value: 2.0}]), true), 0.40611085);
@@ -353,15 +360,15 @@ mod tests {
 
     #[test]
     fn test_example_importance() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
         mi.bit_precision = 18;
         mi.optimizer = model_instance::Optimizer::Adagrad;
         mi.fastmath = true;
-        
+
         let mut re = Regressor::new::<optimizer::OptimizerAdagradLUT>(&mi);
-        
+
         let mut fb_instance = lr_vec(vec![HashAndValue{hash: 1, value: 1.0}]);
         fb_instance.example_importance = 0.5;
         assert_eq!(re.learn(&fb_instance, true), 0.5);
@@ -370,4 +377,3 @@ mod tests {
     }
 
 }
-

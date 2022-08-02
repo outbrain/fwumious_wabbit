@@ -20,6 +20,7 @@ use std::time::Instant;
 extern crate nom;
 
 mod block_ffm;
+mod block_affm;
 mod block_helpers;
 mod block_loss_functions;
 mod block_lr;
@@ -61,7 +62,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
     };
 
     let testonly = cl.is_present("testonly");
-	
+
     let final_regressor_filename = cl.value_of("final_regressor");
     match final_regressor_filename {
         Some(filename) => {
@@ -90,7 +91,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
             .expect("Daemon mode only supports serving from --initial regressor");
         println!("initial_regressor = {}", filename);
         let (mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true, Option::Some(&cl))?;
-		
+
         let mut se = serving::Serving::new(&cl, &vw2, Box::new(re_fixed), &mi2)?;
         se.serve()?;
     } else if cl.is_present("convert_inference_regressor") {
@@ -106,21 +107,21 @@ fn main2() -> Result<(), Box<dyn Error>> {
             None => {}
         }
     } else {
-		
+
         let vw: vwmap::VwNamespaceMap;
         let mut re: regressor::Regressor;
         let mi: model_instance::ModelInstance;
 
         if let Some(filename) = cl.value_of("initial_regressor") {
-			
+
             println!("initial_regressor = {}", filename);
             (mi, vw, re) = persistence::new_regressor_from_filename(filename, testonly, Option::Some(&cl))?;
 
         } else {
-			
+
             // We load vw_namespace_map.csv just so we know all the namespaces ahead of time
             // This is one of the major differences from vowpal
-			
+
             let input_filename = cl.value_of("data").expect("--data expected");
             let vw_namespace_map_filepath = Path::new(input_filename)
                 .parent()
