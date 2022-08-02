@@ -29,13 +29,13 @@ RUN make
 RUN make install
 
 # Compile vw - needed for benchmark
-WORKDIR /
-RUN git clone https://github.com/VowpalWabbit/vowpal_wabbit.git
-WORKDIR /vowpal_wabbit/vowpalwabbit
-RUN mkdir build
-RUN cd build
-RUN cmake ..
-RUN make vw_cli_bin -j $(nproc)
+#WORKDIR /
+#RUN git clone https://github.com/VowpalWabbit/vowpal_wabbit.git
+#WORKDIR /vowpal_wabbit/vowpalwabbit
+#RUN mkdir build
+#RUN cd build
+#RUN cmake ..
+#RUN make vw_cli_bin -j $(nproc)
 
 # Get rust ecosystem operating
 WORKDIR /
