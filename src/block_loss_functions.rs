@@ -7,7 +7,7 @@ use crate::feature_buffer;
 use crate::port_buffer;
 use crate::model_instance;
 use crate::graph;
-
+use crate::block_helpers;
 use regressor::BlockTrait;
 
 
@@ -103,8 +103,6 @@ impl BlockTrait for BlockSigmoid {
         debug_assert!(self.input_offset != usize::MAX);
         debug_assert!(self.output_offset != usize::MAX);
 
-
-//        println!("AAA: {}", len);
         unsafe {
 
             let wsum:f32 = {
@@ -135,10 +133,7 @@ impl BlockTrait for BlockSigmoid {
             if self.copy_to_result {
                 pb.observations.push(prediction_probability);
             }
-            if further_blocks.len() > 0 {
-                let (next_regressor, further_blocks) = further_blocks.split_first_mut().unwrap();
-                next_regressor.forward_backward(further_blocks, fb, pb, update);
-            }
+            block_helpers::forward_backward(further_blocks, fb, pb, update);
         // replace inputs with their gradients
             pb.tape.get_unchecked_mut(self.input_offset .. (self.input_offset + self.num_inputs)).fill(general_gradient);
         }
@@ -176,10 +171,7 @@ impl BlockTrait for BlockSigmoid {
         if self.copy_to_result {
             pb.observations.push(prediction_probability);
         }
-        if further_blocks.len() > 0 {
-            let (next_regressor, further_blocks) = further_blocks.split_at(1);
-            next_regressor[0].forward(further_blocks, fb, pb);
-        }
+        block_helpers::forward(further_blocks, fb, pb);
     }
 
 }

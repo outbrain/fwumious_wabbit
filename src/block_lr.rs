@@ -119,10 +119,9 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
                     *myslice.get_unchecked_mut(combo_index as usize) += feature_weight * feature_value;
                 }
             }
-            if further_blocks.len() > 0 {
-                let (next_regressor, further_blocks) = further_blocks.split_first_mut().unwrap();
-                next_regressor.forward_backward(further_blocks, fb, pb, update);
-            }
+
+            block_helpers::forward_backward(further_blocks, fb, pb, update);
+
             if update {
                 let myslice = &mut pb.tape.get_unchecked(self.output_offset .. (self.output_offset + self.num_combos as usize));
 
@@ -162,8 +161,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
                 }
             }
         }
-        let (next_regressor, further_blocks) = further_blocks.split_at(1);
-        next_regressor[0].forward(further_blocks, fb, pb);
+        block_helpers::forward(further_blocks, fb, pb);
+
     }
     
     

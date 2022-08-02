@@ -313,13 +313,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         wsum *= 0.5;*/
                     });
                         
-                    if further_blocks.len() > 0 {
-                        let (next_regressor, further_blocks) = further_blocks.split_first_mut().unwrap();
-                        next_regressor.forward_backward(further_blocks, fb, pb, update);
-                    }
+                    block_helpers::forward_backward(further_blocks, fb, pb, update);
 
-//                    let general_gradient = pb.tapes[self.output_tape_index as usize].pop().unwrap();
-                    
                     if update {
                         let mut local_index: usize = 0;
                         let myslice = &mut pb.tape[self.output_offset..(self.output_offset + num_outputs)];
@@ -527,8 +522,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 });
             }
         }
-        let (next_regressor, further_blocks) = further_blocks.split_at(1);
-        next_regressor[0].forward(further_blocks, fb, pb);
+        block_helpers::forward(further_blocks, fb, pb);
                  
     }
     
@@ -612,7 +606,7 @@ mod tests {
         let mut bg = BlockGraph::new(); 
         let ffm_block = new_ffm_block(&mut bg, &mi).unwrap(); 
         let loss_block = block_loss_functions::new_logloss_block(&mut bg, ffm_block, true);
-        bg.schedule(); 
+        bg.finalize(); 
         bg.allocate_and_init_weights(&mi);
         let mut pb = bg.new_port_buffer();
 
@@ -628,11 +622,11 @@ mod tests {
         
         let ffm_block = new_ffm_block(&mut bg, &mi).unwrap();
         let lossf = block_loss_functions::new_logloss_block(&mut bg, ffm_block, true);
-        bg.schedule();
+        bg.finalize();
         bg.allocate_and_init_weights(&mi);
         let mut pb = bg.new_port_buffer();
         
-        ffm_init::<optimizer::OptimizerAdagradFlex>(&mut bg.blocks[0]);
+        ffm_init::<optimizer::OptimizerAdagradFlex>(&mut bg.blocks_final[0]);
         let fb = ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: mi.ffm_k}
@@ -648,10 +642,10 @@ mod tests {
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
         let lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
-        bg.schedule();
+        bg.finalize();
         bg.allocate_and_init_weights(&mi);
         
-        ffm_init::<optimizer::OptimizerAdagradLUT>(&mut bg.blocks[0]);
+        ffm_init::<optimizer::OptimizerAdagradLUT>(&mut bg.blocks_final[0]);
         let fb = ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 2.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: mi.ffm_k * 1}
@@ -679,7 +673,7 @@ mod tests {
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
         let lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
-        bg.schedule();
+        bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
 
@@ -698,10 +692,10 @@ mod tests {
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
         let lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
-        bg.schedule();
+        bg.finalize();
         bg.allocate_and_init_weights(&mi);
         
-        ffm_init::<optimizer::OptimizerAdagradFlex>(&mut bg.blocks[0]);
+        ffm_init::<optimizer::OptimizerAdagradFlex>(&mut bg.blocks_final[0]);
         let fb = ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 1.0, contra_field_index: mi.ffm_k * 1}
@@ -716,10 +710,10 @@ mod tests {
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
         let lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
-        bg.schedule();
+        bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
-        ffm_init::<optimizer::OptimizerAdagradLUT>(&mut bg.blocks[0]);
+        ffm_init::<optimizer::OptimizerAdagradLUT>(&mut bg.blocks_final[0]);
         let fb = ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 2.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: mi.ffm_k * 1}
@@ -751,7 +745,7 @@ B,featureB
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
         let lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
-        bg.schedule();
+        bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
 
@@ -759,7 +753,7 @@ B,featureB
 
         let mut p: f32;
 
-        ffm_init::<optimizer::OptimizerAdagradLUT>(&mut bg.blocks[0]);
+        ffm_init::<optimizer::OptimizerAdagradLUT>(&mut bg.blocks_final[0]);
         let fbuf = &ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:3 * 1000, value: 1.0, contra_field_index: 0},
@@ -789,12 +783,12 @@ B,featureB
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
         let lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
-        bg.schedule();
+        bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
         let mut pb = bg.new_port_buffer();
 
-        ffm_init::<optimizer::OptimizerAdagradLUT>(&mut bg.blocks[0]);
+        ffm_init::<optimizer::OptimizerAdagradLUT>(&mut bg.blocks_final[0]);
         let fbuf = &ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:3 * 1000, value: 1.0, contra_field_index: 0},
@@ -828,7 +822,7 @@ B,featureB
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
         let lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
-        bg.schedule();
+        bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
 
@@ -841,10 +835,10 @@ B,featureB
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
         let lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
-        bg.schedule();
+        bg.finalize();
         bg.allocate_and_init_weights(&mi);
         
-        ffm_init::<optimizer::OptimizerAdagradFlex>(&mut bg.blocks[0]);
+        ffm_init::<optimizer::OptimizerAdagradFlex>(&mut bg.blocks_final[0]);
         let fb = ffm_vec(vec![
                                   HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
                                   HashAndValueAndSeq{hash:5, value: 1.0, contra_field_index: mi.ffm_k * 1},

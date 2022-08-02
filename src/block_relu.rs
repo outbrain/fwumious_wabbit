@@ -98,8 +98,8 @@ impl BlockTrait for BlockRELU
                     *pb.tape.get_unchecked_mut(self.input_offset + i) = 1.0;
                 }
             }
-            let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
-            next_regressor[0].forward_backward(further_blocks, fb, pb, update);
+
+            block_helpers::forward_backward(further_blocks, fb, pb, update);
 
             if update {
                 for i in 0..self.num_inputs as usize {
@@ -128,8 +128,7 @@ impl BlockTrait for BlockRELU
                     *pb.tape.get_unchecked_mut(self.output_offset + i) = w;
                 }
             }
-            let (next_regressor, further_blocks) = further_blocks.split_at(1);
-            next_regressor[0].forward(further_blocks, fb, pb);
+            block_helpers::forward(further_blocks, fb, pb);
         } // unsafe end
     }
     
@@ -174,7 +173,7 @@ mod tests {
         let input_block = block_misc::new_const_block(&mut bg, vec![2.0]).unwrap();
         let relu_block = new_relu_block(&mut bg, &mi, input_block).unwrap();
         let observe_block = block_misc::new_observe_block(&mut bg, relu_block, Observe::Forward, Some(1.0)).unwrap();
-        bg.schedule();
+        bg.finalize();
         bg.allocate_and_init_weights(&mi);
         
         let mut pb = bg.new_port_buffer();
@@ -189,7 +188,7 @@ mod tests {
         let input_block = block_misc::new_const_block(&mut bg, vec![-2.0]).unwrap();
         let relu_block = new_relu_block(&mut bg, &mi, input_block).unwrap();
         let observe_block = block_misc::new_observe_block(&mut bg, relu_block, Observe::Forward, Some(1.0)).unwrap();
-        bg.schedule();
+        bg.finalize();
         bg.allocate_and_init_weights(&mi);
         
         let mut pb = bg.new_port_buffer();

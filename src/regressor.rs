@@ -24,6 +24,7 @@ use crate::block_relu;
 use crate::block_misc;
 use crate::graph;
 use crate::block_neural::{InitType};
+use crate::block_helpers;
 
 pub trait BlockTrait {
     fn as_any(&mut self) -> &mut dyn Any; // This enables downcasting
@@ -179,14 +180,14 @@ impl Regressor  {
         // now sigmoid has a single input
 //        println!("INPUTS : {}", inputs);
         let lossf = block_loss_functions::new_logloss_block(&mut bg, output, true).unwrap();
-        bg.schedule();
+        bg.finalize();
 //        bg.println();
         rg.tape_len = bg.get_tape_size();
         
-        //rg.blocks_boxes = bg.take_blocks();
-        for (i, block) in bg.blocks.into_iter().enumerate() {
+        rg.blocks_boxes = bg.take_blocks();
+        /*for (i, block) in bg.blocks.into_iter().enumerate() {
             rg.blocks_boxes.push(block);
-        }
+        }*/
         
         rg
     }
@@ -229,11 +230,10 @@ impl Regressor  {
             return self.predict(fb, pb);
         }
 
-        let blocks_list = &mut self.blocks_boxes[..];
-        let (current, further_blocks) = &mut blocks_list.split_at_mut(1);
         pb.reset(); // empty the tape
+        let further_blocks = &mut self.blocks_boxes[..];
+        block_helpers::forward_backward(further_blocks, fb, pb, update);
 
-        current[0].forward_backward(further_blocks, fb, pb, update);
         assert_eq!(pb.observations.len(), 1);
         let prediction_probability = pb.observations.pop().unwrap();
     
@@ -242,11 +242,11 @@ impl Regressor  {
     
     pub fn predict(&self, fb: &feature_buffer::FeatureBuffer, pb: &mut port_buffer::PortBuffer) -> f32 {
         // TODO: we should find a way of not using unsafe
-        let blocks_list = &self.blocks_boxes[..];
-        let (current, further_blocks) = blocks_list.split_at(1);
         pb.reset(); // empty the tape
 
-        current[0].forward(further_blocks, fb, pb);
+        let further_blocks = &self.blocks_boxes[..];
+        block_helpers::forward(further_blocks, fb, pb);
+
         assert_eq!(pb.observations.len(), 1);
         let prediction_probability = pb.observations.pop().unwrap();
 

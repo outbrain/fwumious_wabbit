@@ -27,6 +27,7 @@ pub struct BlockGraphNode {
 pub struct BlockGraph {
     pub nodes: Vec<BlockGraphNode>,
     pub blocks: Vec<Box<dyn BlockTrait>>,
+    pub blocks_final: Vec<Box<dyn BlockTrait>>,
     pub tape_size: usize,
 }
 
@@ -72,7 +73,8 @@ impl BlockGraph {
     pub fn new() -> BlockGraph {
         BlockGraph {nodes: Vec::new(),
                     blocks: Vec::new(),
-                    tape_size: 0,
+                    blocks_final: Vec::new(),
+                    tape_size: usize::MAX,
                     }
     }
 
@@ -101,7 +103,7 @@ impl BlockGraph {
                     return Err(Box::new(IOError::new(ErrorKind::Other, "First output of a CopyBlock can not go to a JoinBlock (reasons are complicited). Using second output is ok.")));
                 } else if self.blocks[node_id_in].get_block_type() == BlockType::Join {
                     // Join -> Join can always be merged into a single join
-                    // So we won't add a block here, instead, we will add input edges to previous block
+                    // So we won't add a block here, instead, we will add input edges of the previous block
                     // And abandon the previous block with empty inputs and outputs.
                     new_edges_in.append(&mut self.nodes[node_id_in].edges_in);
                     self.nodes[node_id_in].edges_out.truncate(0);
@@ -146,6 +148,7 @@ impl BlockGraph {
 
     
     pub fn get_tape_size(&self) -> usize {
+        assert!(self.tape_size != usize::MAX, "get_tape_size() called on a graph before calling finalize()");
         self.tape_size
     }
 
@@ -170,12 +173,16 @@ impl BlockGraph {
     }
 
     pub fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
-        for i in 0..self.len() { 
-            self.blocks[i].allocate_and_init_weights(&mi);
+        assert!(self.blocks_final.len() > 0, "There are no blocks in the final graph? Have you called finalize() yet?");
+        for i in 0..self.blocks_final.len() { 
+            self.blocks_final[i].allocate_and_init_weights(&mi);
         }
     }
     
     pub fn take_blocks(&mut self) -> Vec<Box<dyn BlockTrait>> {
+        mem::take(&mut self.blocks_final)
+
+    /*
         let mut blocks : Vec<Box<dyn BlockTrait>> = Vec::new();
         for block in mem::take(&mut self.blocks).into_iter() {
             // Join Block is a no-op, so it doesn't need to be executed. This is a super small optimization.  
@@ -183,10 +190,10 @@ impl BlockGraph {
                 blocks.push(block);
             }
         }
-        blocks 
+        blocks */
     }
 
-    pub fn schedule(&mut self) {
+    pub fn finalize(&mut self) {
         let mut offset: usize = 0;
         // We allocate offsets based on input tapes. 
         // This assures that for each block, inputs that are placed conesquitvely are consequtive
@@ -246,6 +253,15 @@ impl BlockGraph {
             }
         }
         self.tape_size = offset;
+        
+        // Prepare the final list of blocks
+        for block in mem::take(&mut self.blocks).into_iter() {
+            // Join Block is a no-op, so it doesn't need to be executed. This is a super small optimization.  
+            if block.get_block_type() != BlockType::Join {
+                self.blocks_final.push(block);
+            }
+        }
+
     }   
 }
 
@@ -365,19 +381,19 @@ mod tests {
 
 
     #[test]
-    fn schedule_simple() {
+    fn finalize_simple() {
         let mut bg = BlockGraph::new();
         
         let const_block_output = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
         let output_node = block_misc::new_observe_block(&mut bg, const_block_output, Observe::Forward, Some(1.0)).unwrap();
 //        assert_eq!(output_node, ());
-        let list = bg.schedule();
+        let list = bg.finalize();
         assert_eq!(bg.tape_size, 1);
         
     }
 
     #[test]
-    fn schedule_realistic() {
+    fn finalize_realistic() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.learning_rate = 0.1;
         mi.ffm_learning_rate = 0.1;
@@ -395,11 +411,11 @@ mod tests {
         let re_ffm = block_ffm::new_ffm_block(&mut bg, &mi).unwrap();
         let joined = block_misc::new_join_block(&mut bg, vec![re_lr, re_ffm]).unwrap();
         let lossf = block_loss_functions::new_logloss_block(&mut bg, joined, true);
-        let list = bg.schedule();
+        let list = bg.finalize();
     }
 
     #[test]
-    fn schedule_fail_copy_to_join() {
+    fn finalize_fail_copy_to_join() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.ffm_k = 1;
         mi.ffm_fields = vec![vec![], vec![], vec![]]; // This isn't really used
@@ -421,11 +437,11 @@ mod tests {
         assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"First output of a CopyBlock can not go to a JoinBlock (reasons are complicited). Using second output is ok.\" })");
 
 //        let lossf = block_loss_functions::new_logloss_block(&mut bg, joined, true);
-//        let list = bg.schedule();
+//        let list = bg.finalize();
     }
 
     #[test]
-    fn schedule_join_to_join() {
+    fn finalize_join_to_join() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.ffm_k = 1;
         mi.ffm_fields = vec![vec![], vec![], vec![]]; // This isn't really used
@@ -443,7 +459,7 @@ mod tests {
         assert_eq!(bg.nodes[3].edges_out.len(), 0);
         assert_eq!(bg.nodes[4].edges_in.len(), 3); // now fourth block has 3 inputs, not 2
         
-        bg.schedule();
+        bg.finalize();
         let list = bg.take_blocks();
         assert_eq!(list.len(), 3);  // both copy blocks are no-op and thus not returned 
                 

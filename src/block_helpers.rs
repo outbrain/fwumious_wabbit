@@ -147,7 +147,7 @@ pub fn slearn2<'a>(bg: &mut graph::BlockGraph,
                     update: bool) -> f32 {
 
         pb.reset();
-        let (block_run, further_blocks) = bg.blocks.split_at_mut(1);
+        let (block_run, further_blocks) = bg.blocks_final.split_at_mut(1);
         block_run[0].forward_backward(further_blocks, fb, pb, update);
         let prediction_probability = pb.observations[0];
         return prediction_probability
@@ -159,14 +159,33 @@ pub fn spredict2<'a>(bg: &mut graph::BlockGraph,
                     update: bool) -> f32 {
 
         pb.reset();
-        let (block_run, further_blocks) = bg.blocks.split_at(1);
+        let (block_run, further_blocks) = bg.blocks_final.split_at(1);
         block_run[0].forward(further_blocks, fb, pb);
         let prediction_probability = pb.observations[0];
         return prediction_probability
 }
 
 
+#[inline(always)]
+pub fn forward_backward(further_blocks: &mut [Box<dyn BlockTrait>], 
+                    fb: &feature_buffer::FeatureBuffer, 
+                    pb: &mut port_buffer::PortBuffer, 
+                    update:bool) {
+            if further_blocks.len() > 0 {
+                let (next_regressor, further_blocks) = further_blocks.split_first_mut().unwrap();
+                next_regressor.forward_backward(further_blocks, fb, pb, update);
+            }
+}
 
+#[inline(always)]
+pub fn forward(         further_blocks: &[Box<dyn BlockTrait>], 
+                    fb: &feature_buffer::FeatureBuffer, 
+                    pb: &mut port_buffer::PortBuffer) {
+            if further_blocks.len() > 0 {
+                let (next_regressor, further_blocks) = further_blocks.split_first().unwrap();
+                next_regressor.forward(further_blocks, fb, pb);
+            }
+}
 
 
 

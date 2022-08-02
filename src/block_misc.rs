@@ -85,16 +85,11 @@ impl BlockTrait for BlockObserve {
                     update:bool) {
         debug_assert!(self.input_offset != usize::MAX);
 
-        // copy inputs to result
-//        println!("Result block with Num inputs: {}", self.num_inputs);
         if self.observe == Observe::Forward {
             pb.observations.extend_from_slice(&pb.tape[self.input_offset .. (self.input_offset + self.num_inputs)]);
         }
 
-        if further_blocks.len() > 0 {
-            let (next_regressor, further_blocks) = further_blocks.split_first_mut().unwrap();
-            next_regressor.forward_backward(further_blocks, fb, pb, update);
-        }
+        block_helpers::forward_backward(further_blocks, fb, pb, update);
         
         if self.observe == Observe::Backward {
             pb.observations.extend_from_slice(&pb.tape[self.input_offset .. (self.input_offset + self.num_inputs)]);
@@ -120,12 +115,7 @@ impl BlockTrait for BlockObserve {
             pb.observations.extend_from_slice(&pb.tape[self.input_offset .. (self.input_offset + self.num_inputs)]);
         }
 
-        
-        if further_blocks.len() > 0 {
-            let (next_regressor, further_blocks) = further_blocks.split_at(1);
-            next_regressor[0].forward(further_blocks, fb, pb);
-        }
-
+        block_helpers::forward(further_blocks, fb, pb);
 
         if self.observe == Observe::Backward {
             pb.observations.extend_from_slice(&pb.tape[self.input_offset .. (self.input_offset + self.num_inputs)]);
@@ -199,10 +189,7 @@ impl BlockTrait for BlockConsts {
 
         pb.tape[self.output_offset..(self.output_offset + self.consts.len())].copy_from_slice(&self.consts);
 
-        if further_blocks.len() > 0 {
-            let (next_regressor, further_blocks) = further_blocks.split_first_mut().unwrap();
-            next_regressor.forward_backward(further_blocks, fb, pb, update);
-        }
+        block_helpers::forward_backward(further_blocks, fb, pb, update);
     }
 
     fn forward(&self, 
@@ -213,10 +200,7 @@ impl BlockTrait for BlockConsts {
         debug_assert!(self.output_offset != usize::MAX);
         pb.tape[self.output_offset..(self.output_offset + self.consts.len())].copy_from_slice(&self.consts);
 
-        if further_blocks.len() > 0 {
-            let (next_regressor, further_blocks) = further_blocks.split_at(1);
-            next_regressor[0].forward(further_blocks, fb, pb);
-        }
+        block_helpers::forward(further_blocks, fb, pb);
 
     }
 
@@ -309,10 +293,8 @@ impl BlockTrait for BlockCopy
             // plain copy from input to output
             pb.tape.copy_within(self.input_offset .. (self.input_offset + self.num_inputs), self.output_offset);
                         
-            if further_blocks.len() > 0 {
-                let (next_regressor, further_blocks) = further_blocks.split_first_mut().unwrap();
-                next_regressor.forward_backward(further_blocks, fb, pb, update);
-            }
+            block_helpers::forward_backward(further_blocks, fb, pb, update);
+
             if update {
                 // Sum up the gradients from output to input
                 for i in 0..self.num_inputs as usize {
@@ -321,9 +303,6 @@ impl BlockTrait for BlockCopy
                 }
 
             }
-            // The only exit point
-            return
-            
         } // unsafe end
     }
     
@@ -334,10 +313,7 @@ impl BlockTrait for BlockCopy
             // plain copy from input to output
             pb.tape.copy_within(self.input_offset .. (self.input_offset + self.num_inputs), self.output_offset);
                         
-            if further_blocks.len() > 0 {
-                let (next_regressor, further_blocks) = further_blocks.split_first().unwrap();
-                next_regressor.forward(further_blocks, fb, pb);
-            }
+            block_helpers::forward(further_blocks, fb, pb);
     }
     
 }
@@ -416,21 +392,14 @@ impl BlockTrait for BlockJoin {
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.num_inputs > 0);
         
-        if further_blocks.len() > 0 {
-            let (next_regressor, further_blocks) = further_blocks.split_first_mut().unwrap();
-            next_regressor.forward_backward(further_blocks, fb, pb, update);
-        }
+        block_helpers::forward_backward(further_blocks, fb, pb, update);
     }
     
     fn forward(&self, further_blocks: &[Box<dyn BlockTrait>], 
                         fb: &feature_buffer::FeatureBuffer, 
                         pb: &mut port_buffer::PortBuffer, 
                         ) {
-        if further_blocks.len() > 0 {
-            let (next_regressor, further_blocks) = further_blocks.split_at(1);
-            next_regressor[0].forward(further_blocks, fb, pb);
-        }
-
+        block_helpers::forward(further_blocks, fb, pb);
     }
     
 }
@@ -513,10 +482,7 @@ impl BlockTrait for BlockSum {
             let wsum:f32 = pb.tape.get_unchecked_mut(self.input_offset .. (self.input_offset + self.num_inputs as usize)).iter().sum();
             pb.tape[self.output_offset as usize] = wsum;
             
-            if further_blocks.len() > 0 {
-                let (next_regressor, further_blocks) = further_blocks.split_first_mut().unwrap();
-                next_regressor.forward_backward(further_blocks, fb, pb, update);
-            }
+            block_helpers::forward_backward(further_blocks, fb, pb, update);
 
             let general_gradient = pb.tape[self.output_offset];
             if update {
@@ -537,10 +503,7 @@ impl BlockTrait for BlockSum {
         let wsum:f32 = pb.tape[self.input_offset .. (self.input_offset + self.num_inputs as usize)].iter().sum();
         pb.tape[self.output_offset as usize] = wsum;
 
-        if further_blocks.len() > 0 {
-            let (next_regressor, further_blocks) = further_blocks.split_at(1);
-            next_regressor[0].forward(further_blocks, fb, pb);
-        }
+        block_helpers::forward(further_blocks, fb, pb);
     }
 }
 
@@ -653,10 +616,8 @@ impl BlockTrait for BlockTriangle
                 }
             }
 
-            if further_blocks.len() > 0 {
-                let (next_regressor, further_blocks) = further_blocks.split_first_mut().unwrap();
-                next_regressor.forward_backward(further_blocks, fb, pb, update);
-            }
+            block_helpers::forward_backward(further_blocks, fb, pb, update);
+
             if update {
                 let (input_tape, output_tape) = block_helpers::get_input_output_borrows(&mut pb.tape, 
                                                             self.input_offset, self.num_inputs,
@@ -698,11 +659,7 @@ impl BlockTrait for BlockTriangle
                     output_index += 1;
                 }
             }
-
-            if further_blocks.len() > 0 {
-                let (next_regressor, further_blocks) = further_blocks.split_at(1);
-                next_regressor[0].forward(further_blocks, fb, pb);
-            }
+            block_helpers::forward(further_blocks, fb, pb);
     }
     
 }
@@ -745,15 +702,18 @@ mod tests {
         let observe_block_backward = block_misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
         let sum_block = new_sum_block(&mut bg, observe_block_backward).unwrap();
         let observe_block_forward = block_misc::new_observe_block(&mut bg, sum_block, Observe::Forward, Some(1.0)).unwrap();
-        bg.schedule();
+        bg.finalize();
         bg.allocate_and_init_weights(&mi);
         
         let mut pb = bg.new_port_buffer();
         let fb = fb_vec();
-        assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 5.0);
-//        assert_epsilon!(spredict2  (&mut bg, &fb, &mut pb, true), 5.0);
-        assert_eq!(pb.observations, vec![5.0,			// forward part
+        slearn2  (&mut bg, &fb, &mut pb, true);
+        assert_eq!(pb.observations, vec![5.0,			// forward part, just a sum of 2 and 3
                                          1.0, 1.0]);		// backward part -- 1 is distributed to both inputs
+        
+        spredict2  (&mut bg, &fb, &mut pb, true);
+        assert_eq!(pb.observations, vec![5.0,			// forward part, just a sum of 2 and 3
+                                         2.0, 3.0]);		// backward part -- nothing gets updated
         
         
 
@@ -768,7 +728,7 @@ mod tests {
         let observe_block_backward = block_misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
         let triangle_block = new_triangle_block(&mut bg, observe_block_backward).unwrap();
         let observe_block_forward = block_misc::new_observe_block(&mut bg, triangle_block, Observe::Forward, None).unwrap();
-        bg.schedule();
+        bg.finalize();
         bg.allocate_and_init_weights(&mi);
         
         let mut pb = bg.new_port_buffer();
@@ -792,7 +752,7 @@ mod tests {
         let copy_block_1 = copy_blocks.pop().unwrap();
         let observe_block_1_forward = block_misc::new_observe_block(&mut bg, copy_block_1, Observe::Forward, Some(5.0)).unwrap();
         let observe_block_2_forward = block_misc::new_observe_block(&mut bg, copy_block_2, Observe::Forward, Some(6.0)).unwrap();
-        bg.schedule();
+        bg.finalize();
         bg.allocate_and_init_weights(&mi);
         
         let mut pb = bg.new_port_buffer();
@@ -809,6 +769,93 @@ mod tests {
 
 
     }
+
+
+    #[test]
+    fn test_join_1_block() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        let mut bg = BlockGraph::new();
+        let input_block_1 = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
+        let join_block = new_join_block(&mut bg, vec![input_block_1]).unwrap();
+        let observe_block = block_misc::new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0)).unwrap();
+        bg.finalize();
+        bg.allocate_and_init_weights(&mi);
+        
+        let mut pb = bg.new_port_buffer();
+        let fb = fb_vec();
+        slearn2  (&mut bg, &fb, &mut pb, true);
+        assert_eq!(pb.observations, vec![2.0, 3.0,]); 			// join actually doesn't do anything
+
+        spredict2  (&mut bg, &fb, &mut pb, false);
+        assert_eq!(pb.observations, vec![2.0, 3.0,]); 			// join actually doesn't do anything
+    }
+
+
+    #[test]
+    fn test_join_2_blocks() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        let mut bg = BlockGraph::new();
+        let input_block_1 = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
+        let input_block_2 = block_misc::new_const_block(&mut bg, vec![4.0, 5.0, 6.0]).unwrap();
+        let join_block = new_join_block(&mut bg, vec![input_block_1, input_block_2]).unwrap();
+        let observe_block = block_misc::new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0)).unwrap();
+        bg.finalize();
+        bg.allocate_and_init_weights(&mi);
+        
+        let mut pb = bg.new_port_buffer();
+        let fb = fb_vec();
+        slearn2  (&mut bg, &fb, &mut pb, true);
+        assert_eq!(pb.observations, vec![2.0, 3.0, 4.0, 5.0, 6.0]); 			// join actually doesn't do anything
+
+        spredict2  (&mut bg, &fb, &mut pb, false);
+        assert_eq!(pb.observations, vec![2.0, 3.0, 4.0, 5.0, 6.0]); 			// join actually doesn't do anything
+    }
+
+    #[test]
+    fn test_join_3_blocks() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        let mut bg = BlockGraph::new();
+        let input_block_3 = block_misc::new_const_block(&mut bg, vec![1.0, 2.0]).unwrap();
+        let input_block_2 = block_misc::new_const_block(&mut bg, vec![3.0, 4.0, 5.0]).unwrap();
+        let input_block_1 = block_misc::new_const_block(&mut bg, vec![6.0, 7.0]).unwrap();
+        let join_block = new_join_block(&mut bg, vec![input_block_1, input_block_2, input_block_3]).unwrap();
+        let observe_block = block_misc::new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0)).unwrap();
+        bg.finalize();
+        bg.allocate_and_init_weights(&mi);
+        
+        let mut pb = bg.new_port_buffer();
+        let fb = fb_vec();
+        slearn2  (&mut bg, &fb, &mut pb, true);
+        // Order depends on the input parameters order, not on order of adding to graph
+        assert_eq!(pb.observations, vec![6.0, 7.0, 3.0, 4.0, 5.0, 1.0, 2.0]); 			// join actually doesn't do anything
+
+        spredict2  (&mut bg, &fb, &mut pb, false);
+        assert_eq!(pb.observations, vec![6.0, 7.0, 3.0, 4.0, 5.0, 1.0, 2.0]); 			// join actually doesn't do anything
+    }
+
+    #[test]
+    fn test_join_cascading() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        let mut bg = BlockGraph::new();
+        let input_block_1 = block_misc::new_const_block(&mut bg, vec![1.0, 2.0]).unwrap();
+        let input_block_2 = block_misc::new_const_block(&mut bg, vec![3.0, 4.0, 5.0]).unwrap();
+        let join_block_1 = new_join_block(&mut bg, vec![input_block_1, input_block_2]).unwrap();
+        let input_block_3 = block_misc::new_const_block(&mut bg, vec![6.0, 7.0]).unwrap();
+        let join_block_2 = new_join_block(&mut bg, vec![input_block_3, join_block_1]).unwrap();
+        let observe_block = block_misc::new_observe_block(&mut bg, join_block_2, Observe::Forward, Some(6.0)).unwrap();
+        bg.finalize();
+        bg.allocate_and_init_weights(&mi);
+        
+        let mut pb = bg.new_port_buffer();
+        let fb = fb_vec();
+        slearn2  (&mut bg, &fb, &mut pb, true);
+        // Order depends on the input parameters order, not on order of adding to graph
+        assert_eq!(pb.observations, vec![6.0, 7.0, 1.0, 2.0, 3.0, 4.0, 5.0]); 			// join actually doesn't do anything
+
+        spredict2  (&mut bg, &fb, &mut pb, false);
+        assert_eq!(pb.observations, vec![6.0, 7.0, 1.0, 2.0, 3.0, 4.0, 5.0]); 			// join actually doesn't do anything
+    }
+
 
 
 

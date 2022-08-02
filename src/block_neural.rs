@@ -274,9 +274,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                             1,//incy: i32
                         )
                 }
-             }       
-            let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
-            next_regressor[0].forward_backward(further_blocks, fb, pb, update);
+            }       
+            block_helpers::forward_backward(further_blocks, fb, pb, update);
 
             if update {
                 if self.neuron_type == NeuronType::WeightedSum {
@@ -344,8 +343,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                 wsum *= self.dropout_1; // fix for overexcitment if we are just predicting and not learning
                 *pb.tape.get_unchecked_mut(self.output_offset + j as usize) = wsum;
             }
-            let (next_regressor, further_blocks) = further_blocks.split_at(1);
-            next_regressor[0].forward(further_blocks, fb, pb);
+            block_helpers::forward(further_blocks, fb, pb);
 
             
             
@@ -439,7 +437,7 @@ mod tests {
                                             0.0, // max norm
                                             ).unwrap();
         let observe_block = block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0)).unwrap();
-        bg.schedule();
+        bg.finalize();
         bg.allocate_and_init_weights(&mi);
         
         let mut pb = bg.new_port_buffer();
@@ -470,7 +468,7 @@ mod tests {
                                             0.0, // max norm
                                             ).unwrap();
         let observe_block = block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0)).unwrap();
-        bg.schedule();
+        bg.finalize();
         bg.allocate_and_init_weights(&mi);
         
         let mut pb = bg.new_port_buffer();
@@ -503,7 +501,7 @@ mod tests {
         let input_block = block_misc::new_const_block(&mut bg, vec![2.0]).unwrap();
         let neuron_block = new_neuron_block(&mut bg, &mi, input_block, NeuronType::WeightedSum, InitType::One).unwrap();
         let observe_block = block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0)).unwrap();
-        bg.schedule();
+        bg.finalize();
         bg.allocate_and_init_weights(&mi);
         
         let mut pb = bg.new_port_buffer();
