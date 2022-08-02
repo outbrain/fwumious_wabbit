@@ -211,7 +211,8 @@ impl BlockTrait for BlockConsts {
 pub struct BlockCopy {    
     pub num_inputs: usize,
     pub input_offset: usize,
-    pub output_offset: usize,
+    pub output_offsets: Vec<usize>,
+    pub num_output_slots: usize,
 }
 
 
@@ -222,9 +223,10 @@ pub fn new_copy_block(bg: &mut graph::BlockGraph,
     assert!(num_inputs != 0);
 
     let mut block = Box::new(BlockCopy {
-        output_offset: usize::MAX,
+        output_offsets: vec![usize::MAX, usize::MAX],
         input_offset: usize::MAX,
         num_inputs: num_inputs as usize,
+        num_output_slots: 2,
     });
     let block_outputs = bg.add_node(block, vec![input])?;
     assert_eq!(block_outputs.len(), 2);
@@ -235,21 +237,20 @@ pub fn new_copy_block(bg: &mut graph::BlockGraph,
 
 
 
-impl BlockTrait for BlockCopy
-
- {
+impl BlockTrait for BlockCopy {
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
 
     fn get_block_type(&self) -> graph::BlockType {graph::BlockType::Copy}  
 
-    fn get_num_output_slots(&self) -> usize {2}   
+    fn get_num_output_slots(&self) -> usize {self.num_output_slots}   
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
-        assert!(output.get_output_index() <= 1);
-        self.num_inputs
+        assert!(output.get_output_index() < self.num_output_slots);
+        self.num_inputs    // all output slots have the same number of output values
     }
+
 
     fn get_input_offset(&mut self, input: graph::InputSlot) -> Result<usize, Box<dyn Error>> {
         assert!(input.get_input_index() == 0);
@@ -265,19 +266,14 @@ impl BlockTrait for BlockCopy
 
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
         if output.get_output_index() == 0 {
-            assert!(self.input_offset == offset)
-        } else 
-        if output.get_output_index() == 1 {
-            assert!(self.output_offset == usize::MAX); // We only allow a single call
-            self.output_offset = offset;
+            // output index 0 is special - as it is zero copy from input
+            assert!(self.input_offset == offset);
+            self.output_offsets[0] = offset;
         } else {
-            panic!("only two outputs supported for BlockCopy");
+            assert!(self.output_offsets[output.get_output_index()] == usize::MAX); // We only allow a single call
+            self.output_offsets[output.get_output_index()] = offset;
         }
     }
-
-
-
-
 
 
     #[inline(always)]
@@ -287,20 +283,26 @@ impl BlockTrait for BlockCopy
                         pb: &mut port_buffer::PortBuffer, 
                         update:bool) {
         debug_assert!(self.input_offset != usize::MAX);
-        debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.num_inputs > 0);
         
         unsafe {
             // plain copy from input to output
-            pb.tape.copy_within(self.input_offset .. (self.input_offset + self.num_inputs), self.output_offset);
-                        
+            for output_index in 1..self.num_output_slots {
+                let output_offset = *self.output_offsets.get_unchecked(output_index);
+                debug_assert!(output_offset != usize::MAX);
+                pb.tape.copy_within(self.input_offset .. (self.input_offset + self.num_inputs), output_offset);
+            }                    
             block_helpers::forward_backward(further_blocks, fb, pb, update);
 
             if update {
                 // Sum up the gradients from output to input
-                for i in 0..self.num_inputs as usize {
-                    let w = *pb.tape.get_unchecked(self.output_offset + i);
-                    *pb.tape.get_unchecked_mut(self.input_offset + i) += w;
+                for output_index in 1..self.num_output_slots {
+                    let output_offset = self.output_offsets[output_index];
+                    let input_offset = self.input_offset;
+                    for i in 0..self.num_inputs {
+                        let w = *pb.tape.get_unchecked(output_offset + i);
+                        *pb.tape.get_unchecked_mut(input_offset + i) += w;
+                    }
                 }
             }
         } // unsafe end
@@ -311,7 +313,9 @@ impl BlockTrait for BlockCopy
                         pb: &mut port_buffer::PortBuffer, 
                         ) {
             // plain copy from input to output
-            pb.tape.copy_within(self.input_offset .. (self.input_offset + self.num_inputs), self.output_offset);
+            for output_index in 1..self.num_output_slots {
+                pb.tape.copy_within(self.input_offset .. (self.input_offset + self.num_inputs), self.output_offsets[output_index]);
+            }                    
                         
             block_helpers::forward(further_blocks, fb, pb);
     }
