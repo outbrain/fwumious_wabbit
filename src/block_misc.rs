@@ -251,12 +251,10 @@ impl BlockTrait for BlockCopy {
         self.num_inputs    // all output slots have the same number of output values
     }
 
-
     fn get_input_offset(&mut self, input: graph::InputSlot) -> Result<usize, Box<dyn Error>> {
         assert!(input.get_input_index() == 0);
         Ok(self.input_offset)
     }
-
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize)  {
         assert!(input.get_input_index() == 0);
@@ -297,11 +295,11 @@ impl BlockTrait for BlockCopy {
             if update {
                 // Sum up the gradients from output to input
                 for output_index in 1..self.num_output_slots {
-                    let output_offset = self.output_offsets[output_index];
-                    let input_offset = self.input_offset;
+                    let (input_tape, output_tape) = block_helpers::get_input_output_borrows(&mut pb.tape, 
+                                                self.input_offset, self.num_inputs,
+                                                self.output_offsets[output_index], self.num_inputs); 
                     for i in 0..self.num_inputs {
-                        let w = *pb.tape.get_unchecked(output_offset + i);
-                        *pb.tape.get_unchecked_mut(input_offset + i) += w;
+                        *input_tape.get_unchecked_mut(i) += *output_tape.get_unchecked(i);
                     }
                 }
             }

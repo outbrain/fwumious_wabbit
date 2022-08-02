@@ -59,16 +59,11 @@ pub fn read_weights_from_buf<L>(weights: &mut Vec<L>, input_bufreader: &mut dyn 
     Ok(())
 }
 
-trait NewTrait: std::io::Read + std::io::Seek {}
-
 // We get a vec here just so we easily know the type...
 // Skip amount of bytes that a weights vector would be
 pub fn skip_weights_from_buf<L>(weights_len: usize, weights: &Vec<L>, input_bufreader: &mut dyn Read) -> Result<(), Box<dyn Error>> {
     let bytes_skip = weights_len *mem::size_of::<L>();
-//    input_bufreader.seek(io::SeekFrom::Current(bytes_skip as i64))?;
-
     io::copy(&mut input_bufreader.take(bytes_skip as u64), &mut io::sink())?;
-
     Ok(())
 }
 
@@ -118,6 +113,7 @@ pub fn read_weights_only_from_buf2<L:OptimizerTrait>(weights_len: usize, out_wei
 }
 
 
+#[inline(always)]
 pub fn get_input_output_borrows(i: &mut Vec<f32>, 
                   start1: usize, len1: usize, 
                   start2: usize, len2: usize) -> (&mut [f32], &mut [f32]) {
@@ -168,23 +164,23 @@ pub fn spredict2<'a>(bg: &mut graph::BlockGraph,
 
 #[inline(always)]
 pub fn forward_backward(further_blocks: &mut [Box<dyn BlockTrait>], 
-                    fb: &feature_buffer::FeatureBuffer, 
-                    pb: &mut port_buffer::PortBuffer, 
-                    update:bool) {
-            if further_blocks.len() > 0 {
-                let (next_regressor, further_blocks) = further_blocks.split_first_mut().unwrap();
-                next_regressor.forward_backward(further_blocks, fb, pb, update);
-            }
+                        fb: &feature_buffer::FeatureBuffer, 
+                        pb: &mut port_buffer::PortBuffer, 
+                        update:bool) {
+    match further_blocks.split_first_mut() {
+        Some((next_regressor, further_blocks)) => next_regressor.forward_backward(further_blocks, fb, pb, update),
+        None => {},
+    }
 }
 
 #[inline(always)]
 pub fn forward(         further_blocks: &[Box<dyn BlockTrait>], 
-                    fb: &feature_buffer::FeatureBuffer, 
-                    pb: &mut port_buffer::PortBuffer) {
-            if further_blocks.len() > 0 {
-                let (next_regressor, further_blocks) = further_blocks.split_first().unwrap();
-                next_regressor.forward(further_blocks, fb, pb);
-            }
+                        fb: &feature_buffer::FeatureBuffer, 
+                        pb: &mut port_buffer::PortBuffer) {
+    match further_blocks.split_first() {
+        Some((next_regressor, further_blocks)) => next_regressor.forward(further_blocks, fb, pb),
+        None => {},
+    }
 }
 
 
