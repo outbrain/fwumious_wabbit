@@ -7,6 +7,8 @@ use std::io::Error as IOError;
 use std::io::ErrorKind;
 use std::mem;
 
+use crate::block_misc;
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct OutputSlot(usize);
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -112,7 +114,22 @@ impl BlockGraph {
                 }
             }
             edges_in = new_edges_in;
+        } else if block.get_block_type() == BlockType::Copy {
+            // if we connect copy to copy... we simply increase number of copies of existing input block
+            assert!(edges_in.len() == 1);
+            let edge_in = &edges_in[0];
+            let node_id_in =  edge_in.get_node_id();
+            if self.blocks[node_id_in].get_block_type() == BlockType::Copy {
+                let copy_block = self.blocks[node_id_in].as_any().downcast_mut::<block_misc::BlockCopy>().unwrap();
+                let bp = BlockPtr(node_id_in);
+                let bo = BlockPtrOutput(bp, OutputSlot(copy_block.output_offsets.len()));
+                copy_block.output_offsets.push(usize::MAX);
+                self.nodes[node_id_in].edges_out.push(BLOCK_PTR_INPUT_DEFAULT); // make empty spaceg
+                return Ok(vec![bo, edges_in.pop().unwrap()]);
+            }  
+  
         }
+        
                     
         let num_output_connectors = block.get_num_output_slots();
         let bp = BlockPtr(self.nodes.len());     // id of current node
@@ -320,7 +337,7 @@ mod tests {
         assert_eq!(bg.nodes[0].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);
 
         // We need to add a copy block to have two sinks
-        let mut copies = block_misc::new_copy_block(&mut bg, const_block_output).unwrap();
+        let mut copies = block_misc::new_copy_block(&mut bg, const_block_output, 2).unwrap();
         let c2 = copies.pop().unwrap();
         let c1 = copies.pop().unwrap();
         
@@ -424,7 +441,7 @@ mod tests {
         let mut bg = BlockGraph::new();
         
         let const_1 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
-        let mut copy_block = block_misc::new_copy_block(&mut bg, const_1).unwrap();
+        let mut copy_block = block_misc::new_copy_block(&mut bg, const_1, 2).unwrap();
         let copy_output_2 = copy_block.pop().unwrap();
         let copy_output_1 = copy_block.pop().unwrap();
         let const_2 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();       

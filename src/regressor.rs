@@ -106,7 +106,7 @@ impl Regressor  {
         if mi.nn_config.layers.len() > 0 {
             let mut join_block : Option<graph::BlockPtrOutput> = None;
             if mi.nn_config.topology == "one" {
-                let mut outputs = block_misc::new_copy_block(&mut bg, output).unwrap();
+                let mut outputs = block_misc::new_copy_block(&mut bg, output, 2).unwrap();
                 join_block = Some(outputs.pop().unwrap());
                 output = outputs.pop().unwrap();
             } else if mi.nn_config.topology == "two" {

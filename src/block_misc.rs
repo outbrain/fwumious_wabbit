@@ -8,7 +8,6 @@ use crate::port_buffer;
 use crate::model_instance;
 use crate::graph;
 use crate::block_helpers;
-use std::convert::TryInto;
 use regressor::BlockTrait;
 
 #[derive(PartialEq)]
@@ -212,24 +211,23 @@ pub struct BlockCopy {
     pub num_inputs: usize,
     pub input_offset: usize,
     pub output_offsets: Vec<usize>,
-    pub num_output_slots: usize,
 }
 
 
 pub fn new_copy_block(bg: &mut graph::BlockGraph,
-                       input: graph::BlockPtrOutput
+                       input: graph::BlockPtrOutput,
+                       num_output_slots: usize,
                        ) -> Result<Vec<graph::BlockPtrOutput>, Box<dyn Error>> {
     let num_inputs = bg.get_num_output_values(vec![&input]);
     assert!(num_inputs != 0);
 
     let mut block = Box::new(BlockCopy {
-        output_offsets: vec![usize::MAX, usize::MAX],
+        output_offsets: vec![usize::MAX; num_output_slots],
         input_offset: usize::MAX,
         num_inputs: num_inputs as usize,
-        num_output_slots: 2,
     });
     let block_outputs = bg.add_node(block, vec![input])?;
-    assert_eq!(block_outputs.len(), 2);
+    assert_eq!(block_outputs.len(), num_output_slots);
     Ok(block_outputs)
 }
 
@@ -244,10 +242,10 @@ impl BlockTrait for BlockCopy {
 
     fn get_block_type(&self) -> graph::BlockType {graph::BlockType::Copy}  
 
-    fn get_num_output_slots(&self) -> usize {self.num_output_slots}   
+    fn get_num_output_slots(&self) -> usize {self.output_offsets.len()}   
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
-        assert!(output.get_output_index() < self.num_output_slots);
+        assert!(output.get_output_index() < self.output_offsets.len(), "output.get_output_index(): {}, self.output_offsets.len(): {}", output.get_output_index(), self.output_offsets.len());
         self.num_inputs    // all output slots have the same number of output values
     }
 
@@ -263,6 +261,7 @@ impl BlockTrait for BlockCopy {
     }
 
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
+        assert!(output.get_output_index() < self.output_offsets.len());
         if output.get_output_index() == 0 {
             // output index 0 is special - as it is zero copy from input
             assert!(self.input_offset == offset);
@@ -281,12 +280,12 @@ impl BlockTrait for BlockCopy {
                         pb: &mut port_buffer::PortBuffer, 
                         update:bool) {
         debug_assert!(self.input_offset != usize::MAX);
+        debug_assert!(self.input_offset == self.output_offsets[0]);
         debug_assert!(self.num_inputs > 0);
         
         unsafe {
             // plain copy from input to output
-            for output_index in 1..self.num_output_slots {
-                let output_offset = *self.output_offsets.get_unchecked(output_index);
+            for &output_offset in self.output_offsets.get_unchecked(1..) {
                 debug_assert!(output_offset != usize::MAX);
                 pb.tape.copy_within(self.input_offset .. (self.input_offset + self.num_inputs), output_offset);
             }                    
@@ -294,10 +293,10 @@ impl BlockTrait for BlockCopy {
 
             if update {
                 // Sum up the gradients from output to input
-                for output_index in 1..self.num_output_slots {
+                for &output_offset in self.output_offsets.get_unchecked(1..) {
                     let (input_tape, output_tape) = block_helpers::get_input_output_borrows(&mut pb.tape, 
                                                 self.input_offset, self.num_inputs,
-                                                self.output_offsets[output_index], self.num_inputs); 
+                                                output_offset, self.num_inputs); 
                     for i in 0..self.num_inputs {
                         *input_tape.get_unchecked_mut(i) += *output_tape.get_unchecked(i);
                     }
@@ -311,13 +310,14 @@ impl BlockTrait for BlockCopy {
                         pb: &mut port_buffer::PortBuffer, 
                         ) {
             // plain copy from input to output
-            for output_index in 1..self.num_output_slots {
-                pb.tape.copy_within(self.input_offset .. (self.input_offset + self.num_inputs), self.output_offsets[output_index]);
+        unsafe {
+            for &output_offset in self.output_offsets.get_unchecked(1..) {
+                pb.tape.copy_within(self.input_offset .. (self.input_offset + self.num_inputs), output_offset);
             }                    
-                        
-            block_helpers::forward(further_blocks, fb, pb);
+        }
+        block_helpers::forward(further_blocks, fb, pb);
     }
-    
+
 }
 
 
@@ -749,7 +749,7 @@ mod tests {
         let mut bg = BlockGraph::new();
         let input_block = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
         let observe_block_backward = block_misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
-        let mut copy_blocks = new_copy_block(&mut bg, observe_block_backward).unwrap();
+        let mut copy_blocks = new_copy_block(&mut bg, observe_block_backward, 2).unwrap();
         let copy_block_2 = copy_blocks.pop().unwrap();
         let copy_block_1 = copy_blocks.pop().unwrap();
         let observe_block_1_forward = block_misc::new_observe_block(&mut bg, copy_block_1, Observe::Forward, Some(5.0)).unwrap();
@@ -769,6 +769,42 @@ mod tests {
                                          2.0, 3.0,			// 2nd copy of forward
                                          5.0, 5.0, ]);		// backward part isn't touched, it will contain whatever observe block_1 put there
 
+
+    }
+
+    #[test]
+    fn test_copy_block_cascade() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        let mut bg = BlockGraph::new();
+        let input_block = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
+        let observe_block_backward = block_misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
+        let mut copy_blocks_1 = new_copy_block(&mut bg, observe_block_backward, 2).unwrap();
+        let copy_block_2 = copy_blocks_1.pop().unwrap();
+        let copy_block_1 = copy_blocks_1.pop().unwrap();
+        let mut copy_blocks_2 = new_copy_block(&mut bg, copy_block_1, 2).unwrap();
+        let copy_block_3 = copy_blocks_2.pop().unwrap();
+        let copy_block_4 = copy_blocks_2.pop().unwrap();
+
+        let observe_block_1_forward = block_misc::new_observe_block(&mut bg, copy_block_2, Observe::Forward, Some(5.0)).unwrap();
+        let observe_block_2_forward = block_misc::new_observe_block(&mut bg, copy_block_3, Observe::Forward, Some(6.0)).unwrap();
+        let observe_block_3_forward = block_misc::new_observe_block(&mut bg, copy_block_4, Observe::Forward, Some(7.0)).unwrap();
+        bg.finalize();
+        bg.allocate_and_init_weights(&mi);
+        
+        let mut pb = bg.new_port_buffer();
+        let fb = fb_vec();
+        slearn2  (&mut bg, &fb, &mut pb, true);
+        assert_eq!(pb.observations, vec![2.0, 3.0, 			// 1st copy of forward parts
+                                         2.0, 3.0,			// 2nd copy of forward
+                                         2.0, 3.0,
+                                         18.0, 18.0, ]);		// backward part  (5+6+7)
+
+        spredict2  (&mut bg, &fb, &mut pb, false);
+        assert_eq!(pb.observations, vec![2.0, 3.0, 			// 1st copy of forward parts
+                                         2.0, 3.0,			// 2nd copy of forward
+                                         2.0, 3.0, 
+                                         6.0, 6.0]);		// backward part isn't touched, it will contain whatever observe block_1 put there
+                                                                // it is from copy_block_3 since that is the last one where observe_block_2_forward does its work
 
     }
 
