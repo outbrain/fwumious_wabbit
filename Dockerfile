@@ -47,6 +47,7 @@ ENV PATH="/root/.cargo/bin:/vowpal_wabbit/vowpalwabbit/vowpalwabbit/cli/:${PATH}
 
 # Conduct benchmark against vw + produce --release bin
 WORKDIR /
+RUN echo 'cloning $FW_BRANCH $FW_REPO_URL'
 RUN git clone --branch $FW_BRANCH $FW_REPO_URL
 WORKDIR /fwumious_wabbit
 RUN cargo test
