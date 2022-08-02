@@ -1,8 +1,8 @@
 FROM ubuntu:18.04
 ENV IMAGENAME="fwumious-builder"
 ENV DEBIAN_FRONTEND=noninteractive
-ENV FW_REPO_URL=https://github.com/outbrain/fwumious_wabbit.git
-ENV FW_BRANCH=main
+ARG FW_REPO_URL=https://github.com/outbrain/fwumious_wabbit.git
+ARG FW_BRANCH=main
 RUN apt-get update &&     apt-get install gcc g++ -y &&     apt-get install libboost-dev libboost-thread-dev libboost-program-options-dev libboost-system-dev libboost-math-dev libboost-test-dev zlib1g-dev -y &&     apt-get install git python3 python3-psutil python3-matplotlib lsb-release wget software-properties-common openjdk-8-jdk curl -y
 
 ENV JAVA_HOME="/usr/lib/jvm/java-8-openjdk-amd64"
