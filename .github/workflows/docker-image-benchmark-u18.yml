@@ -15,4 +15,4 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag fw-bench:$(date +%s)
+      run: docker build --build-arg FW_REPO_URL=https://github.com/$GITHUB_REPOSITORY.git --build-arg FW_BRANCH=$GITHUB_REF_NAME. --file Dockerfile --tag fw-bench:$(date +%s)
