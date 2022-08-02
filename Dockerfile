@@ -52,5 +52,5 @@ WORKDIR /fwumious_wabbit
 RUN cargo test
 RUN cargo build --release
 # VW - FW benchmarking currently disabled
-WORKDIR /fwumious_wabbit/benchmark
-RUN ./run_with_plots.sh
+#WORKDIR /fwumious_wabbit/benchmark
+#RUN ./run_with_plots.sh
