@@ -305,8 +305,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                                 // Updating bias term:
                                 let gradient = general_gradient * 1.0;
                                 let update = self.optimizer.calculate_update(gradient, 
-                                                                            &mut self.weights_optimizer.get_unchecked_mut((bias_offset + j) as usize).optimizer_data);
-                                self.weights.get_unchecked_mut((bias_offset + j) as usize).weight -= update;
+                                                                            &mut self.weights_optimizer.get_unchecked_mut(bias_offset + j).optimizer_data);
+                                self.weights.get_unchecked_mut(bias_offset + j).weight -= update;
                             }
                     }
                      

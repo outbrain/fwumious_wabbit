@@ -63,6 +63,7 @@ impl BlockTrait for BlockObserve {
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize)  {
         assert!(input.get_input_index() == 0);
+        assert!(self.input_offset == usize::MAX); // We only allow a single call
         self.input_offset = offset;
     }
 
@@ -301,7 +302,6 @@ impl BlockTrait for BlockCopy
                     let w = *pb.tape.get_unchecked(self.output_offset + i);
                     *pb.tape.get_unchecked_mut(self.input_offset + i) += w;
                 }
-
             }
         } // unsafe end
     }

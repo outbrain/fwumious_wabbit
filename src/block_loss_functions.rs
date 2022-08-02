@@ -84,10 +84,12 @@ impl BlockTrait for BlockSigmoid {
     
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize)  {
         assert!(input.get_input_index() == 0);
+        assert!(self.input_offset == usize::MAX); // We only allow a single call
         self.input_offset = offset;
     }
 
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize)  {
+        assert!(self.output_offset == usize::MAX); // We only allow a single call
         assert!(output.get_output_index() == 0);
         self.output_offset = offset;
     }
