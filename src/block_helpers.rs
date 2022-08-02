@@ -67,7 +67,7 @@ pub fn skip_weights_from_buf<L>(weights_len: usize, weights: &Vec<L>, input_bufr
     let bytes_skip = weights_len *mem::size_of::<L>();
 //    input_bufreader.seek(io::SeekFrom::Current(bytes_skip as i64))?;
 
-    io::copy(&mut input_bufreader.take(bytes_skip as u64), &mut io::sink());
+    io::copy(&mut input_bufreader.take(bytes_skip as u64), &mut io::sink())?;
 
     Ok(())
 }

@@ -111,7 +111,12 @@ impl Regressor  {
             } else if mi.nn_config.topology == "two" {
                 // do not copy out the 
             } else if mi.nn_config.topology == "three" {
-
+                join_block = Some(output);
+                let mut lr_block = block_lr::new_lr_block(&mut bg, mi).unwrap();
+                let mut block_ffm = block_ffm::new_ffm_block(&mut bg, mi).unwrap();
+                let mut triangle_ffm = block_misc::new_triangle_block(&mut bg, block_ffm).unwrap();
+                output = block_misc::new_join_block(&mut bg, vec![lr_block, triangle_ffm]).unwrap();
+                println!("topology 3: we have entirely separate ebeddings for nn");
             } else {
                 Err(format!("unknown nn topology: \"{}\"", mi.nn_config.topology)).unwrap()
             }

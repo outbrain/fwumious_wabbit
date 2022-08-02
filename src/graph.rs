@@ -22,7 +22,6 @@ pub struct BlockPtrInput(BlockPtr, InputSlot); // since blocks can have multiple
 pub struct BlockGraphNode {
     pub edges_in: Vec<BlockPtrOutput>,	// each block can have multiple input edges
     pub edges_out: Vec<BlockPtrInput>,  // each block can have multiple output edges
-
 }
 
 pub struct BlockGraph {
@@ -73,7 +72,8 @@ impl BlockGraph {
     pub fn new() -> BlockGraph {
         BlockGraph {nodes: Vec::new(),
                     blocks: Vec::new(),
-                    tape_size: 0}
+                    tape_size: 0,
+                    }
     }
 
     pub fn add_node(&mut self, 
@@ -84,13 +84,32 @@ impl BlockGraph {
                 
         // Due to how CopyBlock works (zero-copy first ouptut), it's first output cannot go to a Join block since join block needs to control its inputs 
         // TODO we could just insert TrueCopy block here...
+                
+        let mut edges_in = edges_in;
         if block.get_block_type() == BlockType::Join {
-            for edge_in in edges_in.iter() {
-                if (self.blocks[edge_in.get_node_id()].get_block_type() == BlockType::Copy && edge_in.get_output_index() == 0) || 
-                   (self.blocks[edge_in.get_node_id()].get_block_type() == BlockType::Observe) {
+            // Join a is a special block, because it does zero copy joining of outputs
+            // Which means you can't have certain combinations like copy->join, 
+            // since copy prevents join from deciding on locations of inputs of the first output index
+            // As BlockCopy itself does the zero copy 
+            // Also if we have join blocks going into a new join block, we take all of its inputs and abandon previous join        
+    
+            let mut new_edges_in : Vec<BlockPtrOutput> = Vec::new();
+            for edge_in in edges_in.into_iter() {
+                let node_id_in =  edge_in.get_node_id();
+                if (self.blocks[node_id_in].get_block_type() == BlockType::Copy && edge_in.get_output_index() == 0) || 
+                   (self.blocks[node_id_in].get_block_type() == BlockType::Observe) {
                     return Err(Box::new(IOError::new(ErrorKind::Other, "First output of a CopyBlock can not go to a JoinBlock (reasons are complicited). Using second output is ok.")));
-                }                    
+                } else if self.blocks[node_id_in].get_block_type() == BlockType::Join {
+                    // Join -> Join can always be merged into a single join
+                    // So we won't add a block here, instead, we will add input edges to previous block
+                    // And abandon the previous block with empty inputs and outputs.
+                    new_edges_in.append(&mut self.nodes[node_id_in].edges_in);
+                    self.nodes[node_id_in].edges_out.truncate(0);
+                } else {
+                    new_edges_in.push(edge_in);
+                }
             }
+            edges_in = new_edges_in;
         }
                     
         let num_output_connectors = block.get_num_output_slots();
@@ -170,7 +189,7 @@ impl BlockGraph {
     pub fn schedule(&mut self) {
         let mut offset: usize = 0;
         // We allocate offsets based on input tapes. 
-        // This assures that for each block, inputs are placed conesquitvely are consequtive
+        // This assures that for each block, inputs that are placed conesquitvely are consequtive
         // Which is importnat for the JoinBlock that has that requirement
         for i in 0..self.len() {
             for (input_index, edge_in) in self.nodes[i].edges_in.iter().enumerate() {
@@ -382,16 +401,10 @@ mod tests {
     #[test]
     fn schedule_fail_copy_to_join() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
-        mi.learning_rate = 0.1;
-        mi.ffm_learning_rate = 0.1;
-        mi.power_t = 0.0;
-        mi.ffm_power_t = 0.0;
-        mi.bit_precision = 18;
         mi.ffm_k = 1;
-        mi.ffm_bit_precision = 18;
         mi.ffm_fields = vec![vec![], vec![], vec![]]; // This isn't really used
-        
         mi.optimizer = Optimizer::AdagradLUT;
+
         let mut bg = BlockGraph::new();
         
         let const_1 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
@@ -410,6 +423,40 @@ mod tests {
 //        let lossf = block_loss_functions::new_logloss_block(&mut bg, joined, true);
 //        let list = bg.schedule();
     }
+
+    #[test]
+    fn schedule_join_to_join() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        mi.ffm_k = 1;
+        mi.ffm_fields = vec![vec![], vec![], vec![]]; // This isn't really used
+        mi.optimizer = Optimizer::AdagradLUT;
+
+        let mut bg = BlockGraph::new();
+        
+        let const_1 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
+        let const_2 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();       
+        let const_3 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();   
+        let mut join_block1 = block_misc::new_join_block(&mut bg, vec![const_1, const_2]).unwrap();
+        let mut join_block2 = block_misc::new_join_block(&mut bg, vec![join_block1, const_3]).unwrap();
+        assert_eq!(bg.nodes.len(), 5);
+        assert_eq!(bg.nodes[3].edges_in.len(), 0); // 3 is the first join block which was removed
+        assert_eq!(bg.nodes[3].edges_out.len(), 0);
+        assert_eq!(bg.nodes[4].edges_in.len(), 3); // now fourth block has 3 inputs, not 2
+        
+        bg.schedule();
+        let list = bg.take_blocks();
+        assert_eq!(list.len(), 3);  // both copy blocks are no-op and thus not returned 
+                
+    }
+
+
+
+
+
+
+
+
+
 
 
     

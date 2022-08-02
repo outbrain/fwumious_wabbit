@@ -8,7 +8,7 @@ use crate::port_buffer;
 use crate::model_instance;
 use crate::graph;
 use crate::block_helpers;
-
+use std::convert::TryInto;
 use regressor::BlockTrait;
 
 #[derive(PartialEq)]
@@ -58,7 +58,6 @@ impl BlockTrait for BlockObserve {
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert!(output.get_output_index() == 0);
-        // this means outputs on regular tapes
         return self.num_inputs
     }
 
@@ -76,8 +75,6 @@ impl BlockTrait for BlockObserve {
         assert!(input.get_input_index() == 0);
         Ok(self.input_offset)
     }
-
-
 
     
     #[inline(always)]
@@ -111,6 +108,7 @@ impl BlockTrait for BlockObserve {
 
     }
 
+    #[inline(always)]
     fn forward(&self, 
                      further_blocks: &[Box<dyn BlockTrait>], 
                      fb: &feature_buffer::FeatureBuffer,
@@ -153,11 +151,6 @@ pub struct BlockConsts {
     consts: Vec<f32>,
     
 }
-/*
-pub fn new_const_block(consts: Vec<f32>) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-    Ok(Box::new(BlockConsts {   output_tape_index: -1,
-                                consts: consts}))
-}*/
 
 pub fn new_const_block( bg: &mut graph::BlockGraph, 
                         consts: Vec<f32>) 
@@ -266,9 +259,6 @@ impl BlockTrait for BlockCopy
 
     fn get_block_type(&self) -> graph::BlockType {graph::BlockType::Copy}  
 
-    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
-    }
-
     fn get_num_output_slots(&self) -> usize {2}   
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
@@ -284,6 +274,7 @@ impl BlockTrait for BlockCopy
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize)  {
         assert!(input.get_input_index() == 0);
+        assert!(self.input_offset == usize::MAX); // We only allow a single call
         self.input_offset = offset;
     }
 
@@ -292,6 +283,7 @@ impl BlockTrait for BlockCopy
             assert!(self.input_offset == offset)
         } else 
         if output.get_output_index() == 1 {
+            assert!(self.output_offset == usize::MAX); // We only allow a single call
             self.output_offset = offset;
         } else {
             panic!("only two outputs supported for BlockCopy");
@@ -317,7 +309,6 @@ impl BlockTrait for BlockCopy
             // plain copy from input to output
             pb.tape.copy_within(self.input_offset .. (self.input_offset + self.num_inputs), self.output_offset);
                         
-            //pb.tapes[self.output_tape_index as usize].extend_from_slice(pb.tapes.get_unchecked(self.input_tape_index as usize).get_unchecked(input_tape_start .. input_tape_start + self.num_inputs as usize));
             if further_blocks.len() > 0 {
                 let (next_regressor, further_blocks) = further_blocks.split_first_mut().unwrap();
                 next_regressor.forward_backward(further_blocks, fb, pb, update);
@@ -326,7 +317,6 @@ impl BlockTrait for BlockCopy
                 // Sum up the gradients from output to input
                 for i in 0..self.num_inputs as usize {
                     let w = *pb.tape.get_unchecked(self.output_offset + i);
-//                    println!("AAAAAA: {}, initial: {}", w, *(pb.tapes.get_unchecked_mut(self.input_tape_index as usize)).get_unchecked_mut(input_tape_start + i));
                     *pb.tape.get_unchecked_mut(self.input_offset + i) += w;
                 }
 
@@ -344,10 +334,9 @@ impl BlockTrait for BlockCopy
             // plain copy from input to output
             pb.tape.copy_within(self.input_offset .. (self.input_offset + self.num_inputs), self.output_offset);
                         
-            //pb.tapes[self.output_tape_index as usize].extend_from_slice(pb.tapes.get_unchecked(self.input_tape_index as usize).get_unchecked(input_tape_start .. input_tape_start + self.num_inputs as usize));
             if further_blocks.len() > 0 {
-                let (next_regressor, further_blocks) = further_blocks.split_at(1);
-                next_regressor[0].forward(further_blocks, fb, pb);
+                let (next_regressor, further_blocks) = further_blocks.split_first().unwrap();
+                next_regressor.forward(further_blocks, fb, pb);
             }
     }
     
@@ -399,10 +388,11 @@ impl BlockTrait for BlockJoin {
     }
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize)  {
-        assert!(input.get_input_index() <= 1);
+        //assert!(input.get_input_index() <= 1);    // We now support multiple joins, so no need to assume just one
         if input.get_input_index() == 0 {
+            assert!(self.input_offset == usize::MAX); // We only allow a single call
             self.input_offset = offset;
-        } else if input.get_input_index() == 1 {
+        } else if input.get_input_index() >= 1 {
             assert!(self.input_offset <= offset, "Output 1, error 1: Input offset: {}, num_inputs: {}, offset: {}", self.input_offset, self.num_inputs, offset);
             assert!(self.input_offset + self.num_inputs >= offset, "Output 1, error 2: Input offset: {}, num_inputs: {}, offset: {}", self.input_offset, self.num_inputs, offset);
         }
@@ -411,6 +401,7 @@ impl BlockTrait for BlockJoin {
 
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
         assert!(output.get_output_index() == 0);
+        assert!(self.output_offset == usize::MAX); // We only allow a single call
         self.output_offset = offset;
     }
 
@@ -498,11 +489,13 @@ impl BlockTrait for BlockSum {
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize)  {
         assert!(input.get_input_index() == 0);
+        assert!(self.input_offset == usize::MAX); // We only allow a single call
         self.input_offset = offset;
     }
 
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize)  {
         assert!(output.get_output_index() == 0);
+        assert!(self.output_offset == usize::MAX); // We only allow a single call
         self.output_offset = offset;
     }
 
@@ -621,11 +614,13 @@ impl BlockTrait for BlockTriangle
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize)  {
         assert!(input.get_input_index() == 0);
+        assert!(self.input_offset == usize::MAX); // We only allow a single call
         self.input_offset = offset;
     }
 
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
         assert!(output.get_output_index() == 0);
+        assert!(self.output_offset == usize::MAX); // We only allow a single call
         self.output_offset = offset;
     }
 
@@ -642,8 +637,6 @@ impl BlockTrait for BlockTriangle
         
         unsafe {
             {
-//              let input_tape = pb.tape.get_unchecked(self.input_offset..(self.input_offset + self.num_inputs as usize));
-//              let output_tape = pb.tape.get_unchecked_mut(self.output_offset..(self.output_offset + self.num_outputs as usize));
                 let (input_tape, output_tape) = block_helpers::get_input_output_borrows(&mut pb.tape, 
                                                             self.input_offset, self.num_inputs,
                                                             self.output_offset, self.num_outputs); 
@@ -651,10 +644,7 @@ impl BlockTrait for BlockTriangle
       
                 let mut output_index: usize = 0;
                 for i in 0..self.square_width {
-//                    println!("AAAAA i: {}", i);
                     for j in 0..i {
-//                        let input = input_tape.get_unchecked(i * self.square_width + j);
- //                       println!("Output index: i: {}, j: {}, A: {}, B: {}", i, j, input_tape[i * self.square_width + j], input_tape[j * self.square_width + i]);
                         *output_tape.get_unchecked_mut(output_index) = *input_tape.get_unchecked(i * self.square_width + j) * 2.0;
                         output_index += 1;
                     }
@@ -664,8 +654,8 @@ impl BlockTrait for BlockTriangle
             }
 
             if further_blocks.len() > 0 {
-                let (next_regressor, further_blocks) = further_blocks.split_at_mut(1);
-                next_regressor[0].forward_backward(further_blocks, fb, pb, update);
+                let (next_regressor, further_blocks) = further_blocks.split_first_mut().unwrap();
+                next_regressor.forward_backward(further_blocks, fb, pb, update);
             }
             if update {
                 let (input_tape, output_tape) = block_helpers::get_input_output_borrows(&mut pb.tape, 
@@ -750,21 +740,20 @@ mod tests {
     #[test]
     fn test_sum_block() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
-        mi.learning_rate = 0.1;
-        mi.power_t = 0.0;
-        mi.optimizer = Optimizer::SGD;
-        
-       
         let mut bg = BlockGraph::new();
         let input_block = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
-        let sum_block = new_sum_block(&mut bg, input_block).unwrap();
-        let observe_block = block_misc::new_observe_block(&mut bg, sum_block, Observe::Forward, Some(1.0)).unwrap();
+        let observe_block_backward = block_misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
+        let sum_block = new_sum_block(&mut bg, observe_block_backward).unwrap();
+        let observe_block_forward = block_misc::new_observe_block(&mut bg, sum_block, Observe::Forward, Some(1.0)).unwrap();
         bg.schedule();
         bg.allocate_and_init_weights(&mi);
         
         let mut pb = bg.new_port_buffer();
         let fb = fb_vec();
         assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 5.0);
+//        assert_epsilon!(spredict2  (&mut bg, &fb, &mut pb, true), 5.0);
+        assert_eq!(pb.observations, vec![5.0,			// forward part
+                                         1.0, 1.0]);		// backward part -- 1 is distributed to both inputs
         
         
 
@@ -774,11 +763,6 @@ mod tests {
     #[test]
     fn test_triangle_block() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
-        mi.learning_rate = 0.1;
-        mi.power_t = 0.0;
-        mi.optimizer = Optimizer::SGD;
-        
-       
         let mut bg = BlockGraph::new();
         let input_block = block_misc::new_const_block(&mut bg, vec![2.0, 4.0, 4.0, 5.0]).unwrap();
         let observe_block_backward = block_misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
@@ -792,31 +776,44 @@ mod tests {
         slearn2  (&mut bg, &fb, &mut pb, true);
         assert_eq!(pb.observations, vec![2.0, 8.0, 5.0,			// forward part
                                          2.0, 8.0, 8.0, 5.0]);		// backward part -- 3.0 gets turned into 4.0 since that is its transpose
+
+
+    }
+
+
+    #[test]
+    fn test_copy_block() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        let mut bg = BlockGraph::new();
+        let input_block = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
+        let observe_block_backward = block_misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
+        let mut copy_blocks = new_copy_block(&mut bg, observe_block_backward).unwrap();
+        let copy_block_2 = copy_blocks.pop().unwrap();
+        let copy_block_1 = copy_blocks.pop().unwrap();
+        let observe_block_1_forward = block_misc::new_observe_block(&mut bg, copy_block_1, Observe::Forward, Some(5.0)).unwrap();
+        let observe_block_2_forward = block_misc::new_observe_block(&mut bg, copy_block_2, Observe::Forward, Some(6.0)).unwrap();
+        bg.schedule();
+        bg.allocate_and_init_weights(&mi);
         
+        let mut pb = bg.new_port_buffer();
+        let fb = fb_vec();
+        slearn2  (&mut bg, &fb, &mut pb, true);
+        assert_eq!(pb.observations, vec![2.0, 3.0, 			// 1st copy of forward parts
+                                         2.0, 3.0,			// 2nd copy of forward
+                                         11.0, 11.0, ]);		// backward part  (6+11)
+
+        spredict2  (&mut bg, &fb, &mut pb, false);
+        assert_eq!(pb.observations, vec![2.0, 3.0, 			// 1st copy of forward parts
+                                         2.0, 3.0,			// 2nd copy of forward
+                                         5.0, 5.0, ]);		// backward part isn't touched, it will contain whatever observe block_1 put there
+
 
     }
 
 
 
 
+
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 

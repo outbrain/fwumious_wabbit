@@ -89,6 +89,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
 
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize)  {
         assert!(output.get_output_index() == 0);
+        debug_assert!(self.output_offset == usize::MAX); // We only allow a single call
         self.output_offset = offset;
     }
 
@@ -104,7 +105,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
         let mut wsum:f32 = 0.0;
         unsafe {
             {
-                let myslice = &mut pb.tape[self.output_offset .. (self.output_offset + self.num_combos as usize)];
+                let myslice = &mut pb.tape.get_unchecked_mut(self.output_offset .. (self.output_offset + self.num_combos as usize));
                 myslice.fill(0.0);
 
                 for hashvalue in fb.lr_buffer.iter() {
@@ -123,7 +124,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockLR<L>
                 next_regressor.forward_backward(further_blocks, fb, pb, update);
             }
             if update {
-                let myslice = &mut pb.tape[self.output_offset .. (self.output_offset + self.num_combos as usize)];
+                let myslice = &mut pb.tape.get_unchecked(self.output_offset .. (self.output_offset + self.num_combos as usize));
 
                 for hashvalue in fb.lr_buffer.iter() {
                     let feature_index     = hashvalue.hash as usize;
