@@ -132,6 +132,89 @@ impl BlockTrait for BlockObserve {
 
 }
 
+pub enum SinkType {
+    Zero,
+    Untouched
+}
+
+pub struct BlockSink {
+    num_inputs: usize,
+    input_offset: usize,
+    sink_type: SinkType,
+}
+
+
+pub fn new_sink_block(bg: &mut graph::BlockGraph,
+                        input: graph::BlockPtrOutput,
+                        sink_type: SinkType)
+                        -> Result<(), Box<dyn Error>> {
+
+    let num_inputs = bg.get_num_output_values(vec![&input]);
+    let block = Box::new(BlockSink {
+                         input_offset: usize::MAX,
+                         num_inputs: num_inputs,
+                         sink_type: sink_type,
+                         });
+    let mut block_outputs = bg.add_node(block, vec![input])?;
+    assert_eq!(block_outputs.len(), 0);
+    Ok(())
+}
+
+
+
+impl BlockTrait for BlockSink {
+    // Warning: It does not confirm to regular clean-up after itself
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn get_block_type(&self) -> graph::BlockType {graph::BlockType::Regular}   // It is regular, as there is no special functionality.
+
+    fn get_num_output_slots(&self) -> usize {0} // It is a pass-through   
+
+    fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
+        assert!(false, "No output values in BlockSink");
+        0
+    }
+
+    fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize)  {
+        assert!(input.get_input_index() == 0);
+        assert!(self.input_offset == usize::MAX); // We only allow a single call
+        self.input_offset = offset;
+    }
+
+    fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize)  {
+        assert!(false, "No outputs in BlockSink");
+    }
+
+    #[inline(always)]
+    fn forward_backward(&mut self, 
+                    further_blocks: &mut [Box<dyn BlockTrait>], 
+                    fb: &feature_buffer::FeatureBuffer, 
+                    pb: &mut port_buffer::PortBuffer, 
+                    update:bool) {
+        debug_assert!(self.input_offset != usize::MAX);
+
+        block_helpers::forward_backward(further_blocks, fb, pb, update);
+        match self.sink_type {
+            SinkType::Zero => {pb.tape[self.input_offset..(self.input_offset + self.num_inputs)].fill(0.0);},
+            SinkType::Untouched => {},
+        }
+    }
+
+    #[inline(always)]
+    fn forward(&self, 
+                     further_blocks: &[Box<dyn BlockTrait>], 
+                     fb: &feature_buffer::FeatureBuffer,
+                     pb: &mut port_buffer::PortBuffer
+                     ) {
+        debug_assert!(self.input_offset != usize::MAX);
+        block_helpers::forward(further_blocks, fb, pb);
+    }
+
+}
+
 
 
 
@@ -214,7 +297,7 @@ pub struct BlockCopy {
 }
 
 
-pub fn new_copy_block_x(bg: &mut graph::BlockGraph,
+pub fn new_copy_block(bg: &mut graph::BlockGraph,
                        input: graph::BlockPtrOutput,
                        num_output_slots: usize,
                        ) -> Result<Vec<graph::BlockPtrOutput>, Box<dyn Error>> {
@@ -234,7 +317,7 @@ pub fn new_copy_block_x(bg: &mut graph::BlockGraph,
 pub fn new_copy_block_2(bg: &mut graph::BlockGraph,
                        input: graph::BlockPtrOutput,
                        ) -> Result<(graph::BlockPtrOutput, graph::BlockPtrOutput), Box<dyn Error>> {
-    let mut outputs = new_copy_block_x(bg, input, 2)?;
+    let mut outputs = new_copy_block(bg, input, 2)?;
     assert!(outputs.len() == 2);
     let output_2 = outputs.pop().unwrap();
     let output_1 = outputs.pop().unwrap();
@@ -272,7 +355,7 @@ impl BlockTrait for BlockCopy {
         assert!(output.get_output_index() < self.output_offsets.len());
         if output.get_output_index() == 0 {
             // output index 0 is special - as it is zero copy from input
-            assert!(self.input_offset == offset);
+            //assert!(self.input_offset == offset);
             self.output_offsets[0] = offset;
         } else {
             assert!(self.output_offsets[output.get_output_index()] == usize::MAX); // We only allow a single call
@@ -288,11 +371,17 @@ impl BlockTrait for BlockCopy {
                         pb: &mut port_buffer::PortBuffer, 
                         update:bool) {
         debug_assert!(self.input_offset != usize::MAX);
-        debug_assert!(self.input_offset == self.output_offsets[0]);
+        //debug_assert!(self.input_offset == self.output_offsets[0]);
         debug_assert!(self.num_inputs > 0);
         
         unsafe {
-            // plain copy from input to output
+            // CopyBlock supports two modes:
+            // If input is the same as the first output offset, there is just one copy to be done.
+            //
+            let output_offset_0 = *self.output_offsets.get_unchecked(0);
+            if self.input_offset != output_offset_0 {
+                pb.tape.copy_within(self.input_offset .. (self.input_offset + self.num_inputs), output_offset_0);
+            }
             for &output_offset in self.output_offsets.get_unchecked(1..) {
                 debug_assert!(output_offset != usize::MAX);
                 pb.tape.copy_within(self.input_offset .. (self.input_offset + self.num_inputs), output_offset);
@@ -300,6 +389,11 @@ impl BlockTrait for BlockCopy {
             block_helpers::forward_backward(further_blocks, fb, pb, update);
 
             if update {
+                let output_offset_0 = *self.output_offsets.get_unchecked(0);
+                if self.input_offset != output_offset_0 {
+                    pb.tape.copy_within(output_offset_0 .. (output_offset_0 + self.num_inputs), self.input_offset);
+                }
+             
                 // Sum up the gradients from output to input
                 for &output_offset in self.output_offsets.get_unchecked(1..) {
                     let (input_tape, output_tape) = block_helpers::get_input_output_borrows(&mut pb.tape, 
@@ -319,6 +413,11 @@ impl BlockTrait for BlockCopy {
                         ) {
             // plain copy from input to output
         unsafe {
+            let output_offset_0 = *self.output_offsets.get_unchecked(0);
+            if self.input_offset != output_offset_0 {
+                pb.tape.copy_within(self.input_offset .. (self.input_offset + self.num_inputs), output_offset_0);
+            }
+
             for &output_offset in self.output_offsets.get_unchecked(1..) {
                 pb.tape.copy_within(self.input_offset .. (self.input_offset + self.num_inputs), output_offset);
             }                    
@@ -738,6 +837,7 @@ mod tests {
         let observe_block_backward = block_misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
         let triangle_block = new_triangle_block(&mut bg, observe_block_backward).unwrap();
         let observe_block_forward = block_misc::new_observe_block(&mut bg, triangle_block, Observe::Forward, None).unwrap();
+        let sink = block_misc::new_sink_block(&mut bg, observe_block_forward, block_misc::SinkType::Untouched).unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
         
@@ -773,7 +873,7 @@ mod tests {
         spredict2  (&mut bg, &fb, &mut pb, false);
         assert_eq!(pb.observations, vec![2.0, 3.0, 			// 1st copy of forward parts
                                          2.0, 3.0,			// 2nd copy of forward
-                                         5.0, 5.0, ]);		// backward part isn't touched, it will contain whatever observe block_1 put there
+                                         2.0, 3.0, ]);		// backward part isn't touched, it will contain whatever observe block_1 put there
 
 
     }
@@ -805,7 +905,7 @@ mod tests {
         assert_eq!(pb.observations, vec![2.0, 3.0, 			// 1st copy of forward parts
                                          2.0, 3.0,			// 2nd copy of forward
                                          2.0, 3.0, 
-                                         7.0, 7.0]);		// backward part isn't touched, it will contain whatever observe block_1 put there
+                                         2.0, 3.0]);		// backward part isn't touched, it will contain whatever observe block_1 put there
                                                                 // it is from copy_block_3 since that is the last one where observe_block_2_forward does its work
 
     }
@@ -896,6 +996,29 @@ mod tests {
         assert_eq!(pb.observations, vec![6.0, 7.0, 1.0, 2.0, 3.0, 4.0, 5.0]); 			// join actually doesn't do anything
     }
 
+    #[test]
+    fn test_copy_to_join() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+        let mut bg = BlockGraph::new();
+        let input_block_1 = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
+        let observe_block_backward = block_misc::new_observe_block(&mut bg, input_block_1, Observe::Backward, None).unwrap();
+        let (copy_1, copy_2) = block_misc::new_copy_block_2(&mut bg, observe_block_backward).unwrap();
+        let join_block = new_join_block(&mut bg, vec![copy_1, copy_2]).unwrap();
+        let observe_block = block_misc::new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0)).unwrap();
+        bg.finalize();
+        bg.allocate_and_init_weights(&mi);
+        
+        let mut pb = bg.new_port_buffer();
+        let fb = fb_vec();
+        slearn2  (&mut bg, &fb, &mut pb, true);
+        assert_eq!(pb.observations, vec![2.0, 3.0, 2.0, 3.0, 
+                                         12.0, 12.0
+                                         ]); // correct backwards pass
+
+        spredict2  (&mut bg, &fb, &mut pb, false);
+        assert_eq!(pb.observations, vec![2.0, 3.0, 2.0, 3.0,
+                                         2.0, 3.0]); // on backward pass this are leftovers
+    }
 
 
 

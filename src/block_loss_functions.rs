@@ -136,6 +136,7 @@ impl BlockTrait for BlockSigmoid {
                 pb.observations.push(prediction_probability);
             }
             block_helpers::forward_backward(further_blocks, fb, pb, update);
+//            general_gradient *= *pb.tape.get_unchecked(self.output_offset);
         // replace inputs with their gradients
             pb.tape.get_unchecked_mut(self.input_offset .. (self.input_offset + self.num_inputs)).fill(general_gradient);
         }
@@ -146,9 +147,9 @@ impl BlockTrait for BlockSigmoid {
                      fb: &feature_buffer::FeatureBuffer,
                      pb: &mut port_buffer::PortBuffer, ) {
 
-        if further_blocks.len() != 0 {
+/*        if further_blocks.len() != 0 {
             panic!("RegSigmoid can only be at the end of the chain!");
-        }
+        }*/
         debug_assert!(self.input_offset != usize::MAX);
         debug_assert!(self.output_offset != usize::MAX);
 

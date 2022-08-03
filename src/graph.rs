@@ -27,10 +27,10 @@ pub struct BlockGraphNode {
 }
 
 pub struct BlockGraph {
-    pub nodes: Vec<BlockGraphNode>,
-    pub blocks: Vec<Box<dyn BlockTrait>>,
+    nodes: Vec<BlockGraphNode>,
+    blocks: Vec<Box<dyn BlockTrait>>,
     pub blocks_final: Vec<Box<dyn BlockTrait>>,
-    pub tape_size: usize,
+    tape_size: usize,
 }
 
 
@@ -92,18 +92,10 @@ impl BlockGraph {
         let mut edges_in = edges_in;
         if block.get_block_type() == BlockType::Join {
             // Join a is a special block, because it does zero copy joining of outputs
-            // Which means you can't have certain combinations like copy->join, 
-            // since copy prevents join from deciding on locations of inputs of the first output index
-            // As BlockCopy itself does the zero copy 
-            // Also if we have join blocks going into a new join block, we take all of its inputs and abandon previous join        
-    
             let mut new_edges_in : Vec<BlockPtrOutput> = Vec::new();
             for edge_in in edges_in.into_iter() {
                 let node_id_in =  edge_in.get_node_id();
-                if (self.blocks[node_id_in].get_block_type() == BlockType::Copy && edge_in.get_output_index() == 0) || 
-                   (self.blocks[node_id_in].get_block_type() == BlockType::Observe) {
-                    return Err(Box::new(IOError::new(ErrorKind::Other, "First output of a CopyBlock can not go to a JoinBlock (reasons are complicited). Using second output is ok.")));
-                } else if self.blocks[node_id_in].get_block_type() == BlockType::Join {
+                if self.blocks[node_id_in].get_block_type() == BlockType::Join {
                     // Join -> Join can always be merged into a single join
                     // So we won't add a block here, instead, we will add input edges of the previous block
                     // And abandon the previous block with empty inputs and outputs.
@@ -212,63 +204,54 @@ impl BlockGraph {
 
     pub fn finalize(&mut self) {
         let mut offset: usize = 0;
-        // We allocate offsets based on input tapes. 
-        // This assures that for each block, inputs that are placed conesquitvely are consequtive
-        // Which is importnat for the JoinBlock that has that requirement
+      
+        // Let's first install sinks, so the graph is without dangling parts
+        let mut sinks: Vec<BlockPtrOutput> = Vec::new();
         for i in 0..self.len() {
+            for (output_index, edge_out) in self.nodes[i].edges_out.iter().enumerate() {
+                if *edge_out == BLOCK_PTR_INPUT_DEFAULT {
+                    let bptro = BlockPtrOutput(BlockPtr(i), OutputSlot(output_index));
+                    sinks.push(bptro);
+                }
+            }
+        }      
+        // TODO we could have a single sink for all
+        for bptro in sinks.into_iter() {
+            // For neural nets, zeroing out the backward data is the least-surprise way of doing it
+            block_misc::new_sink_block(self, bptro, block_misc::SinkType::Zero).unwrap();
+        }
+      
+
+        // Now allocate inputs/outputs to parts of the tape
+        for i in 0..self.len() {
+            let current_block_type = self.blocks[i].get_block_type();
+                
             for (input_index, edge_in) in self.nodes[i].edges_in.iter().enumerate() {
                 let bo = edge_in.get_output();
                 let bptr = edge_in.get_node_id();
                 let output_len = self.blocks[bptr].get_num_output_values(bo);
 //                println!("Block: {}, output: {:?},  output offset: {} ouptut_len: {}", i, bo, offset, output_len);
                 let input_block_type = self.blocks[bptr].get_block_type();
-                if (input_block_type  == BlockType::Regular) || (input_block_type == BlockType::Copy && bo.get_output_index() > 0) {
-                    self.blocks[bptr].set_output_offset(bo, offset);
-                    self.blocks[i].set_input_offset(InputSlot(input_index), offset);
-                    offset += output_len as usize; 
-                } else if   (input_block_type == BlockType::Join) || 
-                            (input_block_type == BlockType::Observe) ||
-                            (input_block_type == BlockType::Copy) && (bo.get_output_index() == 0) {
+                if (input_block_type == BlockType::Join) || 
+                   (input_block_type == BlockType::Observe) ||
+                   (input_block_type == BlockType::Copy) && (bo.get_output_index() == 0 && current_block_type != BlockType::Join && current_block_type != BlockType::Observe) {
                     // we are special casing Join block
                     // It is zero-copy joining of inputs, which means inputs and outputs share exactly the same space
 //                    println!("Get input offset of: {}", bptr);
                     let fake_offset = self.blocks[bptr].get_input_offset(InputSlot(0)).unwrap();
                     self.blocks[bptr].set_output_offset(bo, fake_offset);
                     self.blocks[i].set_input_offset(InputSlot(input_index), fake_offset);
+                } else if (input_block_type  == BlockType::Regular) || 
+                    (input_block_type == BlockType::Copy) {
+                    self.blocks[bptr].set_output_offset(bo, offset);
+                    self.blocks[i].set_input_offset(InputSlot(input_index), offset);
+                    offset += output_len as usize; 
                 } else {
                     panic!("Type of block not supported in scheduling: {:?}", input_block_type);
                 }
                 
             }
         }    
-        // now allocate for dead-end outputs
-        for i in 0..self.len() {
-            for (output_index, edge_out) in self.nodes[i].edges_out.iter().enumerate() {
-                if *edge_out == BLOCK_PTR_INPUT_DEFAULT {
-                    let bo = OutputSlot(output_index);
-                    let output_len = self.blocks[i].get_num_output_values(bo);
- //                   println!("setting block {}, output {:?} to offset {}", i, bo, offset);
-//                    self.blocks[i].set_output_offset(bo, offset);
-//                    offset += output_len as usize;
-                    let input_block_type = self.blocks[i].get_block_type();
-                    if input_block_type  == BlockType::Regular {
-                        self.blocks[i].set_output_offset(bo, offset);
-                        offset += output_len as usize; 
-                    } else if (input_block_type == BlockType::Join) || (input_block_type == BlockType::Observe) {
-                        // we are special casing Join block
-                        // It is zero-copy joining of inputs, which means inputs and outputs share exactly the same space
-                        let fake_offset = self.blocks[i].get_input_offset(InputSlot(0)).unwrap();
-                        self.blocks[i].set_output_offset(bo, fake_offset);
-
-                    } else {
-                        panic!("Type of block not supported in scheduling: {:?}", input_block_type);
-                    }
-
-
-        
-                }
-            }
-        }
         self.tape_size = offset;
         
         // Prepare the final list of blocks
@@ -430,7 +413,7 @@ mod tests {
     }
 
     #[test]
-    fn finalize_fail_copy_to_join() {
+    fn finalize_copy_to_join() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
         mi.ffm_k = 1;
         mi.ffm_fields = vec![vec![], vec![], vec![]]; // This isn't really used
@@ -438,19 +421,34 @@ mod tests {
 
         let mut bg = BlockGraph::new();
         
-        let const_1 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
-        let (copy_output_1, copy_output_2) = block_misc::new_copy_block_2(&mut bg, const_1).unwrap();
-        let const_2 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();       
-        let const_3 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();       
-        // This join works, since we are using copy_output_2
-        let joined1 = block_misc::new_join_block(&mut bg, vec![copy_output_2, const_2]).unwrap();
-        // This join fails, since we are using copy_output_1 which can never go to a join
-        let result = block_misc::new_join_block(&mut bg, vec![copy_output_1, const_3]);
-        assert!(result.is_err());
-        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"First output of a CopyBlock can not go to a JoinBlock (reasons are complicited). Using second output is ok.\" })");
+        let const_1 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();	// 0
+        let const_2 = block_misc::new_const_block(&mut bg, vec![3.0]).unwrap();  // 1
+        let const_3 = block_misc::new_const_block(&mut bg, vec![4.0]).unwrap();  // 2     
+        let const_4 = block_misc::new_const_block(&mut bg, vec![4.0]).unwrap();  // 3     
+        let (copy_output_1, copy_output_2) = block_misc::new_copy_block_2(&mut bg, const_1).unwrap(); // 4
+        let (copy_output_3, copy_output_4) = block_misc::new_copy_block_2(&mut bg, const_2).unwrap(); // 5
 
-//        let lossf = block_loss_functions::new_logloss_block(&mut bg, joined, true);
-//        let list = bg.finalize();
+        // this is not zero copy
+        let join_1 = block_misc::new_join_block(&mut bg, vec![copy_output_1, const_3]).unwrap(); // 6
+        // this is zero copy
+        let join_2 = block_misc::new_join_block(&mut bg, vec![const_4, copy_output_2]); // 7
+        bg.finalize();
+        let mut list = bg.take_blocks();
+
+        {
+            // first one goes to copy again, so it cannot use input as an output
+            let copy_block_1 = list[4].as_any().downcast_mut::<block_misc::BlockCopy>().unwrap();
+            assert!(copy_block_1.input_offset != copy_block_1.output_offsets[0]);
+//          println!("C1: input {} outputs: {:?}", copy_block_1.input_offset, copy_block_1.output_offsets);
+        }
+        {
+            // But second one can re-use the input as output
+            let copy_block_2 = list[5].as_any().downcast_mut::<block_misc::BlockCopy>().unwrap();
+            assert!(copy_block_2.input_offset == copy_block_2.output_offsets[0]);
+//          println!("C2: input {} outputs: {:?}", copy_block_2.input_offset, copy_block_2.output_offsets);
+        }
+
+
     }
 
     #[test]
@@ -474,7 +472,7 @@ mod tests {
         
         bg.finalize();
         let list = bg.take_blocks();
-        assert_eq!(list.len(), 3);  // both copy blocks are no-op and thus not returned 
+        assert_eq!(list.len(), 4);  // both join blocks are no-op and thus not returned, but sink block is added automatically 
                 
     }
 
