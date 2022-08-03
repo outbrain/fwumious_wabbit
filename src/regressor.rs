@@ -115,8 +115,9 @@ impl Regressor  {
                 let (a1, a2) = block_misc::new_copy_block_2(&mut bg, output).unwrap();
                 output = a1;
                 join_block = Some(a2);
-                let mut lr_block = block_lr::new_lr_block(&mut bg, mi).unwrap();
-                output = block_misc::new_join_block(&mut bg, vec![output, lr_block]).unwrap();
+                let mut lr_block_1 = block_lr::new_lr_block(&mut bg, mi).unwrap();
+                let mut lr_block_2 = block_lr::new_lr_block(&mut bg, mi).unwrap();
+                output = block_misc::new_join_block(&mut bg, vec![output, lr_block_1, lr_block_2]).unwrap();
             } else {
                 Err(format!("unknown nn topology: \"{}\"", mi.nn_config.topology)).unwrap()
             }
