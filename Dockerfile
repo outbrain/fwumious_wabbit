@@ -3,6 +3,8 @@ ENV IMAGENAME="fwumious-builder"
 ENV DEBIAN_FRONTEND=noninteractive
 ARG FW_REPO_URL
 ARG FW_BRANCH
+ARG RUST_VERSION='1.61.0'
+
 RUN apt-get update &&     apt-get install gcc g++ -y &&     apt-get install libboost-dev libboost-thread-dev libboost-program-options-dev libboost-system-dev libboost-math-dev libboost-test-dev zlib1g-dev -y &&     apt-get install git python3 python3-psutil python3-matplotlib lsb-release wget software-properties-common openjdk-8-jdk curl -y
 
 ENV JAVA_HOME="/usr/lib/jvm/java-8-openjdk-amd64"
@@ -42,7 +44,7 @@ WORKDIR /
 RUN apt-get update
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup_install.sh &&  chmod +x rustup_install.sh && ./rustup_install.sh -y
 ENV PATH="/root/.cargo/bin:${PATH}"
-RUN rustup install 1.61.0
+RUN rustup install $RUST_VERSION
 ENV PATH="/root/.cargo/bin:/vowpal_wabbit/vowpalwabbit/vowpalwabbit/cli/:${PATH}"
 
 # Conduct benchmark against vw + produce --release bin
