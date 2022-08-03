@@ -337,9 +337,7 @@ mod tests {
         assert_eq!(bg.nodes[0].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);
 
         // We need to add a copy block to have two sinks
-        let mut copies = block_misc::new_copy_block(&mut bg, const_block_output, 2).unwrap();
-        let c2 = copies.pop().unwrap();
-        let c1 = copies.pop().unwrap();
+        let (c1, c2) = block_misc::new_copy_block_2(&mut bg, const_block_output).unwrap();
         
         
         // Let's add one result block 
@@ -441,9 +439,7 @@ mod tests {
         let mut bg = BlockGraph::new();
         
         let const_1 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
-        let mut copy_block = block_misc::new_copy_block(&mut bg, const_1, 2).unwrap();
-        let copy_output_2 = copy_block.pop().unwrap();
-        let copy_output_1 = copy_block.pop().unwrap();
+        let (copy_output_1, copy_output_2) = block_misc::new_copy_block_2(&mut bg, const_1).unwrap();
         let const_2 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();       
         let const_3 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();       
         // This join works, since we are using copy_output_2

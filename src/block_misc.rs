@@ -214,7 +214,7 @@ pub struct BlockCopy {
 }
 
 
-pub fn new_copy_block(bg: &mut graph::BlockGraph,
+pub fn new_copy_block_x(bg: &mut graph::BlockGraph,
                        input: graph::BlockPtrOutput,
                        num_output_slots: usize,
                        ) -> Result<Vec<graph::BlockPtrOutput>, Box<dyn Error>> {
@@ -231,7 +231,15 @@ pub fn new_copy_block(bg: &mut graph::BlockGraph,
     Ok(block_outputs)
 }
 
-
+pub fn new_copy_block_2(bg: &mut graph::BlockGraph,
+                       input: graph::BlockPtrOutput,
+                       ) -> Result<(graph::BlockPtrOutput, graph::BlockPtrOutput), Box<dyn Error>> {
+    let mut outputs = new_copy_block_x(bg, input, 2)?;
+    assert!(outputs.len() == 2);
+    let output_2 = outputs.pop().unwrap();
+    let output_1 = outputs.pop().unwrap();
+    Ok((output_1, output_2))
+}
 
 
 
@@ -749,9 +757,7 @@ mod tests {
         let mut bg = BlockGraph::new();
         let input_block = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
         let observe_block_backward = block_misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
-        let mut copy_blocks = new_copy_block(&mut bg, observe_block_backward, 2).unwrap();
-        let copy_block_2 = copy_blocks.pop().unwrap();
-        let copy_block_1 = copy_blocks.pop().unwrap();
+        let (copy_block_1, copy_block_2)= new_copy_block_2(&mut bg, observe_block_backward).unwrap();
         let observe_block_1_forward = block_misc::new_observe_block(&mut bg, copy_block_1, Observe::Forward, Some(5.0)).unwrap();
         let observe_block_2_forward = block_misc::new_observe_block(&mut bg, copy_block_2, Observe::Forward, Some(6.0)).unwrap();
         bg.finalize();
@@ -778,12 +784,8 @@ mod tests {
         let mut bg = BlockGraph::new();
         let input_block = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
         let observe_block_backward = block_misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
-        let mut copy_blocks_1 = new_copy_block(&mut bg, observe_block_backward, 2).unwrap();
-        let copy_block_2 = copy_blocks_1.pop().unwrap();
-        let copy_block_1 = copy_blocks_1.pop().unwrap();
-        let mut copy_blocks_2 = new_copy_block(&mut bg, copy_block_1, 2).unwrap();
-        let copy_block_3 = copy_blocks_2.pop().unwrap();
-        let copy_block_4 = copy_blocks_2.pop().unwrap();
+        let (copy_block_1, copy_block_2) = new_copy_block_2(&mut bg, observe_block_backward).unwrap();
+        let (copy_block_3, copy_block_4) = new_copy_block_2(&mut bg, copy_block_1).unwrap();
 
         let observe_block_1_forward = block_misc::new_observe_block(&mut bg, copy_block_2, Observe::Forward, Some(5.0)).unwrap();
         let observe_block_2_forward = block_misc::new_observe_block(&mut bg, copy_block_3, Observe::Forward, Some(6.0)).unwrap();
@@ -803,7 +805,7 @@ mod tests {
         assert_eq!(pb.observations, vec![2.0, 3.0, 			// 1st copy of forward parts
                                          2.0, 3.0,			// 2nd copy of forward
                                          2.0, 3.0, 
-                                         6.0, 6.0]);		// backward part isn't touched, it will contain whatever observe block_1 put there
+                                         7.0, 7.0]);		// backward part isn't touched, it will contain whatever observe block_1 put there
                                                                 // it is from copy_block_3 since that is the last one where observe_block_2_forward does its work
 
     }
