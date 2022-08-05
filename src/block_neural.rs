@@ -30,7 +30,7 @@ use block_helpers::{Weight, WeightAndOptimizerData, OptimizerData};
 use blas::*;
 
 const MAX_NUM_INPUTS:usize= 16000;
-
+const USE_BLAS:bool = false;
 
 #[derive(PartialEq, Debug)]
 pub enum NeuronType {
@@ -262,7 +262,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                     true => self.dropout_inv,
                     false => 1.0
                 };
-                if false {
+                if !USE_BLAS {
                     let mut j_offset:usize = 0;
                     for j in 0..self.num_neurons {
                         let mut wsum:f32 = self.weights.get_unchecked(bias_offset + j).weight; // bias term
@@ -406,7 +406,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                                                             self.input_offset, self.num_inputs,
                                                             self.output_offset, self.num_neurons); 
       
-            if false {
+            if !USE_BLAS {
                 let mut j_offset:usize = 0;
                 for j in 0..self.num_neurons {
                     let mut wsum:f32 = self.weights.get_unchecked(bias_offset + j).weight; // bias term
@@ -433,20 +433,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                         1,//incy: i32
                     )
             }    
-/*            let mut j_offset:u32 = 0;
-            for j in 0..self.num_neurons {
-                let mut wsum:f32 = 0.0;
-                if self.dropout == 0.0 || merand48(j as u64 + frandseed) > self.dropout {
-                    wsum = self.weights.get_unchecked((bias_offset + j) as usize).weight; // bias term
-                    let input_tape = pb.tape.get_unchecked(self.input_offset..(self.input_offset + self.num_inputs as usize));
-                    for i in 0..self.num_inputs {                                 
-                        wsum += input_tape.get_unchecked(i as usize) * self.weights.get_unchecked(i + j_offset as usize).weight;
-                    }
-                }
-                j_offset += self.num_inputs as u32;
-                wsum *= self.dropout_inv; // fix for overexcitment if we are just predicting and not learning
-                *pb.tape.get_unchecked_mut(self.output_offset + j as usize) = wsum;
-            }*/
             block_helpers::forward(further_blocks, fb, pb);
 
             

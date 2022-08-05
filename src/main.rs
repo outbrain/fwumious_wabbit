@@ -18,6 +18,7 @@ use std::time::Instant;
 
 extern crate blas;
 extern crate intel_mkl_src;
+
 #[macro_use]
 extern crate nom;
 mod block_ffm;
