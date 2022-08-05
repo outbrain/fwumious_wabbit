@@ -30,7 +30,7 @@ use block_helpers::{Weight, WeightAndOptimizerData, OptimizerData};
 use blas::*;
 
 const MAX_NUM_INPUTS:usize= 16000;
-const USE_BLAS:bool = false;
+const USE_BLAS:bool = true;
 
 #[derive(PartialEq, Debug)]
 pub enum NeuronType {
