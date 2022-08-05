@@ -2,7 +2,12 @@ use clap::{App, Arg,  AppSettings};
 use crate::version;
 
 pub fn parse<'a>() -> clap::ArgMatches<'a> {
-  let matches = App::new("fwumious wabbit")
+  let matches = create_expected_args().get_matches();
+  matches
+}
+
+pub fn create_expected_args<'a>() -> App<'a, 'a> {
+  App::new("fwumious wabbit")
                     .version(version::LATEST)
                     .author("Andraz Tori <atori@outbrain.com>")
                     .about("Superfast Logistic Regression & Field Aware Factorization Machines")
@@ -250,7 +255,4 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
                      .value_name("examples")
                      .help("After how many examples stop updating weights")
                      .takes_value(true))
-                    .get_matches();
-
-matches
 }
