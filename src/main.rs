@@ -27,6 +27,7 @@ mod block_lr;
 mod block_neural;
 mod block_relu;
 mod block_misc;
+mod block_normalize;
 mod cache;
 mod cmdline;
 mod consts;

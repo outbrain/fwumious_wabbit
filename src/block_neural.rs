@@ -66,6 +66,7 @@ pub struct BlockNeuronLayer<L:OptimizerTrait> {
     pub dropout: f32,
     pub dropout_inv: f32,
     pub max_norm: f32,
+    pub layer_norm: bool,
     rng: Xoshiro256PlusPlus,
     rng_scratchpad: Vec<u32>,
     dropout_threshold: u32,
@@ -81,6 +82,7 @@ fn new_neuronlayer_without_weights<L:OptimizerTrait + 'static>(mi: &model_instan
                                                     init_type: InitType,
                                                     dropout: f32,
                                                     max_norm: f32,
+                                                    layer_norm: bool,
                                                     ) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
     assert!(num_neurons > 0);
     assert!((num_inputs as usize )< MAX_NUM_INPUTS);
@@ -103,6 +105,7 @@ fn new_neuronlayer_without_weights<L:OptimizerTrait + 'static>(mi: &model_instan
         dropout: dropout,
         dropout_inv: 1.0/(1.0 - dropout),
         max_norm: max_norm,
+        layer_norm: layer_norm,
         rng: Xoshiro256PlusPlus::seed_from_u64(0 as u64),
         rng_scratchpad: Vec::new(),
         dropout_threshold: ((u32::MAX as f64) * (dropout as f64)) as u32,
@@ -123,6 +126,7 @@ pub fn new_neuronlayer_block(
                         init_type: InitType, 
                         dropout: f32,
                         max_norm: f32,
+                        layer_norm: bool,
                         ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {    
 
     let num_inputs = bg.get_num_output_values(vec![&input]);
@@ -130,9 +134,9 @@ pub fn new_neuronlayer_block(
         return Err(Box::new(IOError::new(ErrorKind::Other, "You should not use new_neuronlayer_block with the type NeuronType::Sum, it makes no sense - use block_misc::new_sum_block()")));
     }
     let block = match mi.optimizer {
-        model_instance::Optimizer::AdagradLUT =>  new_neuronlayer_without_weights::<optimizer::OptimizerAdagradLUT> (&mi, num_inputs, ntype, num_neurons, init_type, dropout, max_norm),
-        model_instance::Optimizer::AdagradFlex => new_neuronlayer_without_weights::<optimizer::OptimizerAdagradFlex>(&mi, num_inputs, ntype, num_neurons, init_type, dropout, max_norm),
-        model_instance::Optimizer::SGD =>         new_neuronlayer_without_weights::<optimizer::OptimizerSGD>        (&mi, num_inputs, ntype, num_neurons, init_type, dropout, max_norm)
+        model_instance::Optimizer::AdagradLUT =>  new_neuronlayer_without_weights::<optimizer::OptimizerAdagradLUT> (&mi, num_inputs, ntype, num_neurons, init_type, dropout, max_norm, layer_norm),
+        model_instance::Optimizer::AdagradFlex => new_neuronlayer_without_weights::<optimizer::OptimizerAdagradFlex>(&mi, num_inputs, ntype, num_neurons, init_type, dropout, max_norm, layer_norm),
+        model_instance::Optimizer::SGD =>         new_neuronlayer_without_weights::<optimizer::OptimizerSGD>        (&mi, num_inputs, ntype, num_neurons, init_type, dropout, max_norm, layer_norm)
     }.unwrap();
 
     let mut block_outputs = bg.add_node(block, vec![input]).unwrap();
@@ -158,6 +162,7 @@ pub fn new_neuron_block(
                                                       init_type,
                                                       0.0, // dropout
                                                       0.0, // maxnorm
+                                                      false, // layer norm
                                                       ),
     }
 }
@@ -252,6 +257,11 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                                                             self.input_offset, self.num_inputs,
                                                             self.output_offset, self.num_neurons); 
       
+                // If we are in pure prediction mode (
+                let dropout_inv = match update {
+                    true => self.dropout_inv,
+                    false => 1.0
+                };
                 if false {
                     let mut j_offset:usize = 0;
                     for j in 0..self.num_neurons {
@@ -266,32 +276,35 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                 // This is actually speed things up considerably. 
                     output_tape.copy_from_slice(std::mem::transmute::<&[Weight], &[f32]>(self.weights.get_unchecked(bias_offset..)));
                     sgemv(
-                         b'T',//   trans: u8, 
-                         self.num_inputs as i32, //   m: i32, 
+                         b'T',                    //   trans: u8, 
+                         self.num_inputs as i32,  //   m: i32, 
                          self.num_neurons as i32, //   n: i32, 
-                         self.dropout_inv, //   alpha: f32, 
+                         dropout_inv,             //   alpha: f32, 
                          std::mem::transmute::<&[Weight], &[f32]>(self.weights.get_unchecked(0..)), //  a: &[f32], 
-                         self.num_inputs  as i32,   //lda: i32, 
-                         &input_tape.get_unchecked(0..),//   x: &[f32], 
-                            1, //incx: i32, 
-                            1.0, // beta: f32, 
+                         self.num_inputs  as i32,       // lda: i32, 
+                         &input_tape.get_unchecked(0..),// x: &[f32], 
+                            1,      // incx: i32, 
+                            1.0,    // beta: f32, 
                             output_tape.get_unchecked_mut(0..), //y: &mut [f32], 
-                            1,//incy: i32
+                            1,      // incy: i32
                         )
                 }
 
-                if self.dropout != 0.0 {
-                    let mut fill_view:&mut [u8] = slice::from_raw_parts_mut(self.rng_scratchpad.as_mut_ptr() as *mut u8, 
-                                                                                  self.num_neurons * mem::size_of::<u32>());
-                    self.rng.fill_bytes(&mut fill_view);
-                    for j in 0..self.num_neurons {
-                        if *self.rng_scratchpad.get_unchecked(j) < self.dropout_threshold {
-                            *output_tape.get_unchecked_mut(j) = 0.0;
-                        }
-                    }    
+                if update {
+                    // In case we are doing doing learning, and we have a dropout
+                    if self.dropout != 0.0 {
+                        let mut fill_view:&mut [u8] = slice::from_raw_parts_mut(self.rng_scratchpad.as_mut_ptr() as *mut u8, 
+                                                                                      self.num_neurons * mem::size_of::<u32>());
+                        self.rng.fill_bytes(&mut fill_view);
+                        for j in 0..self.num_neurons {
+                            if *self.rng_scratchpad.get_unchecked(j) < self.dropout_threshold {
+                                *output_tape.get_unchecked_mut(j) = 0.0;
+                    //            println!("A:j {}", j);
+                            }
+                        }    
+                    }
                 }
-                
-            }       
+            }
             
 
 
@@ -299,7 +312,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
 
             if update {
                 if self.neuron_type == NeuronType::WeightedSum {
-                    //let mut myslice = &mut pb.tapes[self.input_tape_index as usize][len - self.num_inputs as usize..];
                     // first we need to initialize inputs to zero
                     // TODO - what to think about this buffer
                     let mut output_errors: [f32; MAX_NUM_INPUTS] = MaybeUninit::uninit().assume_init();
@@ -311,6 +323,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                     
                     for j in 0..self.num_neurons as usize {
                             if self.dropout != 0.0 && *self.rng_scratchpad.get_unchecked(j) < self.dropout_threshold {
+                      //          println!("B:j {}", j);
                                 continue
                             }
 
@@ -332,7 +345,43 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                                                                             &mut self.weights_optimizer.get_unchecked_mut(bias_offset + j).optimizer_data);
                                 self.weights.get_unchecked_mut(bias_offset + j).weight -= update;
                             }
+
+                            if self.max_norm != 0.0 && fb.example_number % 10 == 0 {
+                                let mut wsquaredsum = 0.000001; // Epsilon
+                                for i in 0..self.num_inputs as usize {
+                                    let w = self.weights.get_unchecked_mut(i + j_offset).weight;
+                                    wsquaredsum += w * w;
+                                }
+                                let norm = wsquaredsum.sqrt();
+                                if norm > self.max_norm {
+                                    let scaling = self.max_norm / norm;
+                                    for i in 0..self.num_inputs as usize {
+                                        self.weights.get_unchecked_mut(i + j_offset).weight *= scaling;
+                                    }
+                                } 
+                            }
+
                     }
+                    if self.layer_norm && fb.example_number % 10 == 0 {
+                        let mut sum: f32 = 0.0;
+                        let mut sumsqr: f32 = 0.0;
+                        let K = 100.0;
+                        for i in 0..bias_offset {
+                            let w = self.weights.get_unchecked(i).weight - K;
+                            sum += w;
+                            sumsqr += w * w;
+                        }
+                        let var1 = (sumsqr - sum*sum/bias_offset as f32) / 
+                                    bias_offset as f32;
+                        let var2 = var1.sqrt();
+                        println!("var1: {}, var2: {}, sum: {}, sumsqr: {}", var1, var2, sum, sumsqr);            
+
+                        for i in 0..bias_offset {
+                            self.weights.get_unchecked_mut(i).weight /=var2;
+                        }
+                        
+                    }
+
                      
                     input_tape.copy_from_slice(output_errors.get_unchecked(0..self.num_inputs));
                 
@@ -490,6 +539,7 @@ mod tests {
                                             InitType::One,
                                             0.0, // dropout
                                             0.0, // max norm
+                                            false, 
                                             ).unwrap();
         let observe_block = block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0)).unwrap();
         bg.finalize();
@@ -521,6 +571,7 @@ mod tests {
                                             InitType::One,
                                             0.0, // dropout
                                             0.0, // max norm
+                                            false, // layer norm
                                             ).unwrap();
         let observe_block = block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0)).unwrap();
         bg.finalize();
@@ -582,6 +633,7 @@ mod tests {
                                             InitType::One,
                                             0.5, // dropout
                                             0.0, // max norm
+                                            false,
                                             ).unwrap();
         let observe_block = block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(3.0)).unwrap();
         bg.finalize();
@@ -592,13 +644,13 @@ mod tests {
         let fb = fb_vec();
 
         spredict2  (&mut bg, &fb, &mut pb, false);
-        assert_eq!(pb.observations, vec![3.0, 3.0, 3.0, 3.0, 3.0, 3.0, // m, 
-                                        3.0 // mostly deterministic due to specific PRNG use
+        assert_eq!(pb.observations, vec![3.0, 3.0, 3.0, 3.0, 3.0, 3.0, // mostly deterministic due to specific PRNG use, 
+                                        3.0 			       // Untouched output when forward-only 
                                                     ]);
 
         slearn2  (&mut bg, &fb, &mut pb, true);
-        assert_eq!(pb.observations, vec![6.0, 0.0, 0.0, 0.0, 6.0, 6.0, // m, 
-                                        18.0 // mostly deterministic due to specific PRNG use
+        assert_eq!(pb.observations, vec![6.0, 0.0, 0.0, 0.0, 6.0, 6.0, // mostly deterministic due to specific PRNG use
+                                        18.0 			       // scaled backprop	
                                                     ]);
 //        println!("O: {:?}", pb.observations);
 

@@ -22,6 +22,7 @@ use crate::block_loss_functions;
 use crate::block_neural;
 use crate::block_relu;
 use crate::block_misc;
+use crate::block_normalize;
 use crate::graph;
 use crate::block_neural::{InitType};
 use crate::block_helpers;
@@ -81,6 +82,15 @@ enum NNActivation {
     Relu
 }
 
+#[derive(PartialEq)]
+enum NNLayerNorm {
+    None,
+    BeforeRelu,
+    AfterRelu,
+}
+
+
+
 impl Regressor  {
     pub fn new_without_weights(mi: &model_instance::ModelInstance) -> Regressor {
 
@@ -115,9 +125,21 @@ impl Regressor  {
                 let (a1, a2) = block_misc::new_copy_block_2(&mut bg, output).unwrap();
                 output = a1;
                 join_block = Some(a2);
+                output = block_normalize::new_normalize_layer_block(&mut bg, &mi, output).unwrap();
+
+
+                /*let (a1, a2) = block_misc::new_copy_block_2(&mut bg, output).unwrap();
+                output = a1;
+                join_block = Some(a2);
                 let mut lr_block_1 = block_lr::new_lr_block(&mut bg, mi).unwrap();
                 let mut lr_block_2 = block_lr::new_lr_block(&mut bg, mi).unwrap();
-                output = block_misc::new_join_block(&mut bg, vec![output, lr_block_1, lr_block_2]).unwrap();
+                output = block_misc::new_join_block(&mut bg, vec![output, lr_block_1, lr_block_2]).unwrap();*/
+            } else if mi.nn_config.topology == "five" {
+                let (a1, a2) = block_misc::new_copy_block_2(&mut bg, output).unwrap();
+                output = a1;
+                join_block = Some(a2);
+                output = block_normalize::new_stop_block(&mut bg, &mi, output).unwrap();
+
             } else {
                 Err(format!("unknown nn topology: \"{}\"", mi.nn_config.topology)).unwrap()
             }
@@ -127,9 +149,11 @@ impl Regressor  {
             for (layer_num, layer) in mi.nn_config.layers.iter().enumerate() {
                 let mut layer = layer.clone();
                 let activation_str: String = layer.remove("activation").unwrap_or("none".to_string()).to_string();
+                let layernorm_str: String = layer.remove("layernorm").unwrap_or("none".to_string()).to_string();
                 let width: usize = layer.remove("width").unwrap_or("20".to_string()).parse().unwrap();
                 let maxnorm: f32 = layer.remove("maxnorm").unwrap_or("0.0".to_string()).parse().unwrap();
                 let dropout: f32 = layer.remove("dropout").unwrap_or("0.0".to_string()).parse().unwrap();
+                //let layernorm: bool = layer.remove("layernorm").unwrap_or("false".to_string()).parse().unwrap();
                 let init_type_str: String = layer.remove("init").unwrap_or("hu".to_string()).to_string();
                 
                 if layer.len() > 0 {
@@ -140,6 +164,13 @@ impl Regressor  {
                     "none" => NNActivation::None,
                     "relu" => NNActivation::Relu,
                     _ => Err(format!("unknown nn activation type: \"{}\"", activation_str)).unwrap()
+                };
+                
+                let layernorm = match &*layernorm_str {
+                    "none" => NNLayerNorm::None,
+                    "before" => NNLayerNorm::BeforeRelu,
+                    "after" => NNLayerNorm::AfterRelu,
+                    _ => Err(format!("unknown nn layer norm: \"{}\"", layernorm_str)).unwrap()
                 };
                 
                 let init_type = match &*init_type_str {
@@ -160,11 +191,21 @@ impl Regressor  {
                                             init_type,
                                             dropout, // dropout
                                             maxnorm, // max norm
+                                            false,
                                             ).unwrap();
 
+                
+                if layernorm == NNLayerNorm::BeforeRelu {
+                    output = block_normalize::new_normalize_layer_block(&mut bg, &mi, output).unwrap();
+                    println!("Normalize layer before relu");
+                }
                 if activation == NNActivation::Relu {
                     output = block_relu::new_relu_block(&mut bg, &mi, output).unwrap();
                     println!("Relu layer");
+                }
+                if layernorm == NNLayerNorm::AfterRelu {
+                    output = block_normalize::new_normalize_layer_block(&mut bg, &mi, output).unwrap();
+                    println!("Normalize layer after relu");
                 }
 
 
