@@ -88,6 +88,9 @@ fn new_neuronlayer_without_weights<L:OptimizerTrait + 'static>(mi: &model_instan
     assert!((num_inputs as usize )< MAX_NUM_INPUTS);
     assert!(num_inputs != 0);
 
+    if dropout != 0.0 {
+        panic!("Dropout in this binary is not supported due to bizzare side effects on inner loop unrolling");
+    }
 
     let weights_len = ((num_inputs + 1) * num_neurons as usize) as u32; // +1 is for bias term
 
@@ -292,17 +295,27 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
 
                 if update {
                     // In case we are doing doing learning, and we have a dropout
-                    if self.dropout != 0.0 {
+                    
+                    if false && self.dropout != 0.0 {
                         let mut fill_view:&mut [u8] = slice::from_raw_parts_mut(self.rng_scratchpad.as_mut_ptr() as *mut u8, 
                                                                                       self.num_neurons * mem::size_of::<u32>());
-                        self.rng.fill_bytes(&mut fill_view);
+                        
+                        //let mut fill_view: [u8; 100] = [0; 100];
+                        // This one is from the "You won't believe it till you measure it 10 times and even then you will suspect yourself not the compiler"
+                        // For some reason call to this function in a block that NEVER executes, slows down the code by 50%
+                        // Specifically it prevents loop unrolling of the weight optimizer 50 lines below ... discovered through disassembly
+                        // I thought It might be related to from_raw_parts above, but it isn't
+
+                        // Attempted fix of going through a #[inline(never)] function did not work
+                         self.rng.fill_bytes(&mut fill_view);
+                        //fill_bytes(&mut self.rng, &mut fill_view);
                         for j in 0..self.num_neurons {
                             if *self.rng_scratchpad.get_unchecked(j) < self.dropout_threshold {
                                 *output_tape.get_unchecked_mut(j) = 0.0;
-                    //            println!("A:j {}", j);
                             }
                         }    
                     }
+                    
                 }
             }
             
