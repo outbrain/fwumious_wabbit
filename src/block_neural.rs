@@ -615,7 +615,7 @@ mod tests {
         assert_eq!(pb.observations.len(), 1);
         assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 1.5);
     }
-
+/*
     #[test]
     fn test_dropout() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
@@ -657,7 +657,7 @@ mod tests {
 
     }
 
-
+*/
 
 
 
