@@ -54,6 +54,11 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
                      .help("Adds single features")
                      .multiple(true)
                      .takes_value(true))
+                  .arg(Arg::with_name("build_cache_without_training")
+                      .long("build_cache_without_training")
+                      .value_name("arg")
+                      .help("Build cache file without training the first instance")
+                      .takes_value(true))
 
                     .arg(Arg::with_name("learning_rate")
                      .short("l")
