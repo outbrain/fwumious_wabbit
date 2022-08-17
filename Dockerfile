@@ -31,7 +31,7 @@ RUN cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
 RUN make
 RUN make install
 
-# Compile vw - needed for benchmark
+# Compile vw - if arg is true
 RUN if [ "$VW_COMPILE" = "true" ]; then \
      git clone https://github.com/VowpalWabbit/vowpal_wabbit.git && \
      mkdir build && \
