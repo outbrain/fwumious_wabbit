@@ -152,7 +152,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
 
 			let lower_bound: f32 = -1.0/(self.ffm_weights_len as f32).sqrt();
 			let upper_bound: f32 = 1.0/(self.ffm_weights_len as f32).sqrt();
-			let difference = upper_bound - lower_bound;			
+			let difference = upper_bound - lower_bound;
+			
 			for i in 0..self.ffm_weights_len {
 				let mut w = difference * merand48(i as u64) as f32 + lower_bound;
 				self.weights[i as usize].weight = w;
@@ -164,7 +165,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
 
 			let lower_bound: f32 = -(6 as f32).sqrt() / (2 * self.ffm_weights_len) as f32;
 			let upper_bound: f32 = (6 as f32).sqrt() / (2 * self.ffm_weights_len) as f32;
-			let difference = upper_bound - lower_bound;			
+			let difference = upper_bound - lower_bound;
+			
 			for i in 0..self.ffm_weights_len {
 				let mut w = difference * merand48(i as u64) as f32 + lower_bound;
 				self.weights[i as usize].weight = w;
