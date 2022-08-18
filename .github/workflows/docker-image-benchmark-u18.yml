@@ -14,5 +14,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: Branch name
+      run: echo running on branch ${GITHUB_HEAD_REF##*/}
     - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag fw-bench:$(date +%s)
+      run: docker build --build-arg FW_REPO_URL=https://github.com/$GITHUB_REPOSITORY.git --build-arg FW_BRANCH=${GITHUB_HEAD_REF##*/} . --file Dockerfile --tag fw-bench:$(date +%s)
