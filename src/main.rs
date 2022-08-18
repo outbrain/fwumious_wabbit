@@ -51,6 +51,8 @@ fn main() {
 }
 
 fn build_cache_without_training(cl: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
+    /*! A method that enables creating the cache file without training the first model instance.
+    This is done in order to reduce building time of the cache and running the first model instance multi threaded. */
     // We'll parse once the command line into cl and then different objects will examine it
     let input_filename = cl.value_of("data").expect("--data expected");
     let vw_namespace_map_filepath = Path::new(input_filename)
