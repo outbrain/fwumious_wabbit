@@ -19,7 +19,7 @@ pub struct OptimizerSGD {
 }
 
 impl OptimizerTrait for OptimizerSGD {
-    type PerWeightStore = PhantomData<u32>;
+    type PerWeightStore = PhantomData<()>;
     
     fn get_name() -> &'static str {
         "SGD"
@@ -169,7 +169,7 @@ mod tests {
         let mut l = OptimizerSGD::new();
         l.init(0.15, 0.4, 0.0);
         unsafe {
-            let mut acc: PhantomData<u32> = std::marker::PhantomData{};
+            let mut acc: PhantomData<()> = std::marker::PhantomData{};
             let p = l.calculate_update(0.1, &mut acc);
             assert_eq!(p, 0.1* 0.15);
         }
