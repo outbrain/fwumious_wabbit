@@ -51,7 +51,8 @@ pub struct ModelInstance {
     pub ffm_separate_vectors: bool, // DEPRECATED, UNUSED
     #[serde(default = "default_bool_false")]
     pub fastmath: bool,
-
+	
+    pub initialization_type: String,
     #[serde(default = "default_f32_zero")]
     pub ffm_k_threshold: f32,
     #[serde(default = "default_f32_zero")]
@@ -99,8 +100,9 @@ impl ModelInstance {
             ffm_bit_precision: 18,
             ffm_separate_vectors: false, // DEPRECATED, UNUSED
             fastmath: true,
+			initialization_type: String::from("default"),
             ffm_k_threshold: 0.0,
-            ffm_init_center: 0.0,
+            ffm_init_center: 0.0,			
             ffm_init_width: 0.0,
             ffm_init_zero_band: 0.0,
             ffm_init_acc_gradient: 0.0,
@@ -245,7 +247,11 @@ impl ModelInstance {
             if mi.ffm_k > consts::FFM_MAX_K as u32{
                 return Err(Box::new(IOError::new(ErrorKind::Other, format!("Maximum ffm_k is: {}, passed: {}", consts::FFM_MAX_K, mi.ffm_k))))
             }
-        }        
+        }
+
+		if let Some(val) = cl.value_of("initialization_type") {
+            mi.initialization_type = val.parse()?;
+        }
 
         if let Some(val) = cl.value_of("ffm_init_center") {
             mi.ffm_init_center = val.parse()?;
