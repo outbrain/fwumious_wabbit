@@ -2,7 +2,12 @@ use clap::{App, Arg,  AppSettings};
 use crate::version;
 
 pub fn parse<'a>() -> clap::ArgMatches<'a> {
-	let matches = App::new("fwumious wabbit")
+	let matches = create_expected_args().get_matches();
+	matches
+}
+
+pub fn create_expected_args<'a>() -> App<'a, 'a> {
+	App::new("fwumious wabbit")
         .version(version::LATEST)
         .author("Andraz Tori <atori@outbrain.com>")
         .about("Superfast Logistic Regression & Field Aware Factorization Machines")
@@ -49,7 +54,11 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
              .help("Adds single features")
              .multiple(true)
              .takes_value(true))
-
+		.arg(Arg::with_name("initialization_type")
+             .long("initialization_type")
+             .help("Which weight initialization to consider")
+             .multiple(false)
+             .takes_value(true))
         .arg(Arg::with_name("learning_rate")
              .short("l")
              .long("learning_rate")
@@ -182,14 +191,7 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
              .long("ffm_k_threshold")
              .help("A minum gradient on left and right side to increase k")
              .multiple(false)
-			 .takes_value(true))
-
-		.arg(Arg::with_name("initialization_type")
-             .long("initialization_type")
-             .help("Which weight initialization to consider")
-             .multiple(false)
              .takes_value(true))
-
         .arg(Arg::with_name("ffm_init_center")
              .long("ffm_init_center")
              .help("Center of the initial weights distribution")
@@ -257,7 +259,4 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
              .value_name("examples")
              .help("After how many examples stop updating weights")
              .takes_value(true))
-        .get_matches();
-
-	matches
 }
