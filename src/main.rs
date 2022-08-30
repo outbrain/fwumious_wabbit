@@ -61,7 +61,7 @@ fn build_cache_without_training(cl: clap::ArgMatches) -> Result<(), Box<dyn Erro
         .join("vw_namespace_map.csv");
     let vw: vwmap::VwNamespaceMap;
     vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
-    let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"), &vw);
+    let mut cache = cache::RecordCache::new(input_filename, true, &vw);
     let input = File::open(input_filename)?;
     let mut aa;
     let mut bb;
