@@ -201,7 +201,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
 
     #[inline(always)]
     fn forward_backward(&mut self, 
-                        further_blocks: &mut [Box<dyn BlockTrait>], 
+                        further_blocks: &mut [Box<dyn BlockTrait>],
                         wsum_input: f32, 
                         fb: &feature_buffer::FeatureBuffer, 
                         update:bool) -> (f32, f32) {
