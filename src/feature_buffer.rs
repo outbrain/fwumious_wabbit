@@ -225,6 +225,8 @@ impl FeatureBufferTranslator {
         {
             let lr_buffer = &mut self.feature_buffer.lr_buffer;
             lr_buffer.truncate(0);
+
+			self.feature_buffer.lr_buffer_audit.truncate(0);
             self.feature_buffer.label = record_buffer[parser::LABEL_OFFSET] as f32; // copy label
             self.feature_buffer.example_importance =
                 f32::from_bits(record_buffer[parser::EXAMPLE_IMPORTANCE_OFFSET]);
@@ -233,14 +235,20 @@ impl FeatureBufferTranslator {
             let mut hashes_vec_in: &mut Vec<HashAndValue> = &mut self.hashes_vec_in;
             let mut hashes_vec_out: &mut Vec<HashAndValue> = &mut self.hashes_vec_out;
             //            for feature_combo_desc in &self.model_instance.feature_combo_descs {     // We have to do this due to audit mode :(
+
             for (feature_combo_n, feature_combo_desc) in
                 self.model_instance.feature_combo_descs.iter().enumerate()
             {
+//				println!("TEST {:?}", feature_combo_desc);
                 let feature_combo_weight = feature_combo_desc.weight;
                 // we unroll first iteration of the loop and optimize
+//				println!("TEST {:?}", feature_combo_desc.namespace_descriptors);
+				
                 let num_namespaces: usize = feature_combo_desc.namespace_descriptors.len();
                 let namespace_descriptor =
                     unsafe { *feature_combo_desc.namespace_descriptors.get_unchecked(0) };
+
+//				println!("TEST {:?} {:?}", namespace_descriptor, feature_combo_weight);
                 // We special case a single feature (common occurance)
                 if num_namespaces == 1 {
                     feature_reader!(
@@ -265,7 +273,9 @@ impl FeatureBufferTranslator {
                                 .push(feature_combo_n as i32);
                         }
                     }
+//					println!("TEST {:?} {:?}", self.feature_buffer.lr_buffer_audit, self.feature_buffer.example_number);
                 } else {
+//					lr_buffer.truncate(0);
                     hashes_vec_in.truncate(0);
                     feature_reader!(
                         record_buffer,
