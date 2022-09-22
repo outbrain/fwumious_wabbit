@@ -1,5 +1,6 @@
 
 mod block_ffm;
+mod block_affm;
 mod block_helpers;
 mod block_loss_functions;
 mod block_lr;

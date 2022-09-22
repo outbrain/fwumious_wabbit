@@ -425,6 +425,19 @@ impl ModelInstance {
 			}	
 		}
 
+		// Handle field interactions
+		mi.ffm_interaction_matrix = cmd_arguments.is_present("ffm_interaction_matrix");
+
+        if let Some(in_v) = cmd_arguments.values_of("ffm_interaction") {
+            if !mi.ffm_interaction_matrix {
+                return Err(Box::new(IOError::new(ErrorKind::Other, "You need to turn on --ffm_interaction_matrix")))
+            }
+            for value_str in in_v {
+                mi.ffm_interactions.push(mi.parse_ffm_interaction_mask(value_str, mi.ffm_fields.len() as i32)?);
+                replacement_hyperparam_ids.push(("ffm_interaction".to_string(), value_str.to_string()));
+            }
+        }
+
 		if cmd_arguments.is_present("ffm_learning_rate") {
 
 			if let Some(val) = cmd_arguments.value_of("ffm_learning_rate") {
