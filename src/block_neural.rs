@@ -474,7 +474,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
     fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>> {
         let mut forward = forward.as_any().downcast_mut::<BlockNeuronLayer<optimizer::OptimizerSGD>>().unwrap();
         block_helpers::read_weights_from_buf(&mut forward.weights, input_bufreader)?;
-        block_helpers::skip_weights_from_buf(self.weights_len as usize, &forward.weights_optimizer, input_bufreader)?;
+        block_helpers::skip_weights_from_buf(self.weights_len as usize, &self.weights_optimizer, input_bufreader)?;
         Ok(())
     }
 
