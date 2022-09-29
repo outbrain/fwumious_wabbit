@@ -10,9 +10,9 @@ edition = "2018"
 [dependencies]
 csv = "1.1.3"
 # we need new version to enable static builds
-#fasthash = "0.4"
+fasthash = "0.4"
 # fasthash = { git = "https://github.com/flier/rust-fasthash", rev="6ca68b93f7" }
-fasthash = { git = "https://github.com/flier/rust-fasthash", rev="ef0c52b4157af9a1a7d19b2a37658b6c26a6bea6" }
+#fasthash = { git = "https://github.com/flier/rust-fasthash", rev="ef0c52b4157af9a1a7d19b2a37658b6c26a6bea6" }
 serde = {version = "1.0.114" , features = ["derive"]}
 serde_json = "1.0.55"
 #fastapprox = "0.3.0"
@@ -38,12 +38,12 @@ flate2 = { version = "1.0", features = ["cloudflare_zlib"], default-features = f
 #blas-src = { version = "0.8", features = ["intel-mkl"] }
 #openblas-src = {version = "0.10.4", features = ["static"]}
 #cblas = "0.4.0"
-intel-mkl-src = {version= "0.7.0", default-features = false, features=["download", "mkl-static-lp64-seq"]}
+#intel-mkl-src = {version= "0.7.0", default-features = false, features=["download", "mkl-static-lp64-seq"]}
 #blas-src = "0.8.0"
 #blas = "0.22"
 #openblas-src = {version = "0.10.4", features=["static"]}
 
-blas = "0.22"
+#blas = "0.22"
 #openblas-src = {version = "0.10.4" }
 
 #blas-src = { version = "0.8", features = ["intel-mkl"] }
