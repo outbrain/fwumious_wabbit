@@ -27,7 +27,7 @@ use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 use block_helpers::{Weight, WeightAndOptimizerData, OptimizerData};
 
-use blas::*;
+//use blas::*;
 
 const MAX_NUM_INPUTS:usize= 16000;
 const USE_BLAS:bool = true;
@@ -278,19 +278,19 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                 } else {
                 // This is actually speed things up considerably. 
                     output_tape.copy_from_slice(std::mem::transmute::<&[Weight], &[f32]>(self.weights.get_unchecked(bias_offset..)));
-                    sgemv(
-                         b'T',                    //   trans: u8, 
-                         self.num_inputs as i32,  //   m: i32, 
-                         self.num_neurons as i32, //   n: i32, 
-                         dropout_inv,             //   alpha: f32, 
-                         std::mem::transmute::<&[Weight], &[f32]>(self.weights.get_unchecked(0..)), //  a: &[f32], 
-                         self.num_inputs  as i32,       // lda: i32, 
-                         &input_tape.get_unchecked(0..),// x: &[f32], 
-                            1,      // incx: i32, 
-                            1.0,    // beta: f32, 
-                            output_tape.get_unchecked_mut(0..), //y: &mut [f32], 
-                            1,      // incy: i32
-                        )
+                    // sgemv(
+                    //      b'T',                    //   trans: u8, 
+                    //      self.num_inputs as i32,  //   m: i32, 
+                    //      self.num_neurons as i32, //   n: i32, 
+                    //      dropout_inv,             //   alpha: f32, 
+                    //      std::mem::transmute::<&[Weight], &[f32]>(self.weights.get_unchecked(0..)), //  a: &[f32], 
+                    //      self.num_inputs  as i32,       // lda: i32, 
+                    //      &input_tape.get_unchecked(0..),// x: &[f32], 
+                    //         1,      // incx: i32, 
+                    //         1.0,    // beta: f32, 
+                    //         output_tape.get_unchecked_mut(0..), //y: &mut [f32], 
+                    //         1,      // incy: i32
+                    //     )
                 }
 
                 if update {
@@ -432,19 +432,19 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
             } else {
             // This is actually speed things up considerably. 
                 output_tape.copy_from_slice(std::mem::transmute::<&[Weight], &[f32]>(self.weights.get_unchecked(bias_offset..)));
-                sgemv(
-                     b'T',//   trans: u8, 
-                     self.num_inputs as i32, //   m: i32, 
-                     self.num_neurons as i32, //   n: i32, 
-                     1.0, //   alpha: f32, 
-                     std::mem::transmute::<&[Weight], &[f32]>(self.weights.get_unchecked(0..)), //  a: &[f32], 
-                     self.num_inputs  as i32,   //lda: i32, 
-                     &input_tape.get_unchecked(0..),//   x: &[f32], 
-                        1, //incx: i32, 
-                        1.0, // beta: f32, 
-                        output_tape.get_unchecked_mut(0..), //y: &mut [f32], 
-                        1,//incy: i32
-                    )
+                // sgemv(
+                //      b'T',//   trans: u8, 
+                //      self.num_inputs as i32, //   m: i32, 
+                //      self.num_neurons as i32, //   n: i32, 
+                //      1.0, //   alpha: f32, 
+                //      std::mem::transmute::<&[Weight], &[f32]>(self.weights.get_unchecked(0..)), //  a: &[f32], 
+                //      self.num_inputs  as i32,   //lda: i32, 
+                //      &input_tape.get_unchecked(0..),//   x: &[f32], 
+                //         1, //incx: i32, 
+                //         1.0, // beta: f32, 
+                //         output_tape.get_unchecked_mut(0..), //y: &mut [f32], 
+                //         1,//incy: i32
+                //     )
             }    
             block_helpers::forward(further_blocks, fb, pb);
 
