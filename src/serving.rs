@@ -96,7 +96,7 @@ impl WorkerThread {
                     let p_res = format!("{:.6}\n", p);
                     match writer.write_all(p_res.as_bytes()) {
                         Ok(_) => {},
-                        Err(_e) => { /*println!("Write to socket failed, dropping it"); */ return ConnectionEnd::StreamWriteError; }
+                        Err(_e) => { println!("Write to socket failed, dropping it {:?}", _e);  return ConnectionEnd::StreamWriteError; }
                     };
                 },
                 Err(e) =>
