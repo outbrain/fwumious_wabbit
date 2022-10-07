@@ -128,7 +128,6 @@ fn main2() -> Result<(), Box<dyn Error>> {
 			
             // We load vw_namespace_map.csv just so we know all the namespaces ahead of time
             // This is one of the major differences from vowpal
-			
             let input_filename = cl.value_of("data").expect("--data expected");
             let vw_namespace_map_filepath = Path::new(input_filename)
                 .parent()
@@ -136,6 +135,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
                 .join("vw_namespace_map.csv");
             vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
             mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
+
             re = regressor::get_regressor_with_weights(&mi);
         };
 
@@ -202,6 +202,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
             }
             example_num += 1;
             fbt.translate(buffer, example_num);
+
             let mut prediction: f32 = 0.0;
 
             if prediction_model_delay == 0 {
@@ -220,7 +221,6 @@ fn main2() -> Result<(), Box<dyn Error>> {
                     re.learn(&delayed_buffer, &mut pb, !testonly);
                 }
             }
-
             if example_num > predictions_after {
                 match predictions_file.as_mut() {
                     Some(file) => write!(file, "{:.6}\n", prediction)?,

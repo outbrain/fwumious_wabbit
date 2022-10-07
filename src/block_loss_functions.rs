@@ -146,15 +146,15 @@ impl BlockTrait for BlockSigmoid {
                      further_blocks: &[Box<dyn BlockTrait>], 
                      fb: &feature_buffer::FeatureBuffer,
                      pb: &mut port_buffer::PortBuffer, ) {
+        unsafe {
 
 /*        if further_blocks.len() != 0 {
             panic!("RegSigmoid can only be at the end of the chain!");
         }*/
         debug_assert!(self.input_offset != usize::MAX);
         debug_assert!(self.output_offset != usize::MAX);
-
         let wsum:f32 = {
-            let myslice = &pb.tape[self.input_offset .. (self.input_offset + self.num_inputs)];
+            let myslice = &pb.tape.get_unchecked(self.input_offset .. (self.input_offset + self.num_inputs));
             myslice.iter().sum()
         };
         
@@ -176,7 +176,8 @@ impl BlockTrait for BlockSigmoid {
         }
         block_helpers::forward(further_blocks, fb, pb);
     }
-
+    }
+    
 }
 
 

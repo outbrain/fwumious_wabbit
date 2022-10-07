@@ -125,6 +125,7 @@ pub fn new_regressor_from_filename(
     let mut input_bufreader = io::BufReader::new(fs::File::open(filename).unwrap());
     let (mut mi, vw, mut re) =
         load_regressor_without_weights(&mut input_bufreader, cmd_arguments)?;
+
     if !immutable {
         re.allocate_and_init_weights(&mi);
         re.overwrite_weights_from_buf(&mut input_bufreader)?;
