@@ -41,12 +41,9 @@ mod version;
 mod vwmap;
 
 fn main() {
-    match main2() {
-        Err(e) => {
-            println!("Global error: {:?}", e);
-            std::process::exit(1)
-        }
-        Ok(()) => {}
+    if let Err(e) = main2() {
+        println!("Global error: {:?}", e);
+        std::process::exit(1)
     }
 }
 
@@ -119,22 +116,16 @@ fn main2() -> Result<(), Box<dyn Error>> {
     let testonly = cl.is_present("testonly");
 	
     let final_regressor_filename = cl.value_of("final_regressor");
-    match final_regressor_filename {
-        Some(filename) => {
-            if !cl.is_present("save_resume") {
-                return Err("You need to use --save_resume with --final_regressor, for vowpal wabbit compatibility")?;
-            }
-            println!("final_regressor = {}", filename);
+    if let Some(filename) = final_regressor_filename {
+        if !cl.is_present("save_resume") {
+            return Err("You need to use --save_resume with --final_regressor, for vowpal wabbit compatibility")?;
         }
-        None => {}
+        println!("final_regressor = {}", filename);
     };
 
     let inference_regressor_filename = cl.value_of("convert_inference_regressor");
-    match inference_regressor_filename {
-        Some(filename1) => {
-            println!("inference_regressor = {}", filename1);
-        }
-        None => {}
+    if let Some(filename1) = inference_regressor_filename {
+        println!("inference_regressor = {}", filename1);
     };
 
     /* setting up the pipeline, either from command line or from existing regressor */
@@ -155,11 +146,8 @@ fn main2() -> Result<(), Box<dyn Error>> {
             .expect("Convert mode requires --initial regressor");
         let (mut mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true, Option::Some(&cl))?;
         mi2.optimizer = model_instance::Optimizer::SGD;
-        match inference_regressor_filename {
-            Some(filename1) => {
-                persistence::save_regressor_to_filename(filename1, &mi2, &vw2, re_fixed).unwrap()
-            }
-            None => {}
+        if let Some(filename1) = inference_regressor_filename {
+            persistence::save_regressor_to_filename(filename1, &mi2, &vw2, re_fixed).unwrap()
         }
     } else {
 		
@@ -269,9 +257,8 @@ fn main2() -> Result<(), Box<dyn Error>> {
             }
 
             if example_num > predictions_after {
-                match predictions_file.as_mut() {
-                    Some(file) => write!(file, "{:.6}\n", prediction)?,
-                    None => {}
+                if let Some(file) = predictions_file.as_mut() {
+                    write!(file, "{:.6}\n", prediction)?
                 }
             }
         }
@@ -280,11 +267,8 @@ fn main2() -> Result<(), Box<dyn Error>> {
         let elapsed = now.elapsed();
         println!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
 
-        match final_regressor_filename {
-            Some(filename) => {
-                persistence::save_regressor_to_filename(filename, &mi, &vw, re).unwrap()
-            }
-            None => {}
+        if let Some(filename) = final_regressor_filename {
+            persistence::save_regressor_to_filename(filename, &mi, &vw, re).unwrap()
         }
     }
 

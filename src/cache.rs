@@ -51,10 +51,7 @@ impl<W: io::Write> Write for Wrapper<W> {
 }
 impl<W: Write> Drop for Wrapper<W> {
     fn drop(&mut self) {
-        match self.s.take() {
-            Some(s) => {let a = s.finish();}
-            None => {}
-        }
+        if let Some(s) = self.s.take() {let a = s.finish();}
     }
 }
 
