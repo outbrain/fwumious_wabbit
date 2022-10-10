@@ -17,6 +17,7 @@ ENV PATH="/usr/lib/llvm-11/bin/:${PATH}"
 RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
 RUN apt-add-repository "deb https://apt.kitware.com/ubuntu/ $(lsb_release -cs) main"
 RUN apt update && apt install cmake -y
+RUN apt-get install -y libssl-dev
 
 # Compile fbs
 WORKDIR /
