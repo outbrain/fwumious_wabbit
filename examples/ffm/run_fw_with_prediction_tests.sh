@@ -12,7 +12,7 @@ rm -rf datasets;
 THRESHOLD=0.5
 
 # Training performance margin required to pass (Balanced acc.)
-MARGIN_OF_PERFORMANCE_BA=0.2
+MARGIN_OF_PERFORMANCE_BA=0.45
 
 # Project structure
 PROJECT_ROOT=$DIR/../../
@@ -84,7 +84,17 @@ mv ./tmp.txt ./predictions/joint_prediction_space.txt;
 # All instances
 ALL_INSTANCES=$(cat predictions/joint_prediction_space.txt | wc -l);
 
-# TEST - are all inference predictions the same?
+# Are inference weights' predictions the same?
+INFERENCE_SAME_COUNT=$(cat ./predictions/joint_prediction_space.txt | awk '$2=$3' | wc -l)
+
+if [ $ALL_INSTANCES = $INFERENCE_SAME_COUNT ];
+then
+	echo "$INFO_STRING All inferences' weights' predictions are the same .."
+else
+	echo "$INFO_STRING inference weights produce different predictions to full weights!"
+	exit 1;
+fi
+
 NUM_UNIQUE_INFERENCE_ONLY_EVAL=$(cat predictions/eval_inference_only.txt | sort -u | wc -l)
 NUM_UNIQUE_FULL_WEIGHTS_EVAL=$(cat predictions/eval_full_weight_space.txt | sort -u | wc -l)
 NUM_UNIQUE_TRAINING_RUN_EVAL=$(cat predictions/training.txt | sort -u | wc -l)
@@ -114,16 +124,25 @@ fi
 # Create a benchmark against random classifier
 echo -e "OUTPUT_TAG\tTHRESHOLD\tPRECISION\tRECALL\tF1\tACCURACY\tBALANCED_ACCURACY"
 ALL_INSTANCES=$(cat predictions/joint_prediction_space.txt | wc -l)
-ALL_INSTANCES_POSITIVE=$(cat predictions/joint_prediction_space.txt| awk '{print $4}'| grep '1' | wc -l)
+ALL_INSTANCES_POSITIVE=$(cat predictions/joint_prediction_space.txt| awk '{print $4}'| grep -v '\-1' | wc -l)
 ALL_INSTANCES_NEGATIVE=$(cat predictions/joint_prediction_space.txt| awk '{print $4}'| grep '\-1' | wc -l)
 
-TP=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($3=="1") &&  ($1>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+TP=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  ($3>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
-TN=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($3=="-1") &&  ($1<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+TN=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="-1") &&  ($3<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
-FP=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($3=="-1") &&  ($1>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+FP=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="-1") &&  ($3>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
-FN=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($3=="1") &&  ($1<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+FN=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  ($3<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+
+# Account for corner cases
+if [ "$FP" = "" ]; then
+	FP=0
+fi
+
+if [ "$FN" = "" ]; then
+	FN=0
+fi
 
 PRECISION_FW=$(bc <<<"scale=5 ; $TP / ($TP + $FP)");
 RECALL_FW=$(bc <<< "scale=5 ; $TP / ($TP + $FN)");
@@ -143,10 +162,6 @@ FP=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" 
 
 FN=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  (rand()<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
-echo $TP
-echo $TN
-echo $FP
-echo $FN
 PRECISION=$(bc <<<"scale=5 ; $TP / ($TP + $FP)");
 RECALL=$(bc <<< "scale=5 ; $TP / ($TP + $FN)");
 F1=$(bc <<< "scale=5 ; $TP / ($TP + 0.5 * ($FP + $FN))");
