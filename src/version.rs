@@ -1,1 +1,1 @@
-pub static LATEST: &str = "1.7-adi";
+pub static LATEST: &str = "0.1";

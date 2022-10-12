@@ -102,7 +102,7 @@ impl VwNamespaceMap {
         for (i, record_w) in rdr.records().enumerate() {
             let record = record_w?;
             let vwname_str = &record[0];
-            if vwname_str.as_bytes().len() != 1 {
+            if vwname_str.as_bytes().len() != 1 && i ==0 {
                 println!("Warning: multi-byte namespace names are not compatible with old style namespace arguments");
             }
             
