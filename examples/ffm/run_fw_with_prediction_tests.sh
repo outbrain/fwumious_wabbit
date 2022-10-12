@@ -85,7 +85,7 @@ mv ./tmp.txt ./predictions/joint_prediction_space.txt;
 ALL_INSTANCES=$(cat predictions/joint_prediction_space.txt | wc -l);
 
 # Are inference weights' predictions the same?
-INFERENCE_SAME_COUNT=$(cat ./predictions/joint_prediction_space.txt | awk '$2=$3' | wc -l)
+INFERENCE_SAME_COUNT=$(cat ./predictions/joint_prediction_space.txt | awk '$2==$3' | wc -l)
 
 if [ $ALL_INSTANCES = $INFERENCE_SAME_COUNT ];
 then
