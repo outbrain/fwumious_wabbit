@@ -17,7 +17,7 @@ Data scientists can train hundreds of models over hundreds of millions of exampl
 a matter of hours on a single machine.
 
 For our tested scenarios it is almost two orders of magnitude faster than the 
-fastest Tensorflow implementation of Logistic Regression and FFMs that we could 
+fastest Tensorflow implementation of Logistic Regression and FFMs that we could.
 come up with. 
 It is an order of magnitude faster than Vowpal Wabbit for some specific use-cases.
 
