@@ -122,7 +122,7 @@ then
 fi
 
 # Create a benchmark against random classifier
-echo -e "OUTPUT_TAG\tTHRESHOLD\tPRECISION\tRECALL\tF1\tACCURACY\tBALANCED_ACCURACY"
+echo -e "OUTPUT_TAG\tTHRESHOLD\tPRECISION\tRECALL\tF1\tBALANCED_ACCURACY"
 ALL_INSTANCES=$(cat predictions/joint_prediction_space.txt | wc -l)
 ALL_INSTANCES_POSITIVE=$(cat predictions/joint_prediction_space.txt| awk '{print $4}'| grep -v '\-1' | wc -l)
 ALL_INSTANCES_NEGATIVE=$(cat predictions/joint_prediction_space.txt| awk '{print $4}'| grep '\-1' | wc -l)
