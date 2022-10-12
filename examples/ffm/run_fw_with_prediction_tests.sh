@@ -1,6 +1,17 @@
 #!/bin/bash
 set -e
 
+function compute_main_metrics {
+	# A method that takes err1/2 counts from context and overwrites main statistics
+	
+	PRECISION=$(bc <<<"scale=5 ; $TP / ($TP + $FP)");
+	RECALL=$(bc <<< "scale=5 ; $TP / ($TP + $FN)");
+	F1=$(bc <<< "scale=5 ; $TP / ($TP + 0.5 * ($FP + $FN))");
+	SENSITIVITY=$(bc <<< "scale=5 ; $TP / $ALL_INSTANCES_POSITIVE");
+	SPECIFICITY=$(bc <<< "scale=5 ; $TN / $ALL_INSTANCES_NEGATIVE");
+	BALANCED_ACCURACY=$(bc <<< "scale=5 ; ($SENSITIVITY + $SPECIFICITY) / 2");
+}
+
 SCRIPT=$(readlink -f "$0")
 DIR=$(dirname "$SCRIPT")
 echo "Generating input datasets"
@@ -145,13 +156,8 @@ if [ "$FN" = "" ]; then
 	FN=0
 fi
 
-PRECISION_FW=$(bc <<<"scale=5 ; $TP / ($TP + $FP)");
-RECALL_FW=$(bc <<< "scale=5 ; $TP / ($TP + $FN)");
-F1_FW=$(bc <<< "scale=5 ; $TP / ($TP + 0.5 * ($FP + $FN))");
-SENSITIVITY_FW=$(bc <<< "scale=5 ; $TP / $ALL_INSTANCES_POSITIVE");
-SPECIFICITY_FW=$(bc <<< "scale=5 ; $TN / $ALL_INSTANCES_NEGATIVE");
-BALANCED_ACCURACY_FW=$(bc <<< "scale=5 ; ($SENSITIVITY_FW + $SPECIFICITY_FW) / 2");
-echo -e "FW\t$THRESHOLD\t$PRECISION_FW\t$RECALL_FW\t$F1_FW\t$BALANCED_ACCURACY_FW";
+compute_main_metrics
+echo -e "FW\t$THRESHOLD\t$PRECISION\t$RECALL\t$F1\t$BALANCED_ACCURACY";
 
 # Random baseline
 TP=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  (rand()>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
@@ -162,12 +168,8 @@ FP=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" 
 
 FN=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  (rand()<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
-PRECISION=$(bc <<<"scale=5 ; $TP / ($TP + $FP)");
-RECALL=$(bc <<< "scale=5 ; $TP / ($TP + $FN)");
-F1=$(bc <<< "scale=5 ; $TP / ($TP + 0.5 * ($FP + $FN))");
-SENSITIVITY=$(bc <<< "scale=5 ; $TP / $ALL_INSTANCES_POSITIVE");
-SPECIFICITY=$(bc <<< "scale=5 ; $TN / $ALL_INSTANCES_NEGATIVE");
-BALANCED_ACCURACY=$(bc <<< "scale=5 ; ($SENSITIVITY + $SPECIFICITY) / 2");
+compute_main_metrics
+
 echo -e "RANDOM\t$THRESHOLD\t$PRECISION\t$RECALL\t$F1\t$BALANCED_ACCURACY";
 
 # Is the difference substantial (in BA)
@@ -204,12 +206,7 @@ FP=$(cat predictions/joint_hard_predictions_and_ground.txt | awk -v THRESHOLD="$
 
 FN=$(cat predictions/joint_hard_predictions_and_ground.txt | awk -v THRESHOLD="$THRESHOLD" '($2=="1") &&  ($1<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
-PRECISION=$(bc <<<"scale=5 ; $TP / ($TP + $FP)");
-RECALL=$(bc <<< "scale=5 ; $TP / ($TP + $FN)");
-F1=$(bc <<< "scale=5 ; $TP / ($TP + 0.5 * ($FP + $FN))");
-SENSITIVITY=$(bc <<< "scale=5 ; $TP / $ALL_INSTANCES_POSITIVE");
-SPECIFICITY=$(bc <<< "scale=5 ; $TN / $ALL_INSTANCES_NEGATIVE");
-BALANCED_ACCURACY=$(bc <<< "scale=5 ; ($SENSITIVITY + $SPECIFICITY) / 2");
+compute_main_metrics
 echo -e "FW-hard-test\t$THRESHOLD\t$PRECISION\t$RECALL\t$F1\t$BALANCED_ACCURACY";
 
 if [ 1 -eq "$(echo "($BALANCED_ACCURACY - $MARGIN_OF_PERFORMANCE_HARD_TEST_BA) > 0" | bc)" ];
