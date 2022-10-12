@@ -10,18 +10,22 @@ rm -rf datasets;
 
 # Probability threshold considered
 THRESHOLD=0.5
+
+# Training performance margin required to pass (Balanced acc.)
 MARGIN_OF_PERFORMANCE_BA=0.2
+
+# Project structure
 PROJECT_ROOT=$DIR/../../
 FW=$PROJECT_ROOT/target/release/fw
 DATASET_FOLDER=$DIR/datasets
 TRAIN_DATA=$DATASET_FOLDER/data.vw;
-PRELOG="$DATASET_FOLDER/prelog.csv";
-TEST_DATA=$TRAIN_DATA;
+
+# Nicer printing
 INFO_STRING="==============>"
 
+# Cleanup
 rm -rf models;
 rm -rf predictions;
-
 mkdir -p models;
 mkdir -p predictions;
 
@@ -29,7 +33,7 @@ echo "Building FW"
 (cd $PROJECT_ROOT
 cargo build --release);
 
-# Change this to your preference if required!
+# Change this to your preference if required - this is tailored for the toy example
 namespaces="--keep A --keep B --interactions AB --ffm_k 10 --ffm_field A --ffm_field B" 
 rest="-l 0.1 -b 25 -c --sgd --loss_function logistic --link logistic --power_t 0.0 --l2 0.0 --hash all --noconstant"
 
@@ -70,8 +74,10 @@ fi
 ######################################################################################################################
 paste predictions/training_eval_part_only.txt predictions/eval_inference_only.txt predictions/eval_full_weight_space.txt predictions/ground_truth.txt  > ./predictions/joint_prediction_space.txt
 
+# Generate a "dummy" prediction space
 yes "0.0" | head -n $(cat predictions/joint_prediction_space.txt | wc -l) > ./predictions/all_negative.txt
 
+# Form the final dataframe
 paste predictions/joint_prediction_space.txt predictions/all_negative.txt > ./tmp.txt;
 mv ./tmp.txt ./predictions/joint_prediction_space.txt;
 
@@ -83,19 +89,21 @@ NUM_UNIQUE_INFERENCE_ONLY_EVAL=$(cat predictions/eval_inference_only.txt | sort 
 NUM_UNIQUE_FULL_WEIGHTS_EVAL=$(cat predictions/eval_full_weight_space.txt | sort -u | wc -l)
 NUM_UNIQUE_TRAINING_RUN_EVAL=$(cat predictions/training.txt | sort -u | wc -l)
 
-
+# Are all predictions for full weights the same?
 if [ $NUM_UNIQUE_FULL_WEIGHTS_EVAL = 1 ]
 then
 	echo "$INFO_STRING WARNING: all predictions are the same if using full weights file for inference only.";
 	exit 1;
 fi
 
+# Are all inference weights-based predictions fine?
 if [ $NUM_UNIQUE_INFERENCE_ONLY_EVAL = 1 ]
 then
 	echo "$INFO_STRING WARNING: all predictions are the same if using inference weights file for inference only.";
 	exit 1;
 fi
 
+# Are all training predictions same?
 if [ $NUM_UNIQUE_TRAINING_RUN_EVAL = 1 ]
 then
 	echo "$INFO_STRING WARNING: all predictions are the same during training.";
@@ -103,6 +111,7 @@ then
 	
 fi
 
+# Create a benchmark against random classifier
 echo -e "OUTPUT_TAG\tTHRESHOLD\tPRECISION\tRECALL\tF1\tACCURACY\tBALANCED_ACCURACY"
 ALL_INSTANCES=$(cat predictions/joint_prediction_space.txt | wc -l)
 ALL_INSTANCES_POSITIVE=$(cat predictions/joint_prediction_space.txt| awk '{print $4}'| grep '1' | wc -l)
@@ -146,6 +155,8 @@ echo -e "RANDOM\t$THRESHOLD\t$PRECISION\t$RECALL\t$F1\t$ACCURACY\t$BALANCED_ACCU
 # Is the difference substantial (in BA)
 BA_DIFF=$(bc <<< "scale=5 ; $BALANCED_ACCURACY_FW - $BALANCED_ACCURACY");
 ZERO_VAR="0.0"
+
+# BA margin must be beyond specified threshold for this to pass
 if [ 1 -eq "$(echo "$BA_DIFF > $ZERO_VAR" | bc)" ];
 then
 	echo "$INFO_STRING FW learned much better than random (on training), exiting gracefully.";
