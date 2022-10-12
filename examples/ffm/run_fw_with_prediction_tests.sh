@@ -6,13 +6,14 @@ DIR=$(dirname "$SCRIPT")
 echo "Generating input datasets"
 rm -rf datasets;
 (cd $DIR
- python3 generate.py --num_animals 10 --num_foods 6 --num_train_examples 5000)
+ python3 generate.py --num_animals 300 --num_foods 200 --num_train_examples 40000)
 
 # Probability threshold considered
 THRESHOLD=0.5
 
 # Training performance margin required to pass (Balanced acc.)
 MARGIN_OF_PERFORMANCE_BA=0.45
+MARGIN_OF_PERFORMANCE_HARD_TEST_BA=0.80
 
 # Project structure
 PROJECT_ROOT=$DIR/../../
@@ -190,14 +191,18 @@ $FW $namespaces $rest -i models/inference_weights.fw.model -d $DATASET_FOLDER/te
 cat ./datasets/test-hard.vw|mawk '{print $1}' > ./predictions/hard_ground_truth.txt;
 paste predictions/test_hard_predictions.txt predictions/hard_ground_truth.txt > ./predictions/joint_hard_predictions_and_ground.txt;
 
+
+ALL_INSTANCES_POSITIVE=$(cat predictions/joint_hard_predictions_and_ground.txt | awk '{print $2}'| grep -v '\-1' | wc -l)
+ALL_INSTANCES_NEGATIVE=$(cat predictions/joint_hard_predictions_and_ground.txt | awk '{print $2}'| grep '\-1' | wc -l)
+
 # Random baseline
-TP=$(cat predictions/joint_hard_predictions_and_ground.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  (rand()>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+TP=$(cat predictions/joint_hard_predictions_and_ground.txt | awk -v THRESHOLD="$THRESHOLD" '($2=="1") &&  ($1>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
-TN=$(cat predictions/joint_hard_predictions_and_ground.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="-1") &&  (rand()<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+TN=$(cat predictions/joint_hard_predictions_and_ground.txt | awk -v THRESHOLD="$THRESHOLD" '($2=="-1") &&  ($1<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
-FP=$(cat predictions/joint_hard_predictions_and_ground.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="-1") &&  (rand()>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+FP=$(cat predictions/joint_hard_predictions_and_ground.txt | awk -v THRESHOLD="$THRESHOLD" '($2=="-1") &&  ($1>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
-FN=$(cat predictions/joint_hard_predictions_and_ground.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  (rand()<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+FN=$(cat predictions/joint_hard_predictions_and_ground.txt | awk -v THRESHOLD="$THRESHOLD" '($2=="1") &&  ($1<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
 PRECISION=$(bc <<<"scale=5 ; $TP / ($TP + $FP)");
 RECALL=$(bc <<< "scale=5 ; $TP / ($TP + $FN)");
@@ -206,3 +211,11 @@ SENSITIVITY=$(bc <<< "scale=5 ; $TP / $ALL_INSTANCES_POSITIVE");
 SPECIFICITY=$(bc <<< "scale=5 ; $TN / $ALL_INSTANCES_NEGATIVE");
 BALANCED_ACCURACY=$(bc <<< "scale=5 ; ($SENSITIVITY + $SPECIFICITY) / 2");
 echo -e "FW-hard-test\t$THRESHOLD\t$PRECISION\t$RECALL\t$F1\t$BALANCED_ACCURACY";
+
+if [ 1 -eq "$(echo "($BALANCED_ACCURACY - $MARGIN_OF_PERFORMANCE_HARD_TEST_BA) > 0" | bc)" ];
+then
+	echo "$INFO_STRING FW learned much better than random (on hard test), exiting gracefully.";
+else
+	echo "$INFO_STRING FW did not learn to classify the hard problem well enough!"
+	exit 1
+fi
