@@ -178,3 +178,31 @@ if [ 1 -eq "$(echo "$BA_DIFF > $ZERO_VAR" | bc)" ];
 then
 	echo "$INFO_STRING FW learned much better than random (on training), exiting gracefully.";
 fi
+
+
+#######################################
+# PART 2 - benchmarks on the test set #
+#######################################
+
+# Test inference weights on a given data set
+$FW $namespaces $rest -i models/inference_weights.fw.model -d $DATASET_FOLDER/test-hard.vw -t -p ./predictions/test_hard_predictions.txt
+
+cat ./datasets/test-hard.vw|mawk '{print $1}' > ./predictions/hard_ground_truth.txt;
+paste predictions/test_hard_predictions.txt predictions/hard_ground_truth.txt > ./predictions/joint_hard_predictions_and_ground.txt;
+
+# Random baseline
+TP=$(cat predictions/joint_hard_predictions_and_ground.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  (rand()>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+
+TN=$(cat predictions/joint_hard_predictions_and_ground.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="-1") &&  (rand()<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+
+FP=$(cat predictions/joint_hard_predictions_and_ground.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="-1") &&  (rand()>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+
+FN=$(cat predictions/joint_hard_predictions_and_ground.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  (rand()<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+
+PRECISION=$(bc <<<"scale=5 ; $TP / ($TP + $FP)");
+RECALL=$(bc <<< "scale=5 ; $TP / ($TP + $FN)");
+F1=$(bc <<< "scale=5 ; $TP / ($TP + 0.5 * ($FP + $FN))");
+SENSITIVITY=$(bc <<< "scale=5 ; $TP / $ALL_INSTANCES_POSITIVE");
+SPECIFICITY=$(bc <<< "scale=5 ; $TN / $ALL_INSTANCES_NEGATIVE");
+BALANCED_ACCURACY=$(bc <<< "scale=5 ; ($SENSITIVITY + $SPECIFICITY) / 2");
+echo -e "FW-hard-test\t$THRESHOLD\t$PRECISION\t$RECALL\t$F1\t$BALANCED_ACCURACY";
