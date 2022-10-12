@@ -6,7 +6,7 @@ DIR=$(dirname "$SCRIPT")
 echo "Generating input datasets"
 rm -rf datasets;
 (cd $DIR
- python3 generate.py --num_animals 10 --num_foods 5)
+ python3 generate.py --num_animals 10 --num_foods 6)
 
 # Probability threshold considered
 THRESHOLD=0.5
@@ -147,11 +147,10 @@ fi
 PRECISION_FW=$(bc <<<"scale=5 ; $TP / ($TP + $FP)");
 RECALL_FW=$(bc <<< "scale=5 ; $TP / ($TP + $FN)");
 F1_FW=$(bc <<< "scale=5 ; $TP / ($TP + 0.5 * ($FP + $FN))");
-ACCURACY_FW=$(bc <<< "scale=5 ; (TP + TN) / ($TP + $TN + $FP + $FN)");
 SENSITIVITY_FW=$(bc <<< "scale=5 ; $TP / $ALL_INSTANCES_POSITIVE");
 SPECIFICITY_FW=$(bc <<< "scale=5 ; $TN / $ALL_INSTANCES_NEGATIVE");
 BALANCED_ACCURACY_FW=$(bc <<< "scale=5 ; ($SENSITIVITY_FW + $SPECIFICITY_FW) / 2");
-echo -e "FW\t$THRESHOLD\t$PRECISION_FW\t$RECALL_FW\t$F1_FW\t$ACCURACY_FW\t$BALANCED_ACCURACY_FW";
+echo -e "FW\t$THRESHOLD\t$PRECISION_FW\t$RECALL_FW\t$F1_FW\t$BALANCED_ACCURACY_FW";
 
 # Random baseline
 TP=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  (rand()>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
@@ -165,11 +164,10 @@ FN=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" 
 PRECISION=$(bc <<<"scale=5 ; $TP / ($TP + $FP)");
 RECALL=$(bc <<< "scale=5 ; $TP / ($TP + $FN)");
 F1=$(bc <<< "scale=5 ; $TP / ($TP + 0.5 * ($FP + $FN))");
-ACCURACY=$(bc <<< "scale=5 ; (TP + TN) / ($TP + $TN + $FP + $FN)");
 SENSITIVITY=$(bc <<< "scale=5 ; $TP / $ALL_INSTANCES_POSITIVE");
 SPECIFICITY=$(bc <<< "scale=5 ; $TN / $ALL_INSTANCES_NEGATIVE");
 BALANCED_ACCURACY=$(bc <<< "scale=5 ; ($SENSITIVITY + $SPECIFICITY) / 2");
-echo -e "RANDOM\t$THRESHOLD\t$PRECISION\t$RECALL\t$F1\t$ACCURACY\t$BALANCED_ACCURACY";
+echo -e "RANDOM\t$THRESHOLD\t$PRECISION\t$RECALL\t$F1\t$BALANCED_ACCURACY";
 
 # Is the difference substantial (in BA)
 BA_DIFF=$(bc <<< "scale=5 ; $BALANCED_ACCURACY_FW - $BALANCED_ACCURACY");
