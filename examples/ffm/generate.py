@@ -1,15 +1,57 @@
 import random, pathlib
+import argparse
+
+parser = argparse.ArgumentParser(description="FW synthetic data generator.")
+parser.add_argument(
+    "--num_train_examples",
+    type=int,
+    default=1000000,
+    help="How many instances to generate?"
+)
+parser.add_argument(
+    "--num_eval_examples",
+    type=int,
+    default=10000,
+    help="How many instances to evaluate?"
+)
+parser.add_argument(
+    "--num_animals",
+    type=int,
+    default=5,
+    help="How many possible animals are there?"
+)
+parser.add_argument(
+    "--num_foods",
+    type=int,
+    default=5,
+    help="Number of possible foods for the animals?"
+)
+parser.add_argument(
+    "--block_beyond",
+    type=int,
+    default=3,
+    help="block_beyond parameter."
+)
+parser.add_argument(
+    "--random_seed",
+    type=int,
+    default=1,
+    help="Random seed for the generation."
+)
+
+args = parser.parse_args()
+
 DATASETS_DIRECTORY = pathlib.Path("datasets")
-TRAIN_EXAMPLES = 100000
-EVAL_EXAMPLES = 10000
-NUM_ANIMALS = 5
-NUM_FOODS = 5
-BLOCK_BEYOND = 3
+TRAIN_EXAMPLES = args.num_train_examples
+EVAL_EXAMPLES = args.num_eval_examples
+NUM_ANIMALS = args.num_animals
+NUM_FOODS = args.num_foods
+BLOCK_BEYOND = args.block_beyond
 
 Aval = []
 Bval = []
 
-random.seed(1)
+random.seed(args.random_seed)
 
 def get_score(a,b):
     if (a[0] == "Herbivore" and b[0] == "Plant"):
