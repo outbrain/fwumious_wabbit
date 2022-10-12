@@ -6,7 +6,7 @@ DIR=$(dirname "$SCRIPT")
 echo "Generating input datasets"
 rm -rf datasets;
 (cd $DIR
- python3 generate.py --num_animals 10 --num_foods 6)
+ python3 generate.py --num_animals 10 --num_foods 6 --num_train_examples 5000)
 
 # Probability threshold considered
 THRESHOLD=0.5
