@@ -17,7 +17,7 @@ DIR=$(dirname "$SCRIPT")
 echo "Generating input datasets"
 rm -rf datasets;
 (cd $DIR
- python3 generate.py --num_animals 300 --num_foods 200 --num_train_examples 40000)
+ python3 generate.py --num_animals 300 --num_foods 200 --num_train_examples 30000)
 
 # Probability threshold considered
 THRESHOLD=0.5
@@ -66,7 +66,7 @@ $FW $namespaces $rest -i models/inference_weights.fw.model -d $DATASET_FOLDER/tr
 ###########################################
 
 # Create ground truth labels first
-cat datasets/train.vw |mmawk '{print $1}' > predictions/ground_truth.txt;
+cat datasets/train.vw | mawk '{print $1}' > predictions/ground_truth.txt;
 
 # get last n predictions of training
 cat ./predictions/training.txt | tail -n $(cat predictions/ground_truth.txt | wc -l) > ./predictions/training_eval_part_only.txt
@@ -190,9 +190,8 @@ fi
 # Test inference weights on a given data set
 $FW $namespaces $rest -i models/inference_weights.fw.model -d $DATASET_FOLDER/test-hard.vw -t -p ./predictions/test_hard_predictions.txt
 
-cat ./datasets/test-hard.vw|mmawk '{print $1}' > ./predictions/hard_ground_truth.txt;
+cat ./datasets/test-hard.vw|mawk '{print $1}' > ./predictions/hard_ground_truth.txt;
 paste predictions/test_hard_predictions.txt predictions/hard_ground_truth.txt > ./predictions/joint_hard_predictions_and_ground.txt;
-
 
 ALL_INSTANCES_POSITIVE=$(cat predictions/joint_hard_predictions_and_ground.txt | mawk '{print $2}'| grep -v '\-1' | wc -l)
 ALL_INSTANCES_NEGATIVE=$(cat predictions/joint_hard_predictions_and_ground.txt | mawk '{print $2}'| grep '\-1' | wc -l)
