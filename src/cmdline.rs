@@ -2,12 +2,7 @@ use clap::{App, Arg,  AppSettings};
 use crate::version;
 
 pub fn parse<'a>() -> clap::ArgMatches<'a> {
-  let matches = create_expected_args().get_matches();
-  matches
-}
-
-pub fn create_expected_args<'a>() -> App<'a, 'a> {
-  App::new("fwumious wabbit")
+  let matches = App::new("fwumious wabbit")
                     .version(version::LATEST)
                     .author("Andraz Tori <atori@outbrain.com>")
                     .about("Superfast Logistic Regression & Field Aware Factorization Machines")
@@ -123,7 +118,7 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
                      .value_name("all")
                      .help("We do not support treating strings as already hashed numbers, so you have to use --hash all")
                      .takes_value(true))
-                     
+
                     // Regressor
                     .arg(Arg::with_name("final_regressor")
                      .short("f")
@@ -216,7 +211,16 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
                      .takes_value(true))
 
 
-                     
+                    .arg(Arg::with_name("ffm_interaction_matrix")
+                     .long("ffm_interaction_matrix")
+                     .help("Turn on ffm implementation that supports manual interaction matrix")
+                     .takes_value(false))
+                    .arg(Arg::with_name("ffm_interaction")
+                     .long("ffm_interaction")
+                     .value_name("field_id_1:field_id_2:interaction_weight")
+                     .help("Manually specify interaction strength between two fields")
+                     .multiple(true)
+                     .takes_value(true))
 
                      // Daemon parameterts
                     .arg(Arg::with_name("daemon")
@@ -255,4 +259,7 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
                      .value_name("examples")
                      .help("After how many examples stop updating weights")
                      .takes_value(true))
+                    .get_matches();
+
+matches
 }
