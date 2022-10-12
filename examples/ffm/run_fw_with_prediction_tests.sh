@@ -66,7 +66,7 @@ $FW $namespaces $rest -i models/inference_weights.fw.model -d $DATASET_FOLDER/tr
 ###########################################
 
 # Create ground truth labels first
-cat datasets/train.vw |mawk '{print $1}' > predictions/ground_truth.txt;
+cat datasets/train.vw |mmawk '{print $1}' > predictions/ground_truth.txt;
 
 # get last n predictions of training
 cat ./predictions/training.txt | tail -n $(cat predictions/ground_truth.txt | wc -l) > ./predictions/training_eval_part_only.txt
@@ -97,7 +97,7 @@ mv ./tmp.txt ./predictions/joint_prediction_space.txt;
 ALL_INSTANCES=$(cat predictions/joint_prediction_space.txt | wc -l);
 
 # Are inference weights' predictions the same?
-INFERENCE_SAME_COUNT=$(cat ./predictions/joint_prediction_space.txt | awk '$2==$3' | wc -l)
+INFERENCE_SAME_COUNT=$(cat ./predictions/joint_prediction_space.txt | mawk '$2==$3' | wc -l)
 
 if [ $ALL_INSTANCES = $INFERENCE_SAME_COUNT ];
 then
@@ -136,16 +136,16 @@ fi
 # Create a benchmark against random classifier
 echo -e "OUTPUT_TAG\tTHRESHOLD\tPRECISION\tRECALL\tF1\tBALANCED_ACCURACY"
 ALL_INSTANCES=$(cat predictions/joint_prediction_space.txt | wc -l)
-ALL_INSTANCES_POSITIVE=$(cat predictions/joint_prediction_space.txt| awk '{print $4}'| grep -v '\-1' | wc -l)
-ALL_INSTANCES_NEGATIVE=$(cat predictions/joint_prediction_space.txt| awk '{print $4}'| grep '\-1' | wc -l)
+ALL_INSTANCES_POSITIVE=$(cat predictions/joint_prediction_space.txt| mawk '{print $4}'| grep -v '\-1' | wc -l)
+ALL_INSTANCES_NEGATIVE=$(cat predictions/joint_prediction_space.txt| mawk '{print $4}'| grep '\-1' | wc -l)
 
-TP=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  ($3>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+TP=$(cat predictions/joint_prediction_space.txt | mawk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  ($3>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
-TN=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="-1") &&  ($3<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+TN=$(cat predictions/joint_prediction_space.txt | mawk -v THRESHOLD="$THRESHOLD" '($4=="-1") &&  ($3<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
-FP=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="-1") &&  ($3>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+FP=$(cat predictions/joint_prediction_space.txt | mawk -v THRESHOLD="$THRESHOLD" '($4=="-1") &&  ($3>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
-FN=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  ($3<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+FN=$(cat predictions/joint_prediction_space.txt | mawk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  ($3<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
 # Account for corner cases
 if [ "$FP" = "" ]; then
@@ -160,13 +160,13 @@ compute_main_metrics
 echo -e "FW\t$THRESHOLD\t$PRECISION\t$RECALL\t$F1\t$BALANCED_ACCURACY";
 
 # Random baseline
-TP=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  (rand()>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+TP=$(cat predictions/joint_prediction_space.txt | mawk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  (rand()>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
-TN=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="-1") &&  (rand()<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+TN=$(cat predictions/joint_prediction_space.txt | mawk -v THRESHOLD="$THRESHOLD" '($4=="-1") &&  (rand()<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
-FP=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="-1") &&  (rand()>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+FP=$(cat predictions/joint_prediction_space.txt | mawk -v THRESHOLD="$THRESHOLD" '($4=="-1") &&  (rand()>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
-FN=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  (rand()<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+FN=$(cat predictions/joint_prediction_space.txt | mawk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  (rand()<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
 compute_main_metrics
 
@@ -190,21 +190,21 @@ fi
 # Test inference weights on a given data set
 $FW $namespaces $rest -i models/inference_weights.fw.model -d $DATASET_FOLDER/test-hard.vw -t -p ./predictions/test_hard_predictions.txt
 
-cat ./datasets/test-hard.vw|mawk '{print $1}' > ./predictions/hard_ground_truth.txt;
+cat ./datasets/test-hard.vw|mmawk '{print $1}' > ./predictions/hard_ground_truth.txt;
 paste predictions/test_hard_predictions.txt predictions/hard_ground_truth.txt > ./predictions/joint_hard_predictions_and_ground.txt;
 
 
-ALL_INSTANCES_POSITIVE=$(cat predictions/joint_hard_predictions_and_ground.txt | awk '{print $2}'| grep -v '\-1' | wc -l)
-ALL_INSTANCES_NEGATIVE=$(cat predictions/joint_hard_predictions_and_ground.txt | awk '{print $2}'| grep '\-1' | wc -l)
+ALL_INSTANCES_POSITIVE=$(cat predictions/joint_hard_predictions_and_ground.txt | mawk '{print $2}'| grep -v '\-1' | wc -l)
+ALL_INSTANCES_NEGATIVE=$(cat predictions/joint_hard_predictions_and_ground.txt | mawk '{print $2}'| grep '\-1' | wc -l)
 
 # Random baseline
-TP=$(cat predictions/joint_hard_predictions_and_ground.txt | awk -v THRESHOLD="$THRESHOLD" '($2=="1") &&  ($1>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+TP=$(cat predictions/joint_hard_predictions_and_ground.txt | mawk -v THRESHOLD="$THRESHOLD" '($2=="1") &&  ($1>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
-TN=$(cat predictions/joint_hard_predictions_and_ground.txt | awk -v THRESHOLD="$THRESHOLD" '($2=="-1") &&  ($1<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+TN=$(cat predictions/joint_hard_predictions_and_ground.txt | mawk -v THRESHOLD="$THRESHOLD" '($2=="-1") &&  ($1<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
-FP=$(cat predictions/joint_hard_predictions_and_ground.txt | awk -v THRESHOLD="$THRESHOLD" '($2=="-1") &&  ($1>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+FP=$(cat predictions/joint_hard_predictions_and_ground.txt | mawk -v THRESHOLD="$THRESHOLD" '($2=="-1") &&  ($1>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
-FN=$(cat predictions/joint_hard_predictions_and_ground.txt | awk -v THRESHOLD="$THRESHOLD" '($2=="1") &&  ($1<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+FN=$(cat predictions/joint_hard_predictions_and_ground.txt | mawk -v THRESHOLD="$THRESHOLD" '($2=="1") &&  ($1<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
 compute_main_metrics
 echo -e "FW-hard-test\t$THRESHOLD\t$PRECISION\t$RECALL\t$F1\t$BALANCED_ACCURACY";
