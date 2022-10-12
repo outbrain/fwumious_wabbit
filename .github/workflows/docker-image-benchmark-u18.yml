@@ -23,4 +23,4 @@ jobs:
       run: echo running on branch ${BRANCH_NAME} on ${GITHUB_REPOSITORY} name
 
     - name: Build the Docker image
-      run: docker build --build-arg FW_REPO_URL=https://github.com/${GITHUB_REPOSITORY}.git --build-arg FW_BRANCH=${BRANCH_NAME} . --file Dockerfile --tag fw-bench:$(date +%s)
+      run: docker build --build-arg FW_REPO_URL=https://github.com/$GITHUB_REPOSITORY.git --build-arg FW_BRANCH=${BRANCH_NAME} . --file Dockerfile --tag fw-bench:$(date +%s)
