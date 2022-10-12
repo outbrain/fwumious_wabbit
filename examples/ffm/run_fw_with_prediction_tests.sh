@@ -117,13 +117,13 @@ ALL_INSTANCES=$(cat predictions/joint_prediction_space.txt | wc -l)
 ALL_INSTANCES_POSITIVE=$(cat predictions/joint_prediction_space.txt| awk '{print $4}'| grep '1' | wc -l)
 ALL_INSTANCES_NEGATIVE=$(cat predictions/joint_prediction_space.txt| awk '{print $4}'| grep '\-1' | wc -l)
 
-TP=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  ($1>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+TP=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($3=="1") &&  ($1>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
-TN=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="-1") &&  ($1<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+TN=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($3=="-1") &&  ($1<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
-FP=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="-1") &&  ($1>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+FP=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($3=="-1") &&  ($1>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
-FN=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  ($1<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
+FN=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($3=="1") &&  ($1<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
 PRECISION_FW=$(bc <<<"scale=5 ; $TP / ($TP + $FP)");
 RECALL_FW=$(bc <<< "scale=5 ; $TP / ($TP + $FN)");
@@ -143,6 +143,10 @@ FP=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" 
 
 FN=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  (rand()<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
+echo $TP
+echo $TN
+echo $FP
+echo $FN
 PRECISION=$(bc <<<"scale=5 ; $TP / ($TP + $FP)");
 RECALL=$(bc <<< "scale=5 ; $TP / ($TP + $FN)");
 F1=$(bc <<< "scale=5 ; $TP / ($TP + 0.5 * ($FP + $FN))");
