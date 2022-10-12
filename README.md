@@ -29,7 +29,7 @@ Check out our [benchmark](BENCHMARK.md), here's a teaser:
 **Why is it faster?** (see [here](SPEED.md) for more details)
 - Only implements Logistic Regression and Field-aware Factorization Machines
 - Uses hashing trick, lookup table for AdaGrad and a tight encoding format for the "input cache"
-- Features' namespaces have to be declared up-front
+- Features' namespaces have to be declared up-front.
 - Prefetching of weights from memory (avoiding pipeline stalls)
 - Written in Rust with heavy use of code specialization (via macros and traits)
 
