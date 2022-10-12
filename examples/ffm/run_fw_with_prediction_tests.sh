@@ -10,7 +10,7 @@ rm -rf datasets;
 
 # Probability threshold considered
 THRESHOLD=0.5
-
+MARGIN_OF_PERFORMANCE_BA=0.2
 PROJECT_ROOT=$DIR/../../
 FW=$PROJECT_ROOT/target/release/fw
 DATASET_FOLDER=$DIR/datasets
@@ -61,7 +61,7 @@ then
 	echo "$INFO_STRING Matching prediction counts! The test can proceed .."
 else
 	echo "$INFO_STRING Ground truth number different to eval number of training predictions, exiting .."
-    exit 1;
+	exit 1;
 fi
 
 ######################################################################################################################
@@ -86,17 +86,21 @@ NUM_UNIQUE_TRAINING_RUN_EVAL=$(cat predictions/training.txt | sort -u | wc -l)
 
 if [ $NUM_UNIQUE_FULL_WEIGHTS_EVAL = 1 ]
 then
-	echo "$INFO_STRING WARNING: all predictions are the same if using full weights file for inference only."
+	echo "$INFO_STRING WARNING: all predictions are the same if using full weights file for inference only.";
+	exit 1;
 fi
 
 if [ $NUM_UNIQUE_INFERENCE_ONLY_EVAL = 1 ]
 then
-	echo "$INFO_STRING WARNING: all predictions are the same if using inference weights file for inference only."
+	echo "$INFO_STRING WARNING: all predictions are the same if using inference weights file for inference only.";
+	exit 1;
 fi
 
 if [ $NUM_UNIQUE_TRAINING_RUN_EVAL = 1 ]
 then
-	echo "$INFO_STRING WARNING: all predictions are the same during training."
+	echo "$INFO_STRING WARNING: all predictions are the same during training.";
+	exit 1;
+	
 fi
 
 echo -e "OUTPUT_TAG\tTHRESHOLD\tPRECISION\tRECALL\tF1\tACCURACY\tBALANCED_ACCURACY"
@@ -112,14 +116,14 @@ FP=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" 
 
 FN=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  ($1<THRESHOLD) {positiveMatch++} END {print positiveMatch}');
 
-PRECISION=$(bc <<<"scale=5 ; $TP / ($TP + $FP)");
-RECALL=$(bc <<< "scale=5 ; $TP / ($TP + $FN)");
-F1=$(bc <<< "scale=5 ; $TP / ($TP + 0.5 * ($FP + $FN))");
-ACCURACY=$(bc <<< "scale=5 ; (TP + TN) / ($TP + $TN + $FP + $FN)");
-SENSITIVITY=$(bc <<< "scale=5 ; $TP / $ALL_INSTANCES_POSITIVE");
-SPECIFICITY=$(bc <<< "scale=5 ; $TN / $ALL_INSTANCES_NEGATIVE");
-BALANCED_ACCURACY=$(bc <<< "scale=5 ; ($SENSITIVITY + $SPECIFICITY) / 2");
-echo -e "FW\t$THRESHOLD\t$PRECISION\t$RECALL\t$F1\t$ACCURACY\t$BALANCED_ACCURACY";
+PRECISION_FW=$(bc <<<"scale=5 ; $TP / ($TP + $FP)");
+RECALL_FW=$(bc <<< "scale=5 ; $TP / ($TP + $FN)");
+F1_FW=$(bc <<< "scale=5 ; $TP / ($TP + 0.5 * ($FP + $FN))");
+ACCURACY_FW=$(bc <<< "scale=5 ; (TP + TN) / ($TP + $TN + $FP + $FN)");
+SENSITIVITY_FW=$(bc <<< "scale=5 ; $TP / $ALL_INSTANCES_POSITIVE");
+SPECIFICITY_FW=$(bc <<< "scale=5 ; $TN / $ALL_INSTANCES_NEGATIVE");
+BALANCED_ACCURACY_FW=$(bc <<< "scale=5 ; ($SENSITIVITY_FW + $SPECIFICITY_FW) / 2");
+echo -e "FW\t$THRESHOLD\t$PRECISION_FW\t$RECALL_FW\t$F1_FW\t$ACCURACY_FW\t$BALANCED_ACCURACY_FW";
 
 # Random baseline
 TP=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  (rand()>=THRESHOLD) {positiveMatch++} END {print positiveMatch}');
@@ -138,3 +142,11 @@ SENSITIVITY=$(bc <<< "scale=5 ; $TP / $ALL_INSTANCES_POSITIVE");
 SPECIFICITY=$(bc <<< "scale=5 ; $TN / $ALL_INSTANCES_NEGATIVE");
 BALANCED_ACCURACY=$(bc <<< "scale=5 ; ($SENSITIVITY + $SPECIFICITY) / 2");
 echo -e "RANDOM\t$THRESHOLD\t$PRECISION\t$RECALL\t$F1\t$ACCURACY\t$BALANCED_ACCURACY";
+
+# Is the difference substantial (in BA)
+BA_DIFF=$(bc <<< "scale=5 ; $BALANCED_ACCURACY_FW - $BALANCED_ACCURACY");
+ZERO_VAR="0.0"
+if [ 1 -eq "$(echo "$BA_DIFF > $ZERO_VAR" | bc)" ];
+then
+	echo "$INFO_STRING FW learned much better than random (on training), exiting gracefully.";
+fi
