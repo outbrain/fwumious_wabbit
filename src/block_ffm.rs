@@ -660,6 +660,7 @@ mod tests {
             vec![HashAndValueAndSeq {
                 hash: 1,
                 value: 1.0,
+                bin_value: Default::default(),
                 contra_field_index: 0,
             }],
             1,
@@ -678,11 +679,13 @@ mod tests {
                 HashAndValueAndSeq {
                     hash: 1,
                     value: 1.0,
+                    bin_value: Default::default(),
                     contra_field_index: 0,
                 },
                 HashAndValueAndSeq {
                     hash: 100,
                     value: 1.0,
+                    bin_value: Default::default(),
                     contra_field_index: mi.ffm_k,
                 },
             ],
@@ -704,11 +707,13 @@ mod tests {
                 HashAndValueAndSeq {
                     hash: 1,
                     value: 2.0,
+                    bin_value: Default::default(),
                     contra_field_index: 0,
                 },
                 HashAndValueAndSeq {
                     hash: 100,
                     value: 2.0,
+                    bin_value: Default::default(),
                     contra_field_index: mi.ffm_k * 1,
                 },
             ],
@@ -740,6 +745,7 @@ mod tests {
             vec![HashAndValueAndSeq {
                 hash: 1,
                 value: 1.0,
+                bin_value: Default::default(),
                 contra_field_index: 0,
             }],
             4,
@@ -760,11 +766,13 @@ mod tests {
                 HashAndValueAndSeq {
                     hash: 1,
                     value: 1.0,
+                    bin_value: Default::default(),
                     contra_field_index: 0,
                 },
                 HashAndValueAndSeq {
                     hash: 100,
                     value: 1.0,
+                    bin_value: Default::default(),
                     contra_field_index: mi.ffm_k * 1,
                 },
             ],
@@ -785,11 +793,13 @@ mod tests {
                 HashAndValueAndSeq {
                     hash: 1,
                     value: 2.0,
+                    bin_value: Default::default(),
                     contra_field_index: 0,
                 },
                 HashAndValueAndSeq {
                     hash: 100,
                     value: 2.0,
+                    bin_value: Default::default(),
                     contra_field_index: mi.ffm_k * 1,
                 },
             ],
@@ -836,11 +846,13 @@ C,featureC
                 HashAndValueAndSeq {
                     hash: 1,
                     value: 1.0,
+                    bin_value: Default::default(),
                     contra_field_index: 0,
                 },
                 HashAndValueAndSeq {
                     hash: 100,
                     value: 1.0,
+                    bin_value: Default::default(),
                     contra_field_index: mi.ffm_k * 1,
                 },
             ],
@@ -894,16 +906,19 @@ B,featureB
                 HashAndValueAndSeq {
                     hash: 1,
                     value: 1.0,
+                    bin_value: Default::default(),
                     contra_field_index: 0,
                 },
                 HashAndValueAndSeq {
                     hash: 3 * 1000,
                     value: 1.0,
+                    bin_value: Default::default(),
                     contra_field_index: 0,
                 },
                 HashAndValueAndSeq {
                     hash: 100,
                     value: 2.0,
+                    bin_value: Default::default(),
                     contra_field_index: mi.ffm_k * 1,
                 },
             ],
@@ -940,16 +955,19 @@ B,featureB
                 HashAndValueAndSeq {
                     hash: 1,
                     value: 1.0,
+                    bin_value: Default::default(),
                     contra_field_index: 0,
                 },
                 HashAndValueAndSeq {
                     hash: 3 * 1000,
                     value: 1.0,
+                    bin_value: Default::default(),
                     contra_field_index: 0,
                 },
                 HashAndValueAndSeq {
                     hash: 100,
                     value: 2.0,
+                    bin_value: Default::default(),
                     contra_field_index: mi.ffm_k * 1,
                 },
             ],
@@ -994,16 +1012,19 @@ B,featureB
                 HashAndValueAndSeq {
                     hash: 1,
                     value: 1.0,
+                    bin_value: Default::default(),
                     contra_field_index: 0,
                 },
                 HashAndValueAndSeq {
                     hash: 5,
                     value: 1.0,
+                    bin_value: Default::default(),
                     contra_field_index: mi.ffm_k * 1,
                 },
                 HashAndValueAndSeq {
                     hash: 100,
                     value: 1.0,
+                    bin_value: Default::default(),
                     contra_field_index: mi.ffm_k * 2,
                 },
             ],
@@ -1017,6 +1038,7 @@ B,featureB
             vec![HashAndValueAndSeq {
                 hash: 5,
                 value: 1.0,
+                bin_value: Default::default(),
                 contra_field_index: mi.ffm_k * 1,
             }],
             3,

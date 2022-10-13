@@ -460,13 +460,7 @@ mod tests {
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::NO_FEATURES]); // no feature
         fbt.translate(&rb, 0);
-        assert_eq!(
-            fbt.feature_buffer.lr_buffer,
-            vec![HashAndValue {
-                hash: 116060,
-                value: 1.0
-            }]
-        ); // vw compatibility - no feature is no feature
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:116060, value:1.0, bin_value: Default::default()}]); // vw compatibility - no feature is no feature
     }
 
     #[test]
@@ -486,13 +480,7 @@ mod tests {
 
         let rb = add_header(vec![0xfea]);
         fbt.translate(&rb, 0);
-        assert_eq!(
-            fbt.feature_buffer.lr_buffer,
-            vec![HashAndValue {
-                hash: 0xfea,
-                value: 1.0
-            }]
-        );
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0, bin_value: Default::default()}]);
 
         let rb = add_header(vec![
             parser::IS_NOT_SINGLE_MASK | nd(4, 8),
@@ -502,19 +490,7 @@ mod tests {
             1.0f32.to_bits(),
         ]);
         fbt.translate(&rb, 0);
-        assert_eq!(
-            fbt.feature_buffer.lr_buffer,
-            vec![
-                HashAndValue {
-                    hash: 0xfea,
-                    value: 1.0
-                },
-                HashAndValue {
-                    hash: 0xfeb,
-                    value: 1.0
-                }
-            ]
-        );
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0, bin_value: Default::default()}, HashAndValue {hash:0xfeb, value:1.0, bin_value: Default::default()}]);
     }
 
     #[test]
@@ -544,7 +520,8 @@ mod tests {
             fbt.feature_buffer.lr_buffer,
             vec![HashAndValue {
                 hash: 0xfea,
-                value: 1.0
+                value: 1.0,
+                bin_value: Default::default()
             }]
         );
 
@@ -555,11 +532,13 @@ mod tests {
             vec![
                 HashAndValue {
                     hash: 0xfea,
-                    value: 1.0
+                    value: 1.0,
+                    bin_value: Default::default()
                 },
                 HashAndValue {
                     hash: 0xfeb,
-                    value: 1.0
+                    value: 1.0,
+                    bin_value: Default::default()
                 }
             ]
         );
@@ -597,7 +576,8 @@ mod tests {
             fbt.feature_buffer.lr_buffer,
             vec![HashAndValue {
                 hash: 208368,
-                value: 1.0
+                value: 1.0,
+                bin_value: Default::default()
             }]
         );
     }
@@ -619,7 +599,8 @@ mod tests {
             fbt.feature_buffer.lr_buffer,
             vec![HashAndValue {
                 hash: 0xfea,
-                value: 2.0
+                value: 2.0,
+                bin_value: Default::default()
             }]
         );
     }
@@ -650,7 +631,7 @@ mod tests {
             vec![HashAndValueAndSeq {
                 hash: 0xfea,
                 value: 1.0,
-				unweighted_value: 1.0,
+                bin_value: Default::default(),
                 contra_field_index: 0
             }]
         );
@@ -679,26 +660,31 @@ mod tests {
                 HashAndValueAndSeq {
                     hash: 0xfea,
                     value: 2.0,
+                    bin_value: Default::default(),
                     contra_field_index: 0
                 },
                 HashAndValueAndSeq {
                     hash: 0xfeb,
                     value: 3.0,
+                    bin_value: Default::default(),
                     contra_field_index: 0
                 },
                 HashAndValueAndSeq {
                     hash: 0xfea,
                     value: 2.0,
+                    bin_value: Default::default(),
                     contra_field_index: 1
                 },
                 HashAndValueAndSeq {
                     hash: 0xfeb,
                     value: 3.0,
+                    bin_value: Default::default(),
                     contra_field_index: 1
                 },
                 HashAndValueAndSeq {
                     hash: 0xfec,
                     value: 1.0,
+                    bin_value: Default::default(),
                     contra_field_index: 1
                 }
             ]
@@ -730,31 +716,37 @@ mod tests {
                 HashAndValueAndSeq {
                     hash: 0xfff,
                     value: 2.0,
+                    bin_value: Default::default(),
                     contra_field_index: 0
                 },
                 HashAndValueAndSeq {
                     hash: 0xfeb,
                     value: 3.0,
+                    bin_value: Default::default(),
                     contra_field_index: 0
                 },
                 HashAndValueAndSeq {
                     hash: 0xfff,
                     value: 2.0,
+                    bin_value: Default::default(),
                     contra_field_index: 1
                 },
                 HashAndValueAndSeq {
                     hash: 0xfeb,
                     value: 3.0,
+                    bin_value: Default::default(),
                     contra_field_index: 1
                 },
                 HashAndValueAndSeq {
                     hash: 0x1,
                     value: 1.0,
+                    bin_value: Default::default(),
                     contra_field_index: 1
                 },
                 HashAndValueAndSeq {
                     hash: 0x1,
                     value: 1.0,
+                    bin_value: Default::default(),
                     contra_field_index: 2
                 },
             ]
@@ -777,31 +769,37 @@ mod tests {
                 HashAndValueAndSeq {
                     hash: 0xffc,
                     value: 2.0,
+                    bin_value: Default::default(),
                     contra_field_index: 0
                 },
                 HashAndValueAndSeq {
                     hash: 0xfe8,
                     value: 3.0,
+                    bin_value: Default::default(),
                     contra_field_index: 0
                 },
                 HashAndValueAndSeq {
                     hash: 0xffc,
                     value: 2.0,
+                    bin_value: Default::default(),
                     contra_field_index: 3
                 },
                 HashAndValueAndSeq {
                     hash: 0xfe8,
                     value: 3.0,
+                    bin_value: Default::default(),
                     contra_field_index: 3
                 },
                 HashAndValueAndSeq {
                     hash: 0x0,
                     value: 1.0,
+                    bin_value: Default::default(),
                     contra_field_index: 3
                 },
                 HashAndValueAndSeq {
                     hash: 0x0,
                     value: 1.0,
+                    bin_value: Default::default(),
                     contra_field_index: 6
                 },
             ]
@@ -851,11 +849,13 @@ mod tests {
             vec![
                 HashAndValue {
                     hash: 0xffc,
-                    value: 1.0
+                    value: 1.0,
+                    bin_value: Default::default()
                 },
                 HashAndValue {
                     hash: 0xffa,
-                    value: 1.0
+                    value: 1.0,
+                    bin_value: Default::default()
                 }
             ]
         );

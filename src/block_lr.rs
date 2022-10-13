@@ -233,17 +233,13 @@ C,featureC
 "#;
         let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
 
-        mi.feature_combo_descs
-            .push(model_instance::FeatureComboDesc {
-                feature_indices: vec![0, 2],
-                weight: 1.0,
-            });
+        mi.feature_combo_descs.push(model_instance::FeatureComboDesc {
+                                                        feature_indices: vec![0, 2],
+                                                        weight: 1.0});
         mi.enable_audit(&vw);
 
-        let fb = &mut lr_vec(vec![HashAndValue {
-            hash: 15,
-            value: 1.0,
-        }]);
+
+        let fb = &mut lr_vec(vec![HashAndValue{hash:15, value: 1.0, bin_value: Default::default()}]);
         fb.lr_buffer_audit.push(0); // we have one feature combo
         fb.audit_aux_data = mi.audit_aux_data.as_ref().unwrap().clone();
 

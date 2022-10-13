@@ -195,7 +195,7 @@ B,featureB
         mi.init_acc_gradient = 0.0;
         let mut re = regressor::get_regressor_with_weights(&mi);
 
-        let fbuf = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}]);
+        let fbuf = &lr_vec(vec![HashAndValue{hash: 1, value: 1.0, bin_value: Default::default()}, HashAndValue{hash:2, value: 1.0, bin_value: Default::default()}]);
         assert_eq!(re.learn(fbuf, true), 0.5);
         assert_eq!(re.learn(fbuf, true), 0.45016602);
         assert_eq!(re.learn(fbuf, false), 0.41731137);
@@ -271,9 +271,9 @@ B,featureB
 
         ffm_fixed_init(&mut re);
         let fbuf = &ffm_vec(vec![
-                                  HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
-                                  HashAndValueAndSeq{hash:3 * 1000, value: 1.0, contra_field_index: 0},
-                                  HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: 1}
+                                  HashAndValueAndSeq{hash:1, value: 1.0, bin_value: Default::default(), contra_field_index: 0},
+                                  HashAndValueAndSeq{hash:3 * 1000, value: 1.0, bin_value: Default::default(), contra_field_index: 0},
+                                  HashAndValueAndSeq{hash:100, value: 2.0, bin_value: Default::default(), contra_field_index: 1}
                                   ], 2);
         p = re.learn(fbuf, true);
         assert_eq!(p, 0.9933072); 
@@ -345,18 +345,18 @@ B,featureB
         ffm_fixed_init(&mut re_1);
         ffm_fixed_init(&mut re_2);
         let fbuf_1 = &lr_and_ffm_vec(
-                                vec![HashAndValue{hash: 52, value: 0.5}, HashAndValue{hash:2, value: 1.0}],
+                                vec![HashAndValue{hash: 52, value: 0.5, bin_value: Default::default()}, HashAndValue{hash:2, value: 1.0, bin_value: Default::default()}],
                                 vec![
-                                  HashAndValueAndSeq{hash:1, value: 0.5, contra_field_index: 0},
-                                  HashAndValueAndSeq{hash:3 * 1000, value: 1.0, contra_field_index: 0},
-                                  HashAndValueAndSeq{hash:101, value: 2.0, contra_field_index: 1}
+                                  HashAndValueAndSeq{hash:1, value: 0.5, bin_value: Default::default(), contra_field_index: 0},
+                                  HashAndValueAndSeq{hash:3 * 1000, value: 1.0, bin_value: Default::default(), contra_field_index: 0},
+                                  HashAndValueAndSeq{hash:101, value: 2.0, bin_value: Default::default(), contra_field_index: 1}
                                   ], 2);
         let fbuf_2 = &lr_and_ffm_vec(
-                                vec![HashAndValue{hash: 1, value: 1.0}, HashAndValue{hash:2, value: 1.0}],
+                                vec![HashAndValue{hash: 1, value: 1.0, bin_value: Default::default(),}, HashAndValue{hash:2, value: 1.0, bin_value: Default::default()}],
                                 vec![
-                                  HashAndValueAndSeq{hash:1, value: 1.0, contra_field_index: 0},
-                                  HashAndValueAndSeq{hash:3 * 1000, value: 1.0, contra_field_index: 0},
-                                  HashAndValueAndSeq{hash:100, value: 2.0, contra_field_index: 1}
+                                  HashAndValueAndSeq{hash:1, value: 1.0, bin_value: Default::default(), contra_field_index: 0},
+                                  HashAndValueAndSeq{hash:3 * 1000, value: 1.0, bin_value: Default::default(), contra_field_index: 0},
+                                  HashAndValueAndSeq{hash:100, value: 2.0, bin_value: Default::default(), contra_field_index: 1}
                                   ], 2);
 
         p = re_1.learn(fbuf_1, true);
