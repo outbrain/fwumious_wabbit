@@ -35,9 +35,8 @@ function compute_main_metrics {
 			 totalLoss += localLoss;
 			 allInstances += 1;
 		 }
-		 END {print totalLoss / allInstances}');
+		 END {print totalLoss / allInstances}')
 
-	
 }
 
 SCRIPT=$(readlink -f "$0")
@@ -178,8 +177,8 @@ FP=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" 
 
 FN=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  ($3<THRESHOLD) {positiveMatch++} END {print positiveMatch}')
 
-cat predictions/joint_prediction_space.txt | awk '{print $3" "$4}' > ./predictions/logloss_frame_training.txt;
-LOGLOSS_FRAME="./predictions/logloss_frame_training.txt";
+cat predictions/joint_prediction_space.txt | awk '{print $3" "$4}' >./predictions/logloss_frame_training.txt
+LOGLOSS_FRAME="./predictions/logloss_frame_training.txt"
 
 # Account for corner cases
 if [ "$FP" = "" ]; then
@@ -202,8 +201,8 @@ FP=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" 
 
 FN=$(cat predictions/joint_prediction_space.txt | awk -v THRESHOLD="$THRESHOLD" '($4=="1") &&  (rand()<THRESHOLD) {positiveMatch++} END {print positiveMatch}')
 
-cat predictions/joint_prediction_space.txt | awk '{print rand()" "$4}' > ./predictions/logloss_frame_random.txt;
-LOGLOSS_FRAME="./predictions/logloss_frame_random.txt";
+cat predictions/joint_prediction_space.txt | awk '{print rand()" "$4}' >./predictions/logloss_frame_random.txt
+LOGLOSS_FRAME="./predictions/logloss_frame_random.txt"
 
 compute_main_metrics
 
@@ -240,7 +239,7 @@ FP=$(cat predictions/joint_hard_predictions_and_ground.txt | awk -v THRESHOLD="$
 
 FN=$(cat predictions/joint_hard_predictions_and_ground.txt | awk -v THRESHOLD="$THRESHOLD" '($2=="1") &&  ($1<THRESHOLD) {positiveMatch++} END {print positiveMatch}')
 
-LOGLOSS_FRAME="./predictions/joint_hard_predictions_and_ground.txt";
+LOGLOSS_FRAME="./predictions/joint_hard_predictions_and_ground.txt"
 
 compute_main_metrics
 echo -e "FW-hard-test\t$THRESHOLD\t$PRECISION\t$RECALL\t$F1\t$BALANCED_ACCURACY\t$LOGLOSS"
