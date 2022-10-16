@@ -1,4 +1,4 @@
-name: FW-synthetic-benchmark
+name: FW-prediction-and-learning-test
 
 on:
   push:
