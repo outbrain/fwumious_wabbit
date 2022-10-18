@@ -464,7 +464,8 @@ mod tests {
             fbt.feature_buffer.lr_buffer,
             vec![HashAndValue {
                 hash: 116060,
-                value: 1.0
+                value: 1.0,
+				bin_value: Option::None
             }]
         ); // vw compatibility - no feature is no feature
     }
@@ -490,7 +491,8 @@ mod tests {
             fbt.feature_buffer.lr_buffer,
             vec![HashAndValue {
                 hash: 0xfea,
-                value: 1.0
+                value: 1.0,
+				bin_value: Option::None
             }]
         );
 
@@ -507,11 +509,13 @@ mod tests {
             vec![
                 HashAndValue {
                     hash: 0xfea,
-                    value: 1.0
+                    value: 1.0,
+					bin_value: Option::None
                 },
                 HashAndValue {
                     hash: 0xfeb,
-                    value: 1.0
+                    value: 1.0,
+					bin_value: Option::None
                 }
             ]
         );
@@ -544,7 +548,8 @@ mod tests {
             fbt.feature_buffer.lr_buffer,
             vec![HashAndValue {
                 hash: 0xfea,
-                value: 1.0
+                value: 1.0,
+				bin_value: Option::None
             }]
         );
 
@@ -555,11 +560,13 @@ mod tests {
             vec![
                 HashAndValue {
                     hash: 0xfea,
-                    value: 1.0
+                    value: 1.0,
+					bin_value: Option::None
                 },
                 HashAndValue {
                     hash: 0xfeb,
-                    value: 1.0
+                    value: 1.0,
+					bin_value: Option::None
                 }
             ]
         );
@@ -597,7 +604,8 @@ mod tests {
             fbt.feature_buffer.lr_buffer,
             vec![HashAndValue {
                 hash: 208368,
-                value: 1.0
+                value: 1.0,
+				bin_value: Option::Some(1.0)
             }]
         );
     }
@@ -619,7 +627,8 @@ mod tests {
             fbt.feature_buffer.lr_buffer,
             vec![HashAndValue {
                 hash: 0xfea,
-                value: 2.0
+                value: 2.0,
+				bin_value: Option::None
             }]
         );
     }
@@ -650,8 +659,8 @@ mod tests {
             vec![HashAndValueAndSeq {
                 hash: 0xfea,
                 value: 1.0,
-				unweighted_value: 1.0,
-                contra_field_index: 0
+                contra_field_index: 0,
+				bin_value: Option::None
             }]
         );
     }
@@ -679,26 +688,31 @@ mod tests {
                 HashAndValueAndSeq {
                     hash: 0xfea,
                     value: 2.0,
+					bin_value: Option::None,
                     contra_field_index: 0
                 },
                 HashAndValueAndSeq {
                     hash: 0xfeb,
                     value: 3.0,
+					bin_value: Option::None,
                     contra_field_index: 0
                 },
                 HashAndValueAndSeq {
                     hash: 0xfea,
                     value: 2.0,
+					bin_value: Option::None,
                     contra_field_index: 1
                 },
                 HashAndValueAndSeq {
                     hash: 0xfeb,
                     value: 3.0,
+					bin_value: Option::None,
                     contra_field_index: 1
                 },
                 HashAndValueAndSeq {
                     hash: 0xfec,
                     value: 1.0,
+					bin_value: Option::None,
                     contra_field_index: 1
                 }
             ]
@@ -730,31 +744,37 @@ mod tests {
                 HashAndValueAndSeq {
                     hash: 0xfff,
                     value: 2.0,
-                    contra_field_index: 0
+					bin_value: Option::None,
+                    contra_field_index: 0						
                 },
                 HashAndValueAndSeq {
                     hash: 0xfeb,
                     value: 3.0,
+					bin_value: Option::None,
                     contra_field_index: 0
                 },
                 HashAndValueAndSeq {
                     hash: 0xfff,
                     value: 2.0,
+					bin_value: Option::None,
                     contra_field_index: 1
                 },
                 HashAndValueAndSeq {
                     hash: 0xfeb,
                     value: 3.0,
+					bin_value: Option::None,
                     contra_field_index: 1
                 },
                 HashAndValueAndSeq {
                     hash: 0x1,
                     value: 1.0,
+					bin_value: Option::None,
                     contra_field_index: 1
                 },
                 HashAndValueAndSeq {
                     hash: 0x1,
                     value: 1.0,
+					bin_value: Option::None,
                     contra_field_index: 2
                 },
             ]
@@ -777,31 +797,37 @@ mod tests {
                 HashAndValueAndSeq {
                     hash: 0xffc,
                     value: 2.0,
+					bin_value: Option::None,
                     contra_field_index: 0
                 },
                 HashAndValueAndSeq {
                     hash: 0xfe8,
                     value: 3.0,
+					bin_value: Option::None,
                     contra_field_index: 0
                 },
                 HashAndValueAndSeq {
                     hash: 0xffc,
                     value: 2.0,
+					bin_value: Option::None,
                     contra_field_index: 3
                 },
                 HashAndValueAndSeq {
                     hash: 0xfe8,
                     value: 3.0,
+					bin_value: Option::None,
                     contra_field_index: 3
                 },
                 HashAndValueAndSeq {
                     hash: 0x0,
                     value: 1.0,
+					bin_value: Option::None,
                     contra_field_index: 3
                 },
                 HashAndValueAndSeq {
                     hash: 0x0,
                     value: 1.0,
+					bin_value: Option::None,
                     contra_field_index: 6
                 },
             ]
@@ -851,11 +877,13 @@ mod tests {
             vec![
                 HashAndValue {
                     hash: 0xffc,
-                    value: 1.0
+                    value: 1.0,
+					bin_value: Option::None
                 },
                 HashAndValue {
                     hash: 0xffa,
-                    value: 1.0
+                    value: 1.0,
+					bin_value: Option::None
                 }
             ]
         );

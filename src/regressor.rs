@@ -289,7 +289,9 @@ mod tests {
             re.learn(
                 &lr_vec(vec![HashAndValue {
                     hash: 1,
-                    value: 1.0
+                    value: 1.0,
+					bin_value: Option::Some(1.0)
+						
                 }]),
                 false
             ),
@@ -300,11 +302,13 @@ mod tests {
                 &lr_vec(vec![
                     HashAndValue {
                         hash: 1,
-                        value: 1.0
+                        value: 1.0,
+						bin_value: Option::Some(1.0)
                     },
                     HashAndValue {
                         hash: 2,
-                        value: 1.0
+                        value: 1.0,
+						bin_value: Option::Some(1.0)
                     }
                 ]),
                 false
@@ -324,6 +328,7 @@ mod tests {
         let vec_in = &lr_vec(vec![HashAndValue {
             hash: 1,
             value: 1.0,
+			bin_value: Option::Some(1.0)
         }]);
 
         // Here learning rate mechanism does not affect the results, so let's verify three different ones
@@ -354,10 +359,12 @@ mod tests {
             HashAndValue {
                 hash: 1,
                 value: 1.0,
+				bin_value: Option::Some(1.0)
             },
             HashAndValue {
                 hash: 1,
                 value: 2.0,
+				bin_value: Option::Some(1.0)
             },
         ]);
 
@@ -379,7 +386,8 @@ mod tests {
             re.learn(
                 &lr_vec(vec![HashAndValue {
                     hash: 1,
-                    value: 1.0
+                    value: 1.0,
+					bin_value: Option::Some(1.0)
                 }]),
                 true
             ),
@@ -389,7 +397,8 @@ mod tests {
             re.learn(
                 &lr_vec(vec![HashAndValue {
                     hash: 1,
-                    value: 1.0
+                    value: 1.0,
+					bin_value: Option::Some(1.0)
                 }]),
                 true
             ),
@@ -399,7 +408,8 @@ mod tests {
             re.learn(
                 &lr_vec(vec![HashAndValue {
                     hash: 1,
-                    value: 1.0
+                    value: 1.0,
+					bin_value: Option::Some(1.0)
                 }]),
                 true
             ),
@@ -423,6 +433,7 @@ mod tests {
             &lr_vec(vec![HashAndValue {
                 hash: 1,
                 value: 1.0,
+				bin_value: Option::Some(1.0)
             }]),
             true,
         );
@@ -431,6 +442,7 @@ mod tests {
             &lr_vec(vec![HashAndValue {
                 hash: 1,
                 value: 1.0,
+				bin_value: Option::Some(1.0)
             }]),
             true,
         );
@@ -461,11 +473,13 @@ mod tests {
                 &lr_vec(vec![
                     HashAndValue {
                         hash: 1,
-                        value: 1.0
+                        value: 1.0,
+						bin_value: Option::Some(1.0)
                     },
                     HashAndValue {
                         hash: 2,
-                        value: 1.0
+                        value: 1.0,
+						bin_value: Option::Some(1.0)
                     }
                 ]),
                 true
@@ -477,11 +491,13 @@ mod tests {
                 &lr_vec(vec![
                     HashAndValue {
                         hash: 1,
-                        value: 1.0
+                        value: 1.0,
+						bin_value: Option::Some(1.0)
                     },
                     HashAndValue {
                         hash: 2,
-                        value: 1.0
+                        value: 1.0,
+						bin_value: Option::Some(1.0)
                     }
                 ]),
                 true
@@ -492,7 +508,8 @@ mod tests {
             re.learn(
                 &lr_vec(vec![HashAndValue {
                     hash: 1,
-                    value: 1.0
+                    value: 1.0,
+					bin_value: Option::Some(1.0)
                 }]),
                 true
             ),
@@ -513,7 +530,8 @@ mod tests {
             re.learn(
                 &lr_vec(vec![HashAndValue {
                     hash: 1,
-                    value: 2.0
+                    value: 2.0,
+					bin_value: Option::Some(1.0)
                 }]),
                 true
             ),
@@ -523,7 +541,8 @@ mod tests {
             re.learn(
                 &lr_vec(vec![HashAndValue {
                     hash: 1,
-                    value: 2.0
+                    value: 2.0,
+					bin_value: Option::Some(1.0)
                 }]),
                 true
             ),
@@ -533,7 +552,8 @@ mod tests {
             re.learn(
                 &lr_vec(vec![HashAndValue {
                     hash: 1,
-                    value: 2.0
+                    value: 2.0,
+					bin_value: Option::Some(1.0)
                 }]),
                 true
             ),
@@ -555,6 +575,7 @@ mod tests {
         let mut fb_instance = lr_vec(vec![HashAndValue {
             hash: 1,
             value: 1.0,
+			bin_value: Option::Some(1.0)
         }]);
         fb_instance.example_importance = 0.5;
         assert_eq!(re.learn(&fb_instance, true), 0.5);

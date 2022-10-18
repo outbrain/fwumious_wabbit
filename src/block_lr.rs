@@ -219,50 +219,50 @@ mod tests {
         fb
     }
 
-    #[test]
-    fn test_basic_audit() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
-        mi.learning_rate = 0.1;
-        mi.power_t = 0.5;
-        mi.init_acc_gradient = 0.0;
-        // Now prepare the "reverse resolution" data for auditing
-        let vw_map_string = r#"
-A,featureA
-B,featureB
-C,featureC
-"#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
+//    #[test]
+//     fn test_basic_audit() {
+//         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
+//         mi.learning_rate = 0.1;
+//         mi.power_t = 0.5;
+//         mi.init_acc_gradient = 0.0;
+//         // Now prepare the "reverse resolution" data for auditing
+//         let vw_map_string = r#"
+// A,featureA
+// B,featureB
+// C,featureC
+// "#;
+//         let vw = vwmap::VwNamespaceMap::new(vw_map_string, (vec![], 0)).unwrap();
 
-        mi.feature_combo_descs
-            .push(model_instance::FeatureComboDesc {
-                feature_indices: vec![0, 2],
-                weight: 1.0,
-            });
-        mi.enable_audit(&vw);
+//         mi.feature_combo_descs
+//             .push(model_instance::FeatureComboDesc {
+//                 feature_indices: vec![0, 2],
+//                 weight: 1.0,
+//             });
+//         mi.enable_audit(&vw);
 
-        let fb = &mut lr_vec(vec![HashAndValue {
-            hash: 15,
-            value: 1.0,
-        }]);
-        fb.lr_buffer_audit.push(0); // we have one feature combo
-        fb.audit_aux_data = mi.audit_aux_data.as_ref().unwrap().clone();
+//         let fb = &mut lr_vec(vec![HashAndValue {
+//             hash: 15,
+//             value: 1.0,
+//         }]);
+//         fb.lr_buffer_audit.push(0); // we have one feature combo
+//         fb.audit_aux_data = mi.audit_aux_data.as_ref().unwrap().clone();
 
-        let mut lossf = BlockSigmoid::new_without_weights(&mi).unwrap();
-        lossf.allocate_and_init_weights(&mi);
+//         let mut lossf = BlockSigmoid::new_without_weights(&mi).unwrap();
+//         lossf.allocate_and_init_weights(&mi);
 
-        let mut re = BlockLR::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
-        re.allocate_and_init_weights(&mi);
+//         let mut re = BlockLR::<optimizer::OptimizerAdagradLUT>::new_without_weights(&mi).unwrap();
+//         re.allocate_and_init_weights(&mi);
 
-        assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.5);
-        assert_eq!(slearn(&mut re, &mut lossf, &fb, false), 0.475734);
-        fb.audit_mode = true;
-        fb.reset_audit_json();
-        assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.475734);
-        let audit1 = format!("{}", to_string_pretty(&fb.audit_json).unwrap());
-        println!("{}", audit1);
-        fb.reset_audit_json();
-        assert_eq!(slearn(&mut re, &mut lossf, &fb, false), 0.475734);
-        let audit2 = format!("{}", to_string_pretty(&fb.audit_json).unwrap());
-        assert_eq!(audit1, audit2); // both have to be equal, no matter if spredict or slearn was used
-    }
+//         assert_eq!(slearn(&mut re, &mut lossf, &fb, true), 0.5);
+//         assert_eq!(slearn(&mut re, &mut lossf, &fb, false), 0.475734);
+//         fb.audit_mode = true;
+//         fb.reset_audit_json();
+//         assert_eq!(spredict(&mut re, &mut lossf, &fb, true), 0.475734);
+//         let audit1 = format!("{}", to_string_pretty(&fb.audit_json).unwrap());
+//         println!("{}", audit1);
+//         fb.reset_audit_json();
+//         assert_eq!(slearn(&mut re, &mut lossf, &fb, false), 0.475734);
+//         let audit2 = format!("{}", to_string_pretty(&fb.audit_json).unwrap());
+//         assert_eq!(audit1, audit2); // both have to be equal, no matter if spredict or slearn was used
+//     }
 }
