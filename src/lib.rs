@@ -65,6 +65,9 @@ impl Predictor {
 
 #[no_mangle]
 pub extern "C" fn new_fw_predictor_prototype(command: *const c_char) -> *mut FfiPredictor {
+    /// create a "prototype" predictor that loads the weights file. This predictor is expensive, and is intended
+    /// to only be created once. If additional predictors are needed (e.g. for concurrent work), please
+    /// use this "prototype" with the clone_lite function, which will create cheap copies
     let str_command = c_char_to_str(command);
     let words = shellwords::split(str_command).unwrap();
     let cmd_matches = cmdline::create_expected_args().get_matches_from(words);
@@ -88,6 +91,9 @@ pub extern "C" fn new_fw_predictor_prototype(command: *const c_char) -> *mut Ffi
 
 #[no_mangle]
 pub unsafe extern "C" fn clone_lite(prototype: *mut FfiPredictor) -> *mut FfiPredictor {
+    /// given an expensive "prototype" predictor, this function creates cheap copies of it
+    /// that can be used in different threads concurrently. Note that individually, these predictors
+    /// are not thread safe, but it is safe to use multiple threads, each accessing only one predictor.
     let prototype: &mut Predictor = from_ptr(prototype);
     let lite_predictor = Predictor {
         feature_buffer_translator: prototype.feature_buffer_translator.clone(),
