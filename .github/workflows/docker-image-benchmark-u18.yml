@@ -18,9 +18,9 @@ jobs:
     - uses: actions/checkout@v3
     - name: Branch name
       env:
-        BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
-        GITHUB_REPOSITORY: ${{ github.event.repository.name }}
+        BRANCH_NAME: ${{github.event.pull_request.head.ref}}
+        GITHUB_REPOSITORY: ${{github.event.pull_request.head.repo.full_name}}
       run: echo running on branch ${BRANCH_NAME} on ${GITHUB_REPOSITORY} name
 
     - name: Build the Docker image
-      run: docker build --build-arg FW_REPO_URL=https://github.com/$GITHUB_REPOSITORY.git --build-arg FW_BRANCH=${{ github.head_ref || github.ref_name }} . --file Dockerfile --tag fw-bench:$(date +%s)
+      run: docker build --build-arg FW_REPO_URL=https://github.com/$GITHUB_REPOSITORY.git --build-arg FW_BRANCH=${BRANCH_NAME} . --file Dockerfile --tag fw-bench:$(date +%s)
