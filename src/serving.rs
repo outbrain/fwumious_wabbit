@@ -201,7 +201,7 @@ impl Serving {
             //.stdout(stdout)  // Redirect stdout to `/tmp/daemon.out`.
             //.stderr(stderr);  // Redirect stderr to `/tmp/daemon.err`.;
             match daemonize.start() {
-                Ok(_) => println!("Success, daemonized"),
+                Ok(_) => println!("Successsss, daemonized"),
                 Err(e) => return Err(e)?,
             }
         }
@@ -419,4 +419,3 @@ C,featureC
 
 
 }
-
