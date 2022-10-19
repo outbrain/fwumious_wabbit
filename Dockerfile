@@ -1,6 +1,10 @@
 FROM ubuntu:18.04
 ENV IMAGENAME="fwumious-builder"
 ENV DEBIAN_FRONTEND=noninteractive
+ARG FW_REPO_URL
+ARG FW_BRANCH
+ARG RUST_VERSION='1.61.0'
+ARG VW_COMPILE
 
 RUN apt-get update &&     apt-get install gcc g++ -y &&     apt-get install libboost-dev libboost-thread-dev libboost-program-options-dev libboost-system-dev libboost-math-dev libboost-test-dev zlib1g-dev -y &&     apt-get install git python3 python3-psutil python3-matplotlib lsb-release wget software-properties-common openjdk-8-jdk curl -y
 
@@ -27,29 +31,32 @@ RUN cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
 RUN make
 RUN make install
 
-# Compile vw - needed for benchmark
-WORKDIR /
-RUN git clone https://github.com/VowpalWabbit/vowpal_wabbit.git
-WORKDIR /vowpal_wabbit/vowpalwabbit
-RUN mkdir build
-RUN cd build
-RUN cmake ..
-RUN make vw_cli_bin -j $(nproc)
+# Compile vw - if arg is true
+RUN if [ "$VW_COMPILE" = "true" ]; then \
+     git clone https://github.com/VowpalWabbit/vowpal_wabbit.git && \
+     mkdir build && \
+     cd build && \
+     cmake .. &&\
+     make vw_cli_bin -j $(nproc) ; \
+ else \
+     echo "skip vw compile step "; \
+fi
 
 # Get rust ecosystem operating
 WORKDIR /
 RUN apt-get update
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup_install.sh &&  chmod +x rustup_install.sh && ./rustup_install.sh -y
 ENV PATH="/root/.cargo/bin:${PATH}"
-RUN rustup install 1.61.0
+RUN rustup install $RUST_VERSION
 ENV PATH="/root/.cargo/bin:/vowpal_wabbit/vowpalwabbit/vowpalwabbit/cli/:${PATH}"
 
 # Conduct benchmark against vw + produce --release bin
 WORKDIR /
-RUN git clone https://github.com/outbrain/fwumious_wabbit.git
+RUN echo 'cloning $FW_BRANCH $FW_REPO_URL'
+RUN git clone --branch $FW_BRANCH $FW_REPO_URL
 WORKDIR /fwumious_wabbit
 RUN cargo test
 RUN cargo build --release
 # VW - FW benchmarking currently disabled
 WORKDIR /fwumious_wabbit/benchmark
-RUN ./run_with_plots.sh
+CMD ["./run_with_plots.sh"]

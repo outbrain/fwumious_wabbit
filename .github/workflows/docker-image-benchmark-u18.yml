@@ -1,3 +1,4 @@
+
 name: Build-docker-image-fw
 
 on:
@@ -13,6 +14,13 @@ jobs:
     runs-on: ubuntu-18.04
 
     steps:
+
     - uses: actions/checkout@v3
+    - name: Branch name
+      env:
+        BRANCH_NAME: ${{github.event.pull_request.head.ref}}
+        GITHUB_REPOSITORY: ${{github.event.pull_request.head.repo.full_name}}
+      run: echo running on branch ${BRANCH_NAME} on ${GITHUB_REPOSITORY} name
+
     - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag fw-bench:$(date +%s)
+      run: docker build --build-arg FW_REPO_URL=https://github.com/${{github.event.pull_request.head.repo.full_name}}.git --build-arg FW_BRANCH=${{github.event.pull_request.head.ref}} . --file Dockerfile --tag fw-bench:$(date +%s)

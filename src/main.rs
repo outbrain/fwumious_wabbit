@@ -58,10 +58,66 @@ fn main() {
     }
 }
 
+fn build_cache_without_training(cl: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
+    /*! A method that enables creating the cache file without training the first model instance.
+    This is done in order to reduce building time of the cache and running the first model instance multi threaded. */
+    // We'll parse once the command line into cl and then different objects will examine it
+    let input_filename = cl.value_of("data").expect("--data expected");
+    let vw_namespace_map_filepath = Path::new(input_filename)
+        .parent()
+        .expect("Couldn't access path given by --data")
+        .join("vw_namespace_map.csv");
+    let vw: vwmap::VwNamespaceMap;
+    vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
+    let mut cache = cache::RecordCache::new(input_filename, true, &vw);
+    let input = File::open(input_filename)?;
+    let mut aa;
+    let mut bb;
+    let mut bufferred_input: &mut dyn BufRead = match input_filename.ends_with(".gz") {
+        true => {
+            aa = io::BufReader::new(MultiGzDecoder::new(input));
+            &mut aa
+        }
+        false => {
+            bb = io::BufReader::new(input);
+            &mut bb
+        }
+    };
+    let mut pa = parser::VowpalParser::new(&vw);
+    let mut example_num = 0;
+    loop {
+        let reading_result;
+        let buffer: &[u32];
+        if !cache.reading {
+            reading_result = pa.next_vowpal(&mut bufferred_input);
+            buffer = match reading_result {
+                Ok([]) => break, // EOF
+                Ok(buffer2) => buffer2,
+                Err(_e) => return Err(_e),
+            };
+            if cache.writing {
+                cache.push_record(buffer)?;
+            }
+        } else {
+            reading_result = cache.get_next_record();
+            buffer = match reading_result {
+                Ok([]) => break, // EOF
+                Ok(buffer) => buffer,
+                Err(_e) => return Err(_e),
+            };
+        }
+        example_num += 1;
+    }
+    cache.write_finish()?;
+    Ok(())
+}
+
 fn main2() -> Result<(), Box<dyn Error>> {
     // We'll parse once the command line into cl and then different objects will examine it
     let cl = cmdline::parse();
-
+    if cl.is_present("build_cache_without_training") {
+        return build_cache_without_training(cl)
+    }
     // Where will we be putting perdictions (if at all)
     let mut predictions_file = match cl.value_of("predictions") {
         Some(filename) => Some(BufWriter::new(File::create(filename)?)),

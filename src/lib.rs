@@ -25,6 +25,7 @@ mod block_relu;
 mod block_normalize;
 mod graph;
 
+
 use std::ffi::CStr;
 use std::io::Cursor;
 use std::os::raw::c_char;
@@ -44,7 +45,7 @@ pub struct Predictor {
     feature_buffer_translator: FeatureBufferTranslator,
     vw_parser: VowpalParser,
     regressor: BoxedRegressorTrait,
-    pb: PortBuffer 
+    pb: PortBuffer
 }
 
 impl Predictor {
