@@ -25,7 +25,7 @@ mod block_relu;
 mod block_normalize;
 mod graph;
 
-
+use blas::*;
 use std::ffi::CStr;
 use std::io::Cursor;
 use std::os::raw::c_char;

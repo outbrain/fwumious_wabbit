@@ -37,13 +37,18 @@ flate2 = { version = "1.0", features = ["cloudflare_zlib"], default-features = f
 shellwords = "1.1.0"
 blas = "0.22"
 intel-mkl-src = {version= "0.7.0", default-features = false, features=["download", "mkl-static-lp64-seq"]}
+openblas-src = { version = "0.5", features = ["system"] }
+
 [build-dependencies]
 cbindgen = "0.23.0"
 
 [lib]
 crate_type = ["cdylib"]
-blas = "0.22"
-intel-mkl-src = {version= "0.7.0", default-features = false, features=["download", "mkl-static-lp64-seq"]}
+doctest = false
+#blas = "0.22"
+#intel-mkl-src = {version= "0.7.0", default-features = false, features=["download", "mkl-static-lp64-seq"]}
+#blas = "0.22"
+#intel-mkl-src = {version= "0.7.0", default-features = false, features=["download", "mkl-static-lp64-seq"]}
 #blas-src = { version = "0.8", features = ["intel-mkl"] }
 #openblas-src = {version = "0.10.4", features = ["static"]}
 #cblas = "0.4.0"
@@ -62,7 +67,6 @@ intel-mkl-src = {version= "0.7.0", default-features = false, features=["download
 [dev-dependencies]
 tempfile = "3.1.0"
 mockstream = "0.0.3"
-
 
 [profile.release]
 debug = true

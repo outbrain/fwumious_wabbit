@@ -4,6 +4,7 @@
 #![allow(unused_mut)]
 #![allow(non_snake_case)]
 #![allow(redundant_semicolons)]
+
 use flate2::read::MultiGzDecoder;
 use std::collections::VecDeque;
 use std::error::Error;
@@ -16,8 +17,8 @@ use std::io::Write;
 use std::path::Path;
 use std::time::Instant;
 
-extern crate blas;
-extern crate intel_mkl_src;
+// extern crate blas;
+// extern crate intel_mkl_src;
 
 #[macro_use]
 extern crate nom;

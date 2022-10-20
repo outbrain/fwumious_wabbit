@@ -13,7 +13,6 @@ use std::io::ErrorKind;
 use std::slice;
 
 
-
 use crate::optimizer;
 use crate::regressor;
 use crate::model_instance;
@@ -27,10 +26,10 @@ use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 use block_helpers::{Weight, WeightAndOptimizerData, OptimizerData};
 
-use blas::*;
+//use blas::*;
 
 const MAX_NUM_INPUTS:usize= 16000;
-const USE_BLAS:bool = true;
+const USE_BLAS:bool = false;
 
 #[derive(PartialEq, Debug)]
 pub enum NeuronType {
@@ -278,19 +277,19 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                 } else {
                 // This is actually speed things up considerably. 
                     output_tape.copy_from_slice(std::mem::transmute::<&[Weight], &[f32]>(self.weights.get_unchecked(bias_offset..)));
-                    sgemv(
-                         b'T',                    //   trans: u8, 
-                         self.num_inputs as i32,  //   m: i32, 
-                         self.num_neurons as i32, //   n: i32, 
-                         dropout_inv,             //   alpha: f32, 
-                         std::mem::transmute::<&[Weight], &[f32]>(self.weights.get_unchecked(0..)), //  a: &[f32], 
-                         self.num_inputs  as i32,       // lda: i32, 
-                         &input_tape.get_unchecked(0..),// x: &[f32], 
-                            1,      // incx: i32, 
-                            1.0,    // beta: f32, 
-                            output_tape.get_unchecked_mut(0..), //y: &mut [f32], 
-                            1,      // incy: i32
-                        )
+                    // sgemv(
+                    //      b'T',                    //   trans: u8, 
+                    //      self.num_inputs as i32,  //   m: i32, 
+                    //      self.num_neurons as i32, //   n: i32, 
+                    //      dropout_inv,             //   alpha: f32, 
+                    //      std::mem::transmute::<&[Weight], &[f32]>(self.weights.get_unchecked(0..)), //  a: &[f32], 
+                    //      self.num_inputs  as i32,       // lda: i32, 
+                    //      &input_tape.get_unchecked(0..),// x: &[f32], 
+                    //         1,      // incx: i32, 
+                    //         1.0,    // beta: f32, 
+                    //         output_tape.get_unchecked_mut(0..), //y: &mut [f32], 
+                    //         1,      // incy: i32
+                    //     )
                 }
 
                 if update {
@@ -432,19 +431,19 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
             } else {
             // This is actually speed things up considerably. 
                 output_tape.copy_from_slice(std::mem::transmute::<&[Weight], &[f32]>(self.weights.get_unchecked(bias_offset..)));
-                sgemv(
-                     b'T',//   trans: u8, 
-                     self.num_inputs as i32, //   m: i32, 
-                     self.num_neurons as i32, //   n: i32, 
-                     1.0, //   alpha: f32, 
-                     std::mem::transmute::<&[Weight], &[f32]>(self.weights.get_unchecked(0..)), //  a: &[f32], 
-                     self.num_inputs  as i32,   //lda: i32, 
-                     &input_tape.get_unchecked(0..),//   x: &[f32], 
-                        1, //incx: i32, 
-                        1.0, // beta: f32, 
-                        output_tape.get_unchecked_mut(0..), //y: &mut [f32], 
-                        1,//incy: i32
-                    )
+                // sgemv(
+                //      b'T',//   trans: u8, 
+                //      self.num_inputs as i32, //   m: i32, 
+                //      self.num_neurons as i32, //   n: i32, 
+                //      1.0, //   alpha: f32, 
+                //      std::mem::transmute::<&[Weight], &[f32]>(self.weights.get_unchecked(0..)), //  a: &[f32], 
+                //      self.num_inputs  as i32,   //lda: i32, 
+                //      &input_tape.get_unchecked(0..),//   x: &[f32], 
+                //         1, //incx: i32, 
+                //         1.0, // beta: f32, 
+                //         output_tape.get_unchecked_mut(0..), //y: &mut [f32], 
+                //         1,//incy: i32
+                //     )
             }    
             block_helpers::forward(further_blocks, fb, pb);
 
@@ -506,7 +505,6 @@ mod tests {
     use crate::graph::BlockGraph;
     use block_helpers::{slearn2, spredict2};
     use crate::block_misc::Observe;
-
     use crate::assert_epsilon;
 
     fn fb_vec() -> feature_buffer::FeatureBuffer {
@@ -593,28 +591,28 @@ mod tests {
 
     }
 
-    #[test]
-    fn test_neuron() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
-        mi.nn_learning_rate = 0.1;
-        mi.nn_power_t = 0.0;
-        mi.nn_init_acc_gradient = mi.init_acc_gradient;
-        mi.optimizer = Optimizer::SGD;
+    // #[test]
+    // fn test_neuron() {
+    //     let mut mi = model_instance::ModelInstance::new_empty().unwrap();        
+    //     mi.nn_learning_rate = 0.1;
+    //     mi.nn_power_t = 0.0;
+    //     mi.nn_init_acc_gradient = mi.init_acc_gradient;
+    //     mi.optimizer = Optimizer::SGD;
         
        
-        let mut bg = BlockGraph::new();
-        let input_block = block_misc::new_const_block(&mut bg, vec![2.0]).unwrap();
-        let neuron_block = new_neuron_block(&mut bg, &mi, input_block, NeuronType::WeightedSum, InitType::One).unwrap();
-        let observe_block = block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0)).unwrap();
-        bg.finalize();
-        bg.allocate_and_init_weights(&mi);
+    //     let mut bg = BlockGraph::new();
+    //     let input_block = block_misc::new_const_block(&mut bg, vec![2.0]).unwrap();
+    //     let neuron_block = new_neuron_block(&mut bg, &mi, input_block, NeuronType::WeightedSum, InitType::One).unwrap();
+    //     let observe_block = block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0)).unwrap();
+    //     bg.finalize();
+    //     bg.allocate_and_init_weights(&mi);
         
-        let mut pb = bg.new_port_buffer();
-        let fb = fb_vec();
-        assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 2.0);
-        assert_eq!(pb.observations.len(), 1);
-        assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 1.5);
-    }
+    //     let mut pb = bg.new_port_buffer();
+    //     let fb = fb_vec();
+    //     assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 2.0);
+    //     assert_eq!(pb.observations.len(), 1);
+    //     assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 1.5);
+    // }
 /*
     #[test]
     fn test_dropout() {
