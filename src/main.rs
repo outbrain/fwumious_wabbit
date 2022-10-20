@@ -17,8 +17,8 @@ use std::io::Write;
 use std::path::Path;
 use std::time::Instant;
 
-// extern crate blas;
-// extern crate intel_mkl_src;
+extern crate blas;
+extern crate intel_mkl_src;
 
 #[macro_use]
 extern crate nom;
