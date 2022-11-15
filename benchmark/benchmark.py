@@ -251,8 +251,8 @@ if __name__ == "__main__":
         if action in ["cleanup", "generate", "all"]:
             cleanup()
 
-        train_examples = 10000000
-        test_examples = 10000000
+        train_examples = 1_000_000
+        test_examples = 1_000_000
         feature_variety = 1000
         num_random_features = 10
 
