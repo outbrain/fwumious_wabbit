@@ -6,6 +6,7 @@ use std::io::Error as IOError;
 use std::io::ErrorKind;
 use std::str;
 use std::string::String;
+use std::collections::HashSet;
 use crate::vwmap;
 
 const RECBUF_LEN:usize = 2048;
@@ -128,7 +129,7 @@ impl VowpalParser {
         Ok(o)
     }
 
-    pub fn next_vowpal(&mut self, input_bufread: &mut impl BufRead) -> Result<&[u32], Box<dyn Error>> {
+    pub fn next_vowpal(&mut self, input_bufread: &mut impl BufRead, rare_hashes: Option<&HashSet<&str>>) -> Result<&[u32], Box<dyn Error>> {
             self.tmp_read_buf.truncate(0);
             let rowlen1 = match input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
                 Ok(0) => return Ok(&[]),
@@ -245,7 +246,8 @@ impl VowpalParser {
                      //   print!("F {:?}\n", String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end_first_part]));
                         let h = murmur3::hash32_with_seed(&self.tmp_read_buf[i_start..i_end_first_part], 
                                                           current_namespace_hash_seed) & MASK31;  
-
+						// if hashThing is not none, check if h in hash, if yes, => 1, else h
+						// println!("HASH_VALUE\t{:?}", h);
                         let feature_weight:f32 = match i_end - i_end_first_part {
                             0 => 1.0,
                             _ => self.parse_float_or_error(i_end_first_part + 1, i_end, "Failed parsing feature weight")?

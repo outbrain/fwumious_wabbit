@@ -9,6 +9,7 @@ use std::collections::VecDeque;
 use std::error::Error;
 use std::f32;
 use std::fs::File;
+use std::fs;
 use std::io;
 use std::io::BufRead;
 use std::io::BufWriter;
@@ -19,6 +20,7 @@ use std::time::Instant;
 #[macro_use]
 extern crate nom;
 
+use std::collections::HashSet;
 mod block_ffm;
 mod block_helpers;
 mod block_loss_functions;
@@ -81,7 +83,7 @@ fn build_cache_without_training(cl: clap::ArgMatches) -> Result<(), Box<dyn Erro
         let reading_result;
         let buffer: &[u32];
         if !cache.reading {
-            reading_result = pa.next_vowpal(&mut bufferred_input);
+            reading_result = pa.next_vowpal(&mut bufferred_input, None);
             buffer = match reading_result {
                 Ok([]) => break, // EOF
                 Ok(buffer2) => buffer2,
@@ -103,6 +105,15 @@ fn build_cache_without_training(cl: clap::ArgMatches) -> Result<(), Box<dyn Erro
     cache.write_finish()?;
     Ok(())
 }
+
+// fn read_hash_space(fname: &String) -> std::io::Result<()> {
+//     for line in my_reader::BufReader::open(&fname)? {
+//         println!("{}", line?.trim());
+//     }
+
+//     Ok(())
+// }
+
 
 fn main2() -> Result<(), Box<dyn Error>> {
     // We'll parse once the command line into cl and then different objects will examine it
@@ -196,6 +207,14 @@ fn main2() -> Result<(), Box<dyn Error>> {
             None => 0,
         };
 
+		let mut rare_hashes = HashSet::new();
+		let hash_storage_input = "unique_counts.txt".to_string();
+		let hash_space: String = fs::read_to_string(hash_storage_input)?;
+		
+		for line in hash_space.lines() {
+			rare_hashes.insert(line);
+		}
+
         let holdout_after_option: Option<u64> =
             cl.value_of("holdout_after").map(|s| s.parse().unwrap());
 
@@ -230,7 +249,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
             let reading_result;
             let buffer: &[u32];
             if !cache.reading {
-                reading_result = pa.next_vowpal(&mut bufferred_input);
+                reading_result = pa.next_vowpal(&mut bufferred_input, None);
                 buffer = match reading_result {
                     Ok([]) => break, // EOF
                     Ok(buffer2) => buffer2,

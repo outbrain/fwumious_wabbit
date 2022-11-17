@@ -82,7 +82,7 @@ impl WorkerThread {
     {
         let mut i = 0u64;  // This is per-thread example number
         loop {
-            let reading_result = self.pa.next_vowpal(reader);
+            let reading_result = self.pa.next_vowpal(reader, None);
 
             match reading_result {
                 Ok([]) => return ConnectionEnd::EndOfStream, // EOF

@@ -1,5 +1,6 @@
 
 mod block_ffm;
+use std::collections::HashSet;
 mod block_helpers;
 mod block_loss_functions;
 mod block_lr;
@@ -29,6 +30,7 @@ use crate::multithread_helpers::BoxedRegressorTrait;
 use crate::parser::VowpalParser;
 use crate::regressor::Regressor;
 
+
 #[repr(C)]
 pub struct FfiPredictor {
     _marker: core::marker::PhantomData<Predictor>,
@@ -44,7 +46,7 @@ impl Predictor {
 
     unsafe fn predict(&mut self, input_buffer: &str) -> f32 {
         let mut buffered_input = Cursor::new(input_buffer);
-        let reading_result = self.vw_parser.next_vowpal(&mut buffered_input);
+        let reading_result = self.vw_parser.next_vowpal(&mut buffered_input, None);
         let buffer = match reading_result {
             Ok([]) => return -1.0, // EOF
             Ok(buffer2) => buffer2,
