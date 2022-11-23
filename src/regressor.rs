@@ -182,7 +182,7 @@ impl Regressor  {
                 };
                 let neuron_type = block_neural::NeuronType::WeightedSum;
                 // println!("Neuron layer: width: {}, neuron type: {:?}, dropout: {}, maxnorm: {}, init_type: {:?}",
-                                        width, neuron_type, dropout, maxnorm, init_type);
+                //                        width, neuron_type, dropout, maxnorm, init_type);
                 output =  block_neural::new_neuronlayer_block(&mut bg, 
                                             &mi, 
                                             output,
