@@ -181,7 +181,7 @@ impl Regressor  {
                     _ => Err(format!("unknown nn initialization type: \"{}\"", init_type_str)).unwrap()
                 };
                 let neuron_type = block_neural::NeuronType::WeightedSum;
-                println!("Neuron layer: width: {}, neuron type: {:?}, dropout: {}, maxnorm: {}, init_type: {:?}",
+                // println!("Neuron layer: width: {}, neuron type: {:?}, dropout: {}, maxnorm: {}, init_type: {:?}",
                                         width, neuron_type, dropout, maxnorm, init_type);
                 output =  block_neural::new_neuronlayer_block(&mut bg, 
                                             &mi, 
@@ -197,15 +197,15 @@ impl Regressor  {
                 
                 if layernorm == NNLayerNorm::BeforeRelu {
                     output = block_normalize::new_normalize_layer_block(&mut bg, &mi, output).unwrap();
-                    println!("Normalize layer before relu");
+//                    println!("Normalize layer before relu");
                 }
                 if activation == NNActivation::Relu {
                     output = block_relu::new_relu_block(&mut bg, &mi, output).unwrap();
-                    println!("Relu layer");
+  //                  println!("Relu layer");
                 }
                 if layernorm == NNLayerNorm::AfterRelu {
                     output = block_normalize::new_normalize_layer_block(&mut bg, &mi, output).unwrap();
-                    println!("Normalize layer after relu");
+    //                println!("Normalize layer after relu");
                 }
 
 
