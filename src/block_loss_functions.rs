@@ -4,10 +4,7 @@ use std::io;
 
 use crate::regressor;
 use crate::feature_buffer;
-use crate::port_buffer;
 use crate::model_instance;
-use crate::graph;
-use crate::block_helpers;
 use regressor::BlockTrait;
 
 
@@ -35,38 +32,7 @@ pub fn logistic(t: f32) -> f32 {
 
 
 pub struct BlockSigmoid {
-    num_inputs: usize,
-    input_offset: usize,
-    output_offset: usize,
-    copy_to_result: bool
 }
-
-
-pub fn new_logloss_block(  bg: &mut graph::BlockGraph, 
-                           input: graph::BlockPtrOutput,
-                           copy_to_result: bool) 
-                        -> Result<graph::BlockPtrOutput, Box<dyn Error>> {    
-    let num_inputs = bg.get_num_output_values(vec![&input]);
-    let block = Box::new(BlockSigmoid {num_inputs: num_inputs as usize,
-                                input_offset: usize::MAX,
-                                output_offset: usize::MAX,
-                                copy_to_result: copy_to_result});
-    let mut block_outputs = bg.add_node(block, vec![input]).unwrap();
-    assert_eq!(block_outputs.len(), 1);
-    Ok(block_outputs.pop().unwrap())
-
-}
-
-
-pub fn new_without_weights(mi: &model_instance::ModelInstance, 
-                            num_inputs: u32,
-                            copy_to_result: bool) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-    Ok(Box::new(BlockSigmoid {num_inputs: num_inputs as usize,
-                                input_offset: usize::MAX,
-                                output_offset: usize::MAX,
-                                copy_to_result: copy_to_result}))
-}
-
 
 impl BlockTrait for BlockSigmoid {
 
@@ -74,114 +40,87 @@ impl BlockTrait for BlockSigmoid {
         self
     }
 
-    fn get_num_output_slots(&self) -> usize {1}   
-
-
-    fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
-        assert!(output.get_output_index() == 0);
-        1
+    fn new_without_weights(mi: &model_instance::ModelInstance) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+        Ok(Box::new(BlockSigmoid {}))
     }
-    
-    fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize)  {
-        assert!(input.get_input_index() == 0);
-        assert!(self.input_offset == usize::MAX); // We only allow a single call
-        self.input_offset = offset;
-    }
-
-    fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize)  {
-        assert!(self.output_offset == usize::MAX); // We only allow a single call
-        assert!(output.get_output_index() == 0);
-        self.output_offset = offset;
-    }
-
 
     #[inline(always)]
     fn forward_backward(&mut self, 
-                    further_blocks: &mut [Box<dyn BlockTrait>], 
+                    further_regressors: &mut [Box<dyn BlockTrait>], 
+                    wsum: f32, 
                     fb: &feature_buffer::FeatureBuffer, 
-                    pb: &mut port_buffer::PortBuffer, 
-                    update:bool) {
-
-        debug_assert!(self.input_offset != usize::MAX);
-        debug_assert!(self.output_offset != usize::MAX);
-
-        unsafe {
-
-            let wsum:f32 = {
-                let myslice = &pb.tape.get_unchecked(self.input_offset .. (self.input_offset + self.num_inputs));
-                myslice.iter().sum()
-            };
-            // vowpal compatibility
-            
-            let mut prediction_probability: f32;
-            let mut general_gradient: f32;
-            
-            if wsum.is_nan() {
-                eprintln!("NAN prediction in example {}, forcing 0.0", fb.example_number);
-                prediction_probability = logistic(0.0);
-                general_gradient = 0.0;
-            } else if wsum < -50.0 {
-                prediction_probability = logistic(-50.0);
-                general_gradient = 0.0;
-            } else if wsum > 50.0 {
-                prediction_probability = logistic(50.0);
-                general_gradient = 0.0;
-            } else {
-                prediction_probability = logistic(wsum);
-                general_gradient = - (fb.label - prediction_probability) * fb.example_importance;
-            }
-            //println!("General gradient: {}", general_gradient);
-            *pb.tape.get_unchecked_mut(self.output_offset) = prediction_probability;
-            if self.copy_to_result {
-                pb.observations.push(prediction_probability);
-            }
-            block_helpers::forward_backward(further_blocks, fb, pb, update);
-//            general_gradient *= *pb.tape.get_unchecked(self.output_offset);
-        // replace inputs with their gradients
-            pb.tape.get_unchecked_mut(self.input_offset .. (self.input_offset + self.num_inputs)).fill(general_gradient);
+                    update:bool) -> (f32, f32) {
+        if further_regressors.len() != 0 {
+            panic!("RegSigmoid can only be at the end of the chain!");
         }
+        
+        // vowpal compatibility
+        if wsum.is_nan() {
+            eprintln!("NAN prediction in example {}, forcing 0.0", fb.example_number);
+            return (logistic(0.0), 0.0);
+        } else if wsum < -50.0 {
+            return (logistic(-50.0), 0.0);
+        } else if wsum > 50.0 {
+            return (logistic(50.0), 0.0);
+        }        
+
+        let prediction_probability = logistic(wsum);
+        let general_gradient = (fb.label - prediction_probability) * fb.example_importance;
+        //println!("General gradient: {}", general_gradient);
+        (prediction_probability, general_gradient)
     }
 
     fn forward(&self, 
                      further_blocks: &[Box<dyn BlockTrait>], 
-                     fb: &feature_buffer::FeatureBuffer,
-                     pb: &mut port_buffer::PortBuffer, ) {
-        unsafe {
+                     wsum: f32, 
+                     fb: &feature_buffer::FeatureBuffer) -> f32 {
 
-/*        if further_blocks.len() != 0 {
+        if further_blocks.len() != 0 {
             panic!("RegSigmoid can only be at the end of the chain!");
-        }*/
-        debug_assert!(self.input_offset != usize::MAX);
-        debug_assert!(self.output_offset != usize::MAX);
-        let wsum:f32 = {
-            let myslice = &pb.tape.get_unchecked(self.input_offset .. (self.input_offset + self.num_inputs));
-            myslice.iter().sum()
-        };
+        }
         
-        let prediction_probability:f32;
+        // vowpal compatibility
         if wsum.is_nan() {
             eprintln!("NAN prediction in example {}, forcing 0.0", fb.example_number);
-            prediction_probability = logistic(0.0);
+            return logistic(0.0);
         } else if wsum < -50.0 {
-            prediction_probability = logistic(-50.0);
+            return logistic(-50.0);
         } else if wsum > 50.0 {
-            prediction_probability = logistic(50.0);
-        } else {
-            prediction_probability = logistic(wsum);
-        }
-        
-        pb.tape[self.output_offset] = prediction_probability;
-        if self.copy_to_result {
-            pb.observations.push(prediction_probability);
-        }
-        block_helpers::forward(further_blocks, fb, pb);
+            return logistic(50.0);
+        }        
+
+        let prediction_probability = logistic(wsum);
+        prediction_probability
     }
-    }
+
     
+    
+    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
+        // empty
+    }
+    fn get_serialized_len(&self) -> usize {
+        return 0
+    }
+
+    fn read_weights_from_buf(&mut self, input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+
+    fn write_weights_to_buf(&self, output_bufwriter: &mut dyn io::Write) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+
+    fn read_weights_from_buf_into_forward_only(&self, input_bufreader: &mut dyn io::Read, forward: &mut Box<dyn BlockTrait>) -> Result<(), Box<dyn Error>> {
+        Ok(())        
+    }
+
+    fn new_forward_only_without_weights(&self) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
+        Ok(Box::new(BlockSigmoid{}))
+    }
+    /// Sets internal state of weights based on some completely object-dependent parameters
+    fn testing_set_weights(&mut self, aa: i32, bb: i32, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+
 }
-
-
-
-
-
 

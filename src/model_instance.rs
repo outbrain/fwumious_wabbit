@@ -6,7 +6,6 @@ use std::io::Read;
 use std::io;
 use std::fs;
 use std::fs::File;
-use std::collections::HashMap;
 use serde::{Serialize,Deserialize};//, Deserialize};
 use serde_json::{Value};
 
@@ -26,26 +25,12 @@ pub struct FeatureComboDesc {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Copy)]
 pub enum Optimizer {
-    SGD = 100,
-    AdagradFlex = 200,
-    AdagradLUT = 300,
+    SGD = 1,
+    Adagrad = 2,
 }
 
 pub type FieldDesc = Vec<vwmap::NamespaceDescriptor>;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct NNConfig {
-    pub layers: Vec<HashMap<String, String>>,
-    pub topology: String,
-}
-
-impl NNConfig {
-    pub fn new() -> NNConfig {
-        NNConfig{	
-                layers:Vec::new(), 
-                topology: "one".to_string()}
-    }
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ModelInstance {
@@ -54,6 +39,7 @@ pub struct ModelInstance {
     pub minimum_learning_rate: f32,
     pub power_t: f32,
     pub bit_precision: u8,
+    pub hash_mask: u32,		// DEPRECATED, UNUSED -- this is recalculated in feature_buffer.rs
     pub add_constant_feature: bool,
     pub feature_combo_descs: Vec<FeatureComboDesc>,
     pub ffm_fields: Vec<FieldDesc>,
@@ -61,6 +47,8 @@ pub struct ModelInstance {
     pub ffm_k: u32,
     #[serde(default = "default_u32_zero")]
     pub ffm_bit_precision: u32,
+    #[serde(default = "default_bool_false")]
+    pub ffm_separate_vectors: bool, // DEPRECATED, UNUSED
     #[serde(default = "default_bool_false")]
     pub fastmath: bool,
 
@@ -76,19 +64,11 @@ pub struct ModelInstance {
     pub ffm_init_acc_gradient: f32,
     #[serde(default = "default_f32_zero")]
     pub init_acc_gradient: f32,
+    // these are only used for learning, so it doesnt matter they got set to zero as default        
     #[serde(default = "default_f32_zero")]
     pub ffm_learning_rate: f32,    
     #[serde(default = "default_f32_zero")]
     pub ffm_power_t: f32,
-
-    #[serde(default = "default_f32_zero")]
-    pub nn_init_acc_gradient: f32,
-    #[serde(default = "default_f32_zero")]
-    pub nn_learning_rate: f32,    
-    #[serde(default = "default_f32_zero")]
-    pub nn_power_t: f32,
-
-    pub nn_config: NNConfig,
 
     #[serde(default = "default_optimizer_adagrad")]
     pub optimizer: Optimizer,
@@ -100,15 +80,7 @@ pub struct ModelInstance {
 fn default_u32_zero() -> u32{0}
 fn default_f32_zero() -> f32{0.0}
 fn default_bool_false() -> bool{false}
-fn default_optimizer_adagrad() -> Optimizer{Optimizer::AdagradFlex}
-
-
-fn parse_float(s: &str, default: f32, cl: &clap::ArgMatches) -> f32{
-    match cl.value_of(s) {
-        Some(val) => val.parse().unwrap(),
-        None => default
-    }
-}
+fn default_optimizer_adagrad() -> Optimizer{Optimizer::Adagrad}
 
 impl ModelInstance {
     pub fn new_empty() -> Result<ModelInstance, Box<dyn Error>> {
@@ -117,6 +89,7 @@ impl ModelInstance {
             ffm_learning_rate: 0.5, // vw default
             minimum_learning_rate: 0.0, 
             bit_precision: 18,      // vw default
+            hash_mask: 0, // DEPRECATED, UNUSED
             power_t: 0.5,
             ffm_power_t: 0.5,
             add_constant_feature: true,
@@ -124,19 +97,16 @@ impl ModelInstance {
             ffm_fields: Vec::new(),
             ffm_k: 0,
             ffm_bit_precision: 18,
+            ffm_separate_vectors: false, // DEPRECATED, UNUSED
             fastmath: true,
             ffm_k_threshold: 0.0,
             ffm_init_center: 0.0,
             ffm_init_width: 0.0,
             ffm_init_zero_band: 0.0,
             ffm_init_acc_gradient: 0.0,
-            nn_init_acc_gradient: 0.0,
-            nn_learning_rate: 0.02,
-            nn_power_t: 0.45,
             init_acc_gradient: 1.0,
             optimizer: Optimizer::SGD,
             transform_namespaces: feature_transform_parser::NamespaceTransforms::new(),
-            nn_config: NNConfig::new(),
         };
         Ok(mi)
     }
@@ -204,23 +174,6 @@ impl ModelInstance {
             field.push(namespace_descriptor);
         }
         Ok(field)
-    }
-
-
-    fn parse_nn(&mut self, s: &str) -> Result<(), Box<dyn Error>> {
-        // Examples: 0:activation:relu
-        // Examples: 4:maxnorm:5.0
-        // Examples: 6:width:20
-        let vsplit : Vec<&str> = s.split(":").collect();
-        if vsplit.len() != 3 {
-            return Err(Box::new(IOError::new(ErrorKind::Other, format!("--nn parameters have to be of form layer:parameter_name:parameter_value: {}", s))));
-        }
-        let layer_number: usize = vsplit[0].parse().expect(&format!("--nn can not parse the layer number: {}", vsplit[0]));
-        if layer_number >= self.nn_config.layers.len() {
-            return Err(Box::new(IOError::new(ErrorKind::Other, format!("--nn parameter addressing layer {}, but we have only {} layers", layer_number, self.nn_config.layers.len()))));
-        }	
-        self.nn_config.layers[layer_number].insert(vsplit[1].to_string(), vsplit[2].to_string());
-        Ok(())
     }
 
     
@@ -294,9 +247,26 @@ impl ModelInstance {
             }
         }        
 
-        mi.ffm_init_center 	 = parse_float("ffm_init_center", 	mi.ffm_init_center, &cl);
-        mi.ffm_init_width 	 = parse_float("ffm_init_width", 	mi.ffm_init_width, &cl);
-        mi.ffm_init_zero_band 	 = parse_float("ffm_init_zero_band", 	mi.ffm_init_zero_band, &cl);
+        if let Some(val) = cl.value_of("ffm_init_center") {
+            mi.ffm_init_center = val.parse()?;
+        }
+
+        if let Some(val) = cl.value_of("ffm_init_width") {
+            mi.ffm_init_width = val.parse()?;
+        }
+
+        if let Some(val) = cl.value_of("init_acc_gradient") {
+            if vwcompat {
+                return Err(Box::new(IOError::new(ErrorKind::Other, "Initial accumulated gradient is not supported in --vwcompat mode")))
+            }
+            mi.init_acc_gradient = val.parse()?;
+        }
+        
+        if let Some(val) = cl.value_of("ffm_init_acc_gradient") {
+            mi.ffm_init_acc_gradient = val.parse()?;
+        } else {
+            mi.ffm_init_acc_gradient = mi.init_acc_gradient;
+        }
 
         if let Some(in_v) = cl.values_of("ffm_field") {
             for namespaces_str in in_v {          
@@ -326,35 +296,15 @@ impl ModelInstance {
             println!("Num weight bits = {}", mi.bit_precision); // vwcompat
         }
 
-        mi.learning_rate 	 = parse_float("learning_rate", 	mi.learning_rate, &cl);
-        mi.init_acc_gradient 	 = parse_float("init_acc_gradient", 	mi.init_acc_gradient, &cl);
-        mi.power_t 		 = parse_float("power_t", 		mi.power_t, &cl);
-        
-        mi.ffm_learning_rate 	 = parse_float("ffm_learning_rate", 	mi.learning_rate, &cl);
-        mi.ffm_init_acc_gradient = parse_float("ffm_init_acc_gradient", mi.init_acc_gradient, &cl);
-        mi.ffm_power_t 		 = parse_float("ffm_power_t", 		mi.power_t, &cl);
-
-        mi.nn_learning_rate 	 = parse_float("nn_learning_rate", 	mi.ffm_learning_rate, &cl);
-        mi.nn_init_acc_gradient  = parse_float("nn_init_acc_gradient",	mi.ffm_init_acc_gradient, &cl);
-        mi.nn_power_t 		 = parse_float("nn_power_t", 		mi.ffm_power_t, &cl);
-
-
-        if let Some(val) = cl.value_of("nn_layers") {
-            let nn_layers = val.parse()?;
-            for i in 0..nn_layers {
-                mi.nn_config.layers.push(HashMap::new());
-            } 
+        if let Some(val) = cl.value_of("learning_rate") {
+            mi.learning_rate = val.parse()?;
+        }
+        if let Some(val) = cl.value_of("ffm_learning_rate") {
+            mi.ffm_learning_rate = val.parse()?;
+        } else {
+            mi.ffm_learning_rate = mi.learning_rate;
         }
 
-        if let Some(val) = cl.value_of("nn_topology") {
-                mi.nn_config.topology = val.to_string();
-        }
-
-        if let Some(in_v) = cl.values_of("nn") {
-            for value_str in in_v {                
-                mi.parse_nn(value_str)?;
-            }
-        }
 
 
 
@@ -362,6 +312,15 @@ impl ModelInstance {
             mi.minimum_learning_rate = val.parse()?;
         }
 
+        if let Some(val) = cl.value_of("power_t") {
+            mi.power_t = val.parse()?;
+        }
+        if let Some(val) = cl.value_of("ffm_power_t") {
+            mi.ffm_power_t = val.parse()?;
+        } else {
+            mi.ffm_power_t = mi.power_t;
+        }
+        
         if let Some(val) = cl.value_of("link") {
             if val != "logistic" {
                 return Err(Box::new(IOError::new(ErrorKind::Other, format!("--link only supports 'logistic'"))))
@@ -389,15 +348,8 @@ impl ModelInstance {
         }
 
         if cl.is_present("adaptive") {
-            mi.optimizer = Optimizer::AdagradFlex;
+            mi.optimizer = Optimizer::Adagrad;
         }
-
-        if mi.optimizer == Optimizer::AdagradFlex {
-            if mi.fastmath {
-                mi.optimizer = Optimizer::AdagradLUT;
-            }
-        }
-
 
         Ok(mi)
     }
@@ -454,8 +406,6 @@ impl ModelInstance {
 		Ok(())
 
 	}
-
-
 }
 
 
@@ -561,32 +511,6 @@ C,featureC
         let result = mi.create_field_desc_from_verbose(&vw, "featureA,featureC:3");
         assert!(result.is_err());
         assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Fields currently do not support passing a value via : \\\"featureA,featureC:3\\\"\" })");
-        
-    }	
-
-    #[test]
-    fn test_nn_parsing() {
-        let mut mi = ModelInstance::new_empty().unwrap();        
-
-        let LAYERS = 4;
-        for i in 0..LAYERS {
-                mi.nn_config.layers.push(HashMap::new());
-        } 
-        assert!(mi.parse_nn("1:foo:bar").is_ok());
-        assert!(mi.parse_nn("0::").is_ok());
-//        println!("AAA: {:?}", mi.nn_config.layers);
-        assert_eq!(mi.nn_config.layers[0].get("").unwrap(), "");
-        assert_eq!(mi.nn_config.layers[1].get("foo").unwrap(), "bar");
-        assert_eq!(mi.nn_config.layers[2].len(), 0);
-        assert_eq!(mi.nn_config.layers[3].len(), 0);
-
-        let result = mi.parse_nn("0:");
-        assert!(result.is_err());
-        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"--nn parameters have to be of form layer:parameter_name:parameter_value: 0:\" })");
-        let result = mi.parse_nn("8:a:b");
-        assert!(result.is_err());
-        assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"--nn parameter addressing layer 8, but we have only 4 layers\" })");
-
         
     }	
         
