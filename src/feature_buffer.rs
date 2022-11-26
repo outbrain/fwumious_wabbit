@@ -267,7 +267,7 @@ impl FeatureBufferTranslator {
 				let count_lower_bound: u32 = 10;
 
 				// hash mask specific to non-frequent values
-				let hash_lb_rare = 1 << 14;
+				let hash_lb_rare = 1 << 10;
 
 				// In theory this helps with dispersion
 				let additional_sparsification_term = 1; // tmp_k * tmp_fields; // todo: test k * num fields;
@@ -289,7 +289,7 @@ impl FeatureBufferTranslator {
 					} else {
 
 //						hash_value_entry.hash = 0;
-						hash_value_entry.hash = hash_value_entry.hash & hash_lb_rare & self.ffm_hash_mask;
+						hash_value_entry.hash = hash_value_entry.hash & hash_lb_rare;
 					}
 				}
 			}
