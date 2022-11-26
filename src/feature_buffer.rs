@@ -264,10 +264,10 @@ impl FeatureBufferTranslator {
 				let tmp_fields = 8;
 
 				// lower bound for considering something frequent
-				let count_lower_bound: u32 = 15;
+				let count_lower_bound: u32 = 10;
 
 				// hash mask specific to non-frequent values
-				let hash_lb_rare = 1 << 10;
+				let hash_lb_rare = 1 << 14;
 
 				// In theory this helps with dispersion
 				let additional_sparsification_term = 1; // tmp_k * tmp_fields; // todo: test k * num fields;
@@ -275,8 +275,6 @@ impl FeatureBufferTranslator {
 				let mask_interval_diff = self.ffm_hash_mask - hash_lb_rare;
 				
 				for hash_value_entry in ffm_buffer.iter_mut() {
-
-					// hash_value_entry.hash = 1;
 					
 					let hash_entry: u32 = hash_value_entry.hash;
 
@@ -285,11 +283,12 @@ impl FeatureBufferTranslator {
 					
 					if *stored_hashes_parsed.get(&hash_entry).unwrap_or(&1) > count_lower_bound {
 
+//						hash_value_entry.hash = 1;
 						hash_value_entry.hash = hash_lb_rare + ((hash_value_entry.hash * additional_sparsification_term) & mask_interval_diff);						
 						
 					} else {
 
-						// hash_value_entry.hash = 0;
+//						hash_value_entry.hash = 0;
 						hash_value_entry.hash = hash_value_entry.hash & hash_lb_rare & self.ffm_hash_mask;
 					}
 				}
