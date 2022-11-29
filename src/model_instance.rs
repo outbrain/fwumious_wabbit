@@ -447,9 +447,9 @@ impl ModelInstance {
 			}
 		}
 
-		// for (hyper_name, hyper_value) in replacement_hyperparam_ids.into_iter() {
-		// 	println!("Warning! Updated hyperparameter {} to value {}", hyper_name, hyper_value);
-		// }
+		for (hyper_name, hyper_value) in replacement_hyperparam_ids.into_iter() {
+			println!("Warning! Updated hyperparameter {} to value {}", hyper_name, hyper_value);
+		}
 		
 		Ok(())
 
