@@ -251,8 +251,8 @@ if __name__ == "__main__":
         if action in ["cleanup", "generate", "all"]:
             cleanup()
 
-        train_examples = 10000000
-        test_examples = 10000000
+        train_examples = 1_000_000
+        test_examples = 1_000_000
         feature_variety = 1000
         num_random_features = 10
 
@@ -366,7 +366,9 @@ here are the results for {times} runs for each scenario, taking mean values:""")
 
         if use_plots and action in ["all", "train", "predict", "train+predict"]:
             plot_file_name = "benchmark_results.png"
-            plot_results(f"work_dir/{plot_file_name}", 'Vowpal Wabbit', "Fwumious Wabbit", actions, vw_time_values, fw_time_values, vw_mem_values, fw_mem_values, vw_cpu_values, fw_cpu_values)
+            left_label = "Vowpal Wabbit" if benchmark_vw else None
+            right_label = "Fwumious Wabbit" if benchmark_vw else None
+            plot_results(f"work_dir/{plot_file_name}", left_label, right_label, actions, vw_time_values, fw_time_values, vw_mem_values, fw_mem_values, vw_cpu_values, fw_cpu_values)
             rprint(f"![benchmark results]({plot_file_name})")
 
         if action in ["train", "predict", "train+predict", "all"]:
@@ -494,7 +496,9 @@ Fwumious Wabbit Logistic Regression predictions loss: {fw_model_loss:.4f}
 Fwumious Wabbit FFM predictions loss: {fw_ffm_model_loss:.4f}
 ```
 """)
-        vowpal_wabbit_version = subprocess.check_output(f"{VW} --version", shell=True).decode('utf-8').strip("\n")
+        vowpal_wabbit_version = None
+        if benchmark_vw:
+            vowpal_wabbit_version = subprocess.check_output(f"{VW} --version", shell=True).decode('utf-8').strip("\n")
         fwumious_wabbit_version = subprocess.check_output(f"{FW} --version", shell=True).decode('utf-8').strip("\n")
         fwumious_wabbit_revision = subprocess.check_output("git log | head -n 1", shell=True).decode('utf-8').split(" ")[1][0:7]
 
