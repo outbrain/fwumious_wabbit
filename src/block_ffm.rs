@@ -72,7 +72,8 @@ macro_rules! specialize_k {
 
 impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
 
- {
+{
+	
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
@@ -116,85 +117,91 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
         Ok(Box::new(forwards_only))
     }
 
-
-
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
         self.weights =vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_ffm.initial_data()}; self.ffm_weights_len as usize];
 
-		if mi.initialization_type.eq("default"){
-			if mi.ffm_k > 0 {       
-				if mi.ffm_init_width == 0.0 {
-					// Initialization that has showed to work ok for us, like in ffm.pdf, but centered around zero and further divided by 50
-					let ffm_one_over_k_root = 1.0 / (self.ffm_k as f32).sqrt() / 50.0;
-					for i in 0..self.ffm_weights_len {
-						self.weights[i as usize].weight = (1.0 * merand48((self.ffm_weights_len as usize+ i as usize) as u64)-0.5) * ffm_one_over_k_root;
-						self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
-					}
-				} else {
-					let zero_half_band_width = mi.ffm_init_width * mi.ffm_init_zero_band * 0.5;
-					let band_width = mi.ffm_init_width * (1.0 - mi.ffm_init_zero_band);
-					for i in 0..self.ffm_weights_len {
-						let mut w = merand48(i as u64) * band_width - band_width * 0.5;
-						if w > 0.0 { 
-							w += zero_half_band_width ;
-						} else {
-							w -= zero_half_band_width;
+		match mi.initialization_type.as_str() {
+			"default" => {
+				if mi.ffm_k > 0 {       
+					if mi.ffm_init_width == 0.0 {
+						// Initialization that has showed to work ok for us, like in ffm.pdf, but centered around zero and further divided by 50
+						let ffm_one_over_k_root = 1.0 / (self.ffm_k as f32).sqrt() / 50.0;
+						for i in 0..self.ffm_weights_len {
+							self.weights[i as usize].weight = (1.0 * merand48((self.ffm_weights_len as usize+ i as usize) as u64)-0.5) * ffm_one_over_k_root;
+							self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
 						}
-						w += mi.ffm_init_center;
-						self.weights[i as usize].weight = w; 
-						self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
-					}
+					} else {
+						let zero_half_band_width = mi.ffm_init_width * mi.ffm_init_zero_band * 0.5;
+						let band_width = mi.ffm_init_width * (1.0 - mi.ffm_init_zero_band);
+						for i in 0..self.ffm_weights_len {
+							let mut w = merand48(i as u64) * band_width - band_width * 0.5;
+							if w > 0.0 { 
+								w += zero_half_band_width ;
+							} else {
+								w -= zero_half_band_width;
+							}
+							w += mi.ffm_init_center;
+							self.weights[i as usize].weight = w; 
+							self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
+						}
 
+					}
 				}
 			}
-		} else if mi.initialization_type.eq("xavier") {
-			// U [-(1/sqrt(n)), 1/sqrt(n)]
 
-			let lower_bound: f32 = -1.0/(self.ffm_weights_len as f32).sqrt();
-			let upper_bound: f32 = 1.0/(self.ffm_weights_len as f32).sqrt();
-			let difference = upper_bound - lower_bound;
-			
-			for i in 0..self.ffm_weights_len {
-				let mut w = difference * merand48(i as u64) as f32 + lower_bound;
-				self.weights[i as usize].weight = w;
-				self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
-			}
-			
-		} else if mi.initialization_type.eq("xavier_normalized") {
-			// U [-(sqrt(6)/sqrt(n + m)), sqrt(6)/sqrt(n + m)] + we assume symmetric input-output
-
-			let lower_bound: f32 = -6_f32.sqrt() / (2 * self.ffm_weights_len) as f32;
-			let upper_bound: f32 = 6_f32.sqrt() / (2 * self.ffm_weights_len) as f32;
-			let difference = upper_bound - lower_bound;
-			
-			for i in 0..self.ffm_weights_len {
-				let mut w = difference * merand48(i as u64) as f32 + lower_bound;
-				self.weights[i as usize].weight = w;
-				self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
-			}
-									
-		} else if mi.initialization_type.eq("he") {
-			// G (0.0, sqrt(2/n)) + Box Muller-ish transform
-			
-			for i in 0..self.ffm_weights_len {
-
-				// could use both, but not critical in this case
-				let seed_var_first = merand48(i as u64);
-				let seed_var_second = merand48(u64::pow(i as u64, 2));
-				let normal_var = (-2.0 * seed_var_first.ln()).sqrt() * (2.0 * PI as f32 * seed_var_second).cos();
+			,
+			"xavier" => {
+				// U [-(1/sqrt(n)), 1/sqrt(n)]
+				let lower_bound: f32 = -1.0/(self.ffm_weights_len as f32).sqrt();
+				let upper_bound: f32 = 1.0/(self.ffm_weights_len as f32).sqrt();
+				let difference = upper_bound - lower_bound;
 				
-				self.weights[i as usize].weight = normal_var + (2.0 / self.ffm_weights_len as f32).sqrt();
-				self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
-			}
-			
-		} else if mi.initialization_type.eq("constant") {
-			// generic constant initialization (sanity check)
-			
-			for i in 0..self.ffm_weights_len {
-				let mut w = 1.0;
-				self.weights[i as usize].weight = w;
-				self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
-			}
+				for i in 0..self.ffm_weights_len {
+					let mut w = difference * merand48(i as u64) as f32 + lower_bound;
+					self.weights[i as usize].weight = w;
+					self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
+				}
+			},
+			"xavier_normalized" => {
+				// U [-(sqrt(6)/sqrt(n + m)), sqrt(6)/sqrt(n + m)] + we assume symmetric input-output
+
+				let lower_bound: f32 = -6_f32.sqrt() / (2 * self.ffm_weights_len) as f32;
+				let upper_bound: f32 = 6_f32.sqrt() / (2 * self.ffm_weights_len) as f32;
+				let difference = upper_bound - lower_bound;
+				
+				for i in 0..self.ffm_weights_len {
+					let mut w = difference * merand48(i as u64) as f32 + lower_bound;
+					self.weights[i as usize].weight = w;
+					self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
+				}
+
+			},
+			"he" => {
+				// G (0.0, sqrt(2/n)) + Box Muller-ish transform
+				
+				for i in 0..self.ffm_weights_len {
+
+					// could use both, but not critical in this case
+					let seed_var_first = merand48(i as u64);
+					let seed_var_second = merand48(u64::pow(i as u64, 2));
+					let normal_var = (-2.0 * seed_var_first.ln()).sqrt() * (2.0 * PI as f32 * seed_var_second).cos();
+					
+					self.weights[i as usize].weight = normal_var + (2.0 / self.ffm_weights_len as f32).sqrt();
+					self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
+				}
+
+			},
+			"constant" => {
+				// generic constant initialization (sanity check)
+				
+				for i in 0..self.ffm_weights_len {
+					let mut w = 1.0;
+					self.weights[i as usize].weight = w;
+					self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
+				}
+
+			},
+			_ => {panic!("Please select a valid activation function.")}
 		}
     }
 
