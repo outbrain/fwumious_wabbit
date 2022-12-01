@@ -163,8 +163,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
 		} else if mi.initialization_type.eq("xavier_normalized") {
 			// U [-(sqrt(6)/sqrt(n + m)), sqrt(6)/sqrt(n + m)] + we assume symmetric input-output
 
-			let lower_bound: f32 = -(6 as f32).sqrt() / (2 * self.ffm_weights_len) as f32;
-			let upper_bound: f32 = (6 as f32).sqrt() / (2 * self.ffm_weights_len) as f32;
+			let lower_bound: f32 = -6_f32.sqrt() / (2 * self.ffm_weights_len) as f32;
+			let upper_bound: f32 = 6_f32.sqrt() / (2 * self.ffm_weights_len) as f32;
 			let difference = upper_bound - lower_bound;
 			
 			for i in 0..self.ffm_weights_len {
