@@ -147,9 +147,24 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L>
 
 					}
 				}
-			}
-
-			,
+			},
+			"xavier_custom_mask" => {
+				// MASK[U [-(1/sqrt(n)), 1/sqrt(n)]]
+				let lower_bound: f32 = -1.0/(self.ffm_weights_len as f32).sqrt();
+				let upper_bound: f32 = 1.0/(self.ffm_weights_len as f32).sqrt();
+				let difference = upper_bound - lower_bound;
+				
+				for i in 0..self.ffm_weights_len {
+					let mut w = merand48(i as u64) as f32;
+					if w < (self.ffm_weights_len / 10) as f32 {
+						w = 0.001;
+					} else {
+						w = 0.0;
+					}
+					self.weights[i as usize].weight = w;
+					self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
+				}
+			},			
 			"xavier" => {
 				// U [-(1/sqrt(n)), 1/sqrt(n)]
 				let lower_bound: f32 = -1.0/(self.ffm_weights_len as f32).sqrt();
