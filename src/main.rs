@@ -106,14 +106,6 @@ fn build_cache_without_training(cl: clap::ArgMatches) -> Result<(), Box<dyn Erro
     Ok(())
 }
 
-// fn read_hash_space(fname: &String) -> std::io::Result<()> {
-//     for line in my_reader::BufReader::open(&fname)? {
-//         println!("{}", line?.trim());
-//     }
-
-//     Ok(())
-// }
-
 
 fn main2() -> Result<(), Box<dyn Error>> {
     // We'll parse once the command line into cl and then different objects will examine it
@@ -207,15 +199,23 @@ fn main2() -> Result<(), Box<dyn Error>> {
             None => 0,
         };
 
-		let mut rare_hashes = HashMap::new();
-		
-		// let mut rare_hashes = HashSet::new();
-		// let hash_storage_input = "unique_counts.txt".to_string();
-		// let hash_space: String = fs::read_to_string(hash_storage_input)?;
-		
-		// for line in hash_space.lines() {
-		// 	rare_hashes.insert(line.to_string());
-		// }
+		let mut max_freq_hash_storage: HashMap<u32, u32> = HashMap::new();
+
+		if cl.is_present("rehash_prior_counts"){
+
+			let hash_storage_input = cl.value_of("rehash_prior_counts").expect("Prior count values expected ..").to_string();
+			let hash_space: String = fs::read_to_string(hash_storage_input)?;
+			
+			for line in hash_space.lines() {
+				let instruction_sub_parts = line.split("\t");
+				let vec: Vec<&str> = instruction_sub_parts.collect();
+
+				let hash_entry: u32 = vec[0].parse().unwrap();
+				let hash_value: u32 = vec[1].parse().unwrap();
+				
+				max_freq_hash_storage.insert(hash_entry, hash_entry);
+			}
+		}
 
         let holdout_after_option: Option<u64> =
             cl.value_of("holdout_after").map(|s| s.parse().unwrap());
@@ -270,7 +270,17 @@ fn main2() -> Result<(), Box<dyn Error>> {
             }
 
             example_num += 1;
-            fbt.translate(buffer, example_num, Some(&mut rare_hashes));
+            fbt.translate(buffer, example_num);
+
+			// Conduct the rehashing step based on priors if specified
+			if cl.is_present("rehash_prior_counts") {
+				fbt.max_freq_rehash(Some(&mut max_freq_hash_storage));
+			}
+			
+			// Increment counts if specified as part of CLI
+			if cl.is_present("count_frequent_hashes"){
+				fbt.increment_common_hash(Some(&mut max_freq_hash_storage));
+			}
 
             let mut prediction: f32 = 0.0;
 
@@ -300,13 +310,17 @@ fn main2() -> Result<(), Box<dyn Error>> {
         }
         cache.write_finish()?;
 
-		let mut vec_holder = Vec::<String>::new();
-		for (key, value) in rare_hashes.into_iter() {
-			let some_string = format!("{}\t{}", key.to_string(), value.to_string());
-			vec_holder.push(some_string.to_string());
+		if cl.is_present("count_frequent_hashes"){
+
+			let mut vec_holder = Vec::<String>::new();
+			for (key, value) in max_freq_hash_storage.into_iter() {
+				let some_string = format!("{}\t{}", key.to_string(), value.to_string());
+				vec_holder.push(some_string.to_string());
+			}
+			let final_hash_dump = vec_holder.join("\n");
+			fs::write(cl.value_of("count_frequent_hashes").expect("Specify output hash file please."), final_hash_dump).expect("Unable to write file");
+			
 		}
-		let final_hash_dump = vec_holder.join("\n");
-		fs::write("unique_hash_counts.tsv", final_hash_dump).expect("Unable to write file");
 		
         let elapsed = now.elapsed();
         println!("Elapsed: {:.2?} rows: {}", elapsed, example_num);

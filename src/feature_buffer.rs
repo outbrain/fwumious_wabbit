@@ -171,17 +171,46 @@ impl FeatureBufferTranslator {
     pub fn print(&self) -> () {
         println!("item out {:?}", self.feature_buffer.lr_buffer);
     }
-    
-	//reallocate_hash_prior_freq
-	fn reallocate_hash_prior_freq(&self, mut h: u32) -> () {
 
-		
+
+	pub fn increment_common_hash(&mut self, stored_hashes: Option<&mut HashMap<u32, u32>>) -> () {
+		// Count hashes.
+ 		let stored_hashes_parsed = stored_hashes.unwrap();
+		for hash_value_entry in self.feature_buffer.ffm_buffer.iter_mut() {
+			let hash_entry: u32 = hash_value_entry.hash;
+			stored_hashes_parsed.entry(hash_entry).and_modify(|vx| *vx += 1).or_insert(1);
+		}
 	}
 	
-    pub fn translate(&mut self, record_buffer: &[u32], example_number: u64, stored_hashes: Option<&mut HashMap<u32, u32>>) -> () {
+	pub fn max_freq_rehash(&mut self, stored_hashes: Option<&mut HashMap<u32, u32>>) -> () {
+		/// A method for re-fining the hash space based on prior frequency counts
+		/// Intentionally, this operates on the pre-made hash space for clarty for now.
+		
+		let stored_hashes_parsed = stored_hashes.unwrap();
+
+		// lower bound for considering something frequent
+		let count_lower_bound: u32 = 0;
+
+		// hash mask specific to non-frequent values
+		let hash_lb_rare = 1 << 7;
+
+		let right_shift_constant = 20 * 8;
+
+		let mask_interval_diff = self.ffm_hash_mask - hash_lb_rare;		
+		for hash_value_entry in self.feature_buffer.ffm_buffer.iter_mut() {			
+			let hash_entry: u32 = hash_value_entry.hash;
+			hash_value_entry.hash = (hash_value_entry.hash * right_shift_constant) & self.ffm_hash_mask;
+			
+			// if *stored_hashes_parsed.get(&hash_entry).unwrap_or(&1) > count_lower_bound {
+			// 	hash_value_entry.hash = hash_lb_rare + ((hash_value_entry.hash * right_shift_constant) & mask_interval_diff);				
+			// } else {
+			// 	hash_value_entry.hash = hash_value_entry.hash & hash_lb_rare;
+			// }
+		}
+	}
+	
+    pub fn translate(&mut self, record_buffer: &[u32], example_number: u64) -> () {
         {
-			// That whatever it is must be a ref pass
-			let stored_hashes_parsed = stored_hashes.unwrap();
 
 			// test the reallocation.
 			//let some_int = self.reallocate_hash_prior_freq(123 as u64, stored_hashes_parsed);
@@ -249,49 +278,13 @@ impl FeatureBufferTranslator {
                     for namespace_descriptor in ffm_field {
 						
                         feature_reader!(record_buffer, self.transform_executors, *namespace_descriptor, hash_index, hash_value, {
-                            ffm_buffer.push(HashAndValueAndSeq {hash: hash_index, // & self.ffm_hash_mask -> removed as addressed below separately
+                            ffm_buffer.push(HashAndValueAndSeq {hash: hash_index & self.ffm_hash_mask, // & self.ffm_hash_mask -> removed as addressed below separately
                                                                 value: hash_value,
                                                                 contra_field_index: contra_field_index as u32 * self.model_instance.ffm_k as u32});
 
                         });
                     }
                 }
-
-				// comment below block + add self.ffm_hash_mask to & hash_index above to get default version
-
-				// embedding dim (to be parameterized)
-				let tmp_k = 8;
-				let tmp_fields = 8;
-
-				// lower bound for considering something frequent
-				let count_lower_bound: u32 = 10;
-
-				// hash mask specific to non-frequent values
-				let hash_lb_rare = 1 << 10;
-
-				// In theory this helps with dispersion
-				let additional_sparsification_term = 1; // tmp_k * tmp_fields; // todo: test k * num fields;
-
-				let mask_interval_diff = self.ffm_hash_mask - hash_lb_rare;
-				
-				for hash_value_entry in ffm_buffer.iter_mut() {
-					
-					let hash_entry: u32 = hash_value_entry.hash;
-
-					// two pass -> just retrieve from a pre-loaded map (do not modify) - they are actually compatible (~priors)
-					stored_hashes_parsed.entry(hash_entry).and_modify(|vx| *vx += 1).or_insert(1);
-					
-					if *stored_hashes_parsed.get(&hash_entry).unwrap_or(&1) > count_lower_bound {
-
-//						hash_value_entry.hash = 1;
-						hash_value_entry.hash = hash_lb_rare + ((hash_value_entry.hash * additional_sparsification_term) & mask_interval_diff);						
-						
-					} else {
-
-//						hash_value_entry.hash = 0;
-						hash_value_entry.hash = hash_value_entry.hash & hash_lb_rare;
-					}
-				}
 			}
 		}        
 	}
