@@ -1,1 +1,1 @@
-RUSTFLAGS="-Ctarget-cpu=native -Cembed-bitcode=no -Cforce-frame-pointers=off -Cforce-unwind-tables=y -Cinline-threshold=300 -Cno-redzone=n -Cpasses=inline,instcombine,loop-unroll-and-jam" cargo build --release;
+RUSTFLAGS="-Ctarget-cpu=skylake -Cembed-bitcode=no -Cforce-frame-pointers=off -Cforce-unwind-tables=y -Cinline-threshold=300 -Cno-redzone=n -Cpasses=inline,instcombine,loop-unroll-and-jam" cargo build --release;
