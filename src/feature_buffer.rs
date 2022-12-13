@@ -189,12 +189,12 @@ impl FeatureBufferTranslator {
 		let stored_hashes_parsed = stored_hashes.unwrap();
 
 		// lower bound for considering something frequent
-		let count_lower_bound: u32 = 100;
+		let count_lower_bound: u32 = 80;
 
 		// hash mask specific to non-frequent values
-		let hash_lb_rare = 1 << 26;
+		let hash_lb_rare = 1 << 27;
 
-		let right_shift_constant = 127; // this is the fields * k shift - took a bit larger number as a placeholder before this is fully parameterized.
+		let right_shift_constant = 123; // this is the fields * k shift - took a bit larger number as a placeholder before this is fully parameterized.
 		
 		let mask_interval_diff = self.ffm_hash_mask - hash_lb_rare;
 		for hash_value_entry in self.feature_buffer.ffm_buffer.iter_mut() {

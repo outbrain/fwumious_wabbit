@@ -212,8 +212,9 @@ fn main2() -> Result<(), Box<dyn Error>> {
 
 				let hash_entry: u32 = vec[0].parse().unwrap();
 				let hash_value: u32 = vec[1].parse().unwrap();
-				
-				max_freq_hash_storage.insert(hash_entry, hash_entry);
+
+				// only insert ones > certain frequency
+				max_freq_hash_storage.insert(hash_entry, hash_value);
 			}
 		}
 
