@@ -26,7 +26,7 @@ rand_xoshiro = "0.6.0"
 flate2 = { version = "1.0", features = ["cloudflare_zlib"], default-features = false }
 shellwords = "1.1.0"
 blas = "0.22"
-jemallocator = "0.5.0"
+#jemallocator = "0.5.0"
 intel-mkl-src = {version= "0.7.0", default-features = false, features=["download", "mkl-static-lp64-seq"]}
 
 [build-dependencies]
