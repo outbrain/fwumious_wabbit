@@ -72,7 +72,7 @@ macro_rules! specialize_k {
 impl<L: OptimizerTrait + 'static> BlockFFM<L> {
     fn set_weights(&mut self, lower_bound: f32, difference: f32) {
         for i in 0..self.ffm_weights_len {
-            let mut w = difference * merand48(i as u64) as f32 + lower_bound;
+            let w = difference * merand48(i as u64) as f32 + lower_bound;
             self.weights[i as usize].weight = w;
             self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
         }
