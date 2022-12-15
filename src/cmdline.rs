@@ -225,9 +225,14 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
 
                      // Daemon parameterts
                     .arg(Arg::with_name("daemon")
-                     .long("daemon")
-                     .help("read data from port 26542")
-                     .takes_value(false))
+                    .long("daemon")
+                    .help("read data from port 26542")
+				    .takes_value(false))
+		            .arg(Arg::with_name("ffm_initialization_type")
+                    .long("ffm_initialization_type")
+                    .help("Which weight initialization to consider")
+                    .multiple(false)
+                    .takes_value(true))
                     .arg(Arg::with_name("port")
                      .long("port")
                      .value_name("arg")

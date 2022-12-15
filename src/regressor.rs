@@ -101,7 +101,6 @@ impl Regressor  {
             rr.allocate_and_init_weights(mi);
         }
     }
-    
 
     pub fn new<L: optimizer::OptimizerTrait + 'static>(mi: &model_instance::ModelInstance) -> Regressor 
     {
