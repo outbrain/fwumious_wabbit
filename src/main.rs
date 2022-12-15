@@ -275,12 +275,12 @@ fn main2() -> Result<(), Box<dyn Error>> {
 
 			// Conduct the rehashing step based on priors if specified
 			if cl.is_present("rehash_prior_counts") {
-				fbt.max_freq_rehash(Some(&mut max_freq_hash_storage));
+				fbt.max_freq_rehash(&mut max_freq_hash_storage,  &mi);
 			}
 			
 			// Increment counts if specified as part of CLI
 			if cl.is_present("count_frequent_hashes"){
-				fbt.increment_common_hash(Some(&mut max_freq_hash_storage));
+				fbt.increment_common_hash(&mut max_freq_hash_storage);
 			}
 
             let mut prediction: f32 = 0.0;

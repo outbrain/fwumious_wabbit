@@ -173,39 +173,40 @@ impl FeatureBufferTranslator {
     }
 
 
-	pub fn increment_common_hash(&mut self, stored_hashes: Option<&mut HashMap<u32, u32>>) -> () {
+	pub fn increment_common_hash(&mut self, stored_hashes: &mut HashMap<u32, u32>) -> () {
 		// Count hashes.
- 		let stored_hashes_parsed = stored_hashes.unwrap();
+ 		let stored_hashes_parsed = stored_hashes;
 		for hash_value_entry in self.feature_buffer.ffm_buffer.iter_mut() {
 			let hash_entry: u32 = hash_value_entry.hash;
 			stored_hashes_parsed.entry(hash_entry).and_modify(|vx| *vx += 1).or_insert(1);
 		}
 	}
 	
-	pub fn max_freq_rehash(&mut self, stored_hashes: Option<&mut HashMap<u32, u32>>) -> () {
+	pub fn max_freq_rehash(&mut self, stored_hashes: &mut HashMap<u32, u32>, model_instance: &model_instance::ModelInstance) -> () {
 		/// A method for re-fining the hash space based on prior frequency counts
 		/// Intentionally, this operates on the pre-made hash space for clarty for now.
 		
-		let stored_hashes_parsed = stored_hashes.unwrap();
+		let stored_hashes_parsed = stored_hashes;
 
 		// lower bound for considering something frequent
 		let count_lower_bound: u32 = 80;
 
 		// hash mask specific to non-frequent values
-		let hash_lb_rare = 1 << 27;
+		let hash_lb_rare = 0;
+		let right_shift_constant: u32 = (model_instance.ffm_fields.len() as u32) * (model_instance.ffm_k as u32);
 
-		let right_shift_constant = 123; // this is the fields * k shift - took a bit larger number as a placeholder before this is fully parameterized.
-		
 		let mask_interval_diff = self.ffm_hash_mask - hash_lb_rare;
+		// let mask_interval_diff = self.ffm_hash_mask - hash_lb_rare;
 		for hash_value_entry in self.feature_buffer.ffm_buffer.iter_mut() {
-			let hash_entry: u32 = hash_value_entry.hash;
+				hash_value_entry.hash = (hash_value_entry.hash * right_shift_constant) & mask_interval_diff;
+		// 	let hash_entry: u32 = hash_value_entry.hash;
 			
-			if *stored_hashes_parsed.get(&hash_entry).unwrap_or(&1) > count_lower_bound {
-				hash_value_entry.hash = hash_lb_rare + ((hash_value_entry.hash * right_shift_constant) & mask_interval_diff);
+		// 	if *stored_hashes_parsed.get(&hash_entry).unwrap_or(&1) > count_lower_bound {
+		// 		hash_value_entry.hash = hash_lb_rare + ((hash_value_entry.hash * right_shift_constant) & mask_interval_diff);
 				
-			} else {
-				hash_value_entry.hash = (hash_value_entry.hash * right_shift_constant) & (hash_lb_rare);
-			}
+		// 	} else {
+		// 		hash_value_entry.hash = (hash_value_entry.hash * right_shift_constant) & (hash_lb_rare);
+		// 	}
 		}
 	}
 	
