@@ -205,16 +205,21 @@ fn main2() -> Result<(), Box<dyn Error>> {
 
 			let hash_storage_input = cl.value_of("rehash_prior_counts").expect("Prior count values expected ..").to_string();
 			let hash_space: String = fs::read_to_string(hash_storage_input)?;
+			let mut subsequent_index: u32 = 0;
+			let right_shift_constant: u32 = (mi.ffm_fields.len() as u32) * (mi.ffm_k as u32);
 			
 			for line in hash_space.lines() {
 				let instruction_sub_parts = line.split("\t");
 				let vec: Vec<&str> = instruction_sub_parts.collect();
-
 				let hash_entry: u32 = vec[0].parse().unwrap();
 				let hash_value: u32 = vec[1].parse().unwrap();
-
+				
 				// only insert ones > certain frequency
-				max_freq_hash_storage.insert(hash_entry, hash_value);
+				if hash_value > cl.value_of("hash_freq_lower_bound").expect("Please provide the lower count bound for rehashing.").parse().unwrap() {
+					subsequent_index += 1;
+					let new_value = subsequent_index * right_shift_constant;
+					max_freq_hash_storage.insert(hash_entry, new_value);
+				}
 			}
 		}
 
@@ -273,16 +278,19 @@ fn main2() -> Result<(), Box<dyn Error>> {
             example_num += 1;
             fbt.translate(buffer, example_num);
 
-			// Conduct the rehashing step based on priors if specified
-			if cl.is_present("rehash_prior_counts") {
-				fbt.max_freq_rehash(&mut max_freq_hash_storage,  &mi);
-			}
-			
 			// Increment counts if specified as part of CLI
 			if cl.is_present("count_frequent_hashes"){
 				fbt.increment_common_hash(&mut max_freq_hash_storage);
+				continue
 			}
-
+			
+			// Conduct the rehashing step based on priors if specified
+			if cl.is_present("rehash_prior_counts") {
+				fbt.max_freq_rehash(&mut max_freq_hash_storage);
+			} else {
+				fbt.apply_generic_mask();
+			}
+			
             let mut prediction: f32 = 0.0;
 
             if prediction_model_delay == 0 {
@@ -319,8 +327,9 @@ fn main2() -> Result<(), Box<dyn Error>> {
 				vec_holder.push(some_string.to_string());
 			}
 			let final_hash_dump = vec_holder.join("\n");
-			fs::write(cl.value_of("count_frequent_hashes").expect("Specify output hash file please."), final_hash_dump).expect("Unable to write file");
-			
+			let out_file_arg = cl.value_of("count_frequent_hashes").expect("Out file for hashes not given.");
+			println!("Writing frequent hashes to {} ..", out_file_arg);
+			fs::write(out_file_arg, final_hash_dump).expect("Unable to write file");
 		}
 		
         let elapsed = now.elapsed();

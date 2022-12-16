@@ -181,34 +181,35 @@ impl FeatureBufferTranslator {
 			stored_hashes_parsed.entry(hash_entry).and_modify(|vx| *vx += 1).or_insert(1);
 		}
 	}
-	
-	pub fn max_freq_rehash(&mut self, stored_hashes: &mut HashMap<u32, u32>, model_instance: &model_instance::ModelInstance) -> () {
-		/// A method for re-fining the hash space based on prior frequency counts
-		/// Intentionally, this operates on the pre-made hash space for clarty for now.
+
+	pub fn apply_generic_mask(&mut self) -> () {
+		/// Generic mask application in case no rehashing is considered.
 		
-		let stored_hashes_parsed = stored_hashes;
-
-		// lower bound for considering something frequent
-		let count_lower_bound: u32 = 80;
-
-		// hash mask specific to non-frequent values
-		let hash_lb_rare = 0;
-		let right_shift_constant: u32 = (model_instance.ffm_fields.len() as u32) * (model_instance.ffm_k as u32);
-
-		let mask_interval_diff = self.ffm_hash_mask - hash_lb_rare;
-		// let mask_interval_diff = self.ffm_hash_mask - hash_lb_rare;
 		for hash_value_entry in self.feature_buffer.ffm_buffer.iter_mut() {
-				hash_value_entry.hash = (hash_value_entry.hash * right_shift_constant) & mask_interval_diff;
-		// 	let hash_entry: u32 = hash_value_entry.hash;
-			
-		// 	if *stored_hashes_parsed.get(&hash_entry).unwrap_or(&1) > count_lower_bound {
-		// 		hash_value_entry.hash = hash_lb_rare + ((hash_value_entry.hash * right_shift_constant) & mask_interval_diff);
-				
-		// 	} else {
-		// 		hash_value_entry.hash = (hash_value_entry.hash * right_shift_constant) & (hash_lb_rare);
-		// 	}
+			hash_value_entry.hash = hash_value_entry.hash & self.ffm_hash_mask;
+		}
+	}	
+	
+	pub fn max_freq_rehash(&mut self, stored_hashes: &mut HashMap<u32, u32>) -> () {
+		/// A method for re-fining the hash space based on prior frequency counts
+		/// Intentionally, this operates on the pre-made hash space for clarty for now.		
+
+		let half_mask_rare = self.ffm_hash_mask - 1;
+		let half_offset_rare = 2 << half_mask_rare;
+		let half_mask_common = (2 << self.ffm_hash_mask) - half_offset_rare;
+		
+		for hash_value_entry in self.feature_buffer.ffm_buffer.iter_mut() {
+			match stored_hashes.get(&hash_value_entry.hash) {
+				Some(i) => {
+					hash_value_entry.hash = half_offset_rare + (i % half_mask_common);
+				},
+				_ => {
+					hash_value_entry.hash = hash_value_entry.hash % half_offset_rare;
+				},
+			}
 		}
 	}
+
 	
     pub fn translate(&mut self, record_buffer: &[u32], example_number: u64) -> () {
         {
@@ -220,6 +221,7 @@ impl FeatureBufferTranslator {
             self.feature_buffer.label = record_buffer[parser::LABEL_OFFSET] as f32;  // copy label
             self.feature_buffer.example_importance = f32::from_bits(record_buffer[parser::EXAMPLE_IMPORTANCE_OFFSET]);
             self.feature_buffer.example_number = example_number;
+			
             let mut output_len:usize = 0;
             let mut hashes_vec_in : &mut Vec<HashAndValue> = &mut self.hashes_vec_in;
             let mut hashes_vec_out : &mut Vec<HashAndValue> = &mut self.hashes_vec_out;
@@ -276,7 +278,7 @@ impl FeatureBufferTranslator {
                     for namespace_descriptor in ffm_field {
 						
                         feature_reader!(record_buffer, self.transform_executors, *namespace_descriptor, hash_index, hash_value, {
-                            ffm_buffer.push(HashAndValueAndSeq {hash: hash_index & self.ffm_hash_mask, // & self.ffm_hash_mask -> removed as addressed below separately
+                            ffm_buffer.push(HashAndValueAndSeq {hash: hash_index,
                                                                 value: hash_value,
                                                                 contra_field_index: contra_field_index as u32 * self.model_instance.ffm_k as u32});
 

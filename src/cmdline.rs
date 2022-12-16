@@ -226,6 +226,10 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
              .long("rehash_prior_counts")
              .help("If enabled, prior counts will be used to change hash values.")
              .takes_value(true))
+		.arg(Arg::with_name("hash_freq_lower_bound")
+             .long("hash_freq_lower_bound")
+             .help("Specify the lower hash frequency for rehashing step.")
+             .takes_value(true))
 
     // Daemon parameters
         .arg(Arg::with_name("daemon")
