@@ -200,7 +200,8 @@ fn main2() -> Result<(), Box<dyn Error>> {
         };
 
 		let mut max_freq_hash_storage: HashMap<u32, u32> = HashMap::new();
-
+		let mut max_hashed_index: u32 = 0;
+		
 		if cl.is_present("rehash_prior_counts"){
 
 			let hash_storage_input = cl.value_of("rehash_prior_counts").expect("Prior count values expected ..").to_string();
@@ -219,6 +220,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
 					subsequent_index += 1;
 					let new_value = subsequent_index * right_shift_constant;
 					max_freq_hash_storage.insert(hash_entry, new_value);
+					max_hashed_index = new_value;
 				}
 			}
 		}
@@ -286,7 +288,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
 			
 			// Conduct the rehashing step based on priors if specified
 			if cl.is_present("rehash_prior_counts") {
-				fbt.max_freq_rehash(&mut max_freq_hash_storage);
+				fbt.max_freq_rehash(&mut max_freq_hash_storage, max_hashed_index);
 			} else {
 				fbt.apply_generic_mask();
 			}
@@ -322,7 +324,12 @@ fn main2() -> Result<(), Box<dyn Error>> {
 		if cl.is_present("count_frequent_hashes"){
 
 			let mut vec_holder = Vec::<String>::new();
+			let mut all_hash_intervals: Vec<Vec<u32>> = Vec::new();
+			let right_shift_constant: u32 = (mi.ffm_fields.len() as u32) * (mi.ffm_k as u32);
+			
 			for (key, value) in max_freq_hash_storage.into_iter() {
+				// let masked_hash = key & mi.ffm_bit_precision;
+				// let embedding_end = masked_hash + right_shift_constant;
 				let some_string = format!("{}\t{}", key.to_string(), value.to_string());
 				vec_holder.push(some_string.to_string());
 			}

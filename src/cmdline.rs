@@ -231,6 +231,7 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
              .help("Specify the lower hash frequency for rehashing step.")
              .takes_value(true))
 
+
     // Daemon parameters
         .arg(Arg::with_name("daemon")
              .long("daemon")
