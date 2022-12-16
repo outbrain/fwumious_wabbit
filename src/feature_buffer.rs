@@ -43,7 +43,7 @@ pub struct FeatureBufferTranslator {
     pub feature_buffer: FeatureBuffer,
     pub lr_hash_mask: u32,
     pub ffm_hash_mask: u32,
-	pub ffm_bit_precision: u32,
+	pub ffm_max_capacity: u32,
 	pub ffm_embedding_offset: u32,
     pub transform_executors: feature_transform_executor::TransformExecutors,
 }
@@ -145,7 +145,7 @@ impl FeatureBufferTranslator {
         let dimensions_mask = (1 << ffm_bits_for_dimensions) - 1;
         // in ffm we will simply mask the lower bits, so we spare them for k
         let ffm_hash_mask = ((1 << mi.ffm_bit_precision) -1) ^ dimensions_mask;
-		let ffm_bit_precision = (1 << mi.ffm_bit_precision) - 1;
+		let ffm_max_capacity = (1 << mi.ffm_bit_precision);
 		let ffm_embedding_offset = (mi.ffm_fields.len() as u32) * (mi.ffm_k as u32);
 		
         let mut fb = FeatureBuffer {
@@ -166,7 +166,7 @@ impl FeatureBufferTranslator {
             feature_buffer: fb,
             lr_hash_mask: lr_hash_mask,
             ffm_hash_mask: ffm_hash_mask,
-			ffm_bit_precision: ffm_bit_precision,
+			ffm_max_capacity: ffm_max_capacity,
 			ffm_embedding_offset: ffm_embedding_offset,
             transform_executors: feature_transform_executor::TransformExecutors::from_namespace_transforms(&mi.transform_namespaces),
         };
@@ -199,17 +199,19 @@ impl FeatureBufferTranslator {
 	pub fn max_freq_rehash(&mut self, stored_hashes: &mut HashMap<u32, u32>, max_hashed_index: u32) -> () {
 		// A method for re-fining the hash space based on prior frequency counts
 
-		let hash_offset_remainder = self.ffm_bit_precision - max_hashed_index;
+		let hash_offset_remainder = self.ffm_max_capacity - max_hashed_index;
 		
 		for hash_value_entry in self.feature_buffer.ffm_buffer.iter_mut() {
 			match stored_hashes.get(&hash_value_entry.hash) {
 				Some(i) => {
-					hash_value_entry.hash = i & self.ffm_hash_mask;
+					hash_value_entry.hash = i % self.ffm_max_capacity;
+//					hash_value_entry.hash = i & self.ffm_hash_mask;
 				},
 				_ => {
 
 					// offset to avoid frequent + multiply with emb_offset to disperse further
-					hash_value_entry.hash = (max_hashed_index + self.ffm_embedding_offset + (hash_value_entry.hash * self.ffm_embedding_offset) % hash_offset_remainder) & self.ffm_hash_mask;
+					hash_value_entry.hash = ((max_hashed_index + self.ffm_embedding_offset + hash_value_entry.hash) % hash_offset_remainder) % self.ffm_max_capacity;
+//					hash_value_entry.hash = max_hashed_index + hash_value_entry.hash & self.ffm_hash_mask;
 				},
 			}
 		}

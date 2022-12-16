@@ -337,17 +337,19 @@ fn main2() -> Result<(), Box<dyn Error>> {
 			let out_file_arg = cl.value_of("count_frequent_hashes").expect("Out file for hashes not given.");
 			println!("Writing frequent hashes to {} ..", out_file_arg);
 			fs::write(out_file_arg, final_hash_dump).expect("Unable to write file");
+			
+		} else {
+			match final_regressor_filename {
+				Some(filename) => {
+					persistence::save_regressor_to_filename(filename, &mi, &vw, re).unwrap()
+				}
+				None => {}
+			}
 		}
 		
         let elapsed = now.elapsed();
         println!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
 
-        match final_regressor_filename {
-            Some(filename) => {
-                persistence::save_regressor_to_filename(filename, &mi, &vw, re).unwrap()
-            }
-            None => {}
-        }
     }
 
     Ok(())
