@@ -328,8 +328,6 @@ fn main2() -> Result<(), Box<dyn Error>> {
 			let right_shift_constant: u32 = (mi.ffm_fields.len() as u32) * (mi.ffm_k as u32);
 			
 			for (key, value) in max_freq_hash_storage.into_iter() {
-				// let masked_hash = key & mi.ffm_bit_precision;
-				// let embedding_end = masked_hash + right_shift_constant;
 				let some_string = format!("{}\t{}", key.to_string(), value.to_string());
 				vec_holder.push(some_string.to_string());
 			}

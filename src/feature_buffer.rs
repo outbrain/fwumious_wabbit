@@ -204,14 +204,12 @@ impl FeatureBufferTranslator {
 		for hash_value_entry in self.feature_buffer.ffm_buffer.iter_mut() {
 			match stored_hashes.get(&hash_value_entry.hash) {
 				Some(i) => {
-					hash_value_entry.hash = i % self.ffm_max_capacity;
-//					hash_value_entry.hash = i & self.ffm_hash_mask;
+					
+					hash_value_entry.hash = i & self.ffm_hash_mask;
 				},
 				_ => {
 
-					// offset to avoid frequent + multiply with emb_offset to disperse further
-					hash_value_entry.hash = ((max_hashed_index + self.ffm_embedding_offset + hash_value_entry.hash) % hash_offset_remainder) % self.ffm_max_capacity;
-//					hash_value_entry.hash = max_hashed_index + hash_value_entry.hash & self.ffm_hash_mask;
+					hash_value_entry.hash = (max_hashed_index + self.ffm_embedding_offset + hash_value_entry.hash) & self.ffm_hash_mask;
 				},
 			}
 		}
