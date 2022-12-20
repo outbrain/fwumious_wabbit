@@ -1,19 +1,18 @@
-
-name: Docker-generic-with-tests
+name: Docker Image CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ main ]
+    branches: [ "main" ]
 
 jobs:
 
   build:
 
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
 
     steps:
-
-    - name: Build the docker image with tests
-      run: docker build -f Dockerfile .
+    - uses: actions/checkout@v3
+    - name: Build the Docker image
+      run: docker build . --file Dockerfile --tag my-image-name:$(date +%s)
