@@ -16,7 +16,6 @@ use crate::port_buffer;
 use crate::consts;
 use crate::block_helpers;
 use crate::graph;
-use crate::graph::BlockGraph;
 
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
@@ -73,6 +72,17 @@ macro_rules! specialize_k {
                 val => {let $output_const:u32 = val; let mut $wsumbuf: [f32;consts::FFM_MAX_K] = [0.0;consts::FFM_MAX_K];      $code_block},
             }
     };
+}
+
+
+impl<L: OptimizerTrait + 'static> BlockFFM<L> {
+    fn set_weights(&mut self, lower_bound: f32, difference: f32) {
+        for i in 0..self.ffm_weights_len {
+            let w = difference * merand48(i as u64) as f32 + lower_bound;
+            self.weights[i as usize].weight = w;
+            self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
+        }
+    }
 }
 
 pub fn new_ffm_block(
