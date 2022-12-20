@@ -1,0 +1,19 @@
+
+name: Build-docker-image-fw
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-18.04
+
+    steps:
+
+    - name: Build the docker image with tests
+      run: docker build . --file Dockerfile
