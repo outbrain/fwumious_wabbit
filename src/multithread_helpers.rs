@@ -47,10 +47,11 @@ impl <T:Sized>Drop for UnsafelySharableTrait<T> {
             if count == 0 {
                 let box_to_be_dropped = ManuallyDrop::take(&mut self.content);
                 // Now this means that the content will be dropped
-                println!("Dropping BoxedRegressorTrait!");
-            } else {
-                println!("Not dropping BoxedRegressorTrait as there are still {} references!", count);
+                // println!("Dropping BoxedRegressorTrait!");
             }
+			//else {
+            //    println!("Not dropping BoxedRegressorTrait as there are still {} references!", count);
+            //}
         }
         
     }
@@ -81,7 +82,7 @@ impl BoxedRegressorTrait {
                 content: ManuallyDrop::new(r2),
                 reference_count: self.reference_count.clone()        
             };
-            println!("References to object: {}", Arc::<Mutex<PhantomData<u32>>>::strong_count(&ret.reference_count));
+            // println!("References to object: {}", Arc::<Mutex<PhantomData<u32>>>::strong_count(&ret.reference_count));
             ret
         }
     }
