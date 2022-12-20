@@ -4,6 +4,9 @@
 #![allow(unused_mut)]
 #![allow(non_snake_case)]
 #![allow(redundant_semicolons)]
+//#[global_allocator]
+//static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
 use flate2::read::MultiGzDecoder;
 use std::collections::VecDeque;
 use std::error::Error;
@@ -16,13 +19,19 @@ use std::io::Write;
 use std::path::Path;
 use std::time::Instant;
 
+extern crate blas;
+extern crate intel_mkl_src;
+
 #[macro_use]
 extern crate nom;
-
 mod block_ffm;
 mod block_helpers;
 mod block_loss_functions;
 mod block_lr;
+mod block_neural;
+mod block_relu;
+mod block_misc;
+mod block_normalize;
 mod cache;
 mod cmdline;
 mod consts;
@@ -39,6 +48,8 @@ mod regressor;
 mod serving;
 mod version;
 mod vwmap;
+mod port_buffer;
+mod graph;
 
 fn main() {
     match main2() {
@@ -190,6 +201,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
         let input_filename = cl.value_of("data").expect("--data expected");
         let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"), &vw);
         let mut fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
+        let mut pb = re.new_portbuffer();
 
         let predictions_after: u64 = match cl.value_of("predictions_after") {
             Some(examples) => examples.parse()?,
@@ -256,15 +268,15 @@ fn main2() -> Result<(), Box<dyn Error>> {
                     Some(holdout_after) => !testonly && example_num < holdout_after,
                     None => !testonly,
                 };
-                prediction = re.learn(&fbt.feature_buffer, update);
+                prediction = re.learn(&fbt.feature_buffer, &mut pb, update);
             } else {
                 if example_num > predictions_after {
-                    prediction = re.learn(&fbt.feature_buffer, false);
+                    prediction = re.learn(&fbt.feature_buffer, &mut pb, false);
                 }
                 delayed_learning_fbs.push_back(fbt.feature_buffer.clone());
                 if (prediction_model_delay as usize) < delayed_learning_fbs.len() {
                     let delayed_buffer = delayed_learning_fbs.pop_front().unwrap();
-                    re.learn(&delayed_buffer, !testonly);
+                    re.learn(&delayed_buffer, &mut pb, !testonly);
                 }
             }
 

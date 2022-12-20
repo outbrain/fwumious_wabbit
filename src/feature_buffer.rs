@@ -11,7 +11,8 @@ const CONSTANT_HASH:u32 = 11650396;
 #[derive(Clone, Debug, PartialEq)]
 pub struct HashAndValue {
     pub hash: u32,
-    pub value: f32
+    pub value: f32,
+    pub combo_index: u32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -181,7 +182,8 @@ impl FeatureBufferTranslator {
             let mut output_len:usize = 0;
             let mut hashes_vec_in : &mut Vec<HashAndValue> = &mut self.hashes_vec_in;
             let mut hashes_vec_out : &mut Vec<HashAndValue> = &mut self.hashes_vec_out;
-            for feature_combo_desc in &self.model_instance.feature_combo_descs {
+            for (combo_index, feature_combo_desc) in self.model_instance.feature_combo_descs.iter().enumerate() {
+                let combo_index = combo_index as u32;
                 let feature_combo_weight = feature_combo_desc.weight;
                 // we unroll first iteration of the loop and optimize
                 let num_namespaces:usize = feature_combo_desc.namespace_descriptors.len() ;
@@ -190,12 +192,13 @@ impl FeatureBufferTranslator {
                 if num_namespaces == 1 {
                     feature_reader!(record_buffer, self.transform_executors, namespace_descriptor, hash_index, hash_value, {
                         lr_buffer.push(HashAndValue {hash: hash_index & self.lr_hash_mask, 
-                                                     value: hash_value * feature_combo_weight});
+                                                     value: hash_value * feature_combo_weight,
+                                                     combo_index: combo_index});
                     });
                 } else {
                     hashes_vec_in.truncate(0);
                     feature_reader!(record_buffer, self.transform_executors, namespace_descriptor, hash_index, hash_value, {
-                            hashes_vec_in.push(HashAndValue {hash: hash_index, value: hash_value});
+                            hashes_vec_in.push(HashAndValue {hash: hash_index, value: hash_value, combo_index: combo_index});
                         });
                     for namespace_descriptor in unsafe{feature_combo_desc.namespace_descriptors.get_unchecked(1 as usize .. num_namespaces)} {
                         hashes_vec_out.truncate(0);
@@ -203,21 +206,24 @@ impl FeatureBufferTranslator {
                             let half_hash = handv.hash.overflowing_mul(VOWPAL_FNV_PRIME).0;
                             feature_reader!(record_buffer, self.transform_executors, *namespace_descriptor, hash_index, hash_value, {
                                 hashes_vec_out.push(HashAndValue{   hash: hash_index ^ half_hash,
-                                                                    value: handv.value * hash_value});
+                                                                    value: handv.value * hash_value,
+                                                                    combo_index: combo_index});
                             });
                         }
                         std::mem::swap(&mut hashes_vec_in, &mut hashes_vec_out);
                     }
                     for handv in &(*hashes_vec_in) {
                         lr_buffer.push(HashAndValue{hash: handv.hash & self.lr_hash_mask,
-                                                    value: handv.value * feature_combo_weight});
+                                                    value: handv.value * feature_combo_weight,
+                                                    combo_index: combo_index});
                     }
                 }
             }
             // add the constant
             if self.model_instance.add_constant_feature {
                     lr_buffer.push(HashAndValue{hash: CONSTANT_HASH & self.lr_hash_mask,
-                                                value: 1.0});
+                                                value: 1.0,
+                                                combo_index: self.model_instance.feature_combo_descs.len() as u32}); // we treat bias as a separate output
             }
 
             // FFM loops have not been optimized yet
@@ -286,7 +292,7 @@ mod tests {
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::NO_FEATURES]); // no feature
         fbt.translate(&rb, 0);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:116060, value:1.0}]); // vw compatibility - no feature is no feature
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:116060, value:1.0, combo_index: 1}]); // vw compatibility - no feature is no feature
     }
     
     
@@ -306,11 +312,11 @@ mod tests {
 
         let rb = add_header(vec![0xfea]);
         fbt.translate(&rb, 0);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0, combo_index: 0}]);
 
         let rb = add_header(vec![parser::IS_NOT_SINGLE_MASK | nd(4,8), 0xfea, 1.0f32.to_bits(), 0xfeb, 1.0f32.to_bits()]);
         fbt.translate(&rb, 0);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}, HashAndValue {hash:0xfeb, value:1.0}]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0, combo_index: 0}, HashAndValue {hash:0xfeb, value:1.0, combo_index: 0}]);
     }
 
     #[test]
@@ -332,11 +338,11 @@ mod tests {
 
         let rb = add_header(vec![0xfea, parser::NO_FEATURES]);
         fbt.translate(&rb, 0);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0, combo_index: 0}]);
 
         let rb = add_header(vec![0xfea, 0xfeb]);
         fbt.translate(&rb, 0);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0}, HashAndValue {hash:0xfeb, value:1.0}]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xfea, value:1.0, combo_index: 0}, HashAndValue {hash:0xfeb, value:1.0, combo_index: 1}]);
 
     }
 
@@ -362,7 +368,7 @@ mod tests {
         let rb = add_header(vec![2988156968 & parser::MASK31, 2422381320 & parser::MASK31, parser::NO_FEATURES]);
         fbt.translate(&rb, 0);
 //        println!("out {}, out mod 2^24 {}", fbt.feature_buffer.lr_buffer[1], fbt.feature_buffer.lr_buffer[1] & ((1<<24)-1));
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash: 208368, value:1.0}]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash: 208368, value:1.0, combo_index: 0}]);
         
     }
     
@@ -377,7 +383,7 @@ mod tests {
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![0xfea]);
         fbt.translate(&rb, 0);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash: 0xfea, value:2.0}]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash: 0xfea, value:2.0, combo_index: 0}]);
     }
     
     #[test]
@@ -485,7 +491,7 @@ mod tests {
                                                         0xffa & MASK31, 4.0f32.to_bits(),
                                                         ]);
         fbt.translate(&rb, 0);
-        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xffc, value:1.0}, HashAndValue {hash:0xffa, value:1.0}]);
+        assert_eq!(fbt.feature_buffer.lr_buffer, vec![HashAndValue {hash:0xffc, value:1.0, combo_index: 0}, HashAndValue {hash:0xffa, value:1.0, combo_index: 0}]);
     }
 
 }
