@@ -3,7 +3,7 @@ use crate::parser;
 use crate::feature_transform_executor;
 use crate::feature_transform_parser;
 use crate::vwmap::{NamespaceType, NamespaceFormat};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 const VOWPAL_FNV_PRIME:u32 = 16777619;	// vowpal magic number
 //const CONSTANT_NAMESPACE:usize = 128;
@@ -179,7 +179,7 @@ impl FeatureBufferTranslator {
     }
 
 
-	pub fn increment_common_hash(&mut self, stored_hashes: &mut HashMap<u32, u32>) -> () {
+	pub fn increment_common_hash(&mut self, stored_hashes: &mut FxHashMap<u32, u32>) -> () {
 		// Count hashes.
  		let stored_hashes_parsed = stored_hashes;
 		for hash_value_entry in self.feature_buffer.ffm_buffer.iter_mut() {
@@ -194,22 +194,21 @@ impl FeatureBufferTranslator {
 		for hash_value_entry in self.feature_buffer.ffm_buffer.iter_mut() {
 			hash_value_entry.hash = hash_value_entry.hash & self.ffm_hash_mask;
 		}
-	}	
+	}
 	
-	pub fn max_freq_rehash(&mut self, stored_hashes: &mut HashMap<u32, u32>, max_hashed_index: u32) -> () {
+	pub fn max_freq_rehash(&mut self, stored_hashes: &mut FxHashMap<u32, u32>, max_hashed_index: u32) -> () {
 		// A method for re-fining the hash space based on prior frequency counts
 
-		let hash_offset_remainder = self.ffm_max_capacity - max_hashed_index;
+		let hash_offset_remainder = self.ffm_max_capacity - max_hashed_index - self.ffm_embedding_offset;
 		
 		for hash_value_entry in self.feature_buffer.ffm_buffer.iter_mut() {
 			match stored_hashes.get(&hash_value_entry.hash) {
 				Some(i) => {
-					
-					hash_value_entry.hash = i & self.ffm_hash_mask;
+					hash_value_entry.hash = *i;
 				},
 				_ => {
-
-					hash_value_entry.hash = (max_hashed_index + self.ffm_embedding_offset + hash_value_entry.hash) & self.ffm_hash_mask;
+					hash_value_entry.hash = (max_hashed_index + self.ffm_embedding_offset + hash_value_entry.hash % hash_offset_remainder);
+					assert!(hash_value_entry.hash > (max_hashed_index + self.ffm_embedding_offset));
 				},
 			}
 		}

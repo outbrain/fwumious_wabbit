@@ -20,7 +20,8 @@ use std::time::Instant;
 #[macro_use]
 extern crate nom;
 
-use std::collections::HashMap;
+//use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 mod block_ffm;
 mod block_helpers;
 mod block_loss_functions;
@@ -199,7 +200,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
             None => 0,
         };
 
-		let mut max_freq_hash_storage: HashMap<u32, u32> = HashMap::new();
+		let mut max_freq_hash_storage: FxHashMap<u32, u32> = FxHashMap::default();
 		let mut max_hashed_index: u32 = 0;
 		
 		if cl.is_present("rehash_prior_counts"){
@@ -208,7 +209,8 @@ fn main2() -> Result<(), Box<dyn Error>> {
 			let hash_space: String = fs::read_to_string(hash_storage_input)?;
 			let mut subsequent_index: u32 = 0;
 			let right_shift_constant: u32 = (mi.ffm_fields.len() as u32) * (mi.ffm_k as u32);
-			
+			let hash_frequency_lower_bound: u32 = cl.value_of("hash_freq_lower_bound").expect("Please provide the lower count bound for rehashing.").parse().unwrap();
+				
 			for line in hash_space.lines() {
 				let instruction_sub_parts = line.split("\t");
 				let vec: Vec<&str> = instruction_sub_parts.collect();
@@ -216,7 +218,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
 				let hash_value: u32 = vec[1].parse().unwrap();
 				
 				// only insert ones > certain frequency
-				if hash_value > cl.value_of("hash_freq_lower_bound").expect("Please provide the lower count bound for rehashing.").parse().unwrap() {
+				if hash_value > hash_frequency_lower_bound {
 					subsequent_index += 1;
 					let new_value = subsequent_index * right_shift_constant;
 					max_freq_hash_storage.insert(hash_entry, new_value);

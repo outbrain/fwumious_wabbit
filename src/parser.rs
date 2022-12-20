@@ -1,12 +1,12 @@
 use std::fmt;
-use fasthash::murmur3;
+use fasthash::{murmur3};
+
 use std::io::BufRead;
 use std::error::Error;
 use std::io::Error as IOError;
 use std::io::ErrorKind;
 use std::str;
 use std::string::String;
-use std::collections::HashSet;
 use crate::vwmap;
 
 const RECBUF_LEN:usize = 2048;
@@ -244,10 +244,10 @@ impl VowpalParser {
                         // println!("item out {:?}", std::str::from_utf8(&rr.tmp_read_buf[i_start..i_end]));
 						//   print!("F {:?}\n", String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end_first_part]));
 						
-                        let mut h = (murmur3::hash32_with_seed(&self.tmp_read_buf[i_start..i_end_first_part], 
-                                                          current_namespace_hash_seed) * 11 ) & MASK31;
-
+                        let h = murmur3::hash32_with_seed(&self.tmp_read_buf[i_start..i_end_first_part],
+																					  current_namespace_hash_seed) & MASK31;
 						
+//						let h = 12345;
 						// if hashThing is not none, check if h in hash, if yes, => 1, else h
 						// println!("HASH_VALUEDELIM{:?}", h);
                         let feature_weight:f32 = match i_end - i_end_first_part {
