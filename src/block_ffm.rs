@@ -4,6 +4,8 @@ use merand48::*;
 use core::arch::x86_64::*;
 use std::error::Error;
 use std::mem::{self, MaybeUninit};
+use std::num;
+use std::f32::consts::PI;
 
 
 use crate::optimizer;
