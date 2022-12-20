@@ -1,5 +1,5 @@
 
-name: Build-docker-image-fw
+name: Docker-generic-with-tests
 
 on:
   push:
