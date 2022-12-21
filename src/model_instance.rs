@@ -8,7 +8,7 @@ use serde::{Serialize,Deserialize};
 use crate::vwmap;
 use crate::consts;
 use crate::feature_transform_parser;
-use crate::vwmap::{NamespaceDescriptor, NamespaceType};
+use crate::vwmap::{NamespaceDescriptor};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct FeatureComboDesc {

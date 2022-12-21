@@ -175,6 +175,7 @@ mod tests {
     use crate::model_instance::Optimizer;
     use crate::assert_epsilon;
     use crate::block_ffm;
+    use regressor::BlockTrait;
     use regressor::Regressor;
 
     use tempfile::tempdir;

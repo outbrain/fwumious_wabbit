@@ -305,7 +305,6 @@ pub fn parse_namespace_statement(input: &str) -> IResult<&str, (String, String, 
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::parser;
     use crate::vwmap::{NamespaceType, NamespaceFormat, NamespaceDescriptor, VwNamespaceMap};
 
     fn ns_desc(i: u16) -> NamespaceDescriptor {
