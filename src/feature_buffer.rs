@@ -253,6 +253,8 @@ impl FeatureBufferTranslator {
 
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
+    use crate::parser::{NO_FEATURES, IS_NOT_SINGLE_MASK, MASK31};
     use crate::vwmap::{NamespaceType, NamespaceDescriptor, NamespaceFormat};
 
     fn add_header(v2: Vec<u32>) -> Vec<u32> {

@@ -194,6 +194,8 @@ clone_trait_object!(FunctionExecutorTrait);
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
+    use crate::parser::{IS_NOT_SINGLE_MASK, MASK31};
+    use crate::feature_transform_executor::default_seeds;
 
     fn ns_desc(i: u16) -> vwmap::NamespaceDescriptor {
         vwmap::NamespaceDescriptor {namespace_index: i, 

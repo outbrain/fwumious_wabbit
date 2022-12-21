@@ -229,13 +229,18 @@ pub fn get_namespace_descriptor_verbose(transform_namespaces: &NamespaceTransfor
 
 
 use nom::IResult;
+use nom::number::complete::be_u16;
 use nom::character::complete;
 use nom::bytes::complete::take_while;
 use nom::AsChar;
 use nom::sequence::tuple;
+use nom::branch;
 use nom::number;
 use nom::character;
 use nom;
+use nom::multi;
+use nom::combinator::complete;
+
 
 pub fn name_char(c:char) -> bool {
     if AsChar::is_alphanum(c) || c == '_' {

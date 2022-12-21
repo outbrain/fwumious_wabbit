@@ -493,7 +493,16 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
 
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
+    use crate::block_misc;
+    use crate::model_instance::Optimizer;
     use crate::feature_buffer;
+    use crate::feature_buffer::HashAndValueAndSeq;
+    use crate::vwmap;
+    use crate::graph::BlockGraph;
+    use block_helpers::{slearn2, spredict2};
+    use crate::block_misc::Observe;
+    use crate::assert_epsilon;
 
     fn fb_vec() -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {

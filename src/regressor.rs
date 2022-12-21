@@ -363,6 +363,7 @@ impl Regressor  {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
+    use crate::feature_buffer::HashAndValue;
 
     /* LR TESTS */
     fn lr_vec(v:Vec<feature_buffer::HashAndValue>) -> feature_buffer::FeatureBuffer {

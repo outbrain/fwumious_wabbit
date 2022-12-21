@@ -162,6 +162,7 @@ impl OptimizerTrait for OptimizerAdagradLUT {
 
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
 
     #[test]
     fn test_sgd() {

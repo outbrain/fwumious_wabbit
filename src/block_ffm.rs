@@ -25,8 +25,6 @@ const FFM_CONTRA_BUF_LEN:usize = 16384;
 
 
 const SQRT_OF_ONE_HALF:f32 = 0.70710678118;
- 
-//use std::ops::{Deref, DerefMut};
 
 
 pub struct BlockFFM<L:OptimizerTrait> {
@@ -628,7 +626,14 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
+    use crate::block_loss_functions;
+    use crate::model_instance::Optimizer;
     use crate::feature_buffer;
+    use crate::feature_buffer::HashAndValueAndSeq;
+    use crate::vwmap;
+    use block_helpers::{slearn2, spredict2};
+
+    use crate::assert_epsilon;
 
 
     fn ffm_vec(v:Vec<feature_buffer::HashAndValueAndSeq>, ffm_fields_count: u32) -> feature_buffer::FeatureBuffer {

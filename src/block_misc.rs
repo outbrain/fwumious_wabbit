@@ -782,7 +782,18 @@ impl BlockTrait for BlockTriangle
 
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
+    use crate::block_loss_functions;
+    use crate::block_misc;
+    use crate::model_instance::Optimizer;
     use crate::feature_buffer;
+    use crate::feature_buffer::HashAndValueAndSeq;
+    use crate::vwmap;
+    use crate::block_helpers::{slearn2, spredict2};
+    use crate::graph;
+    use crate::graph::{BlockGraph};
+    use crate::block_misc::Observe;
+    use crate::assert_epsilon;
 
     fn fb_vec() -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {
