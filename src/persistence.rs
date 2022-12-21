@@ -8,12 +8,9 @@ use std::io;
 use std::io::Read;
 
 use crate::model_instance;
-use crate::optimizer;
 use crate::regressor;
 use crate::vwmap;
-use clap::{App, AppSettings, Arg};
-use optimizer::OptimizerTrait;
-use regressor::Regressor;
+use clap;
 
 const REGRESSOR_HEADER_MAGIC_STRING: &[u8; 4] = b"FWRE"; // Fwumious Wabbit REgressor
 const REGRESSOR_HEADER_VERSION: u32 = 6; // Change to 5: introduce namespace descriptors which changes regressor

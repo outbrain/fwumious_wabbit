@@ -1,14 +1,12 @@
 use std::error::Error;
 use crate::optimizer::OptimizerTrait;
 use std::io;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Read};
 
 use std::slice;
-use std::mem::{self, MaybeUninit};
+use std::mem::{self};
 use std::cmp::min;
-use std::ops::Deref;
 use crate::optimizer::OptimizerSGD;
-use std::marker::PhantomData;
 use crate::feature_buffer;
 use crate::regressor::BlockTrait;
 use crate::port_buffer;

@@ -1,24 +1,13 @@
 use std::any::Any;
-use std::io;
-use merand48::*;
-use core::arch::x86_64::*;
 use std::error::Error;
-use std::mem::{self, MaybeUninit};
 
-
-use crate::optimizer;
 use crate::regressor;
 use crate::model_instance;
 use crate::feature_buffer;
 use crate::port_buffer;
-use crate::consts;
+use regressor::BlockTrait;
 use crate::block_helpers;
 use crate::graph;
-use optimizer::OptimizerTrait;
-use regressor::BlockTrait;
-use block_helpers::{Weight, WeightAndOptimizerData};
-use crate::graph::{BlockGraph};
-
 
 const EPS:f32 = 1e-2;
 

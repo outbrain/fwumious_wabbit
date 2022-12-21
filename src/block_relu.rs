@@ -1,22 +1,13 @@
 use std::any::Any;
-use std::io;
-use merand48::*;
-use core::arch::x86_64::*;
 use std::error::Error;
-use std::mem::{self, MaybeUninit};
 
-
-use crate::optimizer;
 use crate::regressor;
 use crate::model_instance;
 use crate::feature_buffer;
 use crate::port_buffer;
-use crate::consts;
 use crate::block_helpers;
 use crate::graph;
-use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
-use block_helpers::{Weight, WeightAndOptimizerData};
 use crate::graph::{BlockGraph};
 
 
@@ -148,9 +139,7 @@ mod tests {
     use super::*;
     use crate::block_misc;
     use crate::feature_buffer;
-    use crate::feature_buffer::HashAndValueAndSeq;
-    use crate::vwmap;
-    use block_helpers::{slearn2, spredict2};
+    use block_helpers::slearn2;
     use block_misc::{Observe};
     use crate::assert_epsilon;
 

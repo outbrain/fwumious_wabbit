@@ -1,7 +1,6 @@
 use crate::model_instance;
 use crate::parser;
 use crate::feature_transform_executor;
-use crate::feature_transform_parser;
 use crate::vwmap::{NamespaceType, NamespaceFormat};
 
 const VOWPAL_FNV_PRIME:u32 = 16777619;	// vowpal magic number
@@ -254,8 +253,6 @@ impl FeatureBufferTranslator {
 
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
-    use super::*;
-    use crate::parser::{NO_FEATURES, IS_NOT_SINGLE_MASK, MASK31};
     use crate::vwmap::{NamespaceType, NamespaceDescriptor, NamespaceFormat};
 
     fn add_header(v2: Vec<u32>) -> Vec<u32> {

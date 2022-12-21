@@ -1,21 +1,12 @@
-//use std::mem::{self};
 use std::any::Any;
-use std::mem;
-use std::slice;
-use std::sync::Arc;
-use core::arch::x86_64::*;
-use merand48::*;
 use std::io;
 use std::io::Cursor;
 use std::error::Error;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use std::cmp::min;
 
 use crate::model_instance;
 use crate::feature_buffer;
 use crate::port_buffer;
-use crate::optimizer;
-use optimizer::OptimizerTrait;
 use crate::block_ffm;
 use crate::block_lr;
 use crate::block_loss_functions;
@@ -372,7 +363,6 @@ impl Regressor  {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::feature_buffer::HashAndValue;
 
     /* LR TESTS */
     fn lr_vec(v:Vec<feature_buffer::HashAndValue>) -> feature_buffer::FeatureBuffer {

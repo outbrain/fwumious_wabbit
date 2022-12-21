@@ -7,16 +7,12 @@ use crate::feature_buffer;
 use crate::graph;
 
 use std::io;
-use core::arch::x86_64::*;
 use std::error::Error;
 
-
-
-use std::mem::{self, MaybeUninit};
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 use crate::block_helpers;
-use block_helpers::{Weight, WeightAndOptimizerData};
+use block_helpers::{WeightAndOptimizerData};
 use crate::port_buffer;
 
 

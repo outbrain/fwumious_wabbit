@@ -365,8 +365,6 @@ impl TransformerCombine {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::parser::{IS_NOT_SINGLE_MASK, MASK31};
-    use crate::feature_transform_executor::default_seeds;
 
     fn add_header(v2: Vec<u32>) -> Vec<u32> {
         let mut rr: Vec<u32> = vec![100, 1, 1.0f32.to_bits()];

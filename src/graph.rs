@@ -3,8 +3,6 @@ use crate::regressor::BlockTrait;
 use crate::model_instance;
 use crate::port_buffer;
 use std::error::Error;
-use std::io::Error as IOError;
-use std::io::ErrorKind;
 use std::mem;
 
 use crate::block_misc;
@@ -267,18 +265,7 @@ impl BlockGraph {
 
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
-    use super::*;
-    use crate::block_misc;
-    use crate::block_misc::Observe;   
-    use crate::model_instance;
-    use crate::block_loss_functions;
-    use crate::model_instance::Optimizer;
-    use crate::feature_buffer;
-    use crate::feature_buffer::HashAndValueAndSeq;
-    use crate::vwmap;
-    use crate::block_lr;
-    use crate::block_ffm;
-    
+
     #[test]
     fn graph_creation() {
         let mut bg = BlockGraph::new();

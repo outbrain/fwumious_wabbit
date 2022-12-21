@@ -4,9 +4,7 @@ use merand48::*;
 use core::arch::x86_64::*;
 use std::error::Error;
 use std::mem::{self, MaybeUninit};
-use std::num;
 use std::f32::consts::PI;
-
 
 use crate::optimizer;
 use crate::regressor;
@@ -19,7 +17,7 @@ use crate::graph;
 
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
-use block_helpers::{Weight, WeightAndOptimizerData};
+use block_helpers::{WeightAndOptimizerData};
 
 
 const FFM_STACK_BUF_LEN:usize= 32768;
@@ -28,8 +26,7 @@ const FFM_CONTRA_BUF_LEN:usize = 16384;
 
 const SQRT_OF_ONE_HALF:f32 = 0.70710678118;
  
-use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
+//use std::ops::{Deref, DerefMut};
 
 
 pub struct BlockFFM<L:OptimizerTrait> {
@@ -435,7 +432,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     // The only exit point
                     return
                 }
-            }; // End of macro
+            } // End of macro
             
 
             if local_data_ffm_len < FFM_STACK_BUF_LEN {
@@ -631,14 +628,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::block_loss_functions;
-    use crate::model_instance::Optimizer;
     use crate::feature_buffer;
-    use crate::feature_buffer::HashAndValueAndSeq;
-    use crate::vwmap;
-    use block_helpers::{slearn2, spredict2};
-
-    use crate::assert_epsilon;
 
 
     fn ffm_vec(v:Vec<feature_buffer::HashAndValueAndSeq>, ffm_fields_count: u32) -> feature_buffer::FeatureBuffer {

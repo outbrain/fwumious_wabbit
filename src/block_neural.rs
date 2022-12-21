@@ -1,7 +1,5 @@
 use std::any::Any;
 use std::io;
-use merand48::*;
-use core::arch::x86_64::*;
 use std::mem::{self, MaybeUninit};
 use rand_distr::{Normal, Distribution, Uniform};
 use rand_xoshiro::rand_core::SeedableRng;
@@ -18,13 +16,12 @@ use crate::regressor;
 use crate::model_instance;
 use crate::feature_buffer;
 use crate::port_buffer;
-use crate::consts;
 use crate::block_helpers;
 use crate::graph;
 use crate::block_misc;
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
-use block_helpers::{Weight, WeightAndOptimizerData, OptimizerData};
+use block_helpers::{Weight, OptimizerData};
 
 use blas::*;
 
@@ -496,16 +493,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
 
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
-    use super::*;
-    use crate::block_misc;
-    use crate::model_instance::Optimizer;
     use crate::feature_buffer;
-    use crate::feature_buffer::HashAndValueAndSeq;
-    use crate::vwmap;
-    use crate::graph::BlockGraph;
-    use block_helpers::{slearn2, spredict2};
-    use crate::block_misc::Observe;
-    use crate::assert_epsilon;
 
     fn fb_vec() -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {

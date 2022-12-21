@@ -1,6 +1,5 @@
 use std::any::Any;
 use std::error::Error;
-use std::io;
 
 use crate::regressor;
 use crate::feature_buffer;

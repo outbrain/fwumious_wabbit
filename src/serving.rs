@@ -7,7 +7,6 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::ops::DerefMut;
-use std::str;
 use daemonize::Daemonize;
 
 use crate::parser;
@@ -15,9 +14,7 @@ use crate::vwmap;
 use crate::regressor;
 use crate::feature_buffer;
 use crate::model_instance;
-use crate::optimizer;
 use crate::persistence;
-use crate::regressor::Regressor;
 use crate::multithread_helpers::{BoxedRegressorTrait};
 use crate::port_buffer;
 

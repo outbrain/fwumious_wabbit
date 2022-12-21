@@ -2,19 +2,12 @@ use std::error::Error;
 use std::io::Error as IOError;
 use std::io::ErrorKind;
 
-use std::io::Read;
-use std::io;
-use std::fs;
-use std::fs::File;
 use std::collections::HashMap;
-use serde::{Serialize,Deserialize};//, Deserialize};
-use serde_json::{Value};
+use serde::{Serialize,Deserialize};
 
 use crate::vwmap;
 use crate::consts;
 use crate::feature_transform_parser;
-use crate::regressor;
-use crate::vwmap::{NamespaceDescriptor, NamespaceType};
 
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
