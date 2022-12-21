@@ -229,17 +229,13 @@ pub fn get_namespace_descriptor_verbose(transform_namespaces: &NamespaceTransfor
 
 
 use nom::IResult;
-use nom::number::complete::be_u16;
 use nom::character::complete;
 use nom::bytes::complete::take_while;
 use nom::AsChar;
 use nom::sequence::tuple;
-use nom::branch;
 use nom::number;
 use nom::character;
 use nom;
-use nom::multi;
-use nom::combinator::complete;
 
 
 pub fn name_char(c:char) -> bool {
@@ -308,7 +304,9 @@ pub fn parse_namespace_statement(input: &str) -> IResult<&str, (String, String, 
 
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
-    use crate::vwmap::{NamespaceType, NamespaceFormat, NamespaceDescriptor};
+    use super::*;
+    use crate::parser::{NO_FEATURES, IS_NOT_SINGLE_MASK, MASK31};
+    use crate::vwmap::{NamespaceType, NamespaceFormat, NamespaceDescriptor, VwNamespaceMap};
 
     fn ns_desc(i: u16) -> NamespaceDescriptor {
         NamespaceDescriptor {namespace_index: i, 

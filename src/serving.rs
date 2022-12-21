@@ -243,8 +243,6 @@ mod tests {
     use std::io::ErrorKind;
     use mockstream::{SharedMockStream, FailingMockStream};
     use crate::feature_buffer;
-    use crate::feature_buffer::HashAndValue;
-    use crate::feature_buffer::HashAndValueAndSeq;
     use tempfile::{tempdir};
     use std::str;
 

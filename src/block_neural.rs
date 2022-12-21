@@ -497,10 +497,8 @@ mod tests {
     use crate::block_misc;
     use crate::model_instance::Optimizer;
     use crate::feature_buffer;
-    use crate::feature_buffer::HashAndValueAndSeq;
-    use crate::vwmap;
     use crate::graph::BlockGraph;
-    use block_helpers::{slearn2, spredict2};
+    use block_helpers::{slearn2};
     use crate::block_misc::Observe;
     use crate::assert_epsilon;
 

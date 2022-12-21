@@ -462,7 +462,7 @@ impl ModelInstance {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-	use clap::{App, Arg,  AppSettings};
+	use clap;
 	
     fn ns_desc(i: u16) -> NamespaceDescriptor {
         NamespaceDescriptor {namespace_index: i, 

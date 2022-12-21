@@ -14,6 +14,7 @@ use crate::port_buffer;
 use crate::consts;
 use crate::block_helpers;
 use crate::graph;
+use crate::graph::BlockGraph;
 
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;

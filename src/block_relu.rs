@@ -139,9 +139,7 @@ mod tests {
     use super::*;
     use crate::block_misc;
     use crate::feature_buffer;
-    use crate::feature_buffer::HashAndValueAndSeq;
-    use crate::vwmap;
-    use block_helpers::{slearn2, spredict2};
+    use block_helpers::{slearn2};
     use block_misc::{Observe};
     use crate::assert_epsilon;
 

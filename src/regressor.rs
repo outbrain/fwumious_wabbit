@@ -7,6 +7,8 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use crate::model_instance;
 use crate::feature_buffer;
 use crate::port_buffer;
+use crate::optimizer;
+use optimizer::OptimizerTrait;
 use crate::block_ffm;
 use crate::block_lr;
 use crate::block_loss_functions;
@@ -15,6 +17,7 @@ use crate::block_relu;
 use crate::block_misc;
 use crate::block_normalize;
 use crate::graph;
+use crate::graph::BlockGraph;
 use crate::block_neural::{InitType};
 use crate::block_helpers;
 
