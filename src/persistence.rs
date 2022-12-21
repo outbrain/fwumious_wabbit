@@ -8,6 +8,7 @@ use std::io;
 use std::io::Read;
 
 use crate::model_instance;
+use crate::optimizer;
 use crate::regressor;
 use crate::vwmap;
 use clap;
@@ -174,7 +175,6 @@ mod tests {
     use crate::model_instance::Optimizer;
     use crate::assert_epsilon;
     use crate::block_ffm;
-    use regressor::BlockTrait;
     use regressor::Regressor;
 
     use tempfile::tempdir;

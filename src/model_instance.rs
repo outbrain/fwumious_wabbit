@@ -8,7 +8,7 @@ use serde::{Serialize,Deserialize};
 use crate::vwmap;
 use crate::consts;
 use crate::feature_transform_parser;
-
+use crate::vwmap::{NamespaceDescriptor, NamespaceType};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct FeatureComboDesc {
@@ -462,8 +462,7 @@ impl ModelInstance {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-	use clap;
-	
+
     fn ns_desc(i: u16) -> NamespaceDescriptor {
         NamespaceDescriptor {namespace_index: i, 
                              namespace_type: vwmap::NamespaceType::Primitive,

@@ -271,9 +271,6 @@ mod tests {
     use crate::model_instance;
     use crate::block_loss_functions;
     use crate::model_instance::Optimizer;
-    use crate::feature_buffer;
-    use crate::feature_buffer::HashAndValueAndSeq;
-    use crate::vwmap;
     use crate::block_lr;
     use crate::block_ffm;
 
