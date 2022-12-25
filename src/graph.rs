@@ -228,14 +228,12 @@ impl BlockGraph {
                 let bo = edge_in.get_output();
                 let bptr = edge_in.get_node_id();
                 let output_len = self.blocks[bptr].get_num_output_values(bo);
-//                println!("Block: {}, output: {:?},  output offset: {} ouptut_len: {}", i, bo, offset, output_len);
                 let input_block_type = self.blocks[bptr].get_block_type();
                 if (input_block_type == BlockType::Join) || 
                    (input_block_type == BlockType::Observe) ||
                    (input_block_type == BlockType::Copy) && (bo.get_output_index() == 0 && current_block_type != BlockType::Join && current_block_type != BlockType::Observe) {
                     // we are special casing Join block
                     // It is zero-copy joining of inputs, which means inputs and outputs share exactly the same space
-//                    println!("Get input offset of: {}", bptr);
                     let fake_offset = self.blocks[bptr].get_input_offset(InputSlot(0)).unwrap();
                     self.blocks[bptr].set_output_offset(bo, fake_offset);
                     self.blocks[i].set_input_offset(InputSlot(input_index), fake_offset);

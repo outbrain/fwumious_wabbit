@@ -83,18 +83,6 @@ impl BlockTrait for BlockNormalize
         debug_assert!(self.num_inputs > 0);
         
         unsafe {
-            let mut sum: f32 = 0.0;
-            let mut sumsqr: f32 = 0.0;
-            let K = 1.0;
-/*          for i in 0..self.num_inputs as usize {                                 
-                    let w = *pb.tape.get_unchecked_mut(self.input_offset + i) - K;
-                    sum += w;
-                    sumsqr += w * w;
-            }
-            let var1 = (sumsqr - sum*sum/self.num_inputs as f32) / 
-                            self.num_inputs as f32 + EPS;
-            let var2 = var1.sqrt();
-            */
             let mut mean:f32 = 0.0;
             for i in 0..self.num_inputs as usize {                                 
                     mean+= *pb.tape.get_unchecked_mut(self.input_offset + i);
@@ -109,8 +97,6 @@ impl BlockTrait for BlockNormalize
             variance += EPS;
             variance /= self.num_inputs as f32;
             variance = variance.sqrt();
-            
-            
             
 //            println!("var1: {}, var2: {}, sum: {}, sumsqr: {}", var1, var2, sum, sumsqr);            
             let variance_inv = 1.0/ variance;
@@ -194,7 +180,7 @@ pub fn new_stop_block(  bg: &mut graph::BlockGraph,
                         input: graph::BlockPtrOutput
                         ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {    
     let num_inputs = bg.get_num_output_values(vec![&input]);
-    assert!(num_inputs != 0);
+    debug_assert!(num_inputs != 0);
     let mut block = Box::new(BlockStopBackward {
         output_offset: usize::MAX,
         input_offset: usize::MAX,

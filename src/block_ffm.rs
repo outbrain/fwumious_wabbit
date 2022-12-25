@@ -114,7 +114,6 @@ fn new_ffm_block_without_weights<L:OptimizerTrait + 'static>(mi: &model_instance
 
     if mi.ffm_k > 0 {
 
-        //reg_ffm.optimizer_ffm.init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
         reg_ffm.optimizer_ffm.init(mi.ffm_learning_rate, mi.ffm_power_t, mi.ffm_init_acc_gradient);
         // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
         reg_ffm.ffm_weights_len = (1 << mi.ffm_bit_precision) + (mi.ffm_fields.len() as u32 * reg_ffm.ffm_k);
@@ -359,7 +358,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                           let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k) - ffm_weight * LEFT_HASH_VALUE;
                                           let gradient =  LEFT_HASH_VALUE * contra_weight;
                                           *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
-//                                          *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient;
                                           *myslice.get_unchecked_mut( contra_offset2 + z ) += ffm_weight * gradient * 0.5;
                                       }
                                   } else {
@@ -368,7 +366,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                           let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k);
                                           let gradient =  LEFT_HASH_VALUE * contra_weight;
                                           *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
-//                                          *wsumbuf.get_unchecked_mut(k) += ffm_weight * gradient;
                                           *myslice.get_unchecked_mut(contra_offset2 + z ) += ffm_weight * gradient * 0.5;
                                       }
                                   }
@@ -378,11 +375,7 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                   ffm_values_offset += FFMK as usize;
                               }
                             }); // End of macro specialize_1f32! for LEFT_HASH_VALUE
-                        }    
-                        /*for k in 0..FFMK as usize {
-                            wsum += wsumbuf[k];
                         }
-                        wsum *= 0.5;*/
                     });
                         
                     block_helpers::forward_backward(further_blocks, fb, pb, update);
@@ -400,31 +393,16 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
                                 for z in 0..fb.ffm_fields_count as usize {
                                     let general_gradient = myslice.get_unchecked(contra_offset2 + z);
-  //                                println!("UPD: Gradient: {}", general_gradient);
                                     for k in 0..FFMK as usize {
                                         let feature_value = *local_data_ffm_values.get_unchecked(local_index);
                                         let gradient = general_gradient * feature_value;
                                         let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
 
-    //                                  println!("Local index: {}, feature index {}", local_index, feature_index);
-      //                                println!("UPD: Feature value: {}, update: {}", feature_value, update);
                                         ffm_weights.get_unchecked_mut(feature_index).weight -= update;
                                         local_index += 1;
                                         feature_index += 1;
                                     }
                                 }
-
-
-                                        /*
-                                for j in 0..fc as usize {
-                                    let feature_value = *local_data_ffm_values.get_unchecked(local_index);
-                                    let general_gradient = myslice.get_unchecked(contra_offset + j);
-                                    let gradient = general_gradient * feature_value;
-                                    let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
-                                    ffm_weights.get_unchecked_mut(feature_index).weight -= update;
-                                    local_index += 1;
-                                    feature_index += 1;
-                                }*/
                             }
                         });
                     }
@@ -511,11 +489,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                 let vv = SQRT_OF_ONE_HALF * LEFT_HASH_VALUE;     // To avoid one additional multiplication, we square root 0.5 into vv
                                 for k in 0..FFMK as usize {
                                     let ss = ffm_weights.get_unchecked(left_hash_hash + field_index_ffmk as usize + k).weight * vv;
-                                    // *wsumbuf.get_unchecked_mut(k) -= ss * ss;
-//                                    println!("sS: {}", ss * ss);
-//                                    println!("ffm_weights addr1: {}", field_index_ffmk as usize + k);
-//                                    println!("ffm buffer index: {}, left_hash.contra_field_index: {}", ffm_buffer_index, left_hash.contra_field_index);
-//                                    println!("sq: {}", (left_hash.contra_field_index / FFMK) as usize * field_embedding_len + left_hash.contra_field_index as usize);
                                     myslice[(contra_offset2 * (fb.ffm_fields_count + 1)) as usize] -= ss * ss;
                                 }
                             });
@@ -534,24 +507,16 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         // This is self-interaction
                         for k in 0..FFMK as usize{
                             let v = contra_fields.get_unchecked(f1_offset_ffmk + k);
-//                            println!("vv: {}", v*v*0.5);
-                            //*wsumbuf.get_unchecked_mut(k) += v * v * 0.5;
-//                            println!("A: {}", f1_offset + f1_ffmk + k as usize);
                             myslice[f1_offset2 + f1] += v * v * 0.5;
-//                            println!("Res: {}", myslice[f1_offset + f1_ffmk + k as usize]);
                         }
 
                         for f2 in f1+1..fb.ffm_fields_count as usize {
                             f2_offset_ffmk += field_embedding_len as usize;
                             f1_offset_ffmk += FFMK as usize;
-                            //assert_eq!(f1_offset_ffmk, f1 * field_embedding_len + f2 * FFMK as usize);
-                            //assert_eq!(f2_offset_ffmk, f2 * field_embedding_len + f1 * FFMK as usize);
                             for k in 0..FFMK {
-                                //*wsumbuf.get_unchecked_mut(k as usize) +=
                                 myslice[f1 * fb.ffm_fields_count as usize + f2] +=
                                         contra_fields.get_unchecked(f1_offset_ffmk + k as usize) *
                                         contra_fields.get_unchecked(f2_offset_ffmk + k as usize) * 0.5;
-//                                println!("fields_count: {}, F2: {}, embedding_len: {}, f1: {}, k: {}", fb.ffm_fields_count, f2, field_embedding_len, f1, k);
                                 myslice[f2 * fb.ffm_fields_count as usize + f1] +=
                                         contra_fields.get_unchecked(f1_offset_ffmk + k as usize) * 
                                         contra_fields.get_unchecked(f2_offset_ffmk + k as usize) * 0.5;
@@ -560,11 +525,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         }
                         
                     }
-//                    println!("FINAL: {:?}", myslice);
-
-                    /*for k in 0..FFMK as usize {
-                        wsum += wsumbuf[k];
-                    }*/
                 });
             } else {
                 // Old straight-forward method. As soon as we have multiple feature values per field, it is slower
@@ -586,9 +546,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         }
                     
                     }
-                    /*for k in 0..FFMK as usize {
-                        wsum += wsumbuf[k];
-                    }*/
                 });
             }
         }

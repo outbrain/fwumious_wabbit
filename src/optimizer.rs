@@ -129,7 +129,6 @@ impl OptimizerTrait for OptimizerAdagradLUT {
             let mut val = learning_rate * ((float_x).powf(minus_power_t) + (float_x_plus_one).powf(minus_power_t)) * 0.5;
             // Safety measure
             if val.is_nan() || val.is_infinite() {
-//                println!("x: {} {} {} {}", x, float_x, val, initial_acc_gradient);
                 val = learning_rate;
             }
             

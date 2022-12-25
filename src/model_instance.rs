@@ -317,12 +317,10 @@ impl ModelInstance {
         
         if let Some(val) = cl.value_of("ffm_bit_precision") {
             mi.ffm_bit_precision = val.parse()?;
-//            println!("FFM num weight bits = {}", mi.ffm_bit_precision); // vwcompat
         }
 
         if let Some(val) = cl.value_of("bit_precision") {
             mi.bit_precision = val.parse()?;
-//            println!("Num weight bits = {}", mi.bit_precision); // vwcompat
         }
 
         mi.learning_rate 	 = parse_float("learning_rate", 	mi.learning_rate, &cl);
@@ -406,7 +404,6 @@ impl ModelInstance {
 		/*! A method that enables updating hyperparameters of an existing (pre-loaded) model.
 		Currently limited to the most commonly used hyperparameters: ffm_learning_rate, ffm_power_t, power_t, learning_rate. */
 		
-//		println!("Replacing initial regressor's hyperparameters from the command line ..");
 		let mut replacement_hyperparam_ids: Vec<(String, String)> = vec![];
 		
 		// Handle learning rates

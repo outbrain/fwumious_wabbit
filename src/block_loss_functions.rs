@@ -135,7 +135,6 @@ impl BlockTrait for BlockSigmoid {
                 pb.observations.push(prediction_probability);
             }
             block_helpers::forward_backward(further_blocks, fb, pb, update);
-//            general_gradient *= *pb.tape.get_unchecked(self.output_offset);
         // replace inputs with their gradients
             pb.tape.get_unchecked_mut(self.input_offset .. (self.input_offset + self.num_inputs)).fill(general_gradient);
         }

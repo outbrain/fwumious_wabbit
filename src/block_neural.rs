@@ -383,8 +383,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                         let var1 = (sumsqr - sum*sum/bias_offset as f32) / 
                                     bias_offset as f32;
                         let var2 = var1.sqrt();
-//                        println!("var1: {}, var2: {}, sum: {}, sumsqr: {}", var1, var2, sum, sumsqr);            
-
                         for i in 0..bias_offset {
                             self.weights.get_unchecked_mut(i).weight /=var2;
                         }
@@ -408,7 +406,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L>
                         ) {
         unsafe {
 
-//          println!("len: {}, num inputs: {}, input_tape_indeX: {}", len, self.num_inputs, self.input_tape_index);
             let frandseed = fb.example_number * fb.example_number;
             let bias_offset = self.num_inputs * self.num_neurons;
             let (input_tape, output_tape) = block_helpers::get_input_output_borrows(&mut pb.tape, 

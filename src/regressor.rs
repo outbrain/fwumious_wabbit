@@ -101,7 +101,6 @@ impl Regressor  {
             let mut block_ffm = block_ffm::new_ffm_block(&mut bg, mi).unwrap();
             let mut triangle_ffm = block_misc::new_triangle_block(&mut bg, block_ffm).unwrap();
             output = block_misc::new_join_block(&mut bg, vec![output, triangle_ffm]).unwrap();
-            //output = block_misc::new_join_block(&mut bg, vec![output, block_ffm]).unwrap();
         }
 
 
@@ -189,15 +188,12 @@ impl Regressor  {
                 
                 if layernorm == NNLayerNorm::BeforeRelu {
                     output = block_normalize::new_normalize_layer_block(&mut bg, &mi, output).unwrap();
-//                    println!("Normalize layer before relu");
                 }
                 if activation == NNActivation::Relu {
                     output = block_relu::new_relu_block(&mut bg, &mi, output).unwrap();
-  //                  println!("Relu layer");
                 }
                 if layernorm == NNLayerNorm::AfterRelu {
                     output = block_normalize::new_normalize_layer_block(&mut bg, &mi, output).unwrap();
-    //                println!("Normalize layer after relu");
                 }
 
 
@@ -211,10 +207,8 @@ impl Regressor  {
          
 
         // now sigmoid has a single input
-//        println!("INPUTS : {}", inputs);
         let lossf = block_loss_functions::new_logloss_block(&mut bg, output, true).unwrap();
         bg.finalize();
-//        bg.println();
         rg.tape_len = bg.get_tape_size();
         
         rg.blocks_boxes = bg.take_blocks();

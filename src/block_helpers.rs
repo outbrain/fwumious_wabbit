@@ -100,7 +100,6 @@ pub fn read_weights_only_from_buf2<L:OptimizerTrait>(weights_len: usize, out_wei
                                          chunk_size * mem::size_of::<WeightAndOptimizerData<L>>());
             input_bufreader.read_exact(&mut in_weights_view)?;
             for w in &in_weights {
-                //out_weights.push(WeightAndOptimizerData{weight:w.weight, optimizer_data: std::marker::PhantomData{}});
                 out_weights.get_unchecked_mut(out_idx).weight = w.weight;
                 out_idx += 1;
             }
@@ -121,13 +120,11 @@ pub fn get_input_output_borrows(i: &mut Vec<f32>,
             let (rest, second) = i.split_at_mut(start2);
             let (rest, first) = rest.split_at_mut(start1);
             return (first.get_unchecked_mut(0..len1), second.get_unchecked_mut(0..len2))
-    //        return (&mut first[0..len1], &mut second[0..len2]);
         } else {
             let (rest, first) = i.split_at_mut(start1);
             let (rest, second) = rest.split_at_mut(start2);
             return (first.get_unchecked_mut(0..len1), second.get_unchecked_mut(0..len2))
-    //        return (&mut first[0..len1], &mut second[0..len2]);
-        
+
         }
     }
     
@@ -180,12 +177,3 @@ pub fn forward(         further_blocks: &[Box<dyn BlockTrait>],
         None => {},
     }
 }
-
-
-
-
-
-
-
-
-
