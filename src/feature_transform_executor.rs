@@ -1,6 +1,5 @@
-use crate::model_instance;
-use crate::parser;
 use crate::vwmap;
+use crate::parser;
 use std::error::Error;
 use std::io::Error as IOError;
 use std::io::ErrorKind;
@@ -8,11 +7,9 @@ use std::io::ErrorKind;
 use std::cell::RefCell;
 
 use fasthash::murmur3;
-use serde::{Serialize,Deserialize};
 use dyn_clone::{clone_trait_object, DynClone};
 
 use crate::feature_transform_parser;
-use crate::feature_transform_parser::NamespaceTransforms;
 use crate::feature_transform_implementations::{TransformerBinner, TransformerLogRatioBinner, TransformerCombine, TransformerWeight};
 
 
@@ -197,7 +194,7 @@ clone_trait_object!(FunctionExecutorTrait);
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::parser::{IS_NOT_SINGLE_MASK, MASK31};
+    use crate::parser;
     use crate::feature_transform_executor::default_seeds;
 
     fn ns_desc(i: u16) -> vwmap::NamespaceDescriptor {
