@@ -4,8 +4,6 @@
 #![allow(unused_mut)]
 #![allow(non_snake_case)]
 #![allow(redundant_semicolons)]
-//#[global_allocator]
-//static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 use flate2::read::MultiGzDecoder;
 use std::collections::VecDeque;
