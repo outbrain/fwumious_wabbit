@@ -142,8 +142,8 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
         self.weights =vec![WeightAndOptimizerData::<L>{weight:0.0, optimizer_data: self.optimizer_ffm.initial_data()}; self.ffm_weights_len as usize];
-
-		match mi.ffm_initialization_type.as_str() {
+	let initialization_type_fixed = "default";
+		match initialization_type_fixed {
 			"default" => {
 				if mi.ffm_k > 0 {
 					if mi.ffm_init_width == 0.0 {
