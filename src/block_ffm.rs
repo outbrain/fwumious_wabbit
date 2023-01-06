@@ -37,7 +37,7 @@ pub struct BlockFFM<L: OptimizerTrait> {
 }
 
 macro_rules! specialize_1f32 {
-    ( $input_expr:expr, 
+    ( $input_expr:expr,
       $output_const:ident,
       $code_block:block  ) => {
         if $input_expr == 1.0 {

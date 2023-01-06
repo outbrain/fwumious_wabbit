@@ -47,11 +47,11 @@ pub struct FeatureBufferTranslator {
 // this simplifies a lot of the code, as it is used often
 #[macro_export]
 macro_rules! feature_reader {
-    ( $record_buffer:ident, 
+    ( $record_buffer:ident,
       $transform_executors:expr,
-      $namespace_descriptor:expr, 
-      $hash_index:ident, 
-      $hash_value:ident, 
+      $namespace_descriptor:expr,
+      $hash_index:ident,
+      $hash_value:ident,
       $bl:block  ) => {
         if $namespace_descriptor.namespace_type == NamespaceType::Transformed {
             // This is super-unoptimized
@@ -110,11 +110,11 @@ macro_rules! feature_reader {
 
 #[macro_export]
 macro_rules! feature_reader_float_namespace {
-    ( $record_buffer:ident, 
-      $namespace_descriptor:expr, 
-      $hash_index:ident, 
-      $hash_value:ident, 
-      $float_value:ident, 
+    ( $record_buffer:ident,
+      $namespace_descriptor:expr,
+      $hash_index:ident,
+      $hash_value:ident,
+      $float_value:ident,
       $bl:block  ) => {
         let namespace_index = $namespace_descriptor.namespace_index as usize;
         let first_token =
