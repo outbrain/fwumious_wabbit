@@ -1,13 +1,13 @@
-use clap::{App, Arg,  AppSettings};
 use crate::version;
+use clap::{App, AppSettings, Arg};
 
 pub fn parse<'a>() -> clap::ArgMatches<'a> {
-  let matches = create_expected_args().get_matches();
-  matches
+    let matches = create_expected_args().get_matches();
+    matches
 }
 
 pub fn create_expected_args<'a>() -> App<'a, 'a> {
-  App::new("fwumious wabbit")
+    App::new("fwumious wabbit")
                     .version(version::LATEST)
                     .author("Andraz Tori <atori@outbrain.com>")
                     .about("Superfast Logistic Regression & Field Aware Factorization Machines")
