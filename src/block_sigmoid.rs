@@ -152,8 +152,8 @@ mod tests {
         let mut pb = bg.new_port_buffer();
 
         let fb = fb_vec();
-        assert_epsilon!(slearn2(&mut bg, &fb, &mut pb, true), 2.0);
-        assert_epsilon!(slearn2(&mut bg, &fb, &mut pb, true), 2.0); // sigmoid doesn't learn
+        assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 0.880797);
+        assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 0.880797); // sigmoid doesn't learn
     }
 
     fn test_simple_negative() {

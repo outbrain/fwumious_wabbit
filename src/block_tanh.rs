@@ -145,8 +145,8 @@ mod tests {
         let mut pb = bg.new_port_buffer();
 
         let fb = fb_vec();
-        assert_epsilon!(slearn2(&mut bg, &fb, &mut pb, true), 2.0);
-        assert_epsilon!(slearn2(&mut bg, &fb, &mut pb, true), 2.0); // tanh desnt learn
+        assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 0.9640276);
+        assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 0.9640276); // tanh doesn't learn
     }
     fn test_simple_negative() {
         let mi = model_instance::ModelInstance::new_empty().unwrap();
