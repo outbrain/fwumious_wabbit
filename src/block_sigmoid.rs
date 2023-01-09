@@ -1,3 +1,6 @@
+use libm::expf;
+use std::any::Any;
+use std::error::Error;
 use crate::block_helpers;
 use crate::feature_buffer;
 use crate::graph;
@@ -6,23 +9,20 @@ use crate::model_instance;
 use crate::port_buffer;
 use crate::regressor;
 use regressor::BlockTrait;
-use std::any::Any;
-use std::error::Error;
 
-pub struct BlockRELU {
+pub struct BlockSigmoid {
     pub num_inputs: usize,
     pub input_offset: usize,
     pub output_offset: usize,
 }
 
-pub fn new_relu_block(
+pub fn new_sigmoid_block(
     bg: &mut graph::BlockGraph,
-    mi: &model_instance::ModelInstance,
     input: graph::BlockPtrOutput,
 ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
     let num_inputs = bg.get_num_output_values(vec![&input]);
     assert!(num_inputs != 0);
-    let mut block = Box::new(BlockRELU {
+    let block = Box::new(BlockSigmoid {
         output_offset: usize::MAX,
         input_offset: usize::MAX,
         num_inputs: num_inputs,
@@ -32,12 +32,12 @@ pub fn new_relu_block(
     Ok(block_outputs.pop().unwrap())
 }
 
-impl BlockTrait for BlockRELU {
+impl BlockTrait for BlockSigmoid {
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
 
-    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {}
+    fn allocate_and_init_weights(&mut self, _mi: &model_instance::ModelInstance) {}
 
     fn get_num_output_slots(&self) -> usize {
         1
@@ -72,13 +72,19 @@ impl BlockTrait for BlockRELU {
 
         unsafe {
             for i in 0..self.num_inputs as usize {
-                let w = *pb.tape.get_unchecked_mut(self.input_offset + i);
-                if w < 0.0 {
-                    *pb.tape.get_unchecked_mut(self.output_offset + i) = 0.0;
-                    *pb.tape.get_unchecked_mut(self.input_offset + i) = 0.0;
+                let x = *pb.tape.get_unchecked_mut(self.input_offset + i);
+
+                // for now doing the actual slow sigmoid computation. once we establish a baseline,
+                // we can replace with a fast approximation or a lookup table
+                if x < 0.0 {
+                    let epx = expf(x);
+                    let s = epx / (1.0 + epx);
+                    *pb.tape.get_unchecked_mut(self.output_offset + i) = s;
+                    *pb.tape.get_unchecked_mut(self.input_offset + i) = s * (1.0 - s);
                 } else {
-                    *pb.tape.get_unchecked_mut(self.output_offset + i) = w;
-                    *pb.tape.get_unchecked_mut(self.input_offset + i) = 1.0;
+                    let s = 1.0 / (1.0 + expf(-x));
+                    *pb.tape.get_unchecked_mut(self.output_offset + i) = s;
+                    *pb.tape.get_unchecked_mut(self.input_offset + i) = s * (1.0 - s);
                 }
             }
 
@@ -105,12 +111,8 @@ impl BlockTrait for BlockRELU {
 
         unsafe {
             for i in 0..self.num_inputs as usize {
-                let w = *pb.tape.get_unchecked_mut(self.input_offset + i);
-                if w < 0.0 {
-                    *pb.tape.get_unchecked_mut(self.output_offset + i) = 0.0;
-                } else {
-                    *pb.tape.get_unchecked_mut(self.output_offset + i) = w;
-                }
+                let x = *pb.tape.get_unchecked_mut(self.input_offset + i);
+                *pb.tape.get_unchecked_mut(self.output_offset + i) = 1.0 / (1.0 + expf(-x));
             }
             block_helpers::forward(further_blocks, fb, pb);
         } // unsafe end
@@ -142,10 +144,8 @@ mod tests {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
         let input_block = block_misc::new_const_block(&mut bg, vec![2.0]).unwrap();
-        let relu_block = new_relu_block(&mut bg, &mi, input_block).unwrap();
-        let observe_block =
-            block_misc::new_observe_block(&mut bg, relu_block, Observe::Forward, Some(1.0))
-                .unwrap();
+        let sigmoid_block = new_sigmoid_block(&mut bg, input_block).unwrap();
+        block_misc::new_observe_block(&mut bg, sigmoid_block, Observe::Forward, Some(1.0)).unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -153,16 +153,15 @@ mod tests {
 
         let fb = fb_vec();
         assert_epsilon!(slearn2(&mut bg, &fb, &mut pb, true), 2.0);
-        assert_epsilon!(slearn2(&mut bg, &fb, &mut pb, true), 2.0); // relu desnt learn
+        assert_epsilon!(slearn2(&mut bg, &fb, &mut pb, true), 2.0); // sigmoid doesn't learn
     }
+
     fn test_simple_negative() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
+        let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
         let input_block = block_misc::new_const_block(&mut bg, vec![-2.0]).unwrap();
-        let relu_block = new_relu_block(&mut bg, &mi, input_block).unwrap();
-        let observe_block =
-            block_misc::new_observe_block(&mut bg, relu_block, Observe::Forward, Some(1.0))
-                .unwrap();
+        let sigmoid_block = new_sigmoid_block(&mut bg, input_block).unwrap();
+        block_misc::new_observe_block(&mut bg, sigmoid_block, Observe::Forward, Some(1.0)).unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -170,6 +169,6 @@ mod tests {
 
         let fb = fb_vec();
         assert_epsilon!(slearn2(&mut bg, &fb, &mut pb, true), 0.0);
-        assert_epsilon!(slearn2(&mut bg, &fb, &mut pb, true), 0.0); // relu desnt learn
+        assert_epsilon!(slearn2(&mut bg, &fb, &mut pb, true), 0.0); // sigmoid doesn't learn
     }
 }
