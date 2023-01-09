@@ -6,8 +6,8 @@
 # no flags are used (generic release build)													   #
 ################################################################################################
 
-cargo build --release;
+#cargo build --release;
 
 # Using specific flags examples
 #RUSTFLAGS="-Ctarget-cpu=skylake" cargo build --release;
-#RUSTFLAGS="-Ctarget-cpu=cascadelake" cargo build --release;
+RUSTFLAGS="-Ctarget-cpu=cascadelake" cargo build --release;
