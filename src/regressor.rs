@@ -6,6 +6,7 @@ use std::io::Cursor;
 
 use crate::block_ffm;
 use crate::block_helpers;
+use crate::block_leaky_relu;
 use crate::block_loss_functions;
 use crate::block_lr;
 use crate::block_misc;
@@ -13,6 +14,8 @@ use crate::block_neural;
 use crate::block_neural::InitType;
 use crate::block_normalize;
 use crate::block_relu;
+use crate::block_sigmoid;
+use crate::block_tanh;
 use crate::feature_buffer;
 use crate::graph;
 use crate::model_instance;
@@ -104,13 +107,16 @@ pub fn get_regressor_with_weights(mi: &model_instance::ModelInstance) -> Regress
 enum NNActivation {
     None,
     Relu,
+    LeakyRelu,
+    Tanh,
+    Sigmoid,
 }
 
 #[derive(PartialEq)]
 enum NNLayerNorm {
     None,
-    BeforeRelu,
-    AfterRelu,
+    BeforeActivation,
+    AfterActivation,
 }
 
 impl Regressor {
@@ -204,6 +210,9 @@ impl Regressor {
                 let activation = match &*activation_str {
                     "none" => NNActivation::None,
                     "relu" => NNActivation::Relu,
+                    "leaky_relu" => NNActivation::LeakyRelu,
+                    "tanh" => NNActivation::Tanh,
+                    "sigmoid" => NNActivation::Sigmoid,
                     _ => Err(format!(
                         "unknown nn activation type: \"{}\"",
                         activation_str
@@ -213,8 +222,8 @@ impl Regressor {
 
                 let layernorm = match &*layernorm_str {
                     "none" => NNLayerNorm::None,
-                    "before" => NNLayerNorm::BeforeRelu,
-                    "after" => NNLayerNorm::AfterRelu,
+                    "before" => NNLayerNorm::BeforeActivation,
+                    "after" => NNLayerNorm::AfterActivation,
                     _ => Err(format!("unknown nn layer norm: \"{}\"", layernorm_str)).unwrap(),
                 };
 
@@ -245,14 +254,32 @@ impl Regressor {
                 )
                 .unwrap();
 
-                if layernorm == NNLayerNorm::BeforeRelu {
+                if layernorm == NNLayerNorm::BeforeActivation {
                     output =
                         block_normalize::new_normalize_layer_block(&mut bg, &mi, output).unwrap();
                 }
-                if activation == NNActivation::Relu {
-                    output = block_relu::new_relu_block(&mut bg, &mi, output).unwrap();
+
+                match activation {
+                    NNActivation::None => {}
+                    NNActivation::Relu => {
+                        output = block_relu::new_relu_block(&mut bg, &mi, output).unwrap();
+                        println!("Relu layer");
+                    }
+                    NNActivation::LeakyRelu => {
+                        output = block_leaky_relu::new_leaky_relu_block(&mut bg, output).unwrap();
+                        println!("LeakyRelu layer");
+                    }
+                    NNActivation::Tanh => {
+                        output = block_tanh::new_tanh_block(&mut bg, output).unwrap();
+                        println!("Tanh layer");
+                    }
+                    NNActivation::Sigmoid => {
+                        output = block_sigmoid::new_sigmoid_block(&mut bg, output).unwrap();
+                        println!("Sigmoid layer");
+                    }
                 }
-                if layernorm == NNLayerNorm::AfterRelu {
+
+                if layernorm == NNLayerNorm::AfterActivation {
                     output =
                         block_normalize::new_normalize_layer_block(&mut bg, &mi, output).unwrap();
                 }
