@@ -280,7 +280,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
                     None => !testonly,
                 };
                 if hogwild_training && update {
-                    hogwild_trainer.digest_example(feature_buffer);
+                    hogwild_trainer.digest_example(fbt.feature_buffer.clone());
                 } else {
                     prediction = re.learn(&fbt.feature_buffer, &mut pb, update);
                 }

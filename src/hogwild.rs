@@ -9,7 +9,7 @@ use crate::port_buffer::PortBuffer;
 use crate::regressor::Regressor;
 
 pub struct HogwildTrainer {
-    workers: Vec<JoinHandle<u32>>,
+    workers: Vec<JoinHandle<()>>,
     sender: Sender<FeatureBuffer>
 }
 
@@ -49,7 +49,7 @@ impl HogwildWorker {
         regressor: BoxedRegressorTrait,
         port_buffer: PortBuffer,
         receiver: Arc<Mutex<Receiver<FeatureBuffer>>>
-    ) -> Result<JoinHandle<u32>, Box<dyn Error>> {
+    ) -> Result<JoinHandle<()>, Box<dyn Error>> {
         let mut worker = HogwildWorker {
             regressor,
             port_buffer
@@ -57,7 +57,7 @@ impl HogwildWorker {
         let thread = thread::spawn(move || {
             worker.train(receiver)
         });
-        OK(thread)
+        Ok(thread)
     }
 
     pub fn train(&mut self, receiver: Arc<Mutex<Receiver<FeatureBuffer>>>) {
