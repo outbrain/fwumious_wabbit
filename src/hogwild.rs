@@ -40,7 +40,7 @@ impl HogwildTrainer {
     }
 
     pub fn digest_example(&mut self, feature_buffer: FeatureBuffer) {
-        self.sender.send(feature_buffer)?;
+        self.sender.send(feature_buffer).unwrap();
     }
 }
 
@@ -57,6 +57,7 @@ impl HogwildWorker {
         let thread = thread::spawn(move || {
             worker.train(receiver)
         });
+        OK(thread)
     }
 
     pub fn train(&mut self, receiver: Arc<Mutex<Receiver<FeatureBuffer>>>) {
