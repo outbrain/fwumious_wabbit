@@ -8,7 +8,7 @@
 use flate2::read::MultiGzDecoder;
 use std::collections::VecDeque;
 use std::error::Error;
-use std::f32;
+use std::{env, f32};
 use std::fs::File;
 use std::io;
 use std::io::BufRead;
@@ -16,6 +16,7 @@ use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
 use std::time::Instant;
+use crate::hogwild::HogwildTrainer;
 
 extern crate blas;
 extern crate intel_mkl_src;
@@ -48,6 +49,7 @@ mod version;
 mod vwmap;
 mod port_buffer;
 mod graph;
+mod hogwild;
 
 fn main() {
     match main2() {
@@ -209,6 +211,17 @@ fn main2() -> Result<(), Box<dyn Error>> {
         let holdout_after_option: Option<u64> =
             cl.value_of("holdout_after").map(|s| s.parse().unwrap());
 
+        
+        let hogwild_training = cl.is_present("hogwild_training");
+        let hogwild_threads = match cl.value_of("hogwild_threads") {
+            Some(hogwild_threads) => hogwild_threads.parse().expect("hogwild_threads should be integer"),
+            None => env::var("NUM_CPUS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or_else(|| num_cpus::get())
+        };
+        let mut hogwild_trainer = HogwildTrainer::new(Box::new(re), hogwild_threads)?;
+
         let prediction_model_delay: u64 = match cl.value_of("prediction_model_delay") {
             Some(delay) => delay.parse()?,
             None => 0,
@@ -266,7 +279,11 @@ fn main2() -> Result<(), Box<dyn Error>> {
                     Some(holdout_after) => !testonly && example_num < holdout_after,
                     None => !testonly,
                 };
-                prediction = re.learn(&fbt.feature_buffer, &mut pb, update);
+                if hogwild_training && update {
+                    hogwild_trainer.digest_example(feature_buffer);
+                } else {
+                    prediction = re.learn(&fbt.feature_buffer, &mut pb, update);
+                }
             } else {
                 if example_num > predictions_after {
                     prediction = re.learn(&fbt.feature_buffer, &mut pb, false);
@@ -284,6 +301,9 @@ fn main2() -> Result<(), Box<dyn Error>> {
                     None => {}
                 }
             }
+        }
+        if hogwild_training {
+            drop(hogwild_trainer);
         }
         cache.write_finish()?;
 
