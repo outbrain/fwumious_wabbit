@@ -218,7 +218,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
             None => env::var("NUM_CPUS")
                 .ok()
                 .and_then(|s| s.parse().ok())
-                .unwrap_or_else(|| num_cpus::get())
+                .unwrap_or_else(|| 16)
         };
         let mut hogwild_trainer = HogwildTrainer::new(Box::new(re), hogwild_threads)?;
 
