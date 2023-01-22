@@ -41,6 +41,12 @@ impl HogwildTrainer {
     pub fn digest_example(&mut self, feature_buffer: FeatureBuffer) {
         self.sender.send(feature_buffer).unwrap();
     }
+
+    pub fn block_untils_workers_finished(&self) {
+        for worker in self.workers {
+            worker.join().unwrap();
+        }
+    }
 }
 
 impl HogwildWorker {

@@ -306,7 +306,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
             }
         }
         if hogwild_training {
-            drop(hogwild_trainer);
+            hogwild_trainer.block_untils_workers_finished();
         }
         cache.write_finish()?;
 
