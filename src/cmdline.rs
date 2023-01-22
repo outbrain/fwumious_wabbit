@@ -302,6 +302,11 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
                     .arg(Arg::with_name("hogwild_training")
                      .long("hogwild_training")
                      .required(false)
-                     .help("use faster lock-free multithreading training")
+                     .help("Use faster lock-free multithreading training")
                      .takes_value(false))
+                    .arg(Arg::with_name("hogwild_threads")
+                        .long("hogwild_threads")
+                        .value_name("num_threads")
+                        .help("Number of threads to use with hogwild training")
+                        .takes_value(true))
 }
