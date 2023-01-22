@@ -299,4 +299,9 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
                      .value_name("examples")
                      .help("After how many examples stop updating weights")
                      .takes_value(true))
+                    .arg(Arg::with_name("hogwild_training")
+                     .long("hogwild_training")
+                     .required(false)
+                     .help("use faster lock-free multithreading training")
+                     .takes_value(false))
 }
