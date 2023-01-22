@@ -17,6 +17,7 @@ use std::io::Write;
 use std::path::Path;
 use std::time::Instant;
 use crate::hogwild::HogwildTrainer;
+use crate::multithread_helpers::BoxedRegressorTrait;
 
 extern crate blas;
 extern crate intel_mkl_src;
@@ -176,13 +177,14 @@ fn main2() -> Result<(), Box<dyn Error>> {
 		
         let vw: vwmap::VwNamespaceMap;
         let mut re: regressor::Regressor;
+        let mut sharable_regressor: BoxedRegressorTrait;
         let mi: model_instance::ModelInstance;
 
         if let Some(filename) = cl.value_of("initial_regressor") {
 			
             println!("initial_regressor = {}", filename);
             (mi, vw, re) = persistence::new_regressor_from_filename(filename, testonly, Option::Some(&cl))?;
-
+            sharable_regressor = BoxedRegressorTrait::new(Box::new(re));
         } else {
 			
             // We load vw_namespace_map.csv just so we know all the namespaces ahead of time
@@ -196,12 +198,13 @@ fn main2() -> Result<(), Box<dyn Error>> {
             vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
             mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
             re = regressor::get_regressor_with_weights(&mi);
+            sharable_regressor = BoxedRegressorTrait::new(Box::new(re));
         };
 
         let input_filename = cl.value_of("data").expect("--data expected");
         let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"), &vw);
         let mut fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
-        let mut pb = re.new_portbuffer();
+        let mut pb = sharable_regressor.new_portbuffer();
 
         let predictions_after: u64 = match cl.value_of("predictions_after") {
             Some(examples) => examples.parse()?,
@@ -220,7 +223,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
                 .and_then(|s| s.parse().ok())
                 .unwrap_or_else(|| 16)
         };
-        let mut hogwild_trainer = HogwildTrainer::new(Box::new(re), hogwild_threads)?;
+        let mut hogwild_trainer = HogwildTrainer::new(sharable_regressor, hogwild_threads)?;
 
         let prediction_model_delay: u64 = match cl.value_of("prediction_model_delay") {
             Some(delay) => delay.parse()?,
@@ -282,16 +285,16 @@ fn main2() -> Result<(), Box<dyn Error>> {
                 if hogwild_training && update {
                     hogwild_trainer.digest_example(fbt.feature_buffer.clone());
                 } else {
-                    prediction = re.learn(&fbt.feature_buffer, &mut pb, update);
+                    prediction = sharable_regressor.learn(&fbt.feature_buffer, &mut pb, update);
                 }
             } else {
                 if example_num > predictions_after {
-                    prediction = re.learn(&fbt.feature_buffer, &mut pb, false);
+                    prediction = sharable_regressor.learn(&fbt.feature_buffer, &mut pb, false);
                 }
                 delayed_learning_fbs.push_back(fbt.feature_buffer.clone());
                 if (prediction_model_delay as usize) < delayed_learning_fbs.len() {
                     let delayed_buffer = delayed_learning_fbs.pop_front().unwrap();
-                    re.learn(&delayed_buffer, &mut pb, !testonly);
+                    sharable_regressor.learn(&delayed_buffer, &mut pb, !testonly);
                 }
             }
 
@@ -312,7 +315,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
 
         match final_regressor_filename {
             Some(filename) => {
-                persistence::save_regressor_to_filename(filename, &mi, &vw, re).unwrap()
+                persistence::save_regressor_to_filename(filename, &mi, &vw, sharable_regressor).unwrap()
             }
             None => {}
         }

@@ -19,14 +19,13 @@ pub struct HogwildWorker {
 }
 
 impl HogwildTrainer {
-    pub fn new(regressor: Box<Regressor>, numWorkers: u32) -> Result<HogwildTrainer, Box<dyn Error>>{
+    pub fn new(sharable_regressor: BoxedRegressorTrait, numWorkers: u32) -> Result<HogwildTrainer, Box<dyn Error>>{
         let (sender, receiver): (Sender<FeatureBuffer>, Receiver<FeatureBuffer>) = mpsc::channel();
         let mut trainer = HogwildTrainer {
             workers: Vec::new(),
             sender
         };
         let receiver: Arc<Mutex<Receiver<FeatureBuffer>>> = Arc::new(Mutex::new(receiver));
-        let sharable_regressor = BoxedRegressorTrait::new(regressor);
         let port_buffer = sharable_regressor.new_portbuffer();
         for i in 0..numWorkers {
             let worker = HogwildWorker::new(
