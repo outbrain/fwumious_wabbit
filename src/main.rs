@@ -223,7 +223,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
                 .and_then(|s| s.parse().ok())
                 .unwrap_or_else(|| 16)
         };
-        let mut hogwild_trainer = HogwildTrainer::new(sharable_regressor, hogwild_threads)?;
+        let mut hogwild_trainer = HogwildTrainer::new(sharable_regressor.clone(), hogwild_threads)?;
 
         let prediction_model_delay: u64 = match cl.value_of("prediction_model_delay") {
             Some(delay) => delay.parse()?,
