@@ -179,6 +179,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
         let mut re: regressor::Regressor;
         let mut sharable_regressor: BoxedRegressorTrait;
         let mi: model_instance::ModelInstance;
+        let mut hogwild_trainer;
 
         if let Some(filename) = cl.value_of("initial_regressor") {
 			
@@ -216,14 +217,16 @@ fn main2() -> Result<(), Box<dyn Error>> {
 
         
         let hogwild_training = cl.is_present("hogwild_training");
-        let hogwild_threads = match cl.value_of("hogwild_threads") {
-            Some(hogwild_threads) => hogwild_threads.parse().expect("hogwild_threads should be integer"),
-            None => env::var("NUM_CPUS")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or_else(|| 16)
-        };
-        let mut hogwild_trainer = HogwildTrainer::new(sharable_regressor.clone(), hogwild_threads)?;
+        if hogwild_training {
+            let hogwild_threads = match cl.value_of("hogwild_threads") {
+                Some(hogwild_threads) => hogwild_threads.parse().expect("hogwild_threads should be integer"),
+                None => env::var("NUM_CPUS")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or_else(|| 16)
+            };
+            hogwild_trainer = HogwildTrainer::new(sharable_regressor.clone(), hogwild_threads)?;
+        }
 
         let prediction_model_delay: u64 = match cl.value_of("prediction_model_delay") {
             Some(delay) => delay.parse()?,
