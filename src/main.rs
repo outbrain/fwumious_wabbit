@@ -315,7 +315,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
 
         match final_regressor_filename {
             Some(filename) => {
-                persistence::save_regressor_to_filename(filename, &mi, &vw, sharable_regressor).unwrap()
+                persistence::save_sharable_regressor_to_filename(filename, &mi, &vw, sharable_regressor).unwrap()
             }
             None => {}
         }

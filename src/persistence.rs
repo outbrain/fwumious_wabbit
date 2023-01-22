@@ -13,6 +13,7 @@ use crate::regressor;
 use crate::vwmap;
 use clap;
 use crate::multithread_helpers::BoxedRegressorTrait;
+use crate::regressor::Regressor;
 
 const REGRESSOR_HEADER_MAGIC_STRING: &[u8; 4] = b"FWRE"; // Fwumious Wabbit REgressor
 const REGRESSOR_HEADER_VERSION: u32 = 6; // Change to 5: introduce namespace descriptors which changes regressor
@@ -53,11 +54,28 @@ impl vwmap::VwNamespaceMap {
     }
 }
 
-pub fn save_regressor_to_filename(
+pub fn save_sharable_regressor_to_filename(
     filename: &str,
     mi: &model_instance::ModelInstance,
     vwmap: &vwmap::VwNamespaceMap,
     re: BoxedRegressorTrait,
+) -> Result<(), Box<dyn Error>> {
+    let output_bufwriter = &mut io::BufWriter::new(
+        fs::File::create(filename)
+            .expect(format!("Cannot open {} to save regressor to", filename).as_str()),
+    );
+    write_regressor_header(output_bufwriter)?;
+    vwmap.save_to_buf(output_bufwriter)?;
+    mi.save_to_buf(output_bufwriter)?;
+    re.write_weights_to_buf(output_bufwriter)?;
+    Ok(())
+}
+
+pub fn save_regressor_to_filename(
+    filename: &str,
+    mi: &model_instance::ModelInstance,
+    vwmap: &vwmap::VwNamespaceMap,
+    re: Regressor,
 ) -> Result<(), Box<dyn Error>> {
     let output_bufwriter = &mut io::BufWriter::new(
         fs::File::create(filename)
