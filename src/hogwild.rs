@@ -11,7 +11,6 @@ use crate::regressor::Regressor;
 pub struct HogwildTrainer {
     workers: Vec<JoinHandle<()>>,
     sender: Sender<FeatureBuffer>,
-    receiver: Receiver<FeatureBuffer>
 }
 
 pub struct HogwildWorker {
@@ -25,7 +24,6 @@ impl HogwildTrainer {
         let mut trainer = HogwildTrainer {
             workers: Vec::new(),
             sender,
-            receiver
         };
         let receiver: Arc<Mutex<Receiver<FeatureBuffer>>> = Arc::new(Mutex::new(receiver));
         let port_buffer = sharable_regressor.new_portbuffer();
@@ -45,7 +43,6 @@ impl HogwildTrainer {
         return HogwildTrainer {
             workers: vec![],
             sender,
-            receiver
         };
     }
 
