@@ -50,7 +50,7 @@ impl HogwildTrainer {
         self.sender.send(feature_buffer).unwrap();
     }
 
-    pub fn block_untils_workers_finished(&self) {
+    pub fn block_until_workers_finished(&self) {
         for worker in &self.workers {
             worker.join().unwrap();
         }

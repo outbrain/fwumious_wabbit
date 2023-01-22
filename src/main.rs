@@ -314,7 +314,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
         cache.write_finish()?;
 
         if hogwild_training {
-            hogwild_trainer.block_untils_workers_finished();
+            hogwild_trainer.block_until_workers_finished();
         }
         let elapsed = now.elapsed();
         println!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
