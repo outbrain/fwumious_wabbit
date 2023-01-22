@@ -76,7 +76,10 @@ impl HogwildWorker {
 
     pub fn train(&mut self, receiver: Arc<Mutex<Receiver<FeatureBuffer>>>) {
         loop {
-            let feature_buffer = receiver.lock().unwrap().recv().unwrap();
+            let feature_buffer = match receiver.lock().unwrap().recv() {
+                Ok(feature_buffer) => feature_buffer,
+                Err(RecvError) => break // channel was closed
+            };
             self.regressor.learn(&feature_buffer, &mut self.port_buffer, true);
         }
     }
