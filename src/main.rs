@@ -226,6 +226,9 @@ fn main2() -> Result<(), Box<dyn Error>> {
                     .unwrap_or_else(|| 16)
             };
             hogwild_trainer = HogwildTrainer::new(sharable_regressor.clone(), hogwild_threads)?;
+        } else {
+            // had to initialize this variable with something
+            hogwild_trainer = HogwildTrainer::new_dummy();
         }
 
         let prediction_model_delay: u64 = match cl.value_of("prediction_model_delay") {
@@ -308,11 +311,11 @@ fn main2() -> Result<(), Box<dyn Error>> {
                 }
             }
         }
+        cache.write_finish()?;
+
         if hogwild_training {
             hogwild_trainer.block_untils_workers_finished();
         }
-        cache.write_finish()?;
-
         let elapsed = now.elapsed();
         println!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
 

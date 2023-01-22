@@ -19,7 +19,7 @@ pub struct HogwildWorker {
 }
 
 impl HogwildTrainer {
-    pub fn new(sharable_regressor: BoxedRegressorTrait, numWorkers: u32) -> Result<HogwildTrainer, Box<dyn Error>>{
+    pub fn new(sharable_regressor: BoxedRegressorTrait, numWorkers: u32) -> Result<HogwildTrainer, Box<dyn Error>> {
         let (sender, receiver): (Sender<FeatureBuffer>, Receiver<FeatureBuffer>) = mpsc::channel();
         let mut trainer = HogwildTrainer {
             workers: Vec::new(),
@@ -37,13 +37,21 @@ impl HogwildTrainer {
         }
         Ok(trainer)
     }
+    
+    pub fn new_dummy() -> HogwildTrainer {
+        let (sender, receiver): (Sender<FeatureBuffer>, Receiver<FeatureBuffer>) = mpsc::channel();
+        return HogwildTrainer {
+            workers: vec![],
+            sender
+        };
+    }
 
     pub fn digest_example(&mut self, feature_buffer: FeatureBuffer) {
         self.sender.send(feature_buffer).unwrap();
     }
 
     pub fn block_untils_workers_finished(&self) {
-        for worker in self.workers {
+        for worker in &self.workers {
             worker.join().unwrap();
         }
     }
