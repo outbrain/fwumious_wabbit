@@ -21,7 +21,7 @@ use regressor::BlockTrait;
 use block_helpers::{WeightAndOptimizerData};
 
 
-const FFM_STACK_BUF_LEN:usize= 32768;
+const FFM_STACK_BUF_LEN:usize= 8192;
 const FFM_CONTRA_BUF_LEN:usize = 16384;
 
 
