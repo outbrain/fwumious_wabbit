@@ -418,7 +418,6 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 core_macro!(local_data_ffm_values);
 
             } else {
-                // panic!("not supposed to reach here! ffm data len: {}", local_data_ffm_len);
                 // Slow-path - using heap data structures
                 if local_data_ffm_len > self.local_data_ffm_values.len() {
                     self.local_data_ffm_values.reserve(local_data_ffm_len - self.local_data_ffm_values.len() + 1024);
