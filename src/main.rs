@@ -179,7 +179,6 @@ fn main2() -> Result<(), Box<dyn Error>> {
         let mut re: regressor::Regressor;
         let mut sharable_regressor: BoxedRegressorTrait;
         let mi: model_instance::ModelInstance;
-        let mut hogwild_trainer;
 
         if let Some(filename) = cl.value_of("initial_regressor") {
 			
@@ -217,7 +216,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
 
         
         let hogwild_training = cl.is_present("hogwild_training");
-        if hogwild_training {
+        let mut hogwild_trainer = if hogwild_training {
             let hogwild_threads = match cl.value_of("hogwild_threads") {
                 Some(hogwild_threads) => hogwild_threads.parse().expect("hogwild_threads should be integer"),
                 None => 16
@@ -226,7 +225,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
         } else {
             // had to initialize this variable with something
             hogwild_trainer = HogwildTrainer::new_dummy();
-        }
+        };
 
         let prediction_model_delay: u64 = match cl.value_of("prediction_model_delay") {
             Some(delay) => delay.parse()?,
