@@ -235,7 +235,11 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
              .help("Adagrad initial accumulated gradient for ")
              .multiple(false)
              .takes_value(true))
-
+        .arg(Arg::with_name("dump_weight_space")
+             .long("dump_weight_space")
+             .help("Dump weights to stdout to be parsed down-stream.")
+             .multiple(false)
+             .takes_value(false))
 
         .arg(Arg::with_name("nn_layers")
              .long("nn_layers")
