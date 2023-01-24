@@ -46,7 +46,7 @@ impl HogwildTrainer {
         };
     }
 
-    pub fn digest_example(self, feature_buffer: FeatureBuffer) {
+    pub fn digest_example(&self, feature_buffer: FeatureBuffer) {
         self.sender.send(feature_buffer).unwrap();
     }
 
