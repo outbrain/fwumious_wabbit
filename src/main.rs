@@ -220,10 +220,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
         if hogwild_training {
             let hogwild_threads = match cl.value_of("hogwild_threads") {
                 Some(hogwild_threads) => hogwild_threads.parse().expect("hogwild_threads should be integer"),
-                None => env::var("NUM_CPUS")
-                    .ok()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or_else(|| 16)
+                None => 16
             };
             hogwild_trainer = HogwildTrainer::new(sharable_regressor.clone(), hogwild_threads)?;
         } else {
