@@ -223,7 +223,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
             };
             HogwildTrainer::new(sharable_regressor.clone(), hogwild_threads)
         } else {
-            // had to initialize this variable with something
+            // had to initialize this variable with something for the compiler to stop complaining, and using Option might be costly
             HogwildTrainer::new_dummy()
         };
 
