@@ -19,7 +19,7 @@ pub struct HogwildWorker {
 }
 
 impl HogwildTrainer {
-    pub fn new(sharable_regressor: BoxedRegressorTrait, numWorkers: u32) -> Result<HogwildTrainer, Box<dyn Error>> {
+    pub fn new(sharable_regressor: BoxedRegressorTrait, numWorkers: u32) -> HogwildTrainer {
         let (sender, receiver): (Sender<FeatureBuffer>, Receiver<FeatureBuffer>) = mpsc::channel();
         let mut trainer = HogwildTrainer {
             workers: Vec::new(),
@@ -32,10 +32,10 @@ impl HogwildTrainer {
                 sharable_regressor.clone(), 
                 port_buffer.clone(), 
                 Arc::clone(&receiver)
-            )?;
+            );
             trainer.workers.push(worker);
         }
-        Ok(trainer)
+        trainer
     }
     
     pub fn new_dummy() -> HogwildTrainer {
@@ -63,7 +63,7 @@ impl HogwildWorker {
         regressor: BoxedRegressorTrait,
         port_buffer: PortBuffer,
         receiver: Arc<Mutex<Receiver<FeatureBuffer>>>
-    ) -> Result<JoinHandle<()>, Box<dyn Error>> {
+    ) -> JoinHandle<()> {
         let mut worker = HogwildWorker {
             regressor,
             port_buffer
@@ -71,7 +71,7 @@ impl HogwildWorker {
         let thread = thread::spawn(move || {
             worker.train(receiver)
         });
-        Ok(thread)
+        thread
     }
 
     pub fn train(&mut self, receiver: Arc<Mutex<Receiver<FeatureBuffer>>>) {

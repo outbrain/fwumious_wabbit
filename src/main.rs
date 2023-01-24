@@ -221,7 +221,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
                 Some(hogwild_threads) => hogwild_threads.parse().expect("hogwild_threads should be integer"),
                 None => 16
             };
-            HogwildTrainer::new(sharable_regressor.clone(), hogwild_threads)?;
+            HogwildTrainer::new(sharable_regressor.clone(), hogwild_threads);
         } else {
             // had to initialize this variable with something
             HogwildTrainer::new_dummy();
