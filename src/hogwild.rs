@@ -84,3 +84,20 @@ impl HogwildWorker {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::model_instance::ModelInstance;
+    use super::*;
+
+    #[test]
+    fn test_hogwild_trainer() {
+        let empty_model_instance = ModelInstance::new_empty()?;
+        let regressor: BoxedRegressorTrait = BoxedRegressorTrait::new(Box::new(Regressor::new(&empty_model_instance)));
+        let trainer = HogwildTrainer::new(regressor, 2);
+        let (sender, receiver) = mpsc::channel();
+        trainer.digest_example(FeatureBuffer::new(vec![], vec![]));
+        trainer.block_until_workers_finished();
+        assert!(receiver.try_recv().is_err());
+    }
+}

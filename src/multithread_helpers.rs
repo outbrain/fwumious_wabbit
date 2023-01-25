@@ -15,7 +15,7 @@ pub struct UnsafelySharableTrait<T:Sized> {
     reference_count: Arc<Mutex<PhantomData<u32>>>,
 }
 
-pub type BoxedRegressorTrait  = UnsafelySharableTrait<Box<Regressor>>;
+pub type BoxedRegressorTrait = UnsafelySharableTrait<Box<Regressor>>;
 
 // SUPER UNSAFE
 // SUPER UNSAFE
