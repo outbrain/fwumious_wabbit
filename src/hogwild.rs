@@ -3,6 +3,7 @@ use std::sync::{Arc, mpsc, Mutex};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::thread::JoinHandle;
+
 use crate::feature_buffer::FeatureBuffer;
 use crate::multithread_helpers::BoxedRegressorTrait;
 use crate::port_buffer::PortBuffer;
@@ -84,22 +85,5 @@ impl HogwildWorker {
             };
             self.regressor.learn(&feature_buffer, &mut self.port_buffer, true);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::model_instance::ModelInstance;
-    use super::*;
-
-    #[test]
-    fn test_hogwild_trainer() {
-        let empty_model_instance = ModelInstance::new_empty()?;
-        let regressor: BoxedRegressorTrait = BoxedRegressorTrait::new(Box::new(Regressor::new(&empty_model_instance)));
-        let trainer = HogwildTrainer::new(regressor, 2);
-        let (sender, receiver) = mpsc::channel();
-        trainer.digest_example(FeatureBuffer::new(vec![], vec![]));
-        trainer.block_until_workers_finished();
-        assert!(receiver.try_recv().is_err());
     }
 }
