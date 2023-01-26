@@ -8,6 +8,7 @@ use crate::multithread_helpers::BoxedRegressorTrait;
 use crate::port_buffer::PortBuffer;
 use crate::regressor::Regressor;
 
+#[derive(Default)]
 pub struct HogwildTrainer {
     workers: Vec<JoinHandle<()>>,
     sender: Sender<FeatureBuffer>,
@@ -38,14 +39,6 @@ impl HogwildTrainer {
         trainer
     }
     
-    pub fn new_dummy() -> HogwildTrainer {
-        let (sender, receiver): (Sender<FeatureBuffer>, Receiver<FeatureBuffer>) = mpsc::channel();
-        return HogwildTrainer {
-            workers: vec![],
-            sender,
-        };
-    }
-
     pub fn digest_example(&self, feature_buffer: FeatureBuffer) {
         self.sender.send(feature_buffer).unwrap();
     }
