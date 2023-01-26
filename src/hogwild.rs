@@ -38,14 +38,6 @@ impl HogwildTrainer {
         trainer
     }
     
-    pub fn new_dummy() -> HogwildTrainer {
-        let (sender, receiver): (Sender<FeatureBuffer>, Receiver<FeatureBuffer>) = mpsc::channel();
-        return HogwildTrainer {
-            workers: vec![],
-            sender,
-        };
-    }
-
     pub fn digest_example(&self, feature_buffer: FeatureBuffer) {
         self.sender.send(feature_buffer).unwrap();
     }
@@ -55,6 +47,16 @@ impl HogwildTrainer {
         for worker in self.workers {
             worker.join().unwrap();
         } 
+    }
+}
+
+impl Default for HogwildTrainer {
+    fn default() -> Self {
+        let (sender, receiver) = mpsc::channel();
+        HogwildTrainer {
+            workers: vec![],
+            sender
+        }
     }
 }
 

@@ -223,8 +223,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
             };
             HogwildTrainer::new(sharable_regressor.clone(), hogwild_threads)
         } else {
-            // had to initialize this variable with something for the compiler to stop complaining, and using Option might be costly
-            HogwildTrainer::new_dummy()
+            HogwildTrainer::default()
         };
 
         let prediction_model_delay: u64 = match cl.value_of("prediction_model_delay") {
