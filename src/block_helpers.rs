@@ -12,6 +12,7 @@ use std::cmp::min;
 use std::mem::{self};
 use std::slice;
 
+
 #[derive(Clone, Debug)]
 #[repr(C)]
 pub struct Weight {
@@ -106,7 +107,7 @@ pub fn read_weights_only_from_buf2<L: OptimizerTrait>(
     if weights_len != out_weights.len() {
         return Err(format!("read_weights_only_from_buf2 - number of weights to read ({}) and number of weights allocated ({}) isn't the same", weights_len, out_weights.len()))?;
     }
-
+    let W_MAX_BOUND = 1.0;
     unsafe {
         while remaining_weights > 0 {
             let chunk_size = min(remaining_weights, BUF_LEN);
@@ -116,8 +117,13 @@ pub fn read_weights_only_from_buf2<L: OptimizerTrait>(
                 chunk_size * mem::size_of::<WeightAndOptimizerData<L>>(),
             );
             input_bufreader.read_exact(&mut in_weights_view)?;
+
             for w in &in_weights {
-                out_weights.get_unchecked_mut(out_idx).weight = w.weight;
+		if w.weight.abs() > W_MAX_BOUND {
+		    out_weights.get_unchecked_mut(out_idx).weight = 1.0 / ((2 << 12) as f32);
+		} else {
+		    out_weights.get_unchecked_mut(out_idx).weight = w.weight;
+		}
                 out_idx += 1;
             }
             remaining_weights -= chunk_size;
