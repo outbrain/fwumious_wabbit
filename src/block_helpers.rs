@@ -40,7 +40,7 @@ pub fn read_weights_from_buf<L:OptimizerTrait>(weights: &mut Vec<WeightAndOptimi
     }
     unsafe {
         let mut buf_view:&mut [u8] = slice::from_raw_parts_mut(weights.as_mut_ptr() as *mut u8, 
-                                         weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
+							       weights.len() *mem::size_of::<WeightAndOptimizerData<L>>());
         input_bufreader.read_exact(&mut buf_view)?;
     }
     Ok(())
@@ -68,7 +68,6 @@ pub fn read_weights_only_from_buf2<L:OptimizerTrait>(weights_len: usize, out_wei
     if weights_len != out_weights.len() {
         return Err(format!("read_weights_only_from_buf2 - number of weights to read ({}) and number of weights allocated ({}) isn't the same", weights_len, out_weights.len()))?;
     }
-    let W_MAX_BOUND = 1.0;
     unsafe {
         while remaining_weights > 0 {
             let chunk_size = min(remaining_weights, BUF_LEN);
@@ -77,13 +76,7 @@ pub fn read_weights_only_from_buf2<L:OptimizerTrait>(weights_len: usize, out_wei
                                          chunk_size * mem::size_of::<WeightAndOptimizerData<L>>());
             input_bufreader.read_exact(&mut in_weights_view)?;
             for w in &in_weights {
-		if w.weight.abs() > W_MAX_BOUND {
-		    out_weights.get_unchecked_mut(out_idx).weight = 1.0 / ((2 << 12) as f32);
-		} else {
-		    out_weights.get_unchecked_mut(out_idx).weight = w.weight;
-		}
-		
-		println!("WEIGHT\t{:?}", w.weight);
+		out_weights.get_unchecked_mut(out_idx).weight = w.weight;
                 //out_weights.push(WeightAndOptimizerData{weight:w.weight, optimizer_data: std::marker::PhantomData{}});
                 // out_weights.get_unchecked_mut(out_idx).weight = w.weight;
                 out_idx += 1;
