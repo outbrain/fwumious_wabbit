@@ -121,7 +121,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
     };
 
     let testonly = cl.is_present("testonly");
-	
+    
     let final_regressor_filename = cl.value_of("final_regressor");
     match final_regressor_filename {
         Some(filename) => {
@@ -150,7 +150,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
             .expect("Daemon mode only supports serving from --initial regressor");
         println!("initial_regressor = {}", filename);
         let (mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true, Option::Some(&cl))?;
-		
+	
         let mut se = serving::Serving::new(&cl, &vw2, Box::new(re_fixed), &mi2)?;
         se.serve()?;
     } else if cl.is_present("convert_inference_regressor") {
@@ -166,21 +166,21 @@ fn main2() -> Result<(), Box<dyn Error>> {
             None => {}
         }
     } else {
-		
+	
         let vw: vwmap::VwNamespaceMap;
         let mut re: regressor::Regressor;
-        let mi: model_instance::ModelInstance;
+        let mut mi: model_instance::ModelInstance;
 
         if let Some(filename) = cl.value_of("initial_regressor") {
-			
+	    
             println!("initial_regressor = {}", filename);
             (mi, vw, re) = persistence::new_regressor_from_filename(filename, testonly, Option::Some(&cl))?;
 
         } else {
-			
+	    
             // We load vw_namespace_map.csv just so we know all the namespaces ahead of time
             // This is one of the major differences from vowpal
-			
+	    
             let input_filename = cl.value_of("data").expect("--data expected");
             let vw_namespace_map_filepath = Path::new(input_filename)
                 .parent()
@@ -200,32 +200,11 @@ fn main2() -> Result<(), Box<dyn Error>> {
             None => 0,
         };
 
-		let mut max_freq_hash_storage: FxHashMap<u32, u32> = FxHashMap::default();
-		let mut max_hashed_index: u32 = 0;
-		
-		if cl.is_present("rehash_prior_counts"){
-
-			let hash_storage_input = cl.value_of("rehash_prior_counts").expect("Prior count values expected ..").to_string();
-			let hash_space: String = fs::read_to_string(hash_storage_input)?;
-			let mut subsequent_index: u32 = 0;
-			let right_shift_constant: u32 = (mi.ffm_fields.len() as u32) * (mi.ffm_k as u32);
-			let hash_frequency_lower_bound: u32 = cl.value_of("hash_freq_lower_bound").expect("Please provide the lower count bound for rehashing.").parse().unwrap();
-				
-			for line in hash_space.lines() {
-				let instruction_sub_parts = line.split("\t");
-				let vec: Vec<&str> = instruction_sub_parts.collect();
-				let hash_entry: u32 = vec[0].parse().unwrap();
-				let hash_value: u32 = vec[1].parse().unwrap();
-				
-				// only insert ones > certain frequency
-				if hash_value > hash_frequency_lower_bound {
-					subsequent_index += 1;
-					let new_value = subsequent_index * right_shift_constant;
-					max_freq_hash_storage.insert(hash_entry, new_value);
-					max_hashed_index = new_value;
-				}
-			}
-		}
+	// let mut max_freq_hash_storage: FxHashMap<u32, u32> = FxHashMap::default();
+	let mut warmup_upper_bound: i64 = 0;
+	if cl.is_present("warmup_listing_count") {
+	    warmup_upper_bound = cl.value_of("warmup_listing_count").expect("Please provide int-like upper bound for hash warm-up phase.").parse::<i64>()?;
+	}
 
         let holdout_after_option: Option<u64> =
             cl.value_of("holdout_after").map(|s| s.parse().unwrap());
@@ -257,6 +236,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
 
         let now = Instant::now();
         let mut example_num = 0;
+	println!("{:?}", mi.freq_hash_rehashed_already);
         loop {
             let reading_result;
             let buffer: &[u32];
@@ -281,20 +261,45 @@ fn main2() -> Result<(), Box<dyn Error>> {
 
             example_num += 1;
             fbt.translate(buffer, example_num);
+	    
+	    // Increment counts if specified as part of CLI	    
+	    if cl.is_present("warmup_listing_count"){
+		if mi.freq_hash_rehashed_already {
+		    fbt.max_freq_rehash(&mi);					
+		} else {
+		    if warmup_upper_bound > mi.warmup_listing_count {
+	    		fbt.increment_common_hash(&mut mi);
+			continue
+		    } else {
 
-			// Increment counts if specified as part of CLI
-			if cl.is_present("count_frequent_hashes"){
-				fbt.increment_common_hash(&mut max_freq_hash_storage);
-				continue
+			println!("Creating the hash index space based on {} listings.", mi.warmup_listing_count);
+			let embedding_slot: u32 = (mi.ffm_fields.len() as u32) * (mi.ffm_k as u32);
+			let mut tmp_hash_vec: Vec::<(&u32, &u32)> = mi.freq_hash.iter().collect();
+			let max_allowed_slot_size = (1 << mi.ffm_bit_precision) - 1;
+			tmp_hash_vec.sort_by(|a, b| b.1.cmp(&a.1));
+			let mut final_hash: FxHashMap<u32, u32> = FxHashMap::default();
+			let mut tmp_location_lower_bound = 0;
+			for hash_name in tmp_hash_vec.iter(){
+			    if (tmp_location_lower_bound + embedding_slot) < max_allowed_slot_size  && *hash_name.1 > 1 {
+				final_hash.insert(*hash_name.0, tmp_location_lower_bound);
+				tmp_location_lower_bound += embedding_slot;
+			    } else {
+				break;
+			    }
 			}
-			
-			// Conduct the rehashing step based on priors if specified
-			if cl.is_present("rehash_prior_counts") {
-				fbt.max_freq_rehash(&mut max_freq_hash_storage, max_hashed_index);
-			} else {
-				fbt.apply_generic_mask();
-			}
-			
+			// in-place switch the internal hash + lock it in
+			println!("Storing indices for {:?} most frequent hashes, tiling {:?}% of entire hash space.", final_hash.len(), (100.0 * (embedding_slot as f32 * final_hash.len() as f32) / max_allowed_slot_size as f32));
+			mi.freq_hash = final_hash;
+			mi.freq_hash_rehashed_already = true;
+			fbt.max_freq_rehash(&mi);
+		    }		
+		}
+		
+	    } else {
+		// this is default behavior.
+		fbt.apply_generic_mask();
+	    }
+	    
             let mut prediction: f32 = 0.0;
 
             if prediction_model_delay == 0 {
@@ -323,30 +328,15 @@ fn main2() -> Result<(), Box<dyn Error>> {
         }
         cache.write_finish()?;
 
-		if cl.is_present("count_frequent_hashes"){
 
-			let mut vec_holder = Vec::<String>::new();
-			let mut all_hash_intervals: Vec<Vec<u32>> = Vec::new();
-			let right_shift_constant: u32 = (mi.ffm_fields.len() as u32) * (mi.ffm_k as u32);
-			
-			for (key, value) in max_freq_hash_storage.into_iter() {
-				let some_string = format!("{}\t{}", key.to_string(), value.to_string());
-				vec_holder.push(some_string.to_string());
-			}
-			let final_hash_dump = vec_holder.join("\n");
-			let out_file_arg = cl.value_of("count_frequent_hashes").expect("Out file for hashes not given.");
-			println!("Writing frequent hashes to {} ..", out_file_arg);
-			fs::write(out_file_arg, final_hash_dump).expect("Unable to write file");
-			
-		} else {
-			match final_regressor_filename {
-				Some(filename) => {
-					persistence::save_regressor_to_filename(filename, &mi, &vw, re).unwrap()
-				}
-				None => {}
-			}
-		}
-		
+	match final_regressor_filename {
+	    Some(filename) => {
+		persistence::save_regressor_to_filename(filename, &mi, &vw, re).unwrap()
+	    }
+	    None => {}
+	}
+	
+	
         let elapsed = now.elapsed();
         println!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
 

@@ -179,14 +179,16 @@ impl FeatureBufferTranslator {
     }
 
 
-	pub fn increment_common_hash(&mut self, stored_hashes: &mut FxHashMap<u32, u32>) -> () {
-		// Count hashes.
- 		let stored_hashes_parsed = stored_hashes;
-		for hash_value_entry in self.feature_buffer.ffm_buffer.iter_mut() {
-			let hash_entry: u32 = hash_value_entry.hash;
-			stored_hashes_parsed.entry(hash_entry).and_modify(|vx| *vx += 1).or_insert(1);
-		}
+    pub fn increment_common_hash(&mut self, mi: &mut model_instance::ModelInstance) -> () {
+
+
+	for hash_value_entry in self.feature_buffer.ffm_buffer.iter_mut() {
+	    let hash_entry: u32 = hash_value_entry.hash;
+	    mi.freq_hash.entry(hash_entry).and_modify(|vx| *vx += 1).or_insert(1);
 	}
+	
+	mi.warmup_listing_count += 1;
+    }
 
 	pub fn apply_generic_mask(&mut self) -> () {
 		// Generic mask application in case no rehashing is considered.
@@ -196,19 +198,16 @@ impl FeatureBufferTranslator {
 		}
 	}
 	
-	pub fn max_freq_rehash(&mut self, stored_hashes: &mut FxHashMap<u32, u32>, max_hashed_index: u32) -> () {
+	pub fn max_freq_rehash(&mut self, mi: &model_instance::ModelInstance) -> () {
 		// A method for re-fining the hash space based on prior frequency counts
-
-		let hash_offset_remainder = self.ffm_max_capacity - max_hashed_index - self.ffm_embedding_offset;
 		
 		for hash_value_entry in self.feature_buffer.ffm_buffer.iter_mut() {
-			match stored_hashes.get(&hash_value_entry.hash) {
+			match mi.freq_hash.get(&hash_value_entry.hash) {
 				Some(i) => {
 					hash_value_entry.hash = *i;
 				},
 				_ => {
-					hash_value_entry.hash = (max_hashed_index + self.ffm_embedding_offset + hash_value_entry.hash % hash_offset_remainder);
-					assert!(hash_value_entry.hash > (max_hashed_index + self.ffm_embedding_offset));
+					hash_value_entry.hash = (hash_value_entry.hash * ((mi.ffm_fields.len() as u32) * (mi.ffm_k as u32))) & self.ffm_hash_mask;
 				},
 			}
 		}

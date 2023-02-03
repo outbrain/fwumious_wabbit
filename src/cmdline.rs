@@ -2,12 +2,12 @@ use clap::{App, Arg,  AppSettings};
 use crate::version;
 
 pub fn parse<'a>() -> clap::ArgMatches<'a> {
-	let matches = create_expected_args().get_matches();
-	matches
+    let matches = create_expected_args().get_matches();
+    matches
 }
 
 pub fn create_expected_args<'a>() -> App<'a, 'a> {
-	App::new("fwumious wabbit")
+    App::new("fwumious wabbit")
         .version(version::LATEST)
         .author("Andraz Tori <atori@outbrain.com>")
         .about("Superfast Logistic Regression & Field Aware Factorization Machines")
@@ -35,7 +35,7 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
         .arg(Arg::with_name("save_resume")
              .long("save_resume")
              .help("save extra state so learning can be resumed later with new data")
-			 .takes_value(false))
+	     .takes_value(false))
         .arg(Arg::with_name("interactions")
              .long("interactions")
              .value_name("namespace_char,namespace_char[:value]")
@@ -218,17 +218,21 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
              .help("Adagrad initial accumulated gradient for ")
              .multiple(false)
              .takes_value(true))
-		.arg(Arg::with_name("count_frequent_hashes")
+	.arg(Arg::with_name("count_frequent_hashes")
              .long("count_frequent_hashes")
              .help("If enabled, fw will count hashes and output a table of common values.")
              .takes_value(true))
-		.arg(Arg::with_name("rehash_prior_counts")
+	.arg(Arg::with_name("rehash_prior_counts")
              .long("rehash_prior_counts")
              .help("If enabled, prior counts will be used to change hash values.")
              .takes_value(true))
-		.arg(Arg::with_name("hash_freq_lower_bound")
+	.arg(Arg::with_name("hash_freq_lower_bound")
              .long("hash_freq_lower_bound")
              .help("Specify the lower hash frequency for rehashing step.")
+             .takes_value(true))
+	.arg(Arg::with_name("warmup_listing_count")
+             .long("warmup_listing_count")
+             .help("How many listings will be used to warm up the hash function.")
              .takes_value(true))
 
 

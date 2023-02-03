@@ -8,6 +8,7 @@ use std::fs;
 use std::fs::File;
 use serde::{Serialize,Deserialize};//, Deserialize};
 use serde_json::{Value};
+use rustc_hash::FxHashMap;
 
 use crate::vwmap;
 use crate::consts;
@@ -51,7 +52,9 @@ pub struct ModelInstance {
     pub ffm_separate_vectors: bool, // DEPRECATED, UNUSED
     #[serde(default = "default_bool_false")]
     pub fastmath: bool,
-
+    pub freq_hash: FxHashMap<u32, u32>,
+    pub warmup_listing_count: i64,
+    pub freq_hash_rehashed_already: bool,
     #[serde(default = "default_f32_zero")]
     pub ffm_k_threshold: f32,
     #[serde(default = "default_f32_zero")]
@@ -92,6 +95,9 @@ impl ModelInstance {
             hash_mask: 0, // DEPRECATED, UNUSED
             power_t: 0.5,
             ffm_power_t: 0.5,
+	    warmup_listing_count: 0,
+	    freq_hash_rehashed_already: false,
+	    freq_hash: FxHashMap::default(),
             add_constant_feature: true,
             feature_combo_descs: Vec::new(),
             ffm_fields: Vec::new(),
