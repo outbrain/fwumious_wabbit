@@ -4,6 +4,7 @@ use std::io::ErrorKind;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use crate::consts;
 use crate::feature_transform_parser;
@@ -56,6 +57,11 @@ pub struct ModelInstance {
     pub ffm_bit_precision: u32,
     #[serde(default = "default_bool_false")]
     pub fastmath: bool,
+
+    // fields relevant for rehashing
+    pub freq_hash: FxHashMap<u32, u32>,
+    pub warmup_listing_count: i64,
+    pub freq_hash_rehashed_already: bool,
 
     pub ffm_initialization_type: String,
     #[serde(default = "default_f32_zero")]
@@ -117,6 +123,9 @@ impl ModelInstance {
             ffm_learning_rate: 0.5, // vw default
             minimum_learning_rate: 0.0,
             bit_precision: 18, // vw default
+	    warmup_listing_count: 0,
+	    freq_hash_rehashed_already: false,
+	    freq_hash: FxHashMap::default(),	    
             power_t: 0.5,
             ffm_power_t: 0.5,
             add_constant_feature: true,

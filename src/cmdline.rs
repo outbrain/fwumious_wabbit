@@ -139,6 +139,10 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
              .value_name("all")
              .help("We do not support treating strings as already hashed numbers, so you have to use --hash all")
              .takes_value(true))
+	.arg(Arg::with_name("warmup_listing_count")
+             .long("warmup_listing_count")
+             .help("How many listings will be used to warm up the hash function.")
+             .takes_value(true))
 
     // Regressor
         .arg(Arg::with_name("final_regressor")
