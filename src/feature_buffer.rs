@@ -2,7 +2,6 @@ use crate::feature_transform_executor;
 use crate::model_instance;
 use crate::parser;
 use crate::vwmap::{NamespaceFormat, NamespaceType};
-use rustc_hash::FxHashMap;
 
 const VOWPAL_FNV_PRIME: u32 = 16777619; // vowpal magic number
 //const CONSTANT_NAMESPACE:usize = 128;

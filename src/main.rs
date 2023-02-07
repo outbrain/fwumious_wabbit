@@ -16,13 +16,13 @@ use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
 use std::time::Instant;
-use rustc_hash::FxHashMap;
 
 extern crate blas;
 extern crate intel_mkl_src;
 
 #[macro_use]
 extern crate nom;
+mod block_rehash;
 mod block_ffm;
 mod block_helpers;
 mod block_loss_functions;
@@ -265,35 +265,12 @@ fn main2() -> Result<(), Box<dyn Error>> {
             example_num += 1;
             fbt.translate(buffer, example_num);
 
-	    if (cl.is_present("warmup_listing_count") & !mi.freq_hash_rehashed_already) {
-	    // if mi.freq_hash_rehashed_already {
-		//     fbt.max_freq_rehash();
-		// } else {
+	    if cl.is_present("warmup_listing_count") & !mi.freq_hash_rehashed_already {
 		if warmup_upper_bound > mi.warmup_listing_count {
 	    	    fbt.increment_common_hash(&mut mi);
 		    continue
-		} else {
-
-		    println!("Creating the hash index space based on {} listings.", mi.warmup_listing_count);
-		    let embedding_slot: u32 = (mi.ffm_fields.len() as u32) * (mi.ffm_k as u32);
-		    let mut tmp_hash_vec: Vec::<(&u32, &u32)> = mi.freq_hash.iter().collect();
-		    let max_allowed_slot_size = (1 << mi.ffm_bit_precision) - 1;
-		    tmp_hash_vec.sort_by(|a, b| b.1.cmp(&a.1));
-		    let mut final_hash: FxHashMap<u32, u32> = FxHashMap::default();
-		    let mut tmp_location_lower_bound = 0;
-		    for hash_name in tmp_hash_vec.iter(){
-			if (tmp_location_lower_bound + embedding_slot) < max_allowed_slot_size  && *hash_name.1 > 1 {
-			    final_hash.insert(*hash_name.0, tmp_location_lower_bound);
-			    tmp_location_lower_bound += embedding_slot;
-			} else {
-			    break;
-			}
-		    }
-		    // in-place switch the internal hash + lock it in
-		    println!("Storing indices for {:?} most frequent hashes, tiling {:?}% of entire hash space.", final_hash.len(), (100.0 * (embedding_slot as f32 * final_hash.len() as f32) / max_allowed_slot_size as f32));
-		    mi.freq_hash = final_hash;
-		    mi.freq_hash_rehashed_already = true;
-		    fbt.max_freq_rehash();
+		} else {		    
+		    block_rehash::rehash_sorted_counts(&mut mi, &mut fbt);
 		}
 	    }
 	    
