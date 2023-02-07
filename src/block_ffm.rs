@@ -23,6 +23,10 @@ use regressor::BlockTrait;
 const FFM_STACK_BUF_LEN: usize = 32768;
 const FFM_CONTRA_BUF_LEN: usize = 16384;
 
+// these two are based on statistics of past weight dumps.
+const WEIGHT_FFM_DEFAULT_FALLBACK: f32 = 0.000001;
+const WEIGHT_FFM_UPPER_BOUND: f32 = 1.5;
+
 const SQRT_OF_ONE_HALF: f32 = 0.70710678118;
 
 pub struct BlockFFM<L: OptimizerTrait> {
@@ -401,9 +405,13 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                     let general_gradient = myslice.get_unchecked(contra_offset2 + z);
                                     for k in 0..FFMK as usize {
                                         let feature_value = *local_data_ffm_values.get_unchecked(local_index);
-                                        let gradient = general_gradient * feature_value;
-                                        let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);
+                                        let gradient = general_gradient * feature_value;					
+                                        let update = self.optimizer_ffm.calculate_update(gradient, &mut ffm_weights.get_unchecked_mut(feature_index).optimizer_data);					
 
+					if ffm_weights.get_unchecked_mut(feature_index).weight.abs() > WEIGHT_FFM_UPPER_BOUND {
+					    ffm_weights.get_unchecked_mut(feature_index).weight = WEIGHT_FFM_DEFAULT_FALLBACK;
+					}
+					
                                         ffm_weights.get_unchecked_mut(feature_index).weight -= update;
                                         local_index += 1;
                                         feature_index += 1;

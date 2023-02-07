@@ -26,6 +26,8 @@ use blas::*;
 
 const MAX_NUM_INPUTS: usize = 16000;
 const USE_BLAS: bool = true;
+const WEIGHT_NN_DEFAULT_FALLBACK: f32 = 0.000001;
+const WEIGHT_NN_UPPER_BOUND: f32 = 1.5;
 
 #[derive(PartialEq, Debug)]
 pub enum NeuronType {
@@ -399,6 +401,12 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
                             );
                             *output_errors.get_unchecked_mut(i) +=
                                 self.weights.get_unchecked(i + j_offset).weight * general_gradient;
+
+
+			    if self.weights.get_unchecked_mut(i + j_offset).weight.abs() > WEIGHT_NN_UPPER_BOUND {
+				self.weights.get_unchecked_mut(i + j_offset).weight = WEIGHT_NN_DEFAULT_FALLBACK;
+			    }
+			    
                             self.weights.get_unchecked_mut(i + j_offset).weight -= update;
                         }
                         {
@@ -411,6 +419,11 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
                                     .get_unchecked_mut(bias_offset + j)
                                     .optimizer_data,
                             );
+
+			    if self.weights.get_unchecked_mut(bias_offset + j).weight.abs() > WEIGHT_NN_UPPER_BOUND {
+				self.weights.get_unchecked_mut(bias_offset + j).weight = WEIGHT_NN_DEFAULT_FALLBACK;
+			    }
+			    
                             self.weights.get_unchecked_mut(bias_offset + j).weight -= update;
                         }
 

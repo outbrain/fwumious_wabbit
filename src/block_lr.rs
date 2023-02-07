@@ -15,6 +15,11 @@ use block_helpers::WeightAndOptimizerData;
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 
+
+// these two are based on statistics of past weight dumps.
+const WEIGHT_LR_DEFAULT_FALLBACK: f32 = 0.000001;
+const WEIGHT_LR_UPPER_BOUND: f32 = 1.5;
+
 pub struct BlockLR<L: OptimizerTrait> {
     pub weights: Vec<WeightAndOptimizerData<L>>,
     pub weights_len: u32,
@@ -146,6 +151,11 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
                         gradient,
                         &mut self.weights.get_unchecked_mut(feature_index).optimizer_data,
                     );
+
+		    if self.weights.get_unchecked_mut(feature_index).weight.abs() > WEIGHT_LR_UPPER_BOUND {
+			self.weights.get_unchecked_mut(feature_index).weight = WEIGHT_LR_DEFAULT_FALLBACK;
+		    }
+		    
                     self.weights.get_unchecked_mut(feature_index).weight -= update;
                 }
             }
