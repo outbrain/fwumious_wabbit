@@ -9,6 +9,7 @@ use crate::consts;
 use crate::feature_transform_parser;
 use crate::vwmap;
 use crate::vwmap::NamespaceDescriptor;
+use log::{warn};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct FeatureComboDesc {
@@ -387,7 +388,6 @@ impl ModelInstance {
             for namespaces_str in in_v {
                 let mut field: Vec<vwmap::NamespaceDescriptor> = Vec::new();
                 for char in namespaces_str.chars() {
-                    //println!("K: {}", char);
                     let namespace_descriptor = feature_transform_parser::get_namespace_descriptor(
                         &mi.transform_namespaces,
                         vw,
@@ -541,7 +541,8 @@ impl ModelInstance {
         }
 
         for (hyper_name, hyper_value) in replacement_hyperparam_ids.into_iter() {
-            println!(
+	    
+            warn!(
                 "Warning! Updated hyperparameter {} to value {}",
                 hyper_name, hyper_value
             );
@@ -682,7 +683,6 @@ C,featureC
         }
         assert!(mi.parse_nn("1:foo:bar").is_ok());
         assert!(mi.parse_nn("0::").is_ok());
-        //        println!("AAA: {:?}", mi.nn_config.layers);
         assert_eq!(mi.nn_config.layers[0].get("").unwrap(), "");
         assert_eq!(mi.nn_config.layers[1].get("foo").unwrap(), "bar");
         assert_eq!(mi.nn_config.layers[2].len(), 0);

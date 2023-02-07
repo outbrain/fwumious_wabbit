@@ -29,7 +29,6 @@ pub fn new_observe_block(
     replace_backward_with: Option<f32>,
 ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
     let num_inputs = bg.get_num_output_values(vec![&input]);
-    //    println!("Inputs: {} vec: {:?}", num_inputs, input);
     let block = Box::new(BlockObserve {
         num_inputs: num_inputs as usize,
         input_offset: usize::MAX,
@@ -823,10 +822,7 @@ impl BlockTrait for BlockTriangle {
 
             let mut output_index: usize = 0;
             for i in 0..self.square_width {
-                //                    println!("AAAAA i: {}", i);
                 for j in 0..i {
-                    //                        let input = input_tape.get_unchecked(i * self.square_width + j);
-                    //                       println!("Output index: i: {}, j: {}, A: {}, B: {}", i, j, input_tape[i * self.square_width + j], input_tape[j * self.square_width + i]);
                     *output_tape.get_unchecked_mut(output_index) =
                         *input_tape.get_unchecked(i * self.square_width + j) * 2.0;
                     output_index += 1;

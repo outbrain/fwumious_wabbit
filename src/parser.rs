@@ -7,6 +7,7 @@ use std::io::Error as IOError;
 use std::io::ErrorKind;
 use std::str;
 use std::string::String;
+use log::{info, warn};
 
 const RECBUF_LEN: usize = 2048;
 pub const HEADER_LEN: u32 = 3;
@@ -92,7 +93,7 @@ impl VowpalParser {
     }
 
     pub fn print(&self) -> () {
-        println!("item out {:?}", self.output_buffer);
+        info!("item out {:?}", self.output_buffer);
     }
 
     #[inline(always)]
@@ -103,7 +104,7 @@ impl VowpalParser {
         error_str: &str,
     ) -> Result<f32, Box<dyn Error>> {
         unsafe {
-            //            println!("{}", str::from_utf8_unchecked(&self.tmp_read_buf[i_start..i_end]));
+
             if i_end - i_start == 4
                 && self.tmp_read_buf[i_start + 0] == 'N' as u8
                 && self.tmp_read_buf[i_start + 1] == 'O' as u8
@@ -276,7 +277,6 @@ impl VowpalParser {
                     i_end += 1;
                 }
 
-                //println!("item out {:?}", std::str::from_utf8(&rr.tmp_read_buf[i_start..i_end]));
                 if *p.add(i_start) == 0x7c {
                     // "|"
                     // new namespace index
@@ -291,9 +291,9 @@ impl VowpalParser {
                     } else {
                         current_namespace_weight = 1.0;
                     }
-                    //   print!("Only single letter namespaces are allowed, however namespace string is: {:?}\n", String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end_first_part]));
+
                     let current_vwname = &self.tmp_read_buf[i_start..i_end_first_part];
-                    //                        println!("Current: {:?}", current_vwname);
+
                     let current_namespace_descriptor = match self
                         .vw_map
                         .map_vwname_to_namespace_descriptor

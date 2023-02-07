@@ -2,6 +2,7 @@ use crate::feature_transform_executor;
 use crate::model_instance;
 use crate::parser;
 use crate::vwmap::{NamespaceFormat, NamespaceType};
+use log::{info};
 
 const VOWPAL_FNV_PRIME: u32 = 16777619; // vowpal magic number
                                         //const CONSTANT_NAMESPACE:usize = 128;
@@ -174,7 +175,7 @@ impl FeatureBufferTranslator {
     }
 
     pub fn print(&self) -> () {
-        println!("item out {:?}", self.feature_buffer.lr_buffer);
+        info!("item out {:?}", self.feature_buffer.lr_buffer);
     }
 
     pub fn translate(&mut self, record_buffer: &[u32], example_number: u64) -> () {
@@ -491,7 +492,7 @@ mod tests {
             parser::NO_FEATURES,
         ]);
         fbt.translate(&rb, 0);
-        //        println!("out {}, out mod 2^24 {}", fbt.feature_buffer.lr_buffer[1], fbt.feature_buffer.lr_buffer[1] & ((1<<24)-1));
+
         assert_eq!(
             fbt.feature_buffer.lr_buffer,
             vec![HashAndValue {
