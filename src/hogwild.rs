@@ -44,10 +44,10 @@ impl HogwildTrainer {
     }
 
     pub fn block_until_workers_finished(self) {
+        drop(self.sender);
         for worker in self.workers {
             worker.join().unwrap();
         } 
-        drop(self.sender);
     }
 }
 
