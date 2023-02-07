@@ -653,5 +653,4 @@ mod tests {
 
         assert_epsilon!(slearn2(&mut bg, &fb, &mut pb, false), 1.5);
     }
-
 }

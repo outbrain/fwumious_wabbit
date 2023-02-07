@@ -17,7 +17,7 @@ use crate::persistence;
 use crate::port_buffer;
 use crate::regressor;
 use crate::vwmap;
-use log::{info};
+use log::info;
 
 pub struct Serving {
     listening_interface: String,

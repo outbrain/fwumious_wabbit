@@ -21,9 +21,8 @@ extern crate blas;
 extern crate intel_mkl_src;
 extern crate log;
 
-
-use log::{info, warn, LevelFilter};
 use env_logger::Builder;
+use log::{info, warn, LevelFilter};
 
 #[macro_use]
 extern crate nom;
@@ -55,9 +54,8 @@ mod version;
 mod vwmap;
 
 fn main() {
-
     Builder::new().filter_level(LevelFilter::max()).init();
-    
+
     match main2() {
         Err(e) => {
             warn!("Global error: {:?}", e);

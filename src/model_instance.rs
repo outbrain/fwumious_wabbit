@@ -9,7 +9,7 @@ use crate::consts;
 use crate::feature_transform_parser;
 use crate::vwmap;
 use crate::vwmap::NamespaceDescriptor;
-use log::{warn};
+use log::warn;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct FeatureComboDesc {
@@ -541,7 +541,6 @@ impl ModelInstance {
         }
 
         for (hyper_name, hyper_value) in replacement_hyperparam_ids.into_iter() {
-	    
             warn!(
                 "Warning! Updated hyperparameter {} to value {}",
                 hyper_name, hyper_value

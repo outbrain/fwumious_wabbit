@@ -120,7 +120,6 @@ impl BlockTrait for BlockNormalize {
         debug_assert!(self.num_inputs > 0);
 
         unsafe {
-
             let mut mean: f32 = 0.0;
             for i in 0..self.num_inputs as usize {
                 mean += *pb.tape.get_unchecked_mut(self.input_offset + i);

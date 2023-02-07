@@ -1,3 +1,4 @@
+use log::{info, warn};
 use std::error::Error;
 use std::fs;
 use std::io;
@@ -5,7 +6,6 @@ use std::io::Read;
 use std::io::Write;
 use std::path;
 use std::{mem, slice};
-use log::{info, warn};
 //use flate2::write::DeflateEncoder;
 //use flate2::Compression;
 //use flate2::read::DeflateDecoder;
@@ -106,7 +106,6 @@ impl RecordCache {
                     // we buffer ourselves, otherwise i would be wise to use bufreader
                     rc.input_bufreader = Box::new(fs::File::open(&final_filename).unwrap());
                 } else {
-
                     rc.input_bufreader = Box::new(
                         lz4::Decoder::new(fs::File::open(&final_filename).unwrap()).unwrap(),
                     );

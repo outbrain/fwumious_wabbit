@@ -1,5 +1,6 @@
 use crate::vwmap;
 use fasthash::murmur3;
+use log::{info, warn};
 use std::error::Error;
 use std::fmt;
 use std::io::BufRead;
@@ -7,7 +8,6 @@ use std::io::Error as IOError;
 use std::io::ErrorKind;
 use std::str;
 use std::string::String;
-use log::{info, warn};
 
 const RECBUF_LEN: usize = 2048;
 pub const HEADER_LEN: u32 = 3;
@@ -104,7 +104,6 @@ impl VowpalParser {
         error_str: &str,
     ) -> Result<f32, Box<dyn Error>> {
         unsafe {
-
             if i_end - i_start == 4
                 && self.tmp_read_buf[i_start + 0] == 'N' as u8
                 && self.tmp_read_buf[i_start + 1] == 'O' as u8

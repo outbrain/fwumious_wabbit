@@ -1,5 +1,5 @@
+use log::info;
 use std::marker::PhantomData;
-use log::{info};
 
 pub trait OptimizerTrait: std::clone::Clone {
     type PerWeightStore: std::clone::Clone;

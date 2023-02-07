@@ -1,10 +1,10 @@
+use crate::block_misc;
 use crate::model_instance;
 use crate::port_buffer;
 use crate::regressor::BlockTrait;
+use log::info;
 use std::error::Error;
 use std::mem;
-use log::{info};
-use crate::block_misc;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct OutputSlot(usize);
@@ -523,7 +523,6 @@ mod tests {
                 .downcast_mut::<block_misc::BlockCopy>()
                 .unwrap();
             assert!(copy_block_1.input_offset != copy_block_1.output_offsets[0]);
-
         }
         {
             // But second one can re-use the input as output
@@ -532,7 +531,6 @@ mod tests {
                 .downcast_mut::<block_misc::BlockCopy>()
                 .unwrap();
             assert!(copy_block_2.input_offset == copy_block_2.output_offsets[0]);
-
         }
     }
 

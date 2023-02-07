@@ -7,8 +7,8 @@ use crate::graph;
 use crate::model_instance;
 use crate::port_buffer;
 use crate::regressor;
+use log::{error, warn};
 use regressor::BlockTrait;
-use log::{warn, error};
 
 //use fastapprox::fast::sigmoid; // surprisingly this doesn't work very well
 

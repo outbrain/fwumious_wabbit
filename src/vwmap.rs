@@ -1,3 +1,4 @@
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
@@ -6,7 +7,6 @@ use std::io::prelude::*;
 use std::io::Error as IOError;
 use std::io::ErrorKind;
 use std::path::PathBuf;
-use log::{info, warn};
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, Eq)]
 pub enum NamespaceType {
