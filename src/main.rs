@@ -265,7 +265,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
             example_num += 1;
             fbt.translate(buffer, example_num);
 
-	    if cl.is_present("warmup_listing_count") & !mi.freq_hash_rehashed_already {
+	    if cl.is_present("warmup_listing_count") && !mi.freq_hash_rehashed_already {
 		if warmup_upper_bound > mi.warmup_listing_count {
 	    	    fbt.increment_common_hash(&mut mi);
 		    continue
