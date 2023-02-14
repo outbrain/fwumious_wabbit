@@ -1,6 +1,5 @@
 use crate::vwmap;
 use fasthash::murmur3;
-use log::{info, warn};
 use std::error::Error;
 use std::fmt;
 use std::io::BufRead;
@@ -93,7 +92,7 @@ impl VowpalParser {
     }
 
     pub fn print(&self) -> () {
-        info!("item out {:?}", self.output_buffer);
+        log::info!("item out {:?}", self.output_buffer);
     }
 
     #[inline(always)]

@@ -1,4 +1,3 @@
-use log::{info, warn};
 use std::error::Error;
 use std::fs;
 use std::io;
@@ -110,12 +109,12 @@ impl RecordCache {
                         lz4::Decoder::new(fs::File::open(&final_filename).unwrap()).unwrap(),
                     );
                 }
-                info!("using cache_file = {}", final_filename);
-                info!("ignoring text input in favor of cache input");
+                log::info!("using cache_file = {}", final_filename);
+                log::info!("ignoring text input in favor of cache input");
                 match rc.verify_header(vw_map) {
                     Ok(()) => {}
                     Err(e) => {
-                        warn!("Couldn't use the existing cache file: {:?}", e);
+                        log::error!("Couldn't use the existing cache file: {:?}", e);
                         rc.reading = false;
                     }
                 }
@@ -124,7 +123,7 @@ impl RecordCache {
 
             if !rc.reading {
                 rc.writing = true;
-                info!("creating cache file = {}", final_filename);
+                log::info!("creating cache file = {}", final_filename);
                 if !gz {
                     rc.output_bufwriter = Box::new(io::BufWriter::new(
                         fs::File::create(temporary_filename).unwrap(),

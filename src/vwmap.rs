@@ -1,4 +1,3 @@
-use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
@@ -115,14 +114,14 @@ impl VwNamespaceMap {
             let record = record_w?;
             let vwname_str = &record[0];
             if vwname_str.as_bytes().len() != 1 && i == 0 {
-                warn!("Warning: multi-byte namespace names are not compatible with old style namespace arguments");
+                log::warn!("Warning: multi-byte namespace names are not compatible with old style namespace arguments");
             }
 
             if vwname_str == "_namespace_skip_prefix" {
                 let namespace_skip_prefix = record[1]
                     .parse()
                     .expect("Couldn't parse _namespace_skip_prefix in vw_namespaces_map.csv");
-                info!(
+                log::info!(
                     "_namespace_skip_prefix set in vw_namespace_map.csv is {}",
                     namespace_skip_prefix
                 );

@@ -7,7 +7,6 @@ use crate::graph;
 use crate::model_instance;
 use crate::port_buffer;
 use crate::regressor;
-use log::{error, warn};
 use regressor::BlockTrait;
 
 //use fastapprox::fast::sigmoid; // surprisingly this doesn't work very well
@@ -118,7 +117,7 @@ impl BlockTrait for BlockSigmoid {
             let mut general_gradient: f32;
 
             if wsum.is_nan() {
-                error!(
+                log::error!(
                     "NAN prediction in example {}, forcing 0.0",
                     fb.example_number
                 );
@@ -168,7 +167,7 @@ impl BlockTrait for BlockSigmoid {
 
             let prediction_probability: f32;
             if wsum.is_nan() {
-                warn!(
+                log::warn!(
                     "NAN prediction in example {}, forcing 0.0",
                     fb.example_number
                 );

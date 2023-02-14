@@ -22,7 +22,6 @@ extern crate intel_mkl_src;
 extern crate log;
 
 use env_logger::Builder;
-use log::{info, warn, LevelFilter};
 
 #[macro_use]
 extern crate nom;
@@ -54,11 +53,11 @@ mod version;
 mod vwmap;
 
 fn main() {
-    Builder::new().filter_level(LevelFilter::max()).init();
+    Builder::new().filter_level(log::LevelFilter::max()).init();
 
     match main2() {
         Err(e) => {
-            warn!("Global error: {:?}", e);
+            log::error!("Global error: {:?}", e);
             std::process::exit(1)
         }
         Ok(()) => {}
@@ -139,7 +138,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
             if !cl.is_present("save_resume") {
                 return Err("You need to use --save_resume with --final_regressor, for vowpal wabbit compatibility")?;
             }
-            info!("final_regressor = {}", filename);
+            log::info!("final_regressor = {}", filename);
         }
         None => {}
     };
@@ -147,7 +146,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
     let inference_regressor_filename = cl.value_of("convert_inference_regressor");
     match inference_regressor_filename {
         Some(filename1) => {
-            info!("inference_regressor = {}", filename1);
+            log::info!("inference_regressor = {}", filename1);
         }
         None => {}
     };
@@ -159,7 +158,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
         let filename = cl
             .value_of("initial_regressor")
             .expect("Daemon mode only supports serving from --initial regressor");
-        info!("initial_regressor = {}", filename);
+        log::info!("initial_regressor = {}", filename);
         let (mi2, vw2, re_fixed) =
             persistence::new_regressor_from_filename(filename, true, Option::Some(&cl))?;
 
@@ -184,7 +183,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
         let mi: model_instance::ModelInstance;
 
         if let Some(filename) = cl.value_of("initial_regressor") {
-            info!("initial_regressor = {}", filename);
+            log::info!("initial_regressor = {}", filename);
             (mi, vw, re) =
                 persistence::new_regressor_from_filename(filename, testonly, Option::Some(&cl))?;
         } else {
@@ -293,7 +292,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
         cache.write_finish()?;
 
         let elapsed = now.elapsed();
-        info!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
+        log::info!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
 
         match final_regressor_filename {
             Some(filename) => {

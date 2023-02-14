@@ -17,7 +17,6 @@ use crate::persistence;
 use crate::port_buffer;
 use crate::regressor;
 use crate::vwmap;
-use log::info;
 
 pub struct Serving {
     listening_interface: String,
@@ -196,7 +195,7 @@ impl Serving {
         let receiver = Arc::new(Mutex::new(receiver));
 
         let listening_interface = format!("127.0.0.1:{}", port);
-        info!("Starting to listen on {}", listening_interface);
+        log::info!("Starting to listen on {}", listening_interface);
         let mut s = Serving {
             listening_interface: listening_interface.to_string(),
             worker_threads: Vec::new(),
@@ -210,7 +209,7 @@ impl Serving {
                 .expect("num_children should be integer"),
             None => 10,
         };
-        info!("Number of threads {}", num_children);
+        log::info!("Number of threads {}", num_children);
 
         if !s.foreground {
             //  let stdout = File::create("/tmp/daemon.out").unwrap();
@@ -245,7 +244,7 @@ impl Serving {
     pub fn serve(&mut self) -> Result<(), Box<dyn Error>> {
         let listener = net::TcpListener::bind(&self.listening_interface)
             .expect("Cannot bind to the interface");
-        info!("Bind done, deamonizing and calling accept");
+        log::info!("Bind done, deamonizing and calling accept");
         for stream in listener.incoming() {
             self.sender.send(stream?)?;
         }

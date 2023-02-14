@@ -2,7 +2,6 @@ use crate::block_misc;
 use crate::model_instance;
 use crate::port_buffer;
 use crate::regressor::BlockTrait;
-use log::info;
 use std::error::Error;
 use std::mem;
 
@@ -171,7 +170,7 @@ impl BlockGraph {
     }
 
     pub fn println(&self) {
-        info!("Graph nodes:\n");
+        log::info!("Graph nodes:\n");
         for n in self.nodes.iter() {
             println!("  {:?}", n);
         }
