@@ -55,7 +55,7 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
              .multiple(true)
              .takes_value(true))
         .arg(Arg::with_name("build_cache_only")
-             .long("build_cache_without_training")
+             .long("build_cache_only")
              .value_name("arg")
              .help("Build cache file without training the first model instance")
              .takes_value(false))
