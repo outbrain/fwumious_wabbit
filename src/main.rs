@@ -19,9 +19,6 @@ use std::time::Instant;
 
 extern crate blas;
 extern crate intel_mkl_src;
-extern crate log;
-
-use env_logger::Builder;
 
 #[macro_use]
 extern crate nom;
@@ -41,6 +38,7 @@ mod feature_transform_executor;
 mod feature_transform_implementations;
 mod feature_transform_parser;
 mod graph;
+mod logging_layer;
 mod model_instance;
 mod multithread_helpers;
 mod optimizer;
@@ -53,7 +51,7 @@ mod version;
 mod vwmap;
 
 fn main() {
-    Builder::new().filter_level(log::LevelFilter::max()).init();
+    logging_layer::initialize_logging_layer();
 
     match main2() {
         Err(e) => {
