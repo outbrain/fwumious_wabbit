@@ -266,6 +266,11 @@ fn main2() -> Result<(), Box<dyn Error>> {
                     None => !testonly,
                 };
                 prediction = re.learn(&fbt.feature_buffer, &mut pb, update);
+
+		// with some probability do the second pass (same instance)
+		if example_num % 32 == 0 {
+                    prediction = re.learn(&fbt.feature_buffer, &mut pb, update);
+		}
             } else {
                 if example_num > predictions_after {
                     prediction = re.learn(&fbt.feature_buffer, &mut pb, false);
