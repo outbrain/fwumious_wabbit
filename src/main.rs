@@ -117,7 +117,7 @@ fn build_cache_without_training(cl: clap::ArgMatches) -> Result<(), Box<dyn Erro
 fn main2() -> Result<(), Box<dyn Error>> {
     // We'll parse once the command line into cl and then different objects will examine it
     let cl = cmdline::parse();
-    if cl.is_present("build_cache_only") {
+    if cl.is_present("build_cache_without_training") {
         return build_cache_without_training(cl);
     }
     // Where will we be putting perdictions (if at all)
