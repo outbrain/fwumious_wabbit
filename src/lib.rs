@@ -14,6 +14,7 @@ mod feature_transform_executor;
 mod feature_transform_implementations;
 mod feature_transform_parser;
 mod graph;
+mod logging_layer;
 mod model_instance;
 mod multithread_helpers;
 mod optimizer;
@@ -69,6 +70,8 @@ pub extern "C" fn new_fw_predictor_prototype(command: *const c_char) -> *mut Ffi
     // create a "prototype" predictor that loads the weights file. This predictor is expensive, and is intended
     // to only be created once. If additional predictors are needed (e.g. for concurrent work), please
     // use this "prototype" with the clone_lite function, which will create cheap copies
+    logging_layer::initialize_logging_layer();
+
     let str_command = c_char_to_str(command);
     let words = shellwords::split(str_command).unwrap();
     let cmd_matches = cmdline::create_expected_args().get_matches_from(words);

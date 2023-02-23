@@ -117,7 +117,7 @@ impl BlockTrait for BlockSigmoid {
             let mut general_gradient: f32;
 
             if wsum.is_nan() {
-                eprintln!(
+                log::error!(
                     "NAN prediction in example {}, forcing 0.0",
                     fb.example_number
                 );
@@ -133,7 +133,7 @@ impl BlockTrait for BlockSigmoid {
                 prediction_probability = logistic(wsum);
                 general_gradient = -(fb.label - prediction_probability) * fb.example_importance;
             }
-            //println!("General gradient: {}", general_gradient);
+
             *pb.tape.get_unchecked_mut(self.output_offset) = prediction_probability;
             if self.copy_to_result {
                 pb.observations.push(prediction_probability);
@@ -167,7 +167,7 @@ impl BlockTrait for BlockSigmoid {
 
             let prediction_probability: f32;
             if wsum.is_nan() {
-                eprintln!(
+                log::warn!(
                     "NAN prediction in example {}, forcing 0.0",
                     fb.example_number
                 );

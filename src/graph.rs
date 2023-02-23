@@ -1,10 +1,9 @@
+use crate::block_misc;
 use crate::model_instance;
 use crate::port_buffer;
 use crate::regressor::BlockTrait;
 use std::error::Error;
 use std::mem;
-
-use crate::block_misc;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct OutputSlot(usize);
@@ -171,7 +170,7 @@ impl BlockGraph {
     }
 
     pub fn println(&self) {
-        println!("Graph nodes:\n");
+        log::info!("Graph nodes:\n");
         for n in self.nodes.iter() {
             println!("  {:?}", n);
         }
@@ -334,9 +333,7 @@ mod tests {
         let output_node =
             block_misc::new_observe_block(&mut bg, const_block_output, Observe::Forward, Some(1.0))
                 .unwrap();
-        //        assert_eq!(output_node, ());
-        //        println!("Output nodes: {:?}", output_nodes);
-        //println!("Block 0: edges_in: {:?}, edges_out: {:?}", bg.edges_in[0], bg.edges_out[0]);
+
         assert_eq!(bg.nodes[0].edges_in, vec![]); // basically []
         assert_eq!(
             bg.nodes[0].edges_out,
@@ -368,9 +365,7 @@ mod tests {
         // Let's add one result block
         let output_node =
             block_misc::new_observe_block(&mut bg, c1, Observe::Forward, Some(1.0)).unwrap();
-        //        assert_eq!(output_node, ());
-        //        println!("Output nodes: {:?}", output_nodes);
-        //println!("Block 0: edges_in: {:?}, edges_out: {:?}", bg.edges_in[0], bg.edges_out[0]);
+
         assert_eq!(bg.nodes[0].edges_in.len(), 0);
         assert_eq!(
             bg.nodes[0].edges_out,
@@ -527,7 +522,6 @@ mod tests {
                 .downcast_mut::<block_misc::BlockCopy>()
                 .unwrap();
             assert!(copy_block_1.input_offset != copy_block_1.output_offsets[0]);
-            //          println!("C1: input {} outputs: {:?}", copy_block_1.input_offset, copy_block_1.output_offsets);
         }
         {
             // But second one can re-use the input as output
@@ -536,7 +530,6 @@ mod tests {
                 .downcast_mut::<block_misc::BlockCopy>()
                 .unwrap();
             assert!(copy_block_2.input_offset == copy_block_2.output_offsets[0]);
-            //          println!("C2: input {} outputs: {:?}", copy_block_2.input_offset, copy_block_2.output_offsets);
         }
     }
 
