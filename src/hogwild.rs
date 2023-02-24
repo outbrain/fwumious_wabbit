@@ -10,9 +10,9 @@ use crate::multithread_helpers::BoxedRegressorTrait;
 use crate::port_buffer::PortBuffer;
 use crate::regressor::Regressor;
 
-pub struct HogwildTrainer {
+pub struct HogwildTrainer<'a> {
     workers: Vec<JoinHandle<()>>,
-    sender: Sender<FeatureBuffer>,
+    sender: Sender<&'a [u32]>,
 }
 
 pub struct HogwildWorker {
@@ -23,12 +23,12 @@ pub struct HogwildWorker {
 
 impl HogwildTrainer {
     pub fn new(sharable_regressor: BoxedRegressorTrait, model_instance: &ModelInstance, numWorkers: u32) -> HogwildTrainer {
-        let (sender, receiver): (Sender<FeatureBuffer>, Receiver<FeatureBuffer>) = mpsc::channel();
+        let (sender, receiver): (Sender<&[u32]>, Receiver<&[u32]>) = mpsc::channel();
         let mut trainer = HogwildTrainer {
             workers: Vec::new(),
             sender,
         };
-        let receiver: Arc<Mutex<Receiver<FeatureBuffer>>> = Arc::new(Mutex::new(receiver));
+        let receiver: Arc<Mutex<Receiver<&[u32]>>> = Arc::new(Mutex::new(receiver));
         let feature_buffer_translator = FeatureBufferTranslator::new(model_instance);
         let port_buffer = sharable_regressor.new_portbuffer();
         for i in 0..numWorkers {
@@ -43,7 +43,7 @@ impl HogwildTrainer {
         trainer
     }
     
-    pub fn digest_example(&self, feature_buffer: FeatureBuffer) {
+    pub fn digest_example(&self, feature_buffer: &[u32]) {
         self.sender.send(feature_buffer).unwrap();
     }
 
@@ -70,7 +70,7 @@ impl HogwildWorker {
         regressor: BoxedRegressorTrait,
         feature_buffer_translator: FeatureBufferTranslator,
         port_buffer: PortBuffer,
-        receiver: Arc<Mutex<Receiver<FeatureBuffer>>>
+        receiver: Arc<Mutex<Receiver<&[u32]>>>
     ) -> JoinHandle<()> {
         let mut worker = HogwildWorker {
             regressor,
@@ -83,13 +83,15 @@ impl HogwildWorker {
         thread
     }
 
-    pub fn train(&mut self, receiver: Arc<Mutex<Receiver<FeatureBuffer>>>) {
+    pub fn train(&mut self, receiver: Arc<Mutex<Receiver<&[u32]>>>) {
+        let mut some_num = 0u64;
         loop {
-            let feature_buffer = match receiver.lock().unwrap().recv() {
+            let buffer = match receiver.lock().unwrap().recv() {
                 Ok(feature_buffer) => feature_buffer,
                 Err(RecvError) => break // channel was closed
             };
-            self.regressor.learn(&feature_buffer, &mut self.port_buffer, true);
+            self.feature_buffer_translator.translate(buffer, some_num);
+            self.regressor.learn(&self.feature_buffer_translator.feature_buffer, &mut self.port_buffer, true);
         }
     }
 }

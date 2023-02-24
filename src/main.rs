@@ -284,11 +284,13 @@ fn main2() -> Result<(), Box<dyn Error>> {
                     None => !testonly,
                 };
                 if hogwild_training && update {
-                    hogwild_trainer.digest_example(fbt.feature_buffer.clone());
+                    hogwild_trainer.digest_example(buffer);
                 } else {
+                    fbt.translate(buffer, example_num);
                     prediction = sharable_regressor.learn(&fbt.feature_buffer, &mut pb, update);
                 }
             } else {
+                fbt.translate(buffer, example_num);
                 if example_num > predictions_after {
                     prediction = sharable_regressor.learn(&fbt.feature_buffer, &mut pb, false);
                 }
