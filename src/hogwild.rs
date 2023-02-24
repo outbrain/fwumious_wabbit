@@ -43,7 +43,7 @@ impl HogwildTrainer {
         trainer
     }
     
-    pub fn digest_example(self, feature_buffer: Vec<u32>) {
+    pub fn digest_example(&self, feature_buffer: Vec<u32>) {
         self.sender.send(feature_buffer).unwrap();
     }
 
