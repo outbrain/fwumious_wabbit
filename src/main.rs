@@ -275,7 +275,6 @@ fn main2() -> Result<(), Box<dyn Error>> {
                 };
             }
             example_num += 1;
-            fbt.translate(buffer, example_num);
             let mut prediction: f32 = 0.0;
 
             if prediction_model_delay == 0 {
@@ -284,7 +283,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
                     None => !testonly,
                 };
                 if hogwild_training && update {
-                    hogwild_trainer.digest_example(buffer);
+                    hogwild_trainer.digest_example(Vec::from(buffer));
                 } else {
                     fbt.translate(buffer, example_num);
                     prediction = sharable_regressor.learn(&fbt.feature_buffer, &mut pb, update);
