@@ -8,7 +8,7 @@
 use flate2::read::MultiGzDecoder;
 use std::collections::VecDeque;
 use std::error::Error;
-use std::{env, f32};
+use std::f32;
 use std::fs::File;
 use std::io;
 use std::io::BufRead;
@@ -28,10 +28,10 @@ mod block_ffm;
 mod block_helpers;
 mod block_loss_functions;
 mod block_lr;
-mod block_neural;
-mod block_relu;
 mod block_misc;
+mod block_neural;
 mod block_normalize;
+mod block_relu;
 mod cache;
 mod cmdline;
 mod consts;
@@ -39,6 +39,7 @@ mod feature_buffer;
 mod feature_transform_executor;
 mod feature_transform_implementations;
 mod feature_transform_parser;
+mod logging_layer;
 mod model_instance;
 mod multithread_helpers;
 mod optimizer;
@@ -53,9 +54,11 @@ mod graph;
 mod hogwild;
 
 fn main() {
+    logging_layer::initialize_logging_layer();
+
     match main2() {
         Err(e) => {
-            println!("Global error: {:?}", e);
+            log::error!("Global error: {:?}", e);
             std::process::exit(1)
         }
         Ok(()) => {}
@@ -120,7 +123,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
     // We'll parse once the command line into cl and then different objects will examine it
     let cl = cmdline::parse();
     if cl.is_present("build_cache_without_training") {
-        return build_cache_without_training(cl)
+        return build_cache_without_training(cl);
     }
     // Where will we be putting perdictions (if at all)
     let mut predictions_file = match cl.value_of("predictions") {
@@ -129,14 +132,14 @@ fn main2() -> Result<(), Box<dyn Error>> {
     };
 
     let testonly = cl.is_present("testonly");
-	
+
     let final_regressor_filename = cl.value_of("final_regressor");
     match final_regressor_filename {
         Some(filename) => {
             if !cl.is_present("save_resume") {
                 return Err("You need to use --save_resume with --final_regressor, for vowpal wabbit compatibility")?;
             }
-            println!("final_regressor = {}", filename);
+            log::info!("final_regressor = {}", filename);
         }
         None => {}
     };
@@ -144,7 +147,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
     let inference_regressor_filename = cl.value_of("convert_inference_regressor");
     match inference_regressor_filename {
         Some(filename1) => {
-            println!("inference_regressor = {}", filename1);
+            log::info!("inference_regressor = {}", filename1);
         }
         None => {}
     };
@@ -156,16 +159,18 @@ fn main2() -> Result<(), Box<dyn Error>> {
         let filename = cl
             .value_of("initial_regressor")
             .expect("Daemon mode only supports serving from --initial regressor");
-        println!("initial_regressor = {}", filename);
-        let (mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true, Option::Some(&cl))?;
-		
+        log::info!("initial_regressor = {}", filename);
+        let (mi2, vw2, re_fixed) =
+            persistence::new_regressor_from_filename(filename, true, Option::Some(&cl))?;
+
         let mut se = serving::Serving::new(&cl, &vw2, Box::new(re_fixed), &mi2)?;
         se.serve()?;
     } else if cl.is_present("convert_inference_regressor") {
         let filename = cl
             .value_of("initial_regressor")
             .expect("Convert mode requires --initial regressor");
-        let (mut mi2, vw2, re_fixed) = persistence::new_regressor_from_filename(filename, true, Option::Some(&cl))?;
+        let (mut mi2, vw2, re_fixed) =
+            persistence::new_regressor_from_filename(filename, true, Option::Some(&cl))?;
         mi2.optimizer = model_instance::Optimizer::SGD;
         match inference_regressor_filename {
             Some(filename1) => {
@@ -174,22 +179,19 @@ fn main2() -> Result<(), Box<dyn Error>> {
             None => {}
         }
     } else {
-		
         let vw: vwmap::VwNamespaceMap;
         let mut re: regressor::Regressor;
         let mut sharable_regressor: BoxedRegressorTrait;
         let mi: model_instance::ModelInstance;
 
         if let Some(filename) = cl.value_of("initial_regressor") {
-			
-            println!("initial_regressor = {}", filename);
+            log::info!("initial_regressor = {}", filename);
             (mi, vw, re) = persistence::new_regressor_from_filename(filename, testonly, Option::Some(&cl))?;
             sharable_regressor = BoxedRegressorTrait::new(Box::new(re));
         } else {
-			
             // We load vw_namespace_map.csv just so we know all the namespaces ahead of time
             // This is one of the major differences from vowpal
-			
+
             let input_filename = cl.value_of("data").expect("--data expected");
             let vw_namespace_map_filepath = Path::new(input_filename)
                 .parent()
@@ -313,7 +315,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
             hogwild_trainer.block_until_workers_finished();
         }
         let elapsed = now.elapsed();
-        println!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
+        log::info!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
 
         match final_regressor_filename {
             Some(filename) => {
