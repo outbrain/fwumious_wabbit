@@ -21,7 +21,7 @@ use block_helpers::WeightAndOptimizerData;
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 
-const FFM_STACK_BUF_LEN: usize = 65536;
+const FFM_STACK_BUF_LEN: usize = 131072;
 const FFM_CONTRA_BUF_LEN: usize = 16384;
 
 const SQRT_OF_ONE_HALF: f32 = 0.70710678118;
