@@ -5,6 +5,7 @@ use core::arch::x86_64::*;
 use std::error::Error;
 use std::mem::{self, MaybeUninit};
 use std::f32::consts::PI;
+use std::sync::Mutex;
 
 use crate::optimizer;
 use crate::regressor;
@@ -37,6 +38,7 @@ pub struct BlockFFM<L:OptimizerTrait> {
     pub field_embedding_len: u32,
     pub weights: Vec<WeightAndOptimizerData<L>>,
     pub output_offset: usize,
+    mutex: Mutex<()>
 }
 
 
@@ -419,11 +421,11 @@ impl <L:OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
             } else {
                 // Slow-path - using heap data structures
+                let guard = self.mutex.lock().unwrap(); // following operations are not thread safe
                 if local_data_ffm_len > self.local_data_ffm_values.len() {
                     self.local_data_ffm_values.reserve(local_data_ffm_len - self.local_data_ffm_values.len() + 1024);
                 }
                 let mut local_data_ffm_values = &mut self.local_data_ffm_values;
-            
                 core_macro!(local_data_ffm_values);
             }             
         } // unsafe end
