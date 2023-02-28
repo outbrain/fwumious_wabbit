@@ -112,6 +112,7 @@ fn new_ffm_block_without_weights<L:OptimizerTrait + 'static>(mi: &model_instance
         field_embedding_len: mi.ffm_k * ffm_num_fields,
         optimizer_ffm: L::new(),
         output_offset: usize::MAX,
+        mutex: Mutex::new(())
     };
 
     if mi.ffm_k > 0 {
