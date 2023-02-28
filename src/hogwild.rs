@@ -95,3 +95,19 @@ impl HogwildWorker {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hogwild_trainer_new_creates_workers() {
+        let num_workers = 4;
+        let mut model_instance = ModelInstance::new_empty().unwrap();
+        let mut regressor = Regressor::new(&model_instance);
+        let sharable_regressor: BoxedRegressorTrait = BoxedRegressorTrait::new(Box::new(regressor));
+        let trainer = HogwildTrainer::new(sharable_regressor, &model_instance, num_workers);
+
+        assert_eq!(trainer.workers.len(), num_workers as usize);
+    }
+}
