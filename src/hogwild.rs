@@ -25,7 +25,7 @@ impl HogwildTrainer {
     pub fn new(sharable_regressor: BoxedRegressorTrait, model_instance: &ModelInstance, numWorkers: u32) -> HogwildTrainer {
         let (sender, receiver): (Sender<Vec<u32>>, Receiver<Vec<u32>>) = mpsc::channel();
         let mut trainer = HogwildTrainer {
-            workers: Vec::new(),
+            workers: Vec::with_capacity(numWorkers as usize),
             sender,
         };
         let receiver: Arc<Mutex<Receiver<Vec<u32>>>> = Arc::new(Mutex::new(receiver));

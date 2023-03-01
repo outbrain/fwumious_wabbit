@@ -215,7 +215,6 @@ fn main2() -> Result<(), Box<dyn Error>> {
 
         let holdout_after_option: Option<u64> =
             cl.value_of("holdout_after").map(|s| s.parse().unwrap());
-
         
         let hogwild_training = cl.is_present("hogwild_training");
         let mut hogwild_trainer = if hogwild_training {
