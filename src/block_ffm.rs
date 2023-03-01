@@ -177,62 +177,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     }
                 }
             }
-            "xavier_custom_mask" => {
-                // MASK[U [-(1/sqrt(n)), 1/sqrt(n)]]
-                let lower_bound: f32 = -1.0 / (self.ffm_weights_len as f32).sqrt();
-                let upper_bound: f32 = 1.0 / (self.ffm_weights_len as f32).sqrt();
-                let difference = upper_bound - lower_bound;
-
-                for i in 0..self.ffm_weights_len {
-                    let mut w = merand48(i as u64) as f32;
-                    if w < (self.ffm_weights_len / 10) as f32 {
-                        w = 0.001;
-                    } else {
-                        w = 0.0;
-                    }
-                    self.weights[i as usize].weight = w;
-                    self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
-                }
-            }
-            "xavier" => {
-                // U [-(1/sqrt(n)), 1/sqrt(n)]
-                let lower_bound: f32 = -1.0 / (self.ffm_weights_len as f32).sqrt();
-                let upper_bound: f32 = 1.0 / (self.ffm_weights_len as f32).sqrt();
-                let difference = upper_bound - lower_bound;
-                self.set_weights(lower_bound, difference);
-            }
-            "xavier_normalized" => {
-                // U [-(sqrt(6)/sqrt(n + m)), sqrt(6)/sqrt(n + m)] + we assume symmetric input-output
-
-                let lower_bound: f32 = -6_f32.sqrt() / (2 * self.ffm_weights_len) as f32;
-                let upper_bound: f32 = 6_f32.sqrt() / (2 * self.ffm_weights_len) as f32;
-                let difference = upper_bound - lower_bound;
-                self.set_weights(lower_bound, difference);
-            }
-            "he" => {
-                // G (0.0, sqrt(2/n)) + Box Muller-ish transform
-
-                for i in 0..self.ffm_weights_len {
-                    // could use both, but not critical in this case
-                    let seed_var_first = merand48(i as u64);
-                    let seed_var_second = merand48(u64::pow(i as u64, 2));
-                    let normal_var = (-2.0 * seed_var_first.ln()).sqrt()
-                        * (2.0 * PI as f32 * seed_var_second).cos();
-
-                    self.weights[i as usize].weight =
-                        normal_var + (2.0 / self.ffm_weights_len as f32).sqrt();
-                    self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
-                }
-            }
-            "constant" => {
-                // generic constant initialization (sanity check)
-
-                for i in 0..self.ffm_weights_len {
-                    let mut w = 1.0;
-                    self.weights[i as usize].weight = w;
-                    self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
-                }
-            }
             _ => {
                 panic!("Please select a valid activation function.")
             }
