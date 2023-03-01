@@ -177,14 +177,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     }
                 }
             }
-            "xavier_normalized" => {
-                // U [-(sqrt(6)/sqrt(n + m)), sqrt(6)/sqrt(n + m)] + we assume symmetric input-output
-
-                let lower_bound: f32 = -6_f32.sqrt() / (2 * self.ffm_weights_len) as f32;
-                let upper_bound: f32 = 6_f32.sqrt() / (2 * self.ffm_weights_len) as f32;
-                let difference = upper_bound - lower_bound;
-                self.set_weights(lower_bound, difference);
-            }
             _ => {
                 panic!("Please select a valid activation function.")
             }
