@@ -298,5 +298,10 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
              .long("holdout_after")
              .value_name("examples")
              .help("After how many examples stop updating weights")
-             .takes_value(true))
+             .takes_value(true))	
+        .arg(Arg::with_name("dump_weight_space")
+             .long("dump_weight_space")
+             .help("Dump weights to stdout to be parsed down-stream.")
+             .multiple(false)
+             .takes_value(false))
 }

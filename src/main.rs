@@ -119,6 +119,16 @@ fn build_cache_without_training(cl: clap::ArgMatches) -> Result<(), Box<dyn Erro
 fn main2() -> Result<(), Box<dyn Error>> {
     // We'll parse once the command line into cl and then different objects will examine it
     let cl = cmdline::parse();
+
+    if cl.is_present("dump_weight_space") {
+	let filename = cl
+            .value_of("initial_regressor")
+            .expect("Daemon mode only supports serving from --initial regressor");
+	let (mi2, vw2, re_fixed) =
+            persistence::new_regressor_from_filename(filename, true, Option::Some(&cl))?;
+	return Ok(());
+    }
+    
     if cl.is_present("build_cache_without_training") {
         return build_cache_without_training(cl);
     }

@@ -117,6 +117,7 @@ pub fn read_weights_only_from_buf2<L: OptimizerTrait>(
             );
             input_bufreader.read_exact(&mut in_weights_view)?;
             for w in &in_weights {
+		println!("WEIGHT\t{:?}", w.weight);
                 out_weights.get_unchecked_mut(out_idx).weight = w.weight;
                 out_idx += 1;
             }
