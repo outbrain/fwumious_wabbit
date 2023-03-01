@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::sync::{Arc, mpsc, Mutex};
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, SyncSender};
 use std::thread;
 use std::thread::JoinHandle;
 
@@ -10,9 +10,11 @@ use crate::multithread_helpers::BoxedRegressorTrait;
 use crate::port_buffer::PortBuffer;
 use crate::regressor::Regressor;
 
+static CHANNEL_CAPACITY: usize = 100_000;
+
 pub struct HogwildTrainer {
     workers: Vec<JoinHandle<()>>,
-    sender: Sender<Vec<u32>>,
+    sender: SyncSender<Vec<u32>>,
 }
 
 pub struct HogwildWorker {
@@ -23,7 +25,7 @@ pub struct HogwildWorker {
 
 impl HogwildTrainer {
     pub fn new(sharable_regressor: BoxedRegressorTrait, model_instance: &ModelInstance, numWorkers: u32) -> HogwildTrainer {
-        let (sender, receiver): (Sender<Vec<u32>>, Receiver<Vec<u32>>) = mpsc::channel();
+        let (sender, receiver): (SyncSender<Vec<u32>>, Receiver<Vec<u32>>) = mpsc::sync_channel(CHANNEL_CAPACITY);
         let mut trainer = HogwildTrainer {
             workers: Vec::with_capacity(numWorkers as usize),
             sender,
@@ -57,7 +59,7 @@ impl HogwildTrainer {
 
 impl Default for HogwildTrainer {
     fn default() -> Self {
-        let (sender, receiver) = mpsc::channel();
+        let (sender, receiver) = mpsc::sync_channel(0);
         HogwildTrainer {
             workers: vec![],
             sender
