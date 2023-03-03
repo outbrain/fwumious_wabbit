@@ -27,6 +27,11 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
              .value_name("output predictions file")
              .help("Output predictions file")
              .takes_value(true))
+        .arg(Arg::with_name("predictions_stdout")
+	     .long("predictions_stdout")
+             .value_name("Output predictions to stdout")
+             .help("Output predictions file to stdout")
+             .takes_value(false))
         .arg(Arg::with_name("cache")
              .short("c")
              .long("cache")
@@ -236,13 +241,11 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
              .multiple(false)
              .takes_value(true))
 
-
         .arg(Arg::with_name("nn_layers")
              .long("nn_layers")
              .help("Enable deep neural network on top of LR+FFM")
              .multiple(false)
              .takes_value(true))
-
 
         .arg(Arg::with_name("nn")
              .long("nn")

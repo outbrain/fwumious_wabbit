@@ -129,7 +129,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
     };
 
     let testonly = cl.is_present("testonly");
-
+    let output_pred_st_output: bool = cl.is_present("predictions_stdout");
     let final_regressor_filename = cl.value_of("final_regressor");
     match final_regressor_filename {
         Some(filename) => {
@@ -269,6 +269,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
                     None => !testonly,
                 };
                 prediction = re.learn(&fbt.feature_buffer, &mut pb, update);
+
             } else {
                 if example_num > predictions_after {
                     prediction = re.learn(&fbt.feature_buffer, &mut pb, false);
@@ -281,6 +282,11 @@ fn main2() -> Result<(), Box<dyn Error>> {
             }
 
             if example_num > predictions_after {
+
+		if output_pred_st_output {
+		    println!("{}", prediction);
+		}
+		
                 match predictions_file.as_mut() {
                     Some(file) => write!(file, "{:.6}\n", prediction)?,
                     None => {}
