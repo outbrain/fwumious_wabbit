@@ -5,6 +5,7 @@ use std::error::Error;
 use std::f32::consts::PI;
 use std::io;
 use std::mem::{self, MaybeUninit};
+use std::sync::Mutex;
 
 use crate::block_helpers;
 use crate::consts;
@@ -20,7 +21,7 @@ use block_helpers::WeightAndOptimizerData;
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 
-const FFM_STACK_BUF_LEN: usize = 32768;
+const FFM_STACK_BUF_LEN: usize = 131072;
 const FFM_CONTRA_BUF_LEN: usize = 16384;
 
 const SQRT_OF_ONE_HALF: f32 = 0.70710678118;
@@ -34,6 +35,7 @@ pub struct BlockFFM<L: OptimizerTrait> {
     pub field_embedding_len: u32,
     pub weights: Vec<WeightAndOptimizerData<L>>,
     pub output_offset: usize,
+    mutex: Mutex<()>
 }
 
 macro_rules! specialize_1f32 {
@@ -109,6 +111,7 @@ fn new_ffm_block_without_weights<L: OptimizerTrait + 'static>(
         field_embedding_len: mi.ffm_k * ffm_num_fields,
         optimizer_ffm: L::new(),
         output_offset: usize::MAX,
+        mutex: Mutex::new(())
     };
 
     if mi.ffm_k > 0 {
@@ -368,6 +371,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 core_macro!(local_data_ffm_values);
             } else {
                 // Slow-path - using heap data structures
+                log::warn!("FFM data too large, allocating on the heap (slow path)!");
+                let guard = self.mutex.lock().unwrap(); // following operations are not thread safe
                 if local_data_ffm_len > self.local_data_ffm_values.len() {
                     self.local_data_ffm_values
                         .reserve(local_data_ffm_len - self.local_data_ffm_values.len() + 1024);

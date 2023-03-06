@@ -16,6 +16,8 @@ use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
 use std::time::Instant;
+use crate::hogwild::HogwildTrainer;
+use crate::multithread_helpers::BoxedRegressorTrait;
 
 extern crate blas;
 extern crate intel_mkl_src;
@@ -37,18 +39,19 @@ mod feature_buffer;
 mod feature_transform_executor;
 mod feature_transform_implementations;
 mod feature_transform_parser;
-mod graph;
 mod logging_layer;
 mod model_instance;
 mod multithread_helpers;
 mod optimizer;
 mod parser;
 mod persistence;
-mod port_buffer;
 mod regressor;
 mod serving;
 mod version;
 mod vwmap;
+mod port_buffer;
+mod graph;
+mod hogwild;
 
 fn main() {
     logging_layer::initialize_logging_layer();
@@ -178,12 +181,13 @@ fn main2() -> Result<(), Box<dyn Error>> {
     } else {
         let vw: vwmap::VwNamespaceMap;
         let mut re: regressor::Regressor;
+        let mut sharable_regressor: BoxedRegressorTrait;
         let mi: model_instance::ModelInstance;
 
         if let Some(filename) = cl.value_of("initial_regressor") {
             log::info!("initial_regressor = {}", filename);
-            (mi, vw, re) =
-                persistence::new_regressor_from_filename(filename, testonly, Option::Some(&cl))?;
+            (mi, vw, re) = persistence::new_regressor_from_filename(filename, testonly, Option::Some(&cl))?;
+            sharable_regressor = BoxedRegressorTrait::new(Box::new(re));
         } else {
             // We load vw_namespace_map.csv just so we know all the namespaces ahead of time
             // This is one of the major differences from vowpal
@@ -196,12 +200,13 @@ fn main2() -> Result<(), Box<dyn Error>> {
             vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
             mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
             re = regressor::get_regressor_with_weights(&mi);
+            sharable_regressor = BoxedRegressorTrait::new(Box::new(re));
         };
 
         let input_filename = cl.value_of("data").expect("--data expected");
         let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"), &vw);
         let mut fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
-        let mut pb = re.new_portbuffer();
+        let mut pb = sharable_regressor.new_portbuffer();
 
         let predictions_after: u64 = match cl.value_of("predictions_after") {
             Some(examples) => examples.parse()?,
@@ -210,6 +215,17 @@ fn main2() -> Result<(), Box<dyn Error>> {
 
         let holdout_after_option: Option<u64> =
             cl.value_of("holdout_after").map(|s| s.parse().unwrap());
+        
+        let hogwild_training = cl.is_present("hogwild_training");
+        let mut hogwild_trainer = if hogwild_training {
+            let hogwild_threads = match cl.value_of("hogwild_threads") {
+                Some(hogwild_threads) => hogwild_threads.parse().expect("hogwild_threads should be integer"),
+                None => 16
+            };
+            HogwildTrainer::new(sharable_regressor.clone(), &mi, hogwild_threads)
+        } else {
+            HogwildTrainer::default()
+        };
 
         let prediction_model_delay: u64 = match cl.value_of("prediction_model_delay") {
             Some(delay) => delay.parse()?,
@@ -260,7 +276,6 @@ fn main2() -> Result<(), Box<dyn Error>> {
                 };
             }
             example_num += 1;
-            fbt.translate(buffer, example_num);
             let mut prediction: f32 = 0.0;
 
             if prediction_model_delay == 0 {
@@ -268,15 +283,21 @@ fn main2() -> Result<(), Box<dyn Error>> {
                     Some(holdout_after) => !testonly && example_num < holdout_after,
                     None => !testonly,
                 };
-                prediction = re.learn(&fbt.feature_buffer, &mut pb, update);
+                if hogwild_training && update {
+                    hogwild_trainer.digest_example(Vec::from(buffer));
+                } else {
+                    fbt.translate(buffer, example_num);
+                    prediction = sharable_regressor.learn(&fbt.feature_buffer, &mut pb, update);
+                }
             } else {
+                fbt.translate(buffer, example_num);
                 if example_num > predictions_after {
-                    prediction = re.learn(&fbt.feature_buffer, &mut pb, false);
+                    prediction = sharable_regressor.learn(&fbt.feature_buffer, &mut pb, false);
                 }
                 delayed_learning_fbs.push_back(fbt.feature_buffer.clone());
                 if (prediction_model_delay as usize) < delayed_learning_fbs.len() {
                     let delayed_buffer = delayed_learning_fbs.pop_front().unwrap();
-                    re.learn(&delayed_buffer, &mut pb, !testonly);
+                    sharable_regressor.learn(&delayed_buffer, &mut pb, !testonly);
                 }
             }
 
@@ -289,12 +310,15 @@ fn main2() -> Result<(), Box<dyn Error>> {
         }
         cache.write_finish()?;
 
+        if hogwild_training {
+            hogwild_trainer.block_until_workers_finished();
+        }
         let elapsed = now.elapsed();
         log::info!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
 
         match final_regressor_filename {
             Some(filename) => {
-                persistence::save_regressor_to_filename(filename, &mi, &vw, re).unwrap()
+                persistence::save_sharable_regressor_to_filename(filename, &mi, &vw, sharable_regressor).unwrap()
             }
             None => {}
         }
