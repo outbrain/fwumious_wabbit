@@ -284,7 +284,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
             if example_num > predictions_after {
 
 		if output_pred_st_output {
-		    println!("{}", prediction);
+		    println!("PREDICTION: {}", prediction);
 		}
 		
                 match predictions_file.as_mut() {
