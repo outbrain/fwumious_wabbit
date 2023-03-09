@@ -293,7 +293,7 @@ C,featureC
         let mut re = regressor::Regressor::new(&mi);
         mi.optimizer = model_instance::Optimizer::SGD;
         let re_fixed = BoxedRegressorTrait::new(Box::new(re.immutable_regressor(&mi).unwrap()));
-        let fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
+        let fbt = feature_buffer::FeatureBufferTranslator::new(&mut mi);
         let pa = parser::VowpalParser::new(&vw);
         let pb = re_fixed.new_portbuffer();
 
@@ -423,7 +423,7 @@ C,featureC
         let mut re = regressor::Regressor::new(&mi);
         mi.optimizer = model_instance::Optimizer::SGD;
         let re_fixed = BoxedRegressorTrait::new(Box::new(re.immutable_regressor(&mi).unwrap()));
-        let fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
+        let fbt = feature_buffer::FeatureBufferTranslator::new(&mut mi);
         let pa = parser::VowpalParser::new(&vw);
         let pb = re_fixed.new_portbuffer();
 

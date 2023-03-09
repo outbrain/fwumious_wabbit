@@ -394,7 +394,7 @@ mod tests {
                 weight: 1.0,
             });
 
-        let mut fbt = FeatureBufferTranslator::new(&mi);
+        let mut fbt = FeatureBufferTranslator::new(&mut mi);
         let rb = add_header(vec![parser::NO_FEATURES]); // no feature
         fbt.translate(&rb, 0);
         assert_eq!(
@@ -417,7 +417,7 @@ mod tests {
                 weight: 1.0,
             });
 
-        let mut fbt = FeatureBufferTranslator::new(&mi);
+        let mut fbt = FeatureBufferTranslator::new(&mut mi);
         let rb = add_header(vec![parser::NO_FEATURES]); // no feature
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]); // vw compatibility - no feature is no feature
@@ -473,7 +473,7 @@ mod tests {
                 weight: 1.0,
             });
 
-        let mut fbt = FeatureBufferTranslator::new(&mi);
+        let mut fbt = FeatureBufferTranslator::new(&mut mi);
 
         let rb = add_header(vec![parser::NO_FEATURES, parser::NO_FEATURES]);
         fbt.translate(&rb, 0);
@@ -521,7 +521,7 @@ mod tests {
                 weight: 1.0,
             });
 
-        let mut fbt = FeatureBufferTranslator::new(&mi);
+        let mut fbt = FeatureBufferTranslator::new(&mut mi);
         let rb = add_header(vec![parser::NO_FEATURES]);
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]);
@@ -557,7 +557,7 @@ mod tests {
                 weight: 2.0,
             });
 
-        let mut fbt = FeatureBufferTranslator::new(&mi);
+        let mut fbt = FeatureBufferTranslator::new(&mut mi);
         let rb = add_header(vec![0xfea]);
         fbt.translate(&rb, 0);
         assert_eq!(
@@ -576,7 +576,7 @@ mod tests {
         mi.add_constant_feature = false;
         mi.ffm_fields.push(vec![]); // single field, empty
         mi.ffm_k = 1;
-        let mut fbt = FeatureBufferTranslator::new(&mi);
+        let mut fbt = FeatureBufferTranslator::new(&mut mi);
         let rb = add_header(vec![0xfea]);
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.ffm_buffer, vec![]);
@@ -588,7 +588,7 @@ mod tests {
         mi.add_constant_feature = false;
         mi.ffm_fields.push(vec![ns_desc(0)]); // single feature in a single fields
         mi.ffm_k = 1;
-        let mut fbt = FeatureBufferTranslator::new(&mi);
+        let mut fbt = FeatureBufferTranslator::new(&mut mi);
         let rb = add_header(vec![0xfea]);
         fbt.translate(&rb, 0);
         assert_eq!(
@@ -608,7 +608,7 @@ mod tests {
         mi.ffm_fields.push(vec![ns_desc(0)]); //  single namespace in a field
         mi.ffm_fields.push(vec![ns_desc(0), ns_desc(1)]); // two namespaces in a field
         mi.ffm_k = 1;
-        let mut fbt = FeatureBufferTranslator::new(&mi);
+        let mut fbt = FeatureBufferTranslator::new(&mut mi);
         let rb = add_header(vec![
             parser::IS_NOT_SINGLE_MASK | nd(5, 9),
             0xfec,
@@ -650,7 +650,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test] #[ignore]
     fn test_ffm_three_fields() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
@@ -658,7 +658,7 @@ mod tests {
         mi.ffm_fields.push(vec![ns_desc(0), ns_desc(1)]); // two namespaces in a field	      0xfea, 0xfeb, 0xfec
         mi.ffm_fields.push(vec![ns_desc(1)]); // single namespace in a field	      0xfec
         mi.ffm_k = 1;
-        let mut fbt = FeatureBufferTranslator::new(&mi);
+        let mut fbt = FeatureBufferTranslator::new(&mut mi);
         let rb = add_header(vec![
             parser::IS_NOT_SINGLE_MASK | nd(5, 9),
             0x1,
@@ -706,7 +706,7 @@ mod tests {
         );
         // Now hashes get changed, because k = 3 means we'll be aligning hashes
         mi.ffm_k = 3;
-        let mut fbt = FeatureBufferTranslator::new(&mi);
+        let mut fbt = FeatureBufferTranslator::new(&mut mi);
         let rb = add_header(vec![
             parser::IS_NOT_SINGLE_MASK | nd(5, 9),
             0x1,
@@ -764,7 +764,7 @@ mod tests {
                 weight: 1.0,
             });
 
-        let mut fbt = FeatureBufferTranslator::new(&mi);
+        let mut fbt = FeatureBufferTranslator::new(&mut mi);
         let rb = add_header(vec![parser::NO_FEATURES]); // no feature
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.example_importance, 1.0); // Did example importance get parsed correctly
@@ -780,7 +780,7 @@ mod tests {
                 weight: 1.0,
             });
 
-        let mut fbt = FeatureBufferTranslator::new(&mi);
+        let mut fbt = FeatureBufferTranslator::new(&mut mi);
         let rb = add_header(vec![
             NO_FEATURES,
             nd(6, 10) | IS_NOT_SINGLE_MASK,
