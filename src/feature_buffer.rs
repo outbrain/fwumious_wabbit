@@ -2,9 +2,10 @@ use crate::feature_transform_executor;
 use crate::model_instance;
 use crate::parser;
 use crate::vwmap::{NamespaceFormat, NamespaceType};
+use rustc_hash::FxHashMap;
 
 const VOWPAL_FNV_PRIME: u32 = 16777619; // vowpal magic number
-//const CONSTANT_NAMESPACE:usize = 128;
+                                        //const CONSTANT_NAMESPACE:usize = 128;
 const CONSTANT_HASH: u32 = 11650396;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -33,7 +34,7 @@ pub struct FeatureBuffer {
 
 #[derive(Clone)]
 pub struct FeatureBufferTranslator {
-    model_instance: model_instance::ModelInstance,
+    pub model_instance: model_instance::ModelInstance,
     // we don't want to keep allocating buffers
     hashes_vec_in: Vec<HashAndValue>,
     hashes_vec_out: Vec<HashAndValue>,
@@ -136,8 +137,9 @@ macro_rules! feature_reader_float_namespace {
 }
 
 impl FeatureBufferTranslator {
-    pub fn new(mi: &model_instance::ModelInstance) -> FeatureBufferTranslator {
+    pub fn new(mi: &mut model_instance::ModelInstance) -> FeatureBufferTranslator {
         // Calculate lr_hash_mask
+
         let lr_hash_mask = (1 << mi.bit_precision) - 1;
         // Calculate ffm_hash_mask
         let mut ffm_bits_for_dimensions = 0;
@@ -166,9 +168,9 @@ impl FeatureBufferTranslator {
             lr_hash_mask: lr_hash_mask,
             ffm_hash_mask: ffm_hash_mask,
             transform_executors:
-            feature_transform_executor::TransformExecutors::from_namespace_transforms(
-                &mi.transform_namespaces,
-            ),
+                feature_transform_executor::TransformExecutors::from_namespace_transforms(
+                    &mi.transform_namespaces,
+                ),
         };
         fbt
     }
@@ -177,42 +179,42 @@ impl FeatureBufferTranslator {
         println!("item out {:?}", self.feature_buffer.lr_buffer);
     }
 
-    pub fn increment_common_hash(&mut self, mi: &mut model_instance::ModelInstance) -> () {
-
-
-	for hash_value_entry in self.feature_buffer.ffm_buffer.iter_mut() {
-	    let hash_entry: u32 = hash_value_entry.hash;
-	    mi.freq_hash.entry(hash_entry).and_modify(|vx| *vx += 1).or_insert(1);
-	}
-
-	mi.warmup_listing_count += 1;
+    pub fn increment_common_hash(&mut self, freq_hash: &mut FxHashMap<u32, u32>) -> () {
+        for hash_value_entry in self.feature_buffer.ffm_buffer.iter_mut() {
+            let hash_entry: u32 = hash_value_entry.hash;
+            freq_hash
+                .entry(hash_entry)
+                .and_modify(|vx| *vx += 1)
+                .or_insert(1);
+        }
     }
 
     pub fn apply_generic_mask(&mut self) -> () {
-	// Generic mask application in case no rehashing is considered.
+        // Generic mask application in case no rehashing is considered.
 
-	for hash_value_entry in self.feature_buffer.ffm_buffer.iter_mut() {
-	    hash_value_entry.hash = hash_value_entry.hash & self.ffm_hash_mask;
-	}
+        for hash_value_entry in self.feature_buffer.ffm_buffer.iter_mut() {
+            hash_value_entry.hash = hash_value_entry.hash & self.ffm_hash_mask;
+        }
     }
 
-    pub fn max_freq_rehash(&mut self) -> () {
-	// A method for re-fining the hash space based on prior frequency counts
+    // pub fn max_freq_rehash(&mut self) -> () {
+    // 	// A method for re-fining the hash space based on prior frequency counts
 
-	for hash_value_entry in self.feature_buffer.ffm_buffer.iter_mut() {
-	    match self.model_instance.freq_hash.get(&hash_value_entry.hash) {
-		Some(i) => {
-		    hash_value_entry.hash = *i;
-		},
-		_ => {
-		    hash_value_entry.hash = (hash_value_entry.hash * ((self.model_instance.ffm_fields.len() as u32) * (self.model_instance.ffm_k as u32))) & self.ffm_hash_mask;
-		},
-	    }
-	}
-    }
+    // 	println!("{}", self.model_instance.freq_hash.len());
+    // 	for hash_value_entry in self.feature_buffer.ffm_buffer.iter_mut() {
+    // 	    match self.model_instance.freq_hash.get(&hash_value_entry.hash) {
+    // 		Some(i) => {
+    // 		    if *i > 1 {
+    // 			hash_value_entry.hash = hash_value_entry.hash;
+    // 		    }
+    // 		},
+    // 		_ => {
+    // 		    hash_value_entry.hash = (hash_value_entry.hash  / 5 ) as u32;
+    // 		},
+    // 	    }
+    // 	}
+    // }
 
-
-    
     pub fn translate(&mut self, record_buffer: &[u32], example_number: u64) -> () {
         {
             let lr_buffer = &mut self.feature_buffer.lr_buffer;
@@ -340,14 +342,12 @@ impl FeatureBufferTranslator {
                 }
             }
 
-
-	    // rehash step - if done here, serving just works
-	    if self.model_instance.freq_hash_rehashed_already {
-		self.max_freq_rehash();
-	    } else {
-		self.apply_generic_mask();
-	    }
-
+            // rehash step - if done here, serving just works
+            // if self.model_instance.freq_hash_rehashed_already {
+            // 	self.max_freq_rehash();
+            // } else {
+            // 	self.apply_generic_mask();
+            // }
         }
     }
 }

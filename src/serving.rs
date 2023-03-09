@@ -191,7 +191,7 @@ impl Serving {
         cl: &clap::ArgMatches<'a>,
         vw: &vwmap::VwNamespaceMap,
         re_fixed: Box<regressor::Regressor>,
-        mi: &model_instance::ModelInstance,
+        mi: &mut model_instance::ModelInstance,
     ) -> Result<Serving, Box<dyn Error>> {
         let port = match cl.value_of("port") {
             Some(port) => port.parse().expect("Port should be integer"),

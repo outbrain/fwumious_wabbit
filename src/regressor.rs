@@ -1,4 +1,5 @@
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use rustc_hash::FxHashMap;
 use std::any::Any;
 use std::error::Error;
 use std::io;
@@ -88,6 +89,7 @@ pub struct Regressor {
     pub blocks_boxes: Vec<Box<dyn BlockTrait>>,
     pub tape_len: usize,
     pub immutable: bool,
+    pub count_freq_map: FxHashMap<u32, u32>,
 }
 
 pub fn get_regressor_without_weights(mi: &model_instance::ModelInstance) -> Regressor {
@@ -120,6 +122,7 @@ impl Regressor {
             regressor_name: format!("Regressor with optimizer \"{:?}\"", mi.optimizer),
             immutable: false,
             tape_len: usize::MAX,
+            count_freq_map: FxHashMap::default(),
         };
 
         let mut bg = graph::BlockGraph::new();

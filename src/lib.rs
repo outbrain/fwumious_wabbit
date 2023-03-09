@@ -5,6 +5,7 @@ mod block_lr;
 mod block_misc;
 mod block_neural;
 mod block_normalize;
+mod block_rehash;
 mod block_relu;
 mod cache;
 mod cmdline;
@@ -59,6 +60,10 @@ impl Predictor {
             Err(_e) => return -1.0,
         };
         self.feature_buffer_translator.translate(buffer, 0);
+        block_rehash::rehash(
+            &self.regressor.count_freq_map,
+            &mut self.feature_buffer_translator,
+        );
         self.regressor
             .predict(&self.feature_buffer_translator.feature_buffer, &mut self.pb)
     }
@@ -69,6 +74,7 @@ pub extern "C" fn new_fw_predictor_prototype(command: *const c_char) -> *mut Ffi
     // create a "prototype" predictor that loads the weights file. This predictor is expensive, and is intended
     // to only be created once. If additional predictors are needed (e.g. for concurrent work), please
     // use this "prototype" with the clone_lite function, which will create cheap copies
+
     let str_command = c_char_to_str(command);
     let words = shellwords::split(str_command).unwrap();
     let cmd_matches = cmdline::create_expected_args().get_matches_from(words);
@@ -76,10 +82,13 @@ pub extern "C" fn new_fw_predictor_prototype(command: *const c_char) -> *mut Ffi
         Some(filename) => filename,
         None => panic!("Cannot resolve input weights file name"),
     };
-    let (model_instance, vw_namespace_map, regressor) =
+    let (mut model_instance, vw_namespace_map, mut regressor) =
         persistence::new_regressor_from_filename(weights_filename, true, Some(&cmd_matches))
             .unwrap();
-    let feature_buffer_translator = FeatureBufferTranslator::new(&model_instance);
+
+    // Pass the current remap hash before creating the refs
+    regressor.count_freq_map = model_instance.freq_hash.clone();
+    let feature_buffer_translator = FeatureBufferTranslator::new(&mut model_instance);
     let vw_parser = VowpalParser::new(&vw_namespace_map);
     let sharable_regressor = BoxedRegressorTrait::new(Box::new(regressor));
     let pb = sharable_regressor.new_portbuffer();

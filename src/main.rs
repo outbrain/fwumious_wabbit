@@ -22,7 +22,6 @@ extern crate intel_mkl_src;
 
 #[macro_use]
 extern crate nom;
-mod block_rehash;
 mod block_ffm;
 mod block_helpers;
 mod block_loss_functions;
@@ -30,6 +29,7 @@ mod block_lr;
 mod block_misc;
 mod block_neural;
 mod block_normalize;
+mod block_rehash;
 mod block_relu;
 mod cache;
 mod cmdline;
@@ -155,10 +155,10 @@ fn main2() -> Result<(), Box<dyn Error>> {
             .value_of("initial_regressor")
             .expect("Daemon mode only supports serving from --initial regressor");
         println!("initial_regressor = {}", filename);
-        let (mi2, vw2, re_fixed) =
+        let (mut mi2, vw2, re_fixed) =
             persistence::new_regressor_from_filename(filename, true, Option::Some(&cl))?;
 
-        let mut se = serving::Serving::new(&cl, &vw2, Box::new(re_fixed), &mi2)?;
+        let mut se = serving::Serving::new(&cl, &vw2, Box::new(re_fixed), &mut mi2)?;
         se.serve()?;
     } else if cl.is_present("convert_inference_regressor") {
         let filename = cl
@@ -198,7 +198,8 @@ fn main2() -> Result<(), Box<dyn Error>> {
 
         let input_filename = cl.value_of("data").expect("--data expected");
         let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"), &vw);
-        let mut fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
+        let mut freq_hash = mi.freq_hash.clone();
+        let mut fbt = feature_buffer::FeatureBufferTranslator::new(&mut mi);
         let mut pb = re.new_portbuffer();
 
         let predictions_after: u64 = match cl.value_of("predictions_after") {
@@ -206,11 +207,6 @@ fn main2() -> Result<(), Box<dyn Error>> {
             None => 0,
         };
 
-	let mut warmup_upper_bound: i64 = 0;
-	if cl.is_present("warmup_listing_count") {
-	    warmup_upper_bound = cl.value_of("warmup_listing_count").expect("Please provide int-like upper bound for hash warm-up phase.").parse::<i64>()?;
-	}
-	
         let holdout_after_option: Option<u64> =
             cl.value_of("holdout_after").map(|s| s.parse().unwrap());
 
@@ -241,6 +237,8 @@ fn main2() -> Result<(), Box<dyn Error>> {
 
         let now = Instant::now();
         let mut example_num = 0;
+        let rehash_step = cl.is_present("rehash_step");
+
         loop {
             let reading_result;
             let buffer: &[u32];
@@ -265,15 +263,16 @@ fn main2() -> Result<(), Box<dyn Error>> {
             example_num += 1;
             fbt.translate(buffer, example_num);
 
-	    if cl.is_present("warmup_listing_count") && !mi.freq_hash_rehashed_already {
-		if warmup_upper_bound > mi.warmup_listing_count {
-	    	    fbt.increment_common_hash(&mut mi);
-		    continue
-		} else {		    
-		    block_rehash::rehash_sorted_counts(&mut mi, &mut fbt);
-		}
-	    }
-	    
+            if rehash_step {
+                // Increment counts
+                fbt.increment_common_hash(&mut freq_hash);
+
+                // neglect the effect of rare ones
+                block_rehash::identify_frequent_stream(&mut freq_hash, &mut fbt);
+                block_rehash::rehash(&freq_hash, &mut fbt);
+            }
+            fbt.apply_generic_mask();
+
             let mut prediction: f32 = 0.0;
 
             if prediction_model_delay == 0 {
@@ -281,6 +280,9 @@ fn main2() -> Result<(), Box<dyn Error>> {
                     Some(holdout_after) => !testonly && example_num < holdout_after,
                     None => !testonly,
                 };
+                if rehash_step && example_num % 10 == 0 {
+                    re.learn(&fbt.feature_buffer, &mut pb, update);
+                }
                 prediction = re.learn(&fbt.feature_buffer, &mut pb, update);
             } else {
                 if example_num > predictions_after {
@@ -302,16 +304,16 @@ fn main2() -> Result<(), Box<dyn Error>> {
         }
         cache.write_finish()?;
 
-	match final_regressor_filename {
-	    Some(filename) => {
-		persistence::save_regressor_to_filename(filename, &mi, &vw, re).unwrap()
-	    }
-	    None => {}
-	}
+        match final_regressor_filename {
+            Some(filename) => {
+                mi.freq_hash = freq_hash;
+                persistence::save_regressor_to_filename(filename, &mi, &vw, re).unwrap()
+            }
+            None => {}
+        }
 
         let elapsed = now.elapsed();
         println!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
-
     }
 
     Ok(())
