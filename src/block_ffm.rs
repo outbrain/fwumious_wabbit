@@ -371,7 +371,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 core_macro!(local_data_ffm_values);
             } else {
                 // Slow-path - using heap data structures
-                log::warn!("FFM data too large, allocating on the heap (slow path)!");
+                eprint!("FFM data too large, allocating on the heap (slow path)!");
                 let guard = self.mutex.lock().unwrap(); // following operations are not thread safe
                 if local_data_ffm_len > self.local_data_ffm_values.len() {
                     self.local_data_ffm_values

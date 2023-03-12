@@ -119,7 +119,7 @@ impl OptimizerTrait for OptimizerAdagradLUT {
     }
 
     fn init(&mut self, learning_rate: f32, power_t: f32, initial_acc_gradient: f32) {
-        log::info!("Calculating look-up tables for Adagrad learning rate calculation");
+        println!("Calculating look-up tables for Adagrad learning rate calculation");
         let minus_power_t = -power_t;
         for x in 0..FASTMATH_LR_LUT_SIZE {
             // accumulated gradients are always positive floating points, sign is guaranteed to be zero
@@ -260,7 +260,8 @@ mod tests {
                     } else {
                         relative_error = error; // happens when the update is 0.0
                     }
-
+                    //println!("Relative error {}", relative_error);
+                    //println!("Err: {} - p_flex: {}, p_lut: {}, gradient: {}, accumulation {}", error, p_flex, p_lut, *gradient, *accumulation);
                     assert!(relative_error < 0.05);
                 }
             }

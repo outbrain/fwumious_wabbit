@@ -94,6 +94,7 @@ impl WorkerThread {
                     match writer.write_all(p_res.as_bytes()) {
                         Ok(_) => {}
                         Err(_e) => {
+                            /*println!("Write to socket failed, dropping it"); */
                             return ConnectionEnd::StreamWriteError;
                         }
                     };
@@ -121,6 +122,7 @@ impl WorkerThread {
                                 match writer.write_all(p_res.as_bytes()) {
                                     Ok(_) => {}
                                     Err(_e) => {
+                                        /*println!("Write to socket failed, dropping it"); */
                                         return ConnectionEnd::StreamWriteError;
                                     }
                                 };
@@ -131,6 +133,7 @@ impl WorkerThread {
                                 match writer.write_all(p_res.as_bytes()) {
                                     Ok(_) => {}
                                     Err(_e) => {
+                                        /*println!("Write to socket failed, dropping it"); */
                                         return ConnectionEnd::StreamWriteError;
                                     }
                                 };
@@ -143,10 +146,12 @@ impl WorkerThread {
                             Ok(_) => match writer.flush() {
                                 Ok(_) => {}
                                 Err(_e) => {
+                                    /*println!("Flushing the socket failed, dropping it");*/
                                     return ConnectionEnd::StreamFlushError;
                                 }
                             },
                             Err(_e) => {
+                                /*println!("Write to socket failed, dropping it"); */
                                 return ConnectionEnd::StreamWriteError;
                             }
                         };
@@ -160,6 +165,7 @@ impl WorkerThread {
                 match writer.flush() {
                     Ok(_) => {}
                     Err(_e) => {
+                        /*println!("Flushing the socket failed, dropping it");*/
                         return ConnectionEnd::StreamFlushError;
                     }
                 };
@@ -195,7 +201,7 @@ impl Serving {
         let receiver = Arc::new(Mutex::new(receiver));
 
         let listening_interface = format!("127.0.0.1:{}", port);
-        log::info!("Starting to listen on {}", listening_interface);
+        println!("Starting to listen on {}", listening_interface);
         let mut s = Serving {
             listening_interface: listening_interface.to_string(),
             worker_threads: Vec::new(),
@@ -209,7 +215,7 @@ impl Serving {
                 .expect("num_children should be integer"),
             None => 10,
         };
-        log::info!("Number of threads {}", num_children);
+        println!("Number of threads {}", num_children);
 
         if !s.foreground {
             //  let stdout = File::create("/tmp/daemon.out").unwrap();
@@ -244,7 +250,7 @@ impl Serving {
     pub fn serve(&mut self) -> Result<(), Box<dyn Error>> {
         let listener = net::TcpListener::bind(&self.listening_interface)
             .expect("Cannot bind to the interface");
-        log::info!("Bind done, deamonizing and calling accept");
+        println!("Bind done, deamonizing and calling accept");
         for stream in listener.incoming() {
             self.sender.send(stream?)?;
         }
@@ -354,6 +360,7 @@ C,featureC
                 newt.handle_connection(&mut reader, &mut writer)
             );
         }
+        //    println!("Return value {:?}", std::str::from_utf8(&x).unwrap());
     }
 
     fn lr_and_ffm_vec(
