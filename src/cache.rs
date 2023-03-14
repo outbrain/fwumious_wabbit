@@ -105,16 +105,17 @@ impl RecordCache {
                     // we buffer ourselves, otherwise i would be wise to use bufreader
                     rc.input_bufreader = Box::new(fs::File::open(&final_filename).unwrap());
                 } else {
+                    //                    rc.input_bufreader = Box::new(zstd::stream::Decoder::new(fs::File::open(&final_filename).unwrap()).unwrap());
                     rc.input_bufreader = Box::new(
                         lz4::Decoder::new(fs::File::open(&final_filename).unwrap()).unwrap(),
                     );
                 }
-                log::info!("using cache_file = {}", final_filename);
-                log::info!("ignoring text input in favor of cache input");
+                println!("using cache_file = {}", final_filename);
+                println!("ignoring text input in favor of cache input");
                 match rc.verify_header(vw_map) {
                     Ok(()) => {}
                     Err(e) => {
-                        log::error!("Couldn't use the existing cache file: {:?}", e);
+                        println!("Couldn't use the existing cache file: {:?}", e);
                         rc.reading = false;
                     }
                 }
@@ -123,7 +124,7 @@ impl RecordCache {
 
             if !rc.reading {
                 rc.writing = true;
-                log::info!("creating cache file = {}", final_filename);
+                println!("creating cache file = {}", final_filename);
                 if !gz {
                     rc.output_bufwriter = Box::new(io::BufWriter::new(
                         fs::File::create(temporary_filename).unwrap(),
