@@ -314,4 +314,8 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
              .value_name("Output predictions to stdout")
              .help("Output predictions file to stdout")
              .takes_value(false))
+	.arg(Arg::with_name("second_pass_nth")
+	     .long("second_pass_nth")
+             .help("Determine every which instance to do second pass.")
+             .takes_value(true))
 }

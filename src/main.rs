@@ -233,6 +233,14 @@ fn main2() -> Result<(), Box<dyn Error>> {
             None => 0,
         };
 
+	let second_pass_iter: u64 = match cl.value_of("second_pass_nth") {
+	    Some(num_second_pass) => num_second_pass.parse().expect("Please input an integer for second pass iterations."),
+	    None => -1
+	};
+
+	if second_pass_iter > 0 {
+	    log::info!("Considering second pass every {} instances.", second_pass_iter);
+	}
         let mut delayed_learning_fbs: VecDeque<feature_buffer::FeatureBuffer> =
             VecDeque::with_capacity(prediction_model_delay as usize);
 
@@ -255,6 +263,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
 
         let now = Instant::now();
         let mut example_num = 0;
+
         loop {
             let reading_result;
             let buffer: &[u32];
@@ -278,7 +287,6 @@ fn main2() -> Result<(), Box<dyn Error>> {
             }
             example_num += 1;
             let mut prediction: f32 = 0.0;
-
             if prediction_model_delay == 0 {
                 let update = match holdout_after_option {
                     Some(holdout_after) => !testonly && example_num < holdout_after,
@@ -288,6 +296,9 @@ fn main2() -> Result<(), Box<dyn Error>> {
                     hogwild_trainer.digest_example(Vec::from(buffer));
                 } else {
                     fbt.translate(buffer, example_num);
+		    if example_num % second_pass_iter == 0 && second_pass_iter > 0 {
+			sharable_regressor.learn(&fbt.feature_buffer, &mut pb, update);
+		    }
                     prediction = sharable_regressor.learn(&fbt.feature_buffer, &mut pb, update);
                 }
             } else {
