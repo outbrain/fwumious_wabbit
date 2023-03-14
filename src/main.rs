@@ -131,7 +131,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
     let testonly = cl.is_present("testonly");
 
     let final_regressor_filename = cl.value_of("final_regressor");
-    let output_pred_st_output: bool = cl.is_present("predictions_stdout");
+    let output_pred_sto: bool = cl.is_present("predictions_stdout");
     match final_regressor_filename {
         Some(filename) => {
             if !cl.is_present("save_resume") {
@@ -301,7 +301,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
 
             if example_num > predictions_after {
 
-		if output_pred_st_output {
+		if output_pred_sto {
 		    println!("{:.6}", prediction);
 		}
 		
