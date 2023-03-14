@@ -308,5 +308,10 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
             .long("hogwild_threads")
             .value_name("num_threads")
             .help("Number of threads to use with hogwild training")
-            .takes_value(true))
+             .takes_value(true))
+	.arg(Arg::with_name("predictions_stdout")
+	     .long("predictions_stdout")
+             .value_name("Output predictions to stdout")
+             .help("Output predictions file to stdout")
+             .takes_value(false))
 }
