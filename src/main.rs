@@ -235,7 +235,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
 
 	let second_pass_iter: u64 = match cl.value_of("second_pass_nth") {
 	    Some(num_second_pass) => num_second_pass.parse().expect("Please input an integer for second pass iterations."),
-	    None => -1
+	    None => "-1".parse().unwrap(),
 	};
 
 	if second_pass_iter > 0 {
