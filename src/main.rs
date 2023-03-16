@@ -112,6 +112,7 @@ fn build_cache_without_training(cl: clap::ArgMatches) -> Result<(), Box<dyn Erro
         }
         example_num += 1;
     }
+    println!("Finished building cache only, exiting ..");
     cache.write_finish()?;
     Ok(())
 }
