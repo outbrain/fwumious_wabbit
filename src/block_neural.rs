@@ -380,7 +380,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
                         if self.dropout != 0.0
                             && *self.rng_scratchpad.get_unchecked(j) < self.dropout_threshold
                         {
-                            //          println!("B:j {}", j);
                             continue;
                         }
 
@@ -654,98 +653,4 @@ mod tests {
 
         assert_epsilon!(slearn2(&mut bg, &fb, &mut pb, false), 1.5);
     }
-
-    // #[test]
-    // fn test_neuron() {
-    //     let mut mi = model_instance::ModelInstance::new_empty().unwrap();
-    //     mi.nn_learning_rate = 0.1;
-    //     mi.nn_power_t = 0.0;
-    //     mi.nn_init_acc_gradient = mi.init_acc_gradient;
-    //     mi.optimizer = Optimizer::SGD;
-
-    //     let mut bg = BlockGraph::new();
-    //     let input_block = block_misc::new_const_block(&mut bg, vec![2.0]).unwrap();
-    //     let neuron_block = new_neuron_block(&mut bg, &mi, input_block, NeuronType::WeightedSum, InitType::One).unwrap();
-    //     let observe_block = block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0)).unwrap();
-    //     bg.finalize();
-    //     bg.allocate_and_init_weights(&mi);
-
-    //     let mut pb = bg.new_port_buffer();
-    //     let fb = fb_vec();
-    //     assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 2.0);
-    //     assert_eq!(pb.observations.len(), 1);
-    //     assert_epsilon!(slearn2  (&mut bg, &fb, &mut pb, true), 1.5);
-    // }
-    /*
-        #[test]
-        fn test_dropout() {
-            let mut mi = model_instance::ModelInstance::new_empty().unwrap();
-
-            let NUM_NEURONS = 6;
-            let mut bg = BlockGraph::new();
-            let input_block = block_misc::new_const_block(&mut bg, vec![3.0]).unwrap();
-            let observe_block_backward = block_misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
-            let neuron_block = new_neuronlayer_block(&mut bg,
-                                                &mi,
-                                                observe_block_backward,
-                                                NeuronType::WeightedSum,
-                                                NUM_NEURONS,
-                                                InitType::One,
-                                                0.5, // dropout
-                                                0.0, // max norm
-                                                false,
-                                                ).unwrap();
-            let observe_block = block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(3.0)).unwrap();
-            bg.finalize();
-            bg.allocate_and_init_weights(&mi);
-
-            let mut pb = bg.new_port_buffer();
-
-            let fb = fb_vec();
-
-            spredict2  (&mut bg, &fb, &mut pb, false);
-            assert_eq!(pb.observations, vec![3.0, 3.0, 3.0, 3.0, 3.0, 3.0, // mostly deterministic due to specific PRNG use,
-                                            3.0 			       // Untouched output when forward-only
-                                                        ]);
-
-            slearn2  (&mut bg, &fb, &mut pb, true);
-            assert_eq!(pb.observations, vec![6.0, 0.0, 0.0, 0.0, 6.0, 6.0, // mostly deterministic due to specific PRNG use
-                                            18.0 			       // scaled backprop
-                                                        ]);
-    //        println!("O: {:?}", pb.observations);
-
-
-
-        }
-
-    */
-
-    /*    #[test]
-        fn test_segm() {
-            unsafe {
-            let input_matrix:Vec<f32> = vec![1.0, 2.0,
-                                             3.0, 4.0,
-                                             5.0, 6.0];
-            let input_vec: Vec<f32> = vec![2.0, 1.0];
-            let mut output_vec : Vec<f32> = vec![0.0, 0.0, 0.0];
-
-                        sgemv(
-                         b'T',//   trans: u8,
-                         2, //   m: i32,          // num_neurons
-                         3, //   n: i32, 	      // num inputs
-                         1.0, //   alpha: f32,
-                         &input_matrix, //  a: &[f32],
-                         2,   //lda: i32,
-                         &input_vec,//   x: &[f32],
-                            1, //incx: i32,
-                            1.0, // beta: f32,
-                            &mut output_vec, //y: &mut [f32],
-                            1,//incy: i32
-                        );
-
-        println!("Output : {:?}", output_vec);
-
-        }
-        }
-    */
 }
