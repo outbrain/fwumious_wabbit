@@ -124,7 +124,7 @@ pub unsafe extern "C" fn free_predictor(ptr: *mut FfiPredictor) {
 
 unsafe fn from_ptr<'a>(ptr: *mut FfiPredictor) -> &'a mut Predictor {
     if ptr.is_null() {
-        eprintln!("Fatal error, got NULL `Context` pointer");
+	log::error!("Fatal error, got NULL `Context` pointer");
         std::process::abort();
     }
     &mut *(ptr.cast())
