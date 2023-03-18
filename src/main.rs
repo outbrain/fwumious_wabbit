@@ -112,6 +112,8 @@ fn build_cache_without_training(cl: clap::ArgMatches) -> Result<(), Box<dyn Erro
         }
         example_num += 1;
     }
+
+    log::info!("Built cache only, exiting.");
     cache.write_finish()?;
     Ok(())
 }
@@ -131,6 +133,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
     let testonly = cl.is_present("testonly");
 
     let final_regressor_filename = cl.value_of("final_regressor");
+    let output_pred_sto: bool = cl.is_present("predictions_stdout");
     match final_regressor_filename {
         Some(filename) => {
             if !cl.is_present("save_resume") {
@@ -299,6 +302,11 @@ fn main2() -> Result<(), Box<dyn Error>> {
             }
 
             if example_num > predictions_after {
+
+		if output_pred_sto {
+		    println!("{:.6}", prediction);
+		}
+		
                 match predictions_file.as_mut() {
                     Some(file) => write!(file, "{:.6}\n", prediction)?,
                     None => {}
