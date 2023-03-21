@@ -86,7 +86,7 @@ impl WorkerThread {
             match reading_result {
                 Ok([]) => return ConnectionEnd::EndOfStream, // EOF
                 Ok(buffer2) => {
-                    self.fbt.translate(buffer2, i);
+                    self.fbt.translate(&Vec::from(buffer2), i);
                     let p = self
                         .re_fixed
                         .predict(&(self.fbt.feature_buffer), &mut self.pb);

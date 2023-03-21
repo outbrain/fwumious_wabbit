@@ -82,6 +82,7 @@ impl OptimizerTrait for OptimizerAdagradFlex {
         let update = gradient
             * self.learning_rate
             * (new_accumulated_gradient_squared).powf(self.minus_power_t);
+
         if update.is_nan() || update.is_infinite() {
             return 0.0;
         }

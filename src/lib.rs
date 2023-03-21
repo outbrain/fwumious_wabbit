@@ -59,7 +59,7 @@ impl Predictor {
             Ok(buffer2) => buffer2,
             Err(_e) => return -1.0,
         };
-        self.feature_buffer_translator.translate(buffer, 0);
+        self.feature_buffer_translator.translate(&Vec::from(buffer), 0);
         self.regressor
             .predict(&self.feature_buffer_translator.feature_buffer, &mut self.pb)
     }

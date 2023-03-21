@@ -2,6 +2,7 @@ use crate::feature_transform_executor;
 use crate::model_instance;
 use crate::parser;
 use crate::vwmap::{NamespaceFormat, NamespaceType};
+use rustc_hash::FxHashMap;
 
 const VOWPAL_FNV_PRIME: u32 = 16777619; // vowpal magic number
                                         //const CONSTANT_NAMESPACE:usize = 128;
@@ -177,7 +178,16 @@ impl FeatureBufferTranslator {
         log::info!("item out {:?}", self.feature_buffer.lr_buffer);
     }
 
-    pub fn translate(&mut self, record_buffer: &[u32], example_number: u64) -> () {
+
+    pub fn apply_generic_mask(&mut self) -> () {
+        // Generic mask application in case no rehashing is considered.
+
+        for hash_value_entry in self.feature_buffer.ffm_buffer.iter_mut() {
+            hash_value_entry.hash = hash_value_entry.hash & self.ffm_hash_mask;
+        }
+    }
+
+    pub fn translate(&mut self, record_buffer: &Vec<u32>, example_number: u64) -> () {
         {
             let lr_buffer = &mut self.feature_buffer.lr_buffer;
             lr_buffer.truncate(0);

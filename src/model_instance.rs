@@ -1,7 +1,8 @@
 use std::error::Error;
+use rustc_hash::FxHashMap;
 use std::io::Error as IOError;
 use std::io::ErrorKind;
-
+//use growable_bloom_filter::GrowableBloom;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -56,6 +57,8 @@ pub struct ModelInstance {
     pub ffm_bit_precision: u32,
     #[serde(default = "default_bool_false")]
     pub fastmath: bool,
+
+    pub freq_hash: FxHashMap<u32, u32>,
 
     pub ffm_initialization_type: String,
     #[serde(default = "default_f32_zero")]
@@ -120,6 +123,7 @@ impl ModelInstance {
             power_t: 0.5,
             ffm_power_t: 0.5,
             add_constant_feature: true,
+	    freq_hash: FxHashMap::default(),
             feature_combo_descs: Vec::new(),
             ffm_fields: Vec::new(),
             ffm_k: 0,

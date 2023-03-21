@@ -16,6 +16,7 @@ use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
 use std::time::Instant;
+use std::cell::RefCell;
 use crate::hogwild::HogwildTrainer;
 use crate::multithread_helpers::BoxedRegressorTrait;
 
@@ -30,6 +31,7 @@ mod block_loss_functions;
 mod block_lr;
 mod block_misc;
 mod block_neural;
+mod block_rehash;
 mod block_normalize;
 mod block_relu;
 mod cache;
@@ -92,6 +94,7 @@ fn build_cache_without_training(cl: clap::ArgMatches) -> Result<(), Box<dyn Erro
     };
     let mut pa = parser::VowpalParser::new(&vw);
     let mut example_num = 0;
+    
     loop {
         let reading_result;
         let buffer: &[u32];
@@ -185,7 +188,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
         let vw: vwmap::VwNamespaceMap;
         let mut re: regressor::Regressor;
         let mut sharable_regressor: BoxedRegressorTrait;
-        let mi: model_instance::ModelInstance;
+        let mut mi: model_instance::ModelInstance;
 
         if let Some(filename) = cl.value_of("initial_regressor") {
             log::info!("initial_regressor = {}", filename);
@@ -257,6 +260,10 @@ fn main2() -> Result<(), Box<dyn Error>> {
 
         let now = Instant::now();
         let mut example_num = 0;
+
+	let rehash_step = cl.is_present("rehash_step");
+	let mut freq_hash = mi.freq_hash.clone();
+	
         loop {
             let reading_result;
             let buffer: &[u32];
@@ -279,6 +286,13 @@ fn main2() -> Result<(), Box<dyn Error>> {
                 };
             }
             example_num += 1;
+	    let mut vec_buff = Vec::from(buffer);
+	    if rehash_step {
+		block_rehash::increment_common_hash(&vec_buff, &mut freq_hash);
+                block_rehash::identify_frequent_stream(&mut freq_hash);
+		block_rehash::rehash(&freq_hash, buffer, &mut vec_buff);
+            }
+	    
             let mut prediction: f32 = 0.0;
 
             if prediction_model_delay == 0 {
@@ -287,13 +301,13 @@ fn main2() -> Result<(), Box<dyn Error>> {
                     None => !testonly,
                 };
                 if hogwild_training && update {
-                    hogwild_trainer.digest_example(Vec::from(buffer));
+                    hogwild_trainer.digest_example(vec_buff);
                 } else {
-                    fbt.translate(buffer, example_num);
+                    fbt.translate(&vec_buff, example_num);
                     prediction = sharable_regressor.learn(&fbt.feature_buffer, &mut pb, update);
                 }
             } else {
-                fbt.translate(buffer, example_num);
+                fbt.translate(&vec_buff, example_num);
                 if example_num > predictions_after {
                     prediction = sharable_regressor.learn(&fbt.feature_buffer, &mut pb, false);
                 }
@@ -326,6 +340,8 @@ fn main2() -> Result<(), Box<dyn Error>> {
 
         match final_regressor_filename {
             Some(filename) => {
+		log::info!("Storing {} frequent hashes.", freq_hash.len());
+		mi.freq_hash = freq_hash;
                 persistence::save_sharable_regressor_to_filename(filename, &mi, &vw, sharable_regressor).unwrap()
             }
             None => {}

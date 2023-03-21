@@ -243,7 +243,7 @@ impl RecordCache {
                     .input_bufreader
                     .read(&mut self.byte_buffer[self.end_pointer..READBUF_LEN])
                 {
-                    Ok(0) => return Ok(&[]),
+                    Ok(0) => return Ok(&mut []),
                     Ok(n) => n,
                     Err(e) => Err(e)?,
                 };

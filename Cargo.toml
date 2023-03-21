@@ -26,9 +26,10 @@ rand_xoshiro = "0.6.0"
 flate2 = { version = "1.0", features = ["cloudflare_zlib"], default-features = false }
 shellwords = "1.1.0"
 blas = "0.22"
-intel-mkl-src = {version= "0.7.0", default-features = false, features=["download", "mkl-static-lp64-seq"]}
+intel-mkl-src = {version= "0.8.1", default-features = false, features=["mkl-static-lp64-seq"]}
 log = "0.4"
 env_logger = "0.10.0"
+rustc-hash = "1.1.0"
 
 [build-dependencies]
 cbindgen = "0.23.0"

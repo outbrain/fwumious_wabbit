@@ -314,4 +314,8 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
              .value_name("Output predictions to stdout")
              .help("Output predictions file to stdout")
              .takes_value(false))
+	.arg(Arg::with_name("rehash_step")
+             .long("rehash_step")
+             .help("Whether to consider rehash step.")
+             .takes_value(false))
 }
