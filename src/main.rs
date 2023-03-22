@@ -261,7 +261,17 @@ fn main2() -> Result<(), Box<dyn Error>> {
         let now = Instant::now();
         let mut example_num = 0;
 
+	let mut rehash_cache_size: usize = 0;
 	let rehash_step = cl.is_present("rehash_step");
+
+	if rehash_step {
+	    rehash_cache_size = match cl.value_of("rehash_step") {
+		Some(hash_step) => hash_step.parse()?,
+		None => 1_000_000,
+            };
+	    log::info!("Considering rehash cache of size {}", rehash_cache_size);
+	}
+
 	let mut freq_hash = mi.freq_hash.clone();
 	
         loop {
@@ -289,8 +299,8 @@ fn main2() -> Result<(), Box<dyn Error>> {
 	    let mut vec_buff = Vec::from(buffer);
 	    if rehash_step {
 		block_rehash::increment_common_hash(&vec_buff, &mut freq_hash);
-                block_rehash::identify_frequent_stream(&mut freq_hash);
-		block_rehash::rehash(&freq_hash, buffer, &mut vec_buff);
+                block_rehash::identify_frequent_stream(&mut freq_hash, rehash_cache_size);
+		block_rehash::rehash(&freq_hash, buffer, &mut vec_buff);		
             }
 	    
             let mut prediction: f32 = 0.0;
@@ -304,10 +314,12 @@ fn main2() -> Result<(), Box<dyn Error>> {
                     hogwild_trainer.digest_example(vec_buff);
                 } else {
                     fbt.translate(&vec_buff, example_num);
+		    fbt.apply_generic_mask();
                     prediction = sharable_regressor.learn(&fbt.feature_buffer, &mut pb, update);
                 }
             } else {
                 fbt.translate(&vec_buff, example_num);
+		fbt.apply_generic_mask();
                 if example_num > predictions_after {
                     prediction = sharable_regressor.learn(&fbt.feature_buffer, &mut pb, false);
                 }

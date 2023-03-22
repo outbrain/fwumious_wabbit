@@ -87,6 +87,7 @@ impl WorkerThread {
                 Ok([]) => return ConnectionEnd::EndOfStream, // EOF
                 Ok(buffer2) => {
                     self.fbt.translate(&Vec::from(buffer2), i);
+		    self.fbt.apply_generic_mask();
                     let p = self
                         .re_fixed
                         .predict(&(self.fbt.feature_buffer), &mut self.pb);

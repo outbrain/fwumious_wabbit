@@ -303,7 +303,7 @@ impl FeatureBufferTranslator {
                             hash_value,
                             {
                                 ffm_buffer.push(HashAndValueAndSeq {
-                                    hash: hash_index & self.ffm_hash_mask,
+                                    hash: hash_index,
                                     value: hash_value,
                                     contra_field_index: contra_field_index as u32
                                         * self.model_instance.ffm_k as u32,
@@ -633,6 +633,7 @@ mod tests {
             3.0f32.to_bits(),
         ]);
         fbt.translate(&rb, 0);
+	fbt.apply_generic_mask();
         // Hashes get changed, because k = 3 means we'll be aligning hashes
         assert_eq!(
             fbt.feature_buffer.ffm_buffer,
@@ -681,6 +682,7 @@ mod tests {
             3.0f32.to_bits(),
         ]);
         fbt.translate(&rb, 0);
+	fbt.apply_generic_mask();
         assert_eq!(
             fbt.feature_buffer.ffm_buffer,
             vec![
@@ -732,6 +734,7 @@ mod tests {
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![parser::NO_FEATURES]); // no feature
         fbt.translate(&rb, 0);
+	fbt.apply_generic_mask();
         assert_eq!(fbt.feature_buffer.example_importance, 1.0); // Did example importance get parsed correctly
     }
 
@@ -756,6 +759,7 @@ mod tests {
             4.0f32.to_bits(),
         ]);
         fbt.translate(&rb, 0);
+	fbt.apply_generic_mask();
         assert_eq!(
             fbt.feature_buffer.lr_buffer,
             vec![

@@ -317,5 +317,5 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
 	.arg(Arg::with_name("rehash_step")
              .long("rehash_step")
              .help("Whether to consider rehash step.")
-             .takes_value(false))
+             .takes_value(true))
 }

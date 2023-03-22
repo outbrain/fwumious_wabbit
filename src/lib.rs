@@ -60,6 +60,7 @@ impl Predictor {
             Err(_e) => return -1.0,
         };
         self.feature_buffer_translator.translate(&Vec::from(buffer), 0);
+	self.feature_buffer_translator.apply_generic_mask();
         self.regressor
             .predict(&self.feature_buffer_translator.feature_buffer, &mut self.pb)
     }

@@ -93,6 +93,7 @@ impl HogwildWorker {
                 Err(RecvError) => break // channel was closed
             };
             self.feature_buffer_translator.translate(&buffer, some_num);
+	    self.feature_buffer_translator.apply_generic_mask();
             self.regressor.learn(&self.feature_buffer_translator.feature_buffer, &mut self.port_buffer, true);
         }
     }
