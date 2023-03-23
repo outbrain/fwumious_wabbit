@@ -39,7 +39,7 @@ mod feature_buffer;
 mod feature_transform_executor;
 mod feature_transform_implementations;
 mod feature_transform_parser;
-mod graph;
+mod logging_layer;
 mod model_instance;
 mod multithread_helpers;
 mod optimizer;
@@ -50,12 +50,15 @@ mod serving;
 mod version;
 mod vwmap;
 mod port_buffer;
+mod graph;
 mod hogwild;
 
 fn main() {
+    logging_layer::initialize_logging_layer();
+
     match main2() {
         Err(e) => {
-            println!("Global error: {:?}", e);
+            log::error!("Global error: {:?}", e);
             std::process::exit(1)
         }
         Ok(()) => {}
@@ -112,7 +115,8 @@ fn build_cache_without_training(cl: clap::ArgMatches) -> Result<(), Box<dyn Erro
         }
         example_num += 1;
     }
-    println!("Finished building cache only, exiting ..");
+
+    log::info!("Built cache only, exiting.");
     cache.write_finish()?;
     Ok(())
 }
@@ -132,12 +136,13 @@ fn main2() -> Result<(), Box<dyn Error>> {
     let testonly = cl.is_present("testonly");
 
     let final_regressor_filename = cl.value_of("final_regressor");
+    let output_pred_sto: bool = cl.is_present("predictions_stdout");
     match final_regressor_filename {
         Some(filename) => {
             if !cl.is_present("save_resume") {
                 return Err("You need to use --save_resume with --final_regressor, for vowpal wabbit compatibility")?;
             }
-            println!("final_regressor = {}", filename);
+            log::info!("final_regressor = {}", filename);
         }
         None => {}
     };
@@ -145,7 +150,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
     let inference_regressor_filename = cl.value_of("convert_inference_regressor");
     match inference_regressor_filename {
         Some(filename1) => {
-            println!("inference_regressor = {}", filename1);
+            log::info!("inference_regressor = {}", filename1);
         }
         None => {}
     };
@@ -157,7 +162,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
         let filename = cl
             .value_of("initial_regressor")
             .expect("Daemon mode only supports serving from --initial regressor");
-        println!("initial_regressor = {}", filename);
+        log::info!("initial_regressor = {}", filename);
         let (mi2, vw2, re_fixed) =
             persistence::new_regressor_from_filename(filename, true, Option::Some(&cl))?;
 
@@ -183,7 +188,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
         let mi: model_instance::ModelInstance;
 
         if let Some(filename) = cl.value_of("initial_regressor") {
-            println!("initial_regressor = {}", filename);
+            log::info!("initial_regressor = {}", filename);
             (mi, vw, re) = persistence::new_regressor_from_filename(filename, testonly, Option::Some(&cl))?;
             sharable_regressor = BoxedRegressorTrait::new(Box::new(re));
         } else {
@@ -300,6 +305,11 @@ fn main2() -> Result<(), Box<dyn Error>> {
             }
 
             if example_num > predictions_after {
+
+		if output_pred_sto {
+		    println!("{:.6}", prediction);
+		}
+		
                 match predictions_file.as_mut() {
                     Some(file) => write!(file, "{:.6}\n", prediction)?,
                     None => {}
@@ -312,7 +322,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
             hogwild_trainer.block_until_workers_finished();
         }
         let elapsed = now.elapsed();
-        println!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
+        log::info!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
 
         match final_regressor_filename {
             Some(filename) => {
