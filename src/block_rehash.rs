@@ -10,11 +10,11 @@ pub fn identify_frequent_stream(
     ///    A method that in-place stores frequent hashes that are used during translation
     ///    Tried Bloom filters, too slow for now.
 
-    if freq_hash.len() % cache_size == 0  && freq_hash.len() > 1 {
+    if freq_hash.len() > cache_size && freq_hash.len() > 1 {
+	let mut cleaned = 0;
         let mut to_remove_vec: Vec<u32> = Vec::new();
-        let mut cleaned = 0;
         for hash in freq_hash.iter() {
-            if *hash.1 == 1 {
+            if *hash.1 <= 2 {
                 to_remove_vec.push(*hash.0);
             }
         }
@@ -23,7 +23,11 @@ pub fn identify_frequent_stream(
             freq_hash.remove(&el);
             cleaned += 1;
         }
-    	log::info!("Cleaned {} rare hashes ..", cleaned);
+
+	if freq_hash.len() > cache_size {
+	    *freq_hash = FxHashMap::default();
+	    log::info!("Clearning the freqHash cache ..");
+	}
     }
 }
 
