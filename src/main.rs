@@ -233,10 +233,13 @@ fn main2() -> Result<(), Box<dyn Error>> {
             None => 0,
         };
 
-	let second_pass_iter: u64 = match cl.value_of("second_pass_nth") {
-	    Some(num_second_pass) => num_second_pass.parse().expect("Please input an integer for second pass iterations."),
-	    None => "-1".parse().unwrap(),
-	};
+	let mut second_pass_iter: u64 = 0;
+	if cl.is_present("second_pass_nth") {
+	    second_pass_iter = match cl.value_of("second_pass_nth") {
+		Some(num_second_pass) => num_second_pass.parse().expect("Please input an integer for second pass iterations."),
+		None => 0,
+	    }
+	}
 
 	if second_pass_iter > 0 {
 	    log::info!("Considering second pass every {} instances.", second_pass_iter);
@@ -296,7 +299,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
                     hogwild_trainer.digest_example(Vec::from(buffer));
                 } else {
                     fbt.translate(buffer, example_num);
-		    if example_num % second_pass_iter == 0 && second_pass_iter > 0 {
+		    if example_num % second_pass_iter == 0 && second_pass_iter != 0 {
 			sharable_regressor.learn(&fbt.feature_buffer, &mut pb, update);
 		    }
                     prediction = sharable_regressor.learn(&fbt.feature_buffer, &mut pb, update);
