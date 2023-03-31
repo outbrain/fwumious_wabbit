@@ -299,8 +299,10 @@ fn main2() -> Result<(), Box<dyn Error>> {
                     hogwild_trainer.digest_example(Vec::from(buffer));
                 } else {
                     fbt.translate(buffer, example_num);
-		    if example_num % second_pass_iter == 0 && second_pass_iter != 0 {
-			sharable_regressor.learn(&fbt.feature_buffer, &mut pb, update);
+		    if second_pass_iter != 0 {
+			if example_num % second_pass_iter == 0 {
+			    sharable_regressor.learn(&fbt.feature_buffer, &mut pb, update);
+			}
 		    }
                     prediction = sharable_regressor.learn(&fbt.feature_buffer, &mut pb, update);
                 }
