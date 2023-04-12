@@ -215,6 +215,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         debug_assert!(self.output_offset != usize::MAX);
 
         let mut wsum = 0.0;
+	let label_id = fb.label as usize;
         let local_data_ffm_len = fb.ffm_buffer.len() * (self.ffm_k * fb.ffm_fields_count) as usize;
 
         unsafe {
@@ -243,7 +244,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                             - we will use these gradients later in backward pass
                         */
 
-                        _mm_prefetch(mem::transmute::<&f32, &i8>(&contra_fields.get_unchecked(fb.ffm_buffer.get_unchecked(0).contra_field_index as usize)), _MM_HINT_T0);
+                        _mm_prefetch(mem::transmute::<&f32, &i8>(&contra_fields.get_unchecked(fb.ffm_buffer.get_unchecked(0).contra_field_index as usize)), _MM_HINT_T2);
                         let mut ffm_buffer_index = 0;
                         for field_index in 0..fb.ffm_fields_count {
                             let field_index_ffmk = field_index * FFMK;
@@ -262,7 +263,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                             }
                             let mut feature_num = 0;
                             while ffm_buffer_index < fb.ffm_buffer.len() && fb.ffm_buffer.get_unchecked(ffm_buffer_index).contra_field_index == field_index_ffmk {
-                                _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(ffm_buffer_index+1).hash as usize).weight), _MM_HINT_T0);
+                                _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(ffm_buffer_index+1).hash as usize).weight), _MM_HINT_T2);
                                 let left_hash = fb.ffm_buffer.get_unchecked(ffm_buffer_index);
                                 let mut addr = left_hash.hash as usize;
                                 let mut zfc:usize = field_index_ffmk as usize;
@@ -270,8 +271,9 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                 specialize_1f32!(left_hash.value, LEFT_HASH_VALUE, {
                                     if feature_num == 0 {
                                         for z in 0..fb.ffm_fields_count {
-                                            _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(addr + FFMK as usize).weight), _MM_HINT_T0);
+                                            _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(addr + FFMK as usize).weight), _MM_HINT_T2);
                                             for k in 0..FFMK as usize{
+						
                                                 *contra_fields.get_unchecked_mut(zfc + k) = ffm_weights.get_unchecked(addr + k).weight * LEFT_HASH_VALUE;
                                             }
                                             zfc += fc;
@@ -279,7 +281,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                         }
                                     } else {
                                         for z in 0..fb.ffm_fields_count {
-                                            _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(addr + FFMK as usize).weight), _MM_HINT_T0);
+                                            _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(addr + FFMK as usize).weight), _MM_HINT_T2);
                                             for k in 0..FFMK as usize{
                                                 *contra_fields.get_unchecked_mut(zfc + k) += ffm_weights.get_unchecked(addr + k).weight * LEFT_HASH_VALUE;
                                             }
@@ -405,7 +407,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                             .get_unchecked(fb.ffm_buffer.get_unchecked(0).hash as usize)
                             .weight,
                     ),
-                    _MM_HINT_T0,
+                    _MM_HINT_T2,
                 );
                 let field_embedding_len = self.field_embedding_len as usize;
                 let mut contra_fields: [f32; FFM_STACK_BUF_LEN] =
@@ -456,7 +458,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                         )
                                         .weight,
                                 ),
-                                _MM_HINT_T0,
+                                _MM_HINT_T2,
                             );
                             let left_hash = fb.ffm_buffer.get_unchecked(ffm_buffer_index);
                             let left_hash_hash = left_hash.hash as usize;

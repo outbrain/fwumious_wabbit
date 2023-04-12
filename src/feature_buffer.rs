@@ -184,6 +184,7 @@ impl FeatureBufferTranslator {
             self.feature_buffer.label = record_buffer[parser::LABEL_OFFSET] as f32; // copy label
             self.feature_buffer.example_importance =
                 f32::from_bits(record_buffer[parser::EXAMPLE_IMPORTANCE_OFFSET]);
+
             self.feature_buffer.example_number = example_number;
             let mut output_len: usize = 0;
             let mut hashes_vec_in: &mut Vec<HashAndValue> = &mut self.hashes_vec_in;
@@ -303,6 +304,33 @@ impl FeatureBufferTranslator {
                     }
                 }
             }
+
+	    // dynamically traverse final hash space and account for anomalies
+	    let mut hash_storage: Vec<i32> = Vec::new();
+	    let alloc_all_size: i32 = (self.model_instance.ffm_k * self.model_instance.ffm_fields.len() as u32) as i32;
+	    let mut _mark_hash: bool;
+	    let mut collision_counter = 0;
+	    
+	    for fb_el in self.feature_buffer.ffm_buffer.iter_mut().rev() {
+	    	_mark_hash = false;
+		
+	    	for stored_hash in hash_storage.iter(){
+	    	    let diff = ((*stored_hash) - (fb_el.hash as i32)).abs() as i32;
+		    let col_space = alloc_all_size as i32 - diff;
+		    
+	    	    if col_space >= 0 {
+	    		fb_el.hash = 123;
+	    		_mark_hash = true;
+			collision_counter+=1;
+	    		break;
+			
+	    	    }
+	    	}
+		
+	    	hash_storage.push(fb_el.hash as i32);
+	    }
+	    
+	    self.feature_buffer.example_importance = collision_counter as f32 + 1.0;	    
         }
     }
 }
