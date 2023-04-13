@@ -308,11 +308,9 @@ impl FeatureBufferTranslator {
 	    // dynamically traverse final hash space and account for anomalies
 	    let mut hash_storage: Vec<i32> = Vec::new();
 	    let alloc_all_size: i32 = (self.model_instance.ffm_k * self.model_instance.ffm_fields.len() as u32) as i32;
-	    let mut _mark_hash: bool;
 	    let mut collision_counter = 0;
 	    
 	    for fb_el in self.feature_buffer.ffm_buffer.iter_mut().rev() {
-	    	_mark_hash = false;
 		
 	    	for stored_hash in hash_storage.iter(){
 	    	    let diff = ((*stored_hash) - (fb_el.hash as i32)).abs() as i32;
@@ -320,7 +318,6 @@ impl FeatureBufferTranslator {
 		    
 	    	    if col_space >= 0 {
 	    		fb_el.hash = 123;
-	    		_mark_hash = true;
 			collision_counter+=1;
 	    		break;
 			
