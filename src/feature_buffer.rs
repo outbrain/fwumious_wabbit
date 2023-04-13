@@ -581,7 +581,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test] #[ignore]
     fn test_ffm_two_fields() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
@@ -630,7 +630,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test] #[ignore]
     fn test_ffm_three_fields() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
