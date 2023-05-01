@@ -259,7 +259,7 @@ impl FeatureBufferTranslator {
                     }
                     for handv in &(*hashes_vec_in) {
                         lr_buffer.push(HashAndValue {
-                            hash: handv.hash & self.lr_hash_mask,
+                            hash: handv.hash, // & self.lr_hash_mask,
                             value: handv.value * feature_combo_weight,
                             combo_index: combo_index,
                         });
@@ -269,7 +269,7 @@ impl FeatureBufferTranslator {
             // add the constant
             if self.model_instance.add_constant_feature {
                 lr_buffer.push(HashAndValue {
-                    hash: CONSTANT_HASH & self.lr_hash_mask,
+                    hash: CONSTANT_HASH, // & self.lr_hash_mask,
                     value: 1.0,
                     combo_index: self.model_instance.feature_combo_descs.len() as u32,
                 }); // we treat bias as a separate output
@@ -319,8 +319,7 @@ impl FeatureBufferTranslator {
 		let nbits = 64 - self.model_instance.bit_precision;
 		part_a ^= part_a >> nbits;
 		fb_el.hash = ((part_a.wrapping_mul(GRATIO)) >> nbits) as u32;
-	    }
-	    
+	    }	    
         }
     }
 }
