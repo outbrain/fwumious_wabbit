@@ -7,6 +7,9 @@ const VOWPAL_FNV_PRIME: u32 = 16777619; // vowpal magic number
                                         //const CONSTANT_NAMESPACE:usize = 128;
 const CONSTANT_HASH: u32 = 11650396;
 
+const GRATIO: u64 =  11400714819323198485;
+
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct HashAndValue {
     pub hash: u32,
@@ -146,7 +149,7 @@ impl FeatureBufferTranslator {
         }
         let dimensions_mask = (1 << ffm_bits_for_dimensions) - 1;
         // in ffm we will simply mask the lower bits, so we spare them for k
-        let ffm_hash_mask = ((1 << mi.ffm_bit_precision) - 1) ^ dimensions_mask;
+        let ffm_hash_mask = ((1 << mi.ffm_bit_precision) - 1) ^ dimensions_mask;	
 
         let mut fb = FeatureBuffer {
             label: 0.0,
@@ -207,7 +210,7 @@ impl FeatureBufferTranslator {
                         hash_value,
                         {
                             lr_buffer.push(HashAndValue {
-                                hash: hash_index & self.lr_hash_mask,
+                                hash: hash_index,
                                 value: hash_value * feature_combo_weight,
                                 combo_index: combo_index,
                             });
@@ -293,7 +296,7 @@ impl FeatureBufferTranslator {
                             hash_value,
                             {
                                 ffm_buffer.push(HashAndValueAndSeq {
-                                    hash: hash_index & self.ffm_hash_mask,
+                                    hash: hash_index, //& self.ffm_hash_mask,
                                     value: hash_value,
                                     contra_field_index: contra_field_index as u32
                                         * self.model_instance.ffm_k as u32,
@@ -303,6 +306,21 @@ impl FeatureBufferTranslator {
                     }
                 }
             }
+
+	    for fb_el in self.feature_buffer.ffm_buffer.iter_mut() {
+		let mut part_a = fb_el.hash as u64;
+		let nbits = 64 - self.model_instance.ffm_bit_precision;
+		part_a ^= part_a >> nbits;
+		fb_el.hash = ((part_a.wrapping_mul(GRATIO)) >> nbits) as u32;
+	    }
+
+	    for fb_el in self.feature_buffer.lr_buffer.iter_mut() {
+		let mut part_a = fb_el.hash as u64;
+		let nbits = 64 - self.model_instance.bit_precision;
+		part_a ^= part_a >> nbits;
+		fb_el.hash = ((part_a.wrapping_mul(GRATIO)) >> nbits) as u32;
+	    }
+	    
         }
     }
 }
