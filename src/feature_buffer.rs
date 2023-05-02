@@ -313,7 +313,6 @@ impl FeatureBufferTranslator {
 		part_a ^= part_a >> nbits;
 		fb_el.hash = ((part_a.wrapping_mul(GRATIO)) >> nbits) as u32;
 	    }
-
 	    for fb_el in self.feature_buffer.lr_buffer.iter_mut() {
 		let mut part_a = fb_el.hash as u64;
 		let nbits = 64 - self.model_instance.bit_precision;
