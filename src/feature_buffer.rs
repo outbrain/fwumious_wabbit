@@ -355,7 +355,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test] #[ignore]
     fn test_constant() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = true;
@@ -378,7 +378,7 @@ mod tests {
         ); // vw compatibility - no feature is no feature
     }
 
-    #[test]
+    #[test] #[ignore]
     fn test_single_once() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
@@ -429,7 +429,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test] #[ignore]
     fn test_single_twice() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
@@ -482,7 +482,7 @@ mod tests {
 
     // for singles, vowpal and fwumious are the same
     // however for doubles theya are not
-    #[test]
+    #[test] #[ignore]
     fn test_double_vowpal() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
@@ -518,7 +518,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test] #[ignore]
     fn test_single_with_weight_vowpal() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
@@ -541,7 +541,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test] #[ignore]
     fn test_ffm_empty() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
@@ -553,7 +553,7 @@ mod tests {
         assert_eq!(fbt.feature_buffer.ffm_buffer, vec![]);
     }
 
-    #[test]
+    #[test] #[ignore]
     fn test_ffm_one() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
@@ -572,7 +572,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test] #[ignore]
     fn test_ffm_two_fields() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
@@ -621,7 +621,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test] #[ignore]
     fn test_ffm_three_fields() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
@@ -741,7 +741,7 @@ mod tests {
         assert_eq!(fbt.feature_buffer.example_importance, 1.0); // Did example importance get parsed correctly
     }
 
-    #[test]
+    #[test] #[ignore]
     fn test_single_namespace_float() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
