@@ -361,6 +361,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             let mut contra_fields: [f32; FFM_CONTRA_BUF_LEN] = MaybeUninit::uninit().assume_init();
 
             let mut ffm_buffer_index = 0;
+
             for field_index in 0..ffm_fields_count {
                 let field_index_ffmk = field_index * ffmk;
                 let field_index_ffmk_as_usize = field_index_ffmk as usize;
@@ -369,7 +370,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 if ffm_buffer_index >= fb.ffm_buffer.len()
                     || fb.ffm_buffer.get_unchecked(ffm_buffer_index).contra_field_index > field_index_ffmk
                 {
-                    // first time we see this field - just overwrite
+                    // first feature of the field - just overwrite
                     for z in offset..offset + field_embedding_len_start {
                         *contra_fields.get_unchecked_mut(z) = 0.0;
                     }
@@ -394,7 +395,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         ),
                         _MM_HINT_T0,
                     );
-
                     let feature = fb.ffm_buffer.get_unchecked(ffm_buffer_index);
                     let feature_index = feature.hash as usize;
                     let feature_value = feature.value;
@@ -438,17 +438,29 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 let mut f1_offset_ffmk = f1_offset + f1_ffmk;
                 // This is self-interaction
                 let mut v = 0.0;
-                for k in f1_offset_ffmk..f1_offset_ffmk + ffmk_as_usize {
+                for k in f1_offset_ffmk..f1_offset_ffmk + ffmk_start {
                     v += contra_fields.get_unchecked(k) * contra_fields.get_unchecked(k);
+                }
+                for k in (f1_offset_ffmk + ffmk_start..f1_offset_ffmk + ffmk_as_usize).step_by(step) {
+                    v += contra_fields.get_unchecked(k) * contra_fields.get_unchecked(k)
+                        + contra_fields.get_unchecked(k + 1) * contra_fields.get_unchecked(k + 1)
+                        + contra_fields.get_unchecked(k + 2) * contra_fields.get_unchecked(k + 2)
+                        + contra_fields.get_unchecked(k + 3) * contra_fields.get_unchecked(k + 3);
                 }
 
                 let diagonal_row = f1 * ffm_fields_count_as_usize;
                 *myslice.get_unchecked_mut(diagonal_row + f1)  += v * 0.5;
 
+                let f1_index_offset: usize = f1 * ffm_fields_count_as_usize;
                 let mut f2_offset_ffmk = f1_offset + f1_ffmk;
+
                 for f2 in f1 + 1..ffm_fields_count_as_usize {
+                    let f1_index = f1_index_offset + f2;
+                    let f2_index = f2 * ffm_fields_count_as_usize + f1;
+
                     f1_offset_ffmk += ffmk_as_usize;
                     f2_offset_ffmk += field_embedding_len_as_usize;
+
                     for k in 0..ffmk {
                         myslice[f1 * fb.ffm_fields_count as usize + f2] += contra_fields
                             .get_unchecked(f1_offset_ffmk + k as usize)
