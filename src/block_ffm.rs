@@ -488,7 +488,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         contra_field += contra_fields.get_unchecked(f1_offset_ffmk + k) * contra_fields.get_unchecked(f2_offset_ffmk + k)
                             + contra_fields.get_unchecked(f1_offset_ffmk + k + 1) * contra_fields.get_unchecked(f2_offset_ffmk + k + 1)
                             + contra_fields.get_unchecked(f1_offset_ffmk + k + 2) * contra_fields.get_unchecked(f2_offset_ffmk + k + 2)
-                            + contra_fields.get_unchecked(f1_offset_ffmk + k + 3) * contra_fields.get_unchecked(f2_offset_ffmk + k + 3)
+                            + contra_fields.get_unchecked(f1_offset_ffmk + k + 3) * contra_fields.get_unchecked(f2_offset_ffmk + k + 3);
                     }
                     contra_field = contra_field * 0.5;
                     *myslice.get_unchecked_mut(f1_index) += contra_field;
