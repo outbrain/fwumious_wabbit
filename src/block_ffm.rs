@@ -32,7 +32,7 @@ pub struct BlockFFM<L: OptimizerTrait> {
     pub ffm_num_fields: u32,
     pub field_embedding_len: u32,
     pub weights: Vec<f32>,
-    pub optimizer_data: Vec<OptimizerData<L>>,
+    pub optimizer: Vec<OptimizerData<L>>,
     pub output_offset: usize,
     mutex: Mutex<()>,
 }
@@ -42,7 +42,7 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
         for i in 0..self.ffm_weights_len {
             let w = difference * merand48(i as u64) as f32 + lower_bound;
             self.weights[i as usize] = w;
-            self.optimizer_data[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
+            self.optimizer[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
         }
     }
 }
@@ -74,7 +74,7 @@ fn new_ffm_block_without_weights<L: OptimizerTrait + 'static>(
     let ffm_num_fields = mi.ffm_fields.len() as u32;
     let mut reg_ffm = BlockFFM::<L> {
         weights: Vec::new(),
-        optimizer_data: Vec::new(),
+        optimizer: Vec::new(),
         ffm_weights_len: 0,
         local_data_ffm_values: Vec::with_capacity(1024),
         ffm_k: mi.ffm_k,
@@ -278,7 +278,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                 for k in 0..ffmk_as_usize {
                                     let feature_value = *local_data_ffm_values.get_unchecked(local_index);
                                     let gradient = general_gradient * feature_value;
-                                    let update = self.optimizer_ffm.calculate_update(gradient, &mut self.optimizer_data.get_unchecked_mut(feature_index).optimizer_data);
+                                    let update = self.optimizer_ffm.calculate_update(gradient, &mut self.optimizer.get_unchecked_mut(feature_index).optimizer_data);
 
                                     *ffm_weights.get_unchecked_mut(feature_index) -= update;
                                     local_index += 1;
@@ -511,7 +511,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             0.0;
             self.ffm_weights_len as usize
         ];
-        self.optimizer_data = vec![
+        self.optimizer = vec![
             OptimizerData::<L> {
                 optimizer_data: self.optimizer_ffm.initial_data(),
             };
@@ -529,7 +529,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                 * merand48((self.ffm_weights_len as usize + i as usize) as u64)
                                 - 0.5)
                                 * ffm_one_over_k_root;
-                            self.optimizer_data[i as usize].optimizer_data =
+                            self.optimizer[i as usize].optimizer_data =
                                 self.optimizer_ffm.initial_data();
                         }
                     } else {
@@ -544,7 +544,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                             }
                             w += mi.ffm_init_center;
                             self.weights[i as usize] = w;
-                            self.optimizer_data[i as usize].optimizer_data =
+                            self.optimizer[i as usize].optimizer_data =
                                 self.optimizer_ffm.initial_data();
                         }
                     }
@@ -564,14 +564,18 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         &self,
         output_bufwriter: &mut dyn io::Write,
     ) -> Result<(), Box<dyn Error>> {
-        block_helpers::write_weights_to_buf(&self.weights, output_bufwriter)
+        block_helpers::write_weights_to_buf(&self.weights, output_bufwriter)?;
+        block_helpers::write_weights_to_buf(&self.optimizer, output_bufwriter)?;
+        Ok(())
     }
 
     fn read_weights_from_buf(
         &mut self,
         input_bufreader: &mut dyn io::Read,
     ) -> Result<(), Box<dyn Error>> {
-        block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader)
+        block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader)?;
+        block_helpers::read_weights_from_buf(&mut self.optimizer, input_bufreader)?;
+        Ok(())
     }
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
@@ -601,11 +605,13 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             .as_any()
             .downcast_mut::<BlockFFM<optimizer::OptimizerSGD>>()
             .unwrap();
-        block_helpers::read_weights_to_f32_only_from_buf::<L>(
+        block_helpers::read_weights_from_buf(&mut forward.weights, input_bufreader)?;
+        block_helpers::skip_weights_from_buf(
             self.ffm_weights_len as usize,
-            &mut forward.weights,
+            &self.optimizer,
             input_bufreader,
-        )
+        )?;
+        Ok(())
     }
 
     /// Sets internal state of weights based on some completely object-dependent parameters
@@ -617,7 +623,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         w: &[f32],
     ) -> Result<(), Box<dyn Error>> {
         self.weights[index] = w[0];
-        self.optimizer_data[index].optimizer_data = self.optimizer_ffm.initial_data();
+        self.optimizer[index].optimizer_data = self.optimizer_ffm.initial_data();
         Ok(())
     }
 }
@@ -654,7 +660,7 @@ mod tests {
 
         for i in 0..block_ffm.weights.len() {
             block_ffm.weights[i] = 1.0;
-            block_ffm.optimizer_data[i].optimizer_data = block_ffm.optimizer_ffm.initial_data();
+            block_ffm.optimizer[i].optimizer_data = block_ffm.optimizer_ffm.initial_data();
         }
     }
 
