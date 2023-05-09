@@ -215,8 +215,7 @@ pub fn spredict2<'a>(
     pb.reset();
     let (block_run, further_blocks) = bg.blocks_final.split_at(1);
     block_run[0].forward(further_blocks, fb, pb);
-    let prediction_probability = pb.observations[0];
-    return prediction_probability;
+    pb.observations[0]
 }
 
 #[inline(always)]

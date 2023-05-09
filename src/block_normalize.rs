@@ -185,17 +185,17 @@ impl BlockTrait for BlockStopBackward {
     }
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
-        assert!(output.get_output_index() == 0);
+        assert_eq!(output.get_output_index(), 0);
         return self.num_inputs;
     }
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
-        assert!(input.get_input_index() == 0);
+        assert_eq!(input.get_input_index(), 0);
         self.input_offset = offset;
     }
 
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
-        assert!(output.get_output_index() == 0);
+        assert_eq!(output.get_output_index(), 0);
         self.output_offset = offset;
     }
 

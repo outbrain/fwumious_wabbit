@@ -35,7 +35,7 @@ fn new_lr_block_without_weights<L: OptimizerTrait + 'static>(
         weights_len: 0,
         optimizer_lr: L::new(),
         output_offset: usize::MAX,
-        num_combos: num_combos,
+        num_combos,
     };
     reg_lr
         .optimizer_lr
@@ -117,16 +117,14 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
                 );
                 myslice.fill(0.0);
 
-                for hashvalue in fb.lr_buffer.iter() {
+                for feature in fb.lr_buffer.iter() {
                     // Prefetch couple of indexes from the future to prevent pipeline stalls due to memory latencies
                     //            for (i, hashvalue) in fb.lr_buffer.iter().enumerate() {
-                    // _mm_prefetch(mem::transmute::<&f32, &i8>(&self.weights.get_unchecked((fb.lr_buffer.get_unchecked(i+8).hash) as usize).weight), _MM_HINT_T0);  // No benefit for now
-                    let feature_index = hashvalue.hash;
-                    let feature_value: f32 = hashvalue.value;
-                    let combo_index = hashvalue.combo_index;
-                    let feature_weight = self.weights.get_unchecked(feature_index as usize).weight;
-                    *myslice.get_unchecked_mut(combo_index as usize) +=
-                        feature_weight * feature_value;
+                    let feature_index = feature.hash as usize;
+                    let feature_value = feature.value;
+                    let combo_index = feature.combo_index as usize;
+                    let feature_weight = self.weights.get_unchecked(feature_index).weight;
+                    *myslice.get_unchecked_mut(combo_index) += feature_weight * feature_value;
                 }
             }
 
@@ -137,11 +135,10 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
                     self.output_offset..(self.output_offset + self.num_combos as usize),
                 );
 
-                for hashvalue in fb.lr_buffer.iter() {
-                    let feature_index = hashvalue.hash as usize;
-                    let feature_value: f32 = hashvalue.value;
-                    let general_gradient = myslice.get_unchecked(hashvalue.combo_index as usize);
-                    let gradient = general_gradient * feature_value;
+                for feature in fb.lr_buffer.iter() {
+                    let feature_index = feature.hash as usize;
+                    let feature_value = feature.value;
+                    let gradient = myslice.get_unchecked(feature.combo_index as usize) * feature_value;
                     let update = self.optimizer_lr.calculate_update(
                         gradient,
                         &mut self.weights.get_unchecked_mut(feature_index).optimizer_data,
@@ -160,19 +157,17 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
     ) {
         debug_assert!(self.output_offset != usize::MAX);
 
-        let fbuf = &fb.lr_buffer;
-        let mut wsum: f32 = 0.0;
-
         {
             unsafe {
                 let myslice = &mut pb.tape
                     [self.output_offset..(self.output_offset + self.num_combos as usize)];
                 myslice.fill(0.0);
-                for val in fbuf {
-                    let hash = val.hash as usize;
-                    let feature_value: f32 = val.value;
-                    *myslice.get_unchecked_mut(val.combo_index as usize) +=
-                        self.weights.get_unchecked(hash).weight * feature_value;
+                for feature in fb.lr_buffer.iter() {
+                    let feature_index = feature.hash as usize;
+                    let feature_value = feature.value;
+                    let combo_index = feature.combo_index as usize;
+                    *myslice.get_unchecked_mut(combo_index) +=
+                        self.weights.get_unchecked(feature_index).weight * feature_value;
                 }
             }
         }
