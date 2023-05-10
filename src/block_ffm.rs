@@ -3,6 +3,7 @@ use std::any::Any;
 use std::error::Error;
 use std::io;
 use std::mem::{self, MaybeUninit};
+use std::simd::{f32x4, SimdFloat};
 use std::sync::Mutex;
 
 use merand48::*;
@@ -164,14 +165,14 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         {
                             let mut offset: usize = field_index_ffmk as usize;
                             for z in 0..ffm_fields_count_as_usize {
-                                for k in 0..ffmk_start {
-                                    *contra_fields.get_unchecked_mut(offset + k) = 0.0;
+                                for k in offset..offset + ffmk_start {
+                                    *contra_fields.get_unchecked_mut(k) = 0.0;
                                 }
-                                for k in (ffmk_start..ffmk_as_usize).step_by(STEP) {
-                                    *contra_fields.get_unchecked_mut(offset + k) = 0.0;
-                                    *contra_fields.get_unchecked_mut(offset + k + 1) = 0.0;
-                                    *contra_fields.get_unchecked_mut(offset + k + 2) = 0.0;
-                                    *contra_fields.get_unchecked_mut(offset + k + 3) = 0.0;
+                                for k in (offset + ffmk_start..offset + ffmk_as_usize).step_by(STEP) {
+                                    *contra_fields.get_unchecked_mut(k) = 0.0;
+                                    *contra_fields.get_unchecked_mut(k + 1) = 0.0;
+                                    *contra_fields.get_unchecked_mut(k + 2) = 0.0;
+                                    *contra_fields.get_unchecked_mut(k + 3) = 0.0;
                                 }
 
                                 offset += fc;
@@ -185,6 +186,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
                             let feature = fb.ffm_buffer.get_unchecked(ffm_buffer_index);
                             let feature_value = feature.value as f32;
+                            let feature_value_simd = f32x4::splat(feature_value);
+
                             let mut feature_index = feature.hash as usize;
                             let mut offset: usize = field_index_ffmk as usize;
 
@@ -195,10 +198,12 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                         *contra_fields.get_unchecked_mut(offset + k) = ffm_weights.get_unchecked(feature_index + k) * feature_value;
                                     }
                                     for k in (ffmk_start..ffmk_as_usize).step_by(STEP) {
-                                        *contra_fields.get_unchecked_mut(offset + k) = ffm_weights.get_unchecked(feature_index + k) * feature_value;
-                                        *contra_fields.get_unchecked_mut(offset + k + 1) = ffm_weights.get_unchecked(feature_index + k + 1) * feature_value;
-                                        *contra_fields.get_unchecked_mut(offset + k + 2) = ffm_weights.get_unchecked(feature_index + k + 2) * feature_value;
-                                        *contra_fields.get_unchecked_mut(offset + k + 3) = ffm_weights.get_unchecked(feature_index + k + 3) * feature_value;
+                                        let ffm_weights_simd = f32x4::from_slice(ffm_weights.get_unchecked(feature_index + k..feature_index + k + STEP));
+                                        let result_simd = (feature_value_simd * ffm_weights_simd).to_array();
+                                        *contra_fields.get_unchecked_mut(offset + k) = *result_simd.get_unchecked(0);
+                                        *contra_fields.get_unchecked_mut(offset + k + 1) = *result_simd.get_unchecked(1);
+                                        *contra_fields.get_unchecked_mut(offset + k + 2) = *result_simd.get_unchecked(2);
+                                        *contra_fields.get_unchecked_mut(offset + k + 3) = *result_simd.get_unchecked(3);
                                     }
 
                                     offset += fc;
@@ -211,10 +216,13 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                         *contra_fields.get_unchecked_mut(offset + k) += ffm_weights.get_unchecked(feature_index + k) * feature_value;
                                     }
                                     for k in (ffmk_start..ffmk_as_usize).step_by(STEP) {
-                                        *contra_fields.get_unchecked_mut(offset + k) += ffm_weights.get_unchecked(feature_index + k) * feature_value;
-                                        *contra_fields.get_unchecked_mut(offset + k + 1) += ffm_weights.get_unchecked(feature_index + k + 1) * feature_value;
-                                        *contra_fields.get_unchecked_mut(offset + k + 2) += ffm_weights.get_unchecked(feature_index + k + 2) * feature_value;
-                                        *contra_fields.get_unchecked_mut(offset + k + 3) += ffm_weights.get_unchecked(feature_index + k + 3) * feature_value;
+                                        let ffm_weights_simd = f32x4::from_slice(ffm_weights.get_unchecked(feature_index + k..feature_index + k + STEP));
+                                        let contra_fields_simd = f32x4::from_slice(contra_fields.get_unchecked(offset + k..offset + k + STEP));
+                                        let result_simd = (feature_value_simd * ffm_weights_simd + contra_fields_simd).to_array();
+                                        *contra_fields.get_unchecked_mut(offset + k) = *result_simd.get_unchecked(0);
+                                        *contra_fields.get_unchecked_mut(offset + k + 1) = *result_simd.get_unchecked(1);
+                                        *contra_fields.get_unchecked_mut(offset + k + 2) = *result_simd.get_unchecked(2);
+                                        *contra_fields.get_unchecked_mut(offset + k + 3) = *result_simd.get_unchecked(3);
                                     }
 
                                     offset += fc;
@@ -395,6 +403,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     let feature = fb.ffm_buffer.get_unchecked(ffm_buffer_index);
                     let feature_index = feature.hash as usize;
                     let feature_value = feature.value;
+                    let feature_value_simd = f32x4::splat(feature_value);
 
                     if feature_num == 0 {
                         // first feature of the field - just overwrite
@@ -403,14 +412,12 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                 ffm_weights.get_unchecked(feature_index + z) * feature_value;
                         }
                         for z in (field_embedding_len_start..field_embedding_len_as_usize).step_by(STEP) {
-                            *contra_fields.get_unchecked_mut(offset + z) =
-                                ffm_weights.get_unchecked(feature_index + z) * feature_value;
-                            *contra_fields.get_unchecked_mut(offset + z + 1) =
-                                ffm_weights.get_unchecked(feature_index + z + 1) * feature_value;
-                            *contra_fields.get_unchecked_mut(offset + z + 2) =
-                                ffm_weights.get_unchecked(feature_index + z + 2) * feature_value;
-                            *contra_fields.get_unchecked_mut(offset + z + 3) =
-                                ffm_weights.get_unchecked(feature_index + z + 3) * feature_value;
+                            let ffm_weights_simd = f32x4::from_slice(ffm_weights.get_unchecked(feature_index + z..feature_index + z + STEP));
+                            let result_simd = (feature_value_simd * ffm_weights_simd).to_array();
+                            *contra_fields.get_unchecked_mut(offset + z) = *result_simd.get_unchecked(0);
+                            *contra_fields.get_unchecked_mut(offset + z + 1) = *result_simd.get_unchecked(1);
+                            *contra_fields.get_unchecked_mut(offset + z + 2) = *result_simd.get_unchecked(2);
+                            *contra_fields.get_unchecked_mut(offset + z + 3) = *result_simd.get_unchecked(3);
                         }
                     } else {
                         for z in 0..field_embedding_len_start {
@@ -418,30 +425,30 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                 ffm_weights.get_unchecked(feature_index + z) * feature_value;
                         }
                         for z in (field_embedding_len_start..field_embedding_len_as_usize).step_by(STEP) {
-                            *contra_fields.get_unchecked_mut(offset + z) +=
-                                ffm_weights.get_unchecked(feature_index + z) * feature_value;
-                            *contra_fields.get_unchecked_mut(offset + z + 1) +=
-                                ffm_weights.get_unchecked(feature_index + z + 1) * feature_value;
-                            *contra_fields.get_unchecked_mut(offset + z + 2) +=
-                                ffm_weights.get_unchecked(feature_index + z + 2) * feature_value;
-                            *contra_fields.get_unchecked_mut(offset + z + 3) +=
-                                ffm_weights.get_unchecked(feature_index + z + 3) * feature_value;
+                            let ffm_weights_simd = f32x4::from_slice(ffm_weights.get_unchecked(feature_index + z..feature_index + z + STEP));
+                            let contra_fields_simd = f32x4::from_slice(contra_fields.get_unchecked(offset + z..offset + z + STEP));
+                            let result_simd = (feature_value_simd * ffm_weights_simd + contra_fields_simd).to_array();
+                            *contra_fields.get_unchecked_mut(offset + z) = *result_simd.get_unchecked(0);
+                            *contra_fields.get_unchecked_mut(offset + z + 1) = *result_simd.get_unchecked(1);
+                            *contra_fields.get_unchecked_mut(offset + z + 2) = *result_simd.get_unchecked(2);
+                            *contra_fields.get_unchecked_mut(offset + z + 3) = *result_simd.get_unchecked(3);
+
                         }
                     }
 
-                    let mut correction = 0.0;
-
                     let feature_field_index = feature_index + field_index_ffmk_as_usize;
+                    let mut correction = 0.0;
                     for k in feature_field_index..feature_field_index + ffmk_start {
                         correction += ffm_weights.get_unchecked(k) * ffm_weights.get_unchecked(k);
                     }
+
+                    let mut correction_simd = f32x4::splat(0.0);
                     for k in (feature_field_index + ffmk_start..feature_field_index + ffmk_as_usize).step_by(STEP) {
-                        correction += ffm_weights.get_unchecked(k) * ffm_weights.get_unchecked(k)
-                            + ffm_weights.get_unchecked(k + 1) * ffm_weights.get_unchecked(k + 1)
-                            + ffm_weights.get_unchecked(k + 2) * ffm_weights.get_unchecked(k + 2)
-                            + ffm_weights.get_unchecked(k + 3) * ffm_weights.get_unchecked(k + 3);
+                        let ffm_weights_simd = f32x4::from_slice(ffm_weights.get_unchecked(k .. k + STEP));
+                        correction_simd += ffm_weights_simd * ffm_weights_simd;
                     }
 
+                    correction += correction_simd.reduce_sum();
                     *myslice.get_unchecked_mut(((feature.contra_field_index / ffmk) * ffm_fields_count_plus_one) as usize) -=
                         correction * 0.5 * feature_value * feature_value;
 
@@ -462,14 +469,13 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 for k in f1_offset_ffmk..f1_offset_ffmk + ffmk_start {
                     v += contra_fields.get_unchecked(k) * contra_fields.get_unchecked(k);
                 }
+                let mut v_simd = f32x4::splat(0.0);
                 for k in (f1_offset_ffmk + ffmk_start..f1_offset_ffmk + ffmk_as_usize).step_by(STEP) {
-                    v += contra_fields.get_unchecked(k) * contra_fields.get_unchecked(k)
-                        + contra_fields.get_unchecked(k + 1) * contra_fields.get_unchecked(k + 1)
-                        + contra_fields.get_unchecked(k + 2) * contra_fields.get_unchecked(k + 2)
-                        + contra_fields.get_unchecked(k + 3) * contra_fields.get_unchecked(k + 3);
+                    let contra_fields_simd = f32x4::from_slice(contra_fields.get_unchecked(k .. k + STEP));
+                    v_simd += contra_fields_simd * contra_fields_simd;
                 }
 
-                *myslice.get_unchecked_mut(diagonal_row + f1)  += v * 0.5;
+                *myslice.get_unchecked_mut(diagonal_row + f1)  += (v + v_simd.reduce_sum()) * 0.5;
 
                 let mut f2_index_offset = f1_index_offset + ffm_fields_count_as_usize;
                 let mut f2_offset_ffmk = f1_offset + f1_ffmk;
@@ -484,12 +490,15 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     for k in 0.. ffmk_start {
                         contra_field += contra_fields.get_unchecked(f1_offset_ffmk + k) * contra_fields.get_unchecked(f2_offset_ffmk + k);
                     }
+
+                    let mut contra_field_simd = f32x4::splat(0.0);
                     for k in (ffmk_start..ffmk_as_usize).step_by(STEP) {
-                        contra_field += contra_fields.get_unchecked(f1_offset_ffmk + k) * contra_fields.get_unchecked(f2_offset_ffmk + k)
-                            + contra_fields.get_unchecked(f1_offset_ffmk + k + 1) * contra_fields.get_unchecked(f2_offset_ffmk + k + 1)
-                            + contra_fields.get_unchecked(f1_offset_ffmk + k + 2) * contra_fields.get_unchecked(f2_offset_ffmk + k + 2)
-                            + contra_fields.get_unchecked(f1_offset_ffmk + k + 3) * contra_fields.get_unchecked(f2_offset_ffmk + k + 3);
+                        let contra_fields_1_simd = f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk + k .. f1_offset_ffmk + k + STEP));
+                        let contra_fields_2_simd = f32x4::from_slice(contra_fields.get_unchecked(f2_offset_ffmk + k .. f2_offset_ffmk + k + STEP));
+                        contra_field_simd += contra_fields_1_simd * contra_fields_2_simd;
                     }
+
+                    contra_field += contra_field_simd.reduce_sum();
                     contra_field = contra_field * 0.5;
                     *myslice.get_unchecked_mut(f1_index) += contra_field;
                     *myslice.get_unchecked_mut(f2_index) += contra_field;

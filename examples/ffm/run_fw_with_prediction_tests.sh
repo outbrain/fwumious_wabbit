@@ -70,7 +70,7 @@ rm -rf predictions
 mkdir -p models
 mkdir -p predictions
 
-if [ $1 = "--rebuild" ]; then
+if [ $1 == "--rebuild" ]; then
   echo "Building FW"
   (
     cd $PROJECT_ROOT
