@@ -231,6 +231,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     let mut ffm_values_offset = 0;
                     for (i, feature) in fb.ffm_buffer.iter().enumerate() {
                         let feature_value = feature.value;
+                        let feature_value_simd = f32x4::splat(feature_value);
                         let feature_index = feature.hash as usize;
                         let feature_contra_field_index = feature.contra_field_index as usize;
 
@@ -241,23 +242,58 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         let mut vv = 0;
                         for z in 0..ffm_fields_count_as_usize {
                             let mut correction = 0.0;
+                            let mut correction_simd = f32x4::splat(0.0);
+
+                            let vv_feature_index = feature_index + vv;
+                            let vv_contra_offset = contra_offset + vv;
+
                             if vv == feature_contra_field_index {
-                                for k in 0..ffmk_as_usize {
-                                    let ffm_weight = ffm_weights.get_unchecked(feature_index + vv + k);
-                                    let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k) - ffm_weight * feature_value;
+                                for k in 0..ffmk_start {
+                                    let ffm_weight = ffm_weights.get_unchecked(vv_feature_index + k);
+                                    let contra_weight = *contra_fields.get_unchecked(vv_contra_offset + k) - ffm_weight * feature_value;
                                     let gradient = feature_value * contra_weight;
                                     *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
+
                                     correction += ffm_weight * gradient;
+                                }
+
+                                for k in (ffmk_start..ffmk_as_usize).step_by(STEP) {
+                                    let ffm_weight_simd = f32x4::from_slice(ffm_weights.get_unchecked(vv_feature_index + k..vv_feature_index + k + STEP));
+
+                                    let contra_weight_simd = f32x4::from_slice(contra_fields
+                                        .get_unchecked(vv_contra_offset + k..vv_contra_offset + k + STEP)) - ffm_weight_simd * feature_value_simd;
+                                    let gradient_simd = feature_value_simd * contra_weight_simd;
+
+                                    local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k..ffm_values_offset + k + STEP)
+                                        .copy_from_slice(gradient_simd.as_array());
+
+                                    correction_simd += ffm_weight_simd * gradient_simd;
                                 }
                             } else {
-                                for k in 0..ffmk_as_usize {
-                                    let ffm_weight = ffm_weights.get_unchecked(feature_index + vv + k);
-                                    let contra_weight = *contra_fields.get_unchecked(contra_offset + vv + k);
+                                for k in 0..ffmk_start {
+                                    let contra_weight = *contra_fields.get_unchecked(vv_contra_offset + k);
                                     let gradient = feature_value * contra_weight;
+
                                     *local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k) = gradient;
+
+                                    let ffm_weight = ffm_weights.get_unchecked(vv_feature_index + k);
                                     correction += ffm_weight * gradient;
                                 }
+
+                                for k in (ffmk_start..ffmk_as_usize).step_by(STEP) {
+                                    let contra_weight_simd = f32x4::from_slice(contra_fields
+                                        .get_unchecked(vv_contra_offset + k..vv_contra_offset + k + STEP));
+                                    let gradient_simd = feature_value_simd * contra_weight_simd;
+
+                                    local_data_ffm_values.get_unchecked_mut(ffm_values_offset + k..ffm_values_offset + k + STEP)
+                                        .copy_from_slice(gradient_simd.as_array());
+
+                                    let ffm_weight_simd = f32x4::from_slice(ffm_weights.get_unchecked(vv_feature_index + k..vv_feature_index + k + STEP));
+                                    correction_simd += ffm_weight_simd * gradient_simd;
+                                }
                             }
+                            correction += correction_simd.reduce_sum();
+
                             *myslice.get_unchecked_mut(contra_offset2 + z) += correction * 0.5;
                             vv += ffmk_as_usize;
                             ffm_values_offset += ffmk_as_usize;
@@ -276,14 +312,40 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
                             for z in 0..ffm_fields_count_as_usize {
                                 let general_gradient = myslice.get_unchecked(contra_offset + z);
-                                for k in 0..ffmk_as_usize {
+
+                                for k in 0.. ffmk_start {
                                     let feature_value = *local_data_ffm_values.get_unchecked(local_index);
                                     let gradient = general_gradient * feature_value;
-                                    let update = self.optimizer_ffm.calculate_update(gradient, &mut self.optimizer.get_unchecked_mut(feature_index).optimizer_data);
+                                    let update = self.optimizer_ffm.calculate_update(gradient,
+                                        &mut self.optimizer.get_unchecked_mut(feature_index).optimizer_data);
 
                                     *ffm_weights.get_unchecked_mut(feature_index) -= update;
                                     local_index += 1;
                                     feature_index += 1;
+                                }
+
+                                let general_gradient_simd = f32x4::splat(*general_gradient);
+                                for k in (ffmk_start..ffmk_as_usize).step_by(STEP) {
+                                    let feature_value_simd = f32x4::from_slice(local_data_ffm_values.get_unchecked(local_index..local_index + STEP));
+                                    let gradient_simd = general_gradient_simd * feature_value_simd;
+                                    let gradient = gradient_simd.as_array();
+
+                                    let update = self.optimizer_ffm.calculate_update(gradient[0],
+                                        &mut self.optimizer.get_unchecked_mut(feature_index).optimizer_data);
+                                    let update_1 = self.optimizer_ffm.calculate_update(gradient[1],
+                                        &mut self.optimizer.get_unchecked_mut(feature_index + 1).optimizer_data);
+                                    let update_2 = self.optimizer_ffm.calculate_update(gradient[2],
+                                        &mut self.optimizer.get_unchecked_mut(feature_index + 2).optimizer_data);
+                                    let update_3 = self.optimizer_ffm.calculate_update(gradient[3],
+                                        &mut self.optimizer.get_unchecked_mut(feature_index + 3).optimizer_data);
+
+                                    let update_simd = f32x4::from_array([update, update_1, update_2, update_3]);
+                                    let ffm_weights_simd = f32x4::from_slice(ffm_weights.get_unchecked(feature_index..feature_index + STEP));
+                                    let result_simd = ffm_weights_simd - update_simd;
+
+                                    ffm_weights.get_unchecked_mut(feature_index..feature_index+STEP).copy_from_slice(result_simd.as_array());
+                                    local_index += STEP;
+                                    feature_index += STEP;
                                 }
                             }
                         }
