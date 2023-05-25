@@ -36,6 +36,20 @@ pub trait BlockTrait {
         pb: &mut port_buffer::PortBuffer,
     );
 
+    fn forward_with_cache(
+        &self,
+        further_blocks: &[Box<dyn BlockTrait>],
+        fb: &feature_buffer::FeatureBuffer,
+        pb: &mut port_buffer::PortBuffer,
+    );
+
+
+    fn prepare_forward_cache(
+        &mut self,
+        further_blocks: &mut [Box<dyn BlockTrait>],
+        fb: &feature_buffer::FeatureBuffer
+    );
+
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {}
     fn get_serialized_len(&self) -> usize {
         0
@@ -350,6 +364,30 @@ impl Regressor {
         let prediction_probability = pb.observations.pop().unwrap();
 
         return prediction_probability;
+    }
+
+    pub fn predict_with_cache(
+        &self,
+        fb: &feature_buffer::FeatureBuffer,
+        pb: &mut port_buffer::PortBuffer,
+    ) -> f32 {
+        pb.reset(); // empty the tape
+
+        let further_blocks = &self.blocks_boxes[..];
+        block_helpers::forward_with_cache(further_blocks, fb, pb);
+
+        assert_eq!(pb.observations.len(), 1);
+        let prediction_probability = pb.observations.pop().unwrap();
+
+        return prediction_probability;
+    }
+
+    pub fn setup_cache(
+        &mut self,
+        fb: &feature_buffer::FeatureBuffer,
+    ) {
+        let further_blocks = self.blocks_boxes.as_mut_slice();
+        block_helpers::prepare_forward_cache(further_blocks, fb);
     }
 
     // Yeah, this is weird. I just didn't want to break the format compatibility at this point

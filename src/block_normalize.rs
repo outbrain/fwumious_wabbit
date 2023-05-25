@@ -8,6 +8,8 @@ use crate::model_instance;
 use crate::port_buffer;
 use crate::regressor;
 use regressor::BlockTrait;
+use crate::feature_buffer::FeatureBuffer;
+use crate::port_buffer::PortBuffer;
 
 const EPS: f32 = 1e-2;
 
@@ -77,27 +79,8 @@ impl BlockTrait for BlockNormalize {
         debug_assert!(self.num_inputs > 0);
 
         unsafe {
-            let mut mean: f32 = 0.0;
-            for i in 0..self.num_inputs as usize {
-                mean += *pb.tape.get_unchecked_mut(self.input_offset + i);
-            }
-            mean /= self.num_inputs as f32;
-            let meansq = mean * mean;
-            let mut variance: f32 = 0.0;
-            for i in 0..self.num_inputs as usize {
-                let w = meansq - *pb.tape.get_unchecked_mut(self.input_offset + i);
-                variance += w * w;
-            }
-            variance += EPS;
-            variance /= self.num_inputs as f32;
-            variance = variance.sqrt();
+            let variance_inv = self.internal_forward(pb);
 
-            let variance_inv = 1.0 / variance;
-
-            for i in 0..self.num_inputs {
-                *pb.tape.get_unchecked_mut(self.output_offset + i) =
-                    (*pb.tape.get_unchecked(self.input_offset + i) - mean) * variance_inv;
-            }
             block_helpers::forward_backward(further_blocks, fb, pb, update);
 
             if update {
@@ -115,6 +98,30 @@ impl BlockTrait for BlockNormalize {
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
     ) {
+        self.internal_forward(pb);
+        block_helpers::forward(further_blocks, fb, pb);
+    }
+
+    fn forward_with_cache(&self, further_blocks: &[Box<dyn BlockTrait>], fb: &FeatureBuffer, pb: &mut PortBuffer) {
+        self.internal_forward(pb);
+        block_helpers::forward_with_cache(further_blocks, fb, pb);
+    }
+
+    fn prepare_forward_cache(
+        &mut self,
+        further_blocks: &mut [Box<dyn BlockTrait>],
+        fb: &feature_buffer::FeatureBuffer,
+    ) {
+        block_helpers::prepare_forward_cache(further_blocks, fb);
+    }
+}
+
+impl BlockNormalize {
+    #[inline(always)]
+    fn internal_forward(
+        &self,
+        pb: &mut port_buffer::PortBuffer,
+    ) -> f32 {
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.input_offset != usize::MAX);
         debug_assert!(self.num_inputs > 0);
@@ -135,14 +142,16 @@ impl BlockTrait for BlockNormalize {
             variance /= self.num_inputs as f32;
             variance = variance.sqrt();
 
-            let var3 = 1.0 / variance;
+            let variance_inv = 1.0 / variance;
 
             for i in 0..self.num_inputs {
                 *pb.tape.get_unchecked_mut(self.output_offset + i) =
-                    *pb.tape.get_unchecked(self.input_offset + i) * var3;
+                    *pb.tape.get_unchecked(self.input_offset + i) * variance_inv;
             }
-            block_helpers::forward(further_blocks, fb, pb);
+
+            return variance_inv;
         } // unsafe end
+
     }
 }
 
@@ -207,14 +216,7 @@ impl BlockTrait for BlockStopBackward {
         pb: &mut port_buffer::PortBuffer,
         update: bool,
     ) {
-        debug_assert!(self.output_offset != usize::MAX);
-        debug_assert!(self.input_offset != usize::MAX);
-        debug_assert!(self.num_inputs > 0);
-
-        pb.tape.copy_within(
-            self.input_offset..(self.input_offset + self.num_inputs),
-            self.output_offset,
-        );
+        self.internal_forward(pb);
 
         block_helpers::forward_backward(further_blocks, fb, pb, update);
 
@@ -229,6 +231,30 @@ impl BlockTrait for BlockStopBackward {
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
     ) {
+        self.internal_forward(pb);
+        block_helpers::forward(further_blocks, fb, pb);
+    }
+
+    fn forward_with_cache(&self, further_blocks: &[Box<dyn BlockTrait>], fb: &FeatureBuffer, pb: &mut PortBuffer) {
+        self.internal_forward(pb);
+        block_helpers::forward_with_cache(further_blocks, fb, pb);
+    }
+
+    fn prepare_forward_cache(
+        &mut self,
+        further_blocks: &mut [Box<dyn BlockTrait>],
+        fb: &feature_buffer::FeatureBuffer,
+    ) {
+        block_helpers::prepare_forward_cache(further_blocks, fb);
+    }
+}
+
+impl BlockStopBackward {
+    #[inline(always)]
+    fn internal_forward(
+        &self,
+        pb: &mut port_buffer::PortBuffer,
+    ) {
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.input_offset != usize::MAX);
         debug_assert!(self.num_inputs > 0);
@@ -236,8 +262,6 @@ impl BlockTrait for BlockStopBackward {
             self.input_offset..(self.input_offset + self.num_inputs),
             self.output_offset,
         );
-
-        block_helpers::forward(further_blocks, fb, pb);
     }
 }
 

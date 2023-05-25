@@ -9,6 +9,8 @@ use crate::model_instance;
 use crate::port_buffer;
 use crate::regressor;
 use regressor::BlockTrait;
+use crate::feature_buffer::FeatureBuffer;
+use crate::port_buffer::PortBuffer;
 
 pub struct BlockRELU {
     pub num_inputs: usize,
@@ -32,6 +34,31 @@ pub fn new_relu_block(
     assert_eq!(block_outputs.len(), 1);
     Ok(block_outputs.pop().unwrap())
 }
+
+impl BlockRELU {
+
+    #[inline(always)]
+    fn forward(
+        &self,
+        pb: &mut port_buffer::PortBuffer,
+    ) {
+        debug_assert!(self.output_offset != usize::MAX);
+        debug_assert!(self.input_offset != usize::MAX);
+        debug_assert!(self.num_inputs > 0);
+
+        unsafe {
+            for i in 0..self.num_inputs as usize {
+                let w = *pb.tape.get_unchecked_mut(self.input_offset + i);
+                if w < 0.0 {
+                    *pb.tape.get_unchecked_mut(self.output_offset + i) = 0.0;
+                } else {
+                    *pb.tape.get_unchecked_mut(self.output_offset + i) = w;
+                }
+            }
+        } // unsafe end
+    }
+}
+
 
 impl BlockTrait for BlockRELU {
     fn as_any(&mut self) -> &mut dyn Any {
@@ -100,21 +127,21 @@ impl BlockTrait for BlockRELU {
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
     ) {
-        debug_assert!(self.output_offset != usize::MAX);
-        debug_assert!(self.input_offset != usize::MAX);
-        debug_assert!(self.num_inputs > 0);
+        self.forward(pb);
+        block_helpers::forward(further_blocks, fb, pb);
+    }
 
-        unsafe {
-            for i in 0..self.num_inputs as usize {
-                let w = *pb.tape.get_unchecked_mut(self.input_offset + i);
-                if w < 0.0 {
-                    *pb.tape.get_unchecked_mut(self.output_offset + i) = 0.0;
-                } else {
-                    *pb.tape.get_unchecked_mut(self.output_offset + i) = w;
-                }
-            }
-            block_helpers::forward(further_blocks, fb, pb);
-        } // unsafe end
+    fn forward_with_cache(&self, further_blocks: &[Box<dyn BlockTrait>], fb: &FeatureBuffer, pb: &mut PortBuffer) {
+        self.forward(pb);
+        block_helpers::forward_with_cache(further_blocks, fb, pb);
+    }
+
+    fn prepare_forward_cache(
+        &mut self,
+        further_blocks: &mut [Box<dyn BlockTrait>],
+        fb: &feature_buffer::FeatureBuffer,
+    ) {
+        block_helpers::prepare_forward_cache(further_blocks, fb);
     }
 }
 

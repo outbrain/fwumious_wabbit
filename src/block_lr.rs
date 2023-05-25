@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::collections::HashSet;
 
 use crate::feature_buffer;
 use crate::graph;
@@ -14,6 +15,13 @@ use crate::port_buffer;
 use block_helpers::WeightAndOptimizerData;
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
+use crate::block_helpers::szudziki_pair;
+
+#[derive(Default)]
+struct BlockLRCache {
+    lr: Vec<f32>,
+    buffer: HashSet<u32>
+}
 
 pub struct BlockLR<L: OptimizerTrait> {
     pub weights: Vec<WeightAndOptimizerData<L>>,
@@ -21,6 +29,33 @@ pub struct BlockLR<L: OptimizerTrait> {
     pub optimizer_lr: L,
     pub output_offset: usize,
     pub num_combos: u32,
+    cache: BlockLRCache,
+}
+
+impl<L: OptimizerTrait + 'static> BlockLR<L> {
+
+    fn internal_forward(
+        &self,
+        fb: &feature_buffer::FeatureBuffer,
+        pb: &mut port_buffer::PortBuffer,
+    ) {
+        debug_assert!(self.output_offset != usize::MAX);
+
+        {
+            unsafe {
+                let myslice = &mut pb.tape
+                    [self.output_offset..(self.output_offset + self.num_combos as usize)];
+                myslice.fill(0.0);
+                for feature in fb.lr_buffer.iter() {
+                    let feature_index = feature.hash as usize;
+                    let feature_value = feature.value;
+                    let combo_index = feature.combo_index as usize;
+                    *myslice.get_unchecked_mut(combo_index) +=
+                        self.weights.get_unchecked(feature_index).weight * feature_value;
+                }
+            }
+        }
+    }
 }
 
 fn new_lr_block_without_weights<L: OptimizerTrait + 'static>(
@@ -36,6 +71,7 @@ fn new_lr_block_without_weights<L: OptimizerTrait + 'static>(
         optimizer_lr: L::new(),
         output_offset: usize::MAX,
         num_combos,
+        cache: BlockLRCache::default(),
     };
     reg_lr
         .optimizer_lr
@@ -85,7 +121,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
     }
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
-        assert!(output.get_output_index() == 0);
+        assert_eq!(output.get_output_index(), 0);
         self.num_combos as usize
     }
 
@@ -94,7 +130,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
     }
 
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
-        assert!(output.get_output_index() == 0);
+        assert_eq!(output.get_output_index(), 0);
         debug_assert!(self.output_offset == usize::MAX); // We only allow a single call
         self.output_offset = offset;
     }
@@ -107,26 +143,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         pb: &mut port_buffer::PortBuffer,
         update: bool,
     ) {
-        debug_assert!(self.output_offset != usize::MAX);
-
-        let mut wsum: f32 = 0.0;
         unsafe {
-            {
-                let myslice = &mut pb.tape.get_unchecked_mut(
-                    self.output_offset..(self.output_offset + self.num_combos as usize),
-                );
-                myslice.fill(0.0);
-
-                for feature in fb.lr_buffer.iter() {
-                    // Prefetch couple of indexes from the future to prevent pipeline stalls due to memory latencies
-                    //            for (i, hashvalue) in fb.lr_buffer.iter().enumerate() {
-                    let feature_index = feature.hash as usize;
-                    let feature_value = feature.value;
-                    let combo_index = feature.combo_index as usize;
-                    let feature_weight = self.weights.get_unchecked(feature_index).weight;
-                    *myslice.get_unchecked_mut(combo_index) += feature_weight * feature_value;
-                }
-            }
+            self.internal_forward(fb, pb);
 
             block_helpers::forward_backward(further_blocks, fb, pb, update);
 
@@ -155,23 +173,59 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
     ) {
-        debug_assert!(self.output_offset != usize::MAX);
+        self.internal_forward(fb, pb);
+        block_helpers::forward(further_blocks, fb, pb);
+    }
 
-        {
-            unsafe {
-                let myslice = &mut pb.tape
-                    [self.output_offset..(self.output_offset + self.num_combos as usize)];
-                myslice.fill(0.0);
-                for feature in fb.lr_buffer.iter() {
-                    let feature_index = feature.hash as usize;
-                    let feature_value = feature.value;
-                    let combo_index = feature.combo_index as usize;
-                    *myslice.get_unchecked_mut(combo_index) +=
-                        self.weights.get_unchecked(feature_index).weight * feature_value;
+    fn forward_with_cache(
+        &self,
+        further_blocks: &[Box<dyn BlockTrait>],
+        fb: &feature_buffer::FeatureBuffer,
+        pb: &mut port_buffer::PortBuffer,
+    ) {
+        unsafe {
+            let lr_slice = &mut pb.tape
+                [self.output_offset..(self.output_offset + self.num_combos as usize)];
+            lr_slice.copy_from_slice(self.cache.lr.as_slice());
+
+            for feature in fb.lr_buffer.iter() {
+                let feature_index = feature.hash as usize;
+                let combo_index = feature.combo_index as usize;
+                if self.cache.buffer.contains(&szudziki_pair(feature.combo_index, feature.hash)) {
+                    continue
                 }
+                let feature_value = feature.value;
+                *lr_slice.get_unchecked_mut(combo_index) +=
+                    self.weights.get_unchecked(feature_index).weight * feature_value;
             }
         }
-        block_helpers::forward(further_blocks, fb, pb);
+
+        block_helpers::forward_with_cache(further_blocks, fb, pb);
+    }
+
+    fn prepare_forward_cache(
+        &mut self,
+        further_blocks: &mut [Box<dyn BlockTrait>],
+        fb: &feature_buffer::FeatureBuffer,
+    ) {
+        unsafe {
+            self.cache.buffer = fb.lr_buffer.iter()
+                .map(|feature| szudziki_pair(feature.combo_index, feature.hash))
+                .collect();
+            self.cache.lr = vec![0.0; self.num_combos as usize];
+
+            let mut lr_slice = self.cache.lr.as_mut_slice();
+
+            for feature in fb.lr_buffer.iter() {
+                let feature_index = feature.hash as usize;
+                let feature_value = feature.value;
+                let combo_index = feature.combo_index as usize;
+                *lr_slice.get_unchecked_mut(combo_index) +=
+                    self.weights.get_unchecked(feature_index).weight * feature_value;
+            }
+        }
+
+        block_helpers::prepare_forward_cache(further_blocks, fb);
     }
 
     fn get_serialized_len(&self) -> usize {

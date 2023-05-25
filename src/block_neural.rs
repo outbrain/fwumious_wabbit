@@ -21,6 +21,8 @@ use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 
 use blas::*;
+use crate::feature_buffer::FeatureBuffer;
+use crate::port_buffer::PortBuffer;
 
 const MAX_NUM_INPUTS: usize = 16000;
 
@@ -190,6 +192,42 @@ pub fn new_neuron_block(
     }
 }
 
+impl<L: OptimizerTrait + 'static>  BlockNeuronLayer<L> {
+    #[inline(always)]
+    fn internal_forward(
+        &self,
+        pb: &mut port_buffer::PortBuffer,
+        alpha: f32
+    ) {
+        unsafe {
+            let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
+                &mut pb.tape,
+                self.input_offset,
+                self.num_inputs,
+                self.output_offset,
+                self.num_neurons,
+            );
+
+            // This is actually speed things up considerably.
+            output_tape.copy_from_slice(self.weights.get_unchecked(self.bias_offset..));
+            sgemv(
+                b'T',                               //   trans: u8,
+                self.num_inputs as i32,             //   m: i32,
+                self.num_neurons as i32,            //   n: i32,
+                alpha,                                //   alpha: f32,
+                self.weights.get_unchecked(0..),    //  a: &[f32],
+                self.num_inputs as i32,             //lda: i32,
+                &input_tape.get_unchecked(0..),     //   x: &[f32],
+                1,                                  //incx: i32,
+                1.0,                                // beta: f32,
+                output_tape.get_unchecked_mut(0..), //y: &mut [f32],
+                1,                                  //incy: i32
+            );
+        } // unsafe end
+
+    }
+}
+
 impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
     fn as_any(&mut self) -> &mut dyn Any {
         self
@@ -207,40 +245,17 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.input_offset != usize::MAX);
 
+        // If we are in pure prediction mode (
+        let dropout_inv = match update {
+            true => self.dropout_inv,
+            false => 1.0,
+        };
+
+        self.internal_forward(pb, dropout_inv);
+
+        block_helpers::forward_backward(further_blocks, fb, pb, update);
+
         unsafe {
-            {
-                let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
-                    &mut pb.tape,
-                    self.input_offset,
-                    self.num_inputs,
-                    self.output_offset,
-                    self.num_neurons,
-                );
-
-                // If we are in pure prediction mode (
-                let dropout_inv = match update {
-                    true => self.dropout_inv,
-                    false => 1.0,
-                };
-                // This is actually speed things up considerably.
-                output_tape.copy_from_slice(self.weights.get_unchecked(self.bias_offset..));
-                sgemv(
-                    b'T',                               //   trans: u8,
-                    self.num_inputs as i32,             //   m: i32,
-                    self.num_neurons as i32,            //   n: i32,
-                    dropout_inv,                        //   alpha: f32,
-                    self.weights.get_unchecked(0..),    //  a: &[f32],
-                    self.num_inputs as i32,             // lda: i32,
-                    &input_tape.get_unchecked(0..),     // x: &[f32],
-                    1,                                  // incx: i32,
-                    1.0,                                // beta: f32,
-                    output_tape.get_unchecked_mut(0..), //y: &mut [f32],
-                    1,                                  // incy: i32
-                );
-            }
-
-            block_helpers::forward_backward(further_blocks, fb, pb, update);
-
             if update && self.neuron_type == NeuronType::WeightedSum {
                 // first we need to initialize inputs to zero
                 // TODO - what to think about this buffer
@@ -337,32 +352,23 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
     ) {
-        unsafe {
-            let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
-                &mut pb.tape,
-                self.input_offset,
-                self.num_inputs,
-                self.output_offset,
-                self.num_neurons,
-            );
+        self.internal_forward(pb, 1.0);
 
-            // This is actually speed things up considerably.
-            output_tape.copy_from_slice(self.weights.get_unchecked(self.bias_offset..));
-            sgemv(
-                b'T',                               //   trans: u8,
-                self.num_inputs as i32,             //   m: i32,
-                self.num_neurons as i32,            //   n: i32,
-                1.0,                                //   alpha: f32,
-                self.weights.get_unchecked(0..),    //  a: &[f32],
-                self.num_inputs as i32,             //lda: i32,
-                &input_tape.get_unchecked(0..),     //   x: &[f32],
-                1,                                  //incx: i32,
-                1.0,                                // beta: f32,
-                output_tape.get_unchecked_mut(0..), //y: &mut [f32],
-                1,                                  //incy: i32
-            );
-            block_helpers::forward(further_blocks, fb, pb);
-        } // unsafe end
+        block_helpers::forward(further_blocks, fb, pb);
+    }
+
+    fn forward_with_cache(&self, further_blocks: &[Box<dyn BlockTrait>], fb: &FeatureBuffer, pb: &mut PortBuffer) {
+        self.internal_forward(pb, 1.0);
+
+        block_helpers::forward_with_cache(further_blocks, fb, pb);
+    }
+
+    fn prepare_forward_cache(
+        &mut self,
+        further_blocks: &mut [Box<dyn BlockTrait>],
+        fb: &feature_buffer::FeatureBuffer,
+    ) {
+        block_helpers::prepare_forward_cache(further_blocks, fb);
     }
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
