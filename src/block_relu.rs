@@ -11,6 +11,7 @@ use crate::regressor;
 use regressor::BlockTrait;
 use crate::feature_buffer::FeatureBuffer;
 use crate::port_buffer::PortBuffer;
+use crate::regressor::BlockCache;
 
 pub struct BlockRELU {
     pub num_inputs: usize,
@@ -38,7 +39,7 @@ pub fn new_relu_block(
 impl BlockRELU {
 
     #[inline(always)]
-    fn forward(
+    fn internal_forward(
         &self,
         pb: &mut port_buffer::PortBuffer,
     ) {
@@ -127,21 +128,19 @@ impl BlockTrait for BlockRELU {
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
     ) {
-        self.forward(pb);
+        self.internal_forward(pb);
         block_helpers::forward(further_blocks, fb, pb);
     }
 
-    fn forward_with_cache(&self, further_blocks: &[Box<dyn BlockTrait>], fb: &FeatureBuffer, pb: &mut PortBuffer) {
-        self.forward(pb);
-        block_helpers::forward_with_cache(further_blocks, fb, pb);
-    }
-
-    fn prepare_forward_cache(
-        &mut self,
-        further_blocks: &mut [Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer,
+    fn forward_with_cache(
+        &self,
+        further_blocks: &[Box<dyn BlockTrait>],
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
+        caches: &[Box<dyn BlockCache>],
     ) {
-        block_helpers::prepare_forward_cache(further_blocks, fb);
+        self.internal_forward(pb);
+        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
     }
 }
 

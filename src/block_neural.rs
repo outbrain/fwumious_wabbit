@@ -23,6 +23,7 @@ use regressor::BlockTrait;
 use blas::*;
 use crate::feature_buffer::FeatureBuffer;
 use crate::port_buffer::PortBuffer;
+use crate::regressor::BlockCache;
 
 const MAX_NUM_INPUTS: usize = 16000;
 
@@ -357,18 +358,16 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
         block_helpers::forward(further_blocks, fb, pb);
     }
 
-    fn forward_with_cache(&self, further_blocks: &[Box<dyn BlockTrait>], fb: &FeatureBuffer, pb: &mut PortBuffer) {
+    fn forward_with_cache(
+        &self,
+        further_blocks: &[Box<dyn BlockTrait>],
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
+        caches: &[Box<dyn BlockCache>],
+    ) {
         self.internal_forward(pb, 1.0);
 
-        block_helpers::forward_with_cache(further_blocks, fb, pb);
-    }
-
-    fn prepare_forward_cache(
-        &mut self,
-        further_blocks: &mut [Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer,
-    ) {
-        block_helpers::prepare_forward_cache(further_blocks, fb);
+        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
     }
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {

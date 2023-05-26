@@ -19,6 +19,11 @@ use crate::model_instance;
 use crate::optimizer;
 use crate::port_buffer;
 
+pub trait BlockCache {
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
+
 pub trait BlockTrait {
     fn as_any(&mut self) -> &mut dyn Any; // This enables downcasting
     fn forward_backward(
@@ -41,14 +46,25 @@ pub trait BlockTrait {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
+        caches: &[Box<dyn BlockCache>],
     );
-
 
     fn prepare_forward_cache(
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer
-    );
+        fb: &feature_buffer::FeatureBuffer,
+        caches: &mut [Box<dyn BlockCache>],
+    ) {
+        block_helpers::prepare_forward_cache(further_blocks, fb, caches);
+    }
+
+    fn create_forward_cache(
+        &mut self,
+        further_blocks: &mut [Box<dyn BlockTrait>],
+        caches: &mut Vec<Box<dyn BlockCache>>
+    ) {
+        block_helpers::create_forward_cache(further_blocks, caches);
+    }
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {}
     fn get_serialized_len(&self) -> usize {
@@ -370,11 +386,12 @@ impl Regressor {
         &self,
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
+        caches: &[Box<dyn BlockCache>],
     ) -> f32 {
         pb.reset(); // empty the tape
 
         let further_blocks = &self.blocks_boxes[..];
-        block_helpers::forward_with_cache(further_blocks, fb, pb);
+        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
 
         assert_eq!(pb.observations.len(), 1);
         let prediction_probability = pb.observations.pop().unwrap();
@@ -385,9 +402,14 @@ impl Regressor {
     pub fn setup_cache(
         &mut self,
         fb: &feature_buffer::FeatureBuffer,
+        caches: &mut Vec<Box<dyn BlockCache>>,
+        should_create: bool,
     ) {
         let further_blocks = self.blocks_boxes.as_mut_slice();
-        block_helpers::prepare_forward_cache(further_blocks, fb);
+        if should_create {
+            block_helpers::create_forward_cache(further_blocks, caches);
+        }
+        block_helpers::prepare_forward_cache(further_blocks, fb, caches.as_mut_slice());
     }
 
     // Yeah, this is weird. I just didn't want to break the format compatibility at this point

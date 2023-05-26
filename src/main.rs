@@ -26,6 +26,8 @@ extern crate intel_mkl_src;
 
 #[macro_use]
 extern crate nom;
+extern crate core;
+
 mod block_ffm;
 mod block_helpers;
 mod block_loss_functions;

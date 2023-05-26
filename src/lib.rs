@@ -39,6 +39,7 @@ use shellwords;
 use std::ffi::CStr;
 use std::io::Cursor;
 use std::os::raw::c_char;
+use crate::regressor::BlockCache;
 
 #[repr(C)]
 pub struct FfiPredictor {
@@ -50,6 +51,7 @@ pub struct Predictor {
     vw_parser: VowpalParser,
     regressor: BoxedRegressorTrait,
     pb: PortBuffer,
+    caches: Vec<Box<dyn BlockCache>>
 }
 
 impl Predictor {
@@ -75,7 +77,7 @@ impl Predictor {
             Err(_e) => return -1.0,
         };
         self.feature_buffer_translator.translate(buffer, 0);
-        self.regressor.predict_with_cache(&self.feature_buffer_translator.feature_buffer, &mut self.pb)
+        self.regressor.predict_with_cache(&self.feature_buffer_translator.feature_buffer, &mut self.pb, self.caches.as_slice())
     }
 
     unsafe fn setup_cache(&mut self, input_buffer: &str) -> f32 {
@@ -87,7 +89,8 @@ impl Predictor {
             Err(_e) => return -1.0,
         };
         self.feature_buffer_translator.translate(buffer, 0);
-        self.regressor.setup_cache(&self.feature_buffer_translator.feature_buffer);
+        let is_empty = self.caches.is_empty();
+        self.regressor.setup_cache(&self.feature_buffer_translator.feature_buffer, &mut self.caches, is_empty);
         return 0.0;
     }
 
@@ -120,6 +123,7 @@ pub extern "C" fn new_fw_predictor_prototype(command: *const c_char) -> *mut Ffi
         vw_parser,
         regressor: sharable_regressor,
         pb,
+        caches: Vec::new(),
     };
     Box::into_raw(Box::new(predictor)).cast()
 }
@@ -135,6 +139,7 @@ pub unsafe extern "C" fn clone_lite(prototype: *mut FfiPredictor) -> *mut FfiPre
         vw_parser: prototype.vw_parser.clone(),
         regressor: prototype.regressor.clone(),
         pb: prototype.pb.clone(),
+        caches: Vec::new(),
     };
     Box::into_raw(Box::new(lite_predictor)).cast()
 }
