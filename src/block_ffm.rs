@@ -1,6 +1,5 @@
 use core::arch::x86_64::*;
 use std::any::Any;
-use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::io;
 use std::mem::{self, MaybeUninit};
@@ -17,7 +16,6 @@ use crate::block_helpers::{OptimizerData, szudziki_pair};
 use crate::feature_buffer;
 use crate::feature_buffer::FeatureBuffer;
 use crate::graph;
-use crate::graph::BlockGraph;
 use crate::model_instance;
 use crate::optimizer;
 use crate::port_buffer;
@@ -28,21 +26,6 @@ use crate::regressor::BlockCache;
 const FFM_STACK_BUF_LEN: usize = 131072;
 const FFM_CONTRA_BUF_LEN: usize = 16384;
 const STEP: usize = f32x4::LANES;
-
-
-struct BlockFFMCache {
-    contra_fields: HashMap<u64, Vec<f32>>,
-    ffm: Vec<f32>,
-}
-
-impl BlockCache for BlockFFMCache {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-}
 
 pub struct BlockFFM<L: OptimizerTrait> {
     pub optimizer_ffm: L,
@@ -590,7 +573,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &FeatureBuffer,
         pb: &mut PortBuffer,
-        caches: &[Box<dyn BlockCache>],
+        caches: &[BlockCache],
     ) {
         debug_assert!(self.output_offset != usize::MAX);
 
@@ -600,7 +583,10 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             return;
         };
 
-        let Some(cache) = next_cache.as_any().downcast_ref::<BlockFFMCache>() else {
+        let BlockCache::FFM {
+            ffm,
+            contra_fields,
+        } = next_cache else {
             log::warn!("Unable to downcast cache to BlockFFMCache, executing forward pass without cache");
             self.forward(further_blocks, fb, pb);
             return;
@@ -610,10 +596,9 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             let num_outputs = (self.ffm_num_fields * self.ffm_num_fields) as usize;
             let mut ffm_slice = &mut pb.tape
                 [self.output_offset..(self.output_offset + num_outputs)];
-            ffm_slice.fill(0.0);
-            // ffm_slice.copy_from_slice(cache.ffm.as_slice());
+            ffm_slice.copy_from_slice(ffm.as_slice());
 
-            let cached_contra_fields = &cache.contra_fields;
+            let cached_contra_fields = &contra_fields;
             let mut contra_fields: [f32; FFM_CONTRA_BUF_LEN] = MaybeUninit::uninit().assume_init();
 
             let ffm_weights = &self.weights;
@@ -685,7 +670,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     let feature_value = feature.value;
                     let feature_value_simd = f32x4::splat(feature_value);
 
-                    if let Some(cached_contra_field) = cache.contra_fields.get(&szudziki_pair(feature.contra_field_index as u64, feature.hash as u64)) {
+                    if let Some(cached_contra_field) = cached_contra_fields.get(&szudziki_pair(feature.contra_field_index as u64, feature.hash as u64)) {
                         contra_fields.get_unchecked_mut(offset..offset + field_embedding_len_as_usize)
                             .copy_from_slice(&cached_contra_field)
                     } else {
@@ -796,12 +781,12 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
     fn create_forward_cache(
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
-        caches: &mut Vec<Box<dyn BlockCache>>,
+        caches: &mut Vec<BlockCache>,
     ) {
-        caches.push(Box::new(BlockFFMCache {
+        caches.push(BlockCache::FFM {
             contra_fields: Default::default(),
             ffm: vec![0.0; (self.ffm_num_fields * self.ffm_num_fields) as usize],
-        }));
+        });
         block_helpers::create_forward_cache(further_blocks, caches);
     }
 
@@ -809,23 +794,26 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
-        caches: &mut [Box<dyn BlockCache>],
+        caches: &mut [BlockCache],
     ) {
         let Some((next_cache, further_caches)) = caches.split_first_mut() else {
             log::warn!("Expected BlockFFMCache caches, but non available, skipping cache preparation");
             return;
         };
 
-        let Some(cache) = next_cache.as_any_mut().downcast_mut::<BlockFFMCache>() else {
+        let BlockCache::FFM {
+            ffm,
+            contra_fields,
+        } = next_cache else {
             log::warn!("Unable to downcast cache to BlockFFMCache, skipping cache preparation");
             return;
         };
 
         unsafe {
-            let ffm_slice = cache.ffm.as_mut_slice();
+            let ffm_slice = ffm.as_mut_slice();
             ffm_slice.fill(0.0);
 
-            let cached_contra_fields = &mut cache.contra_fields;
+            let cached_contra_fields = contra_fields;
             cached_contra_fields.clear();
 
             let mut contra_fields: [f32; FFM_CONTRA_BUF_LEN] = MaybeUninit::uninit().assume_init();
@@ -1065,6 +1053,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
 mod tests {
     use block_helpers::{slearn2, spredict2, spredict2_with_cache};
+    use crate::graph::BlockGraph;
 
     use crate::assert_epsilon;
     use crate::block_helpers::ssetup_cache2;
@@ -1216,7 +1205,7 @@ mod tests {
         bg.allocate_and_init_weights(&mi);
         let mut pb = bg.new_port_buffer();
 
-        let mut caches: Vec<Box<dyn BlockCache>> = Vec::default();
+        let mut caches: Vec<BlockCache> = Vec::default();
         let cache_fb = ffm_vec(
             vec![HashAndValueAndSeq {
                 hash: 1,
@@ -1250,7 +1239,7 @@ mod tests {
         let mut pb = bg.new_port_buffer();
 
         ffm_init::<optimizer::OptimizerAdagradFlex>(&mut bg.blocks_final[0]);
-        let mut caches: Vec<Box<dyn BlockCache>> = Vec::default();
+        let mut caches: Vec<BlockCache> = Vec::default();
         let cache_fb = ffm_vec(
             vec![HashAndValueAndSeq {
                 hash: 1,
@@ -1291,7 +1280,7 @@ mod tests {
         bg.allocate_and_init_weights(&mi);
 
         ffm_init::<optimizer::OptimizerAdagradLUT>(&mut bg.blocks_final[0]);
-        let mut caches: Vec<Box<dyn BlockCache>> = Vec::default();
+        let mut caches: Vec<BlockCache> = Vec::default();
         let cache_fb = ffm_vec(
             vec![HashAndValueAndSeq {
                 hash: 100,
@@ -1436,7 +1425,7 @@ mod tests {
         bg.allocate_and_init_weights(&mi);
 
         let mut pb = bg.new_port_buffer();
-        let mut caches: Vec<Box<dyn BlockCache>> = Vec::default();
+        let mut caches: Vec<BlockCache> = Vec::default();
         let cache_fb = ffm_vec(
             vec![HashAndValueAndSeq {
                 hash: 1,
@@ -1469,7 +1458,7 @@ mod tests {
         bg.allocate_and_init_weights(&mi);
 
         ffm_init::<optimizer::OptimizerAdagradFlex>(&mut bg.blocks_final[0]);
-        let mut caches: Vec<Box<dyn BlockCache>> = Vec::default();
+        let mut caches: Vec<BlockCache> = Vec::default();
         let cache_fb = ffm_vec(
             vec![HashAndValueAndSeq {
                 hash: 100,
@@ -1508,7 +1497,7 @@ mod tests {
         bg.allocate_and_init_weights(&mi);
 
         ffm_init::<optimizer::OptimizerAdagradLUT>(&mut bg.blocks_final[0]);
-        let mut caches: Vec<Box<dyn BlockCache>> = Vec::default();
+        let mut caches: Vec<BlockCache> = Vec::default();
         let cache_fb = ffm_vec(
             vec![HashAndValueAndSeq {
                 hash: 100,
@@ -1560,7 +1549,7 @@ mod tests {
         bg.allocate_and_init_weights(&mi);
 
         let mut pb = bg.new_port_buffer();
-        let mut caches: Vec<Box<dyn BlockCache>> = Vec::default();
+        let mut caches: Vec<BlockCache> = Vec::default();
         let cache_fb = ffm_vec(
             vec![HashAndValueAndSeq {
                 hash: 1,
@@ -1593,7 +1582,7 @@ mod tests {
         bg.allocate_and_init_weights(&mi);
 
         ffm_init::<optimizer::OptimizerAdagradFlex>(&mut bg.blocks_final[0]);
-        let mut caches: Vec<Box<dyn BlockCache>> = Vec::default();
+        let mut caches: Vec<BlockCache> = Vec::default();
         let cache_fb = ffm_vec(
             vec![HashAndValueAndSeq {
                 hash: 100,
@@ -1632,7 +1621,7 @@ mod tests {
         bg.allocate_and_init_weights(&mi);
 
         ffm_init::<optimizer::OptimizerAdagradLUT>(&mut bg.blocks_final[0]);
-        let mut caches: Vec<Box<dyn BlockCache>> = Vec::default();
+        let mut caches: Vec<BlockCache> = Vec::default();
         let cache_fb = ffm_vec(
             vec![HashAndValueAndSeq {
                 hash: 100,
@@ -1748,7 +1737,7 @@ B,featureB
         let mut p: f32;
 
         ffm_init::<optimizer::OptimizerAdagradLUT>(&mut bg.blocks_final[0]);
-        let mut caches: Vec<Box<dyn BlockCache>> = Vec::default();
+        let mut caches: Vec<BlockCache> = Vec::default();
         let cache_fb = &ffm_vec(
             vec![
                 HashAndValueAndSeq {
@@ -1866,7 +1855,7 @@ B,featureB
         let mut pb = bg.new_port_buffer();
 
         ffm_init::<optimizer::OptimizerAdagradLUT>(&mut bg.blocks_final[0]);
-        let mut caches: Vec<Box<dyn BlockCache>> = Vec::default();
+        let mut caches: Vec<BlockCache> = Vec::default();
         let cache_fb = &ffm_vec(
             vec![
                 HashAndValueAndSeq {
@@ -2019,7 +2008,7 @@ B,featureB
         bg.allocate_and_init_weights(&mi);
 
         ffm_init::<optimizer::OptimizerAdagradFlex>(&mut bg.blocks_final[0]);
-        let mut caches: Vec<Box<dyn BlockCache>> = Vec::default();
+        let mut caches: Vec<BlockCache> = Vec::default();
         let cache_fb = ffm_vec(
             vec![
                 HashAndValueAndSeq {

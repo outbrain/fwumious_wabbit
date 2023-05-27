@@ -150,7 +150,7 @@ impl BlockTrait for BlockObserve {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &FeatureBuffer,
         pb: &mut PortBuffer,
-        caches: &[Box<dyn BlockCache>],
+        caches: &[BlockCache],
     ) {
         debug_assert!(self.input_offset != usize::MAX);
         debug_assert!(self.input_offset != usize::MAX);
@@ -273,7 +273,7 @@ impl BlockTrait for BlockSink {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &FeatureBuffer,
         pb: &mut PortBuffer,
-        caches: &[Box<dyn BlockCache>],
+        caches: &[BlockCache],
     ) {
         debug_assert!(self.input_offset != usize::MAX);
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
@@ -366,7 +366,7 @@ impl BlockTrait for BlockConsts {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &FeatureBuffer,
         pb: &mut PortBuffer,
-        caches: &[Box<dyn BlockCache>],
+        caches: &[BlockCache],
     ) {
         self.internal_forward(pb);
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
@@ -515,7 +515,7 @@ impl BlockTrait for BlockCopy {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &FeatureBuffer,
         pb: &mut PortBuffer,
-        caches: &[Box<dyn BlockCache>],
+        caches: &[BlockCache],
     ) {
         self.internal_forward(pb);
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
@@ -654,7 +654,7 @@ impl BlockTrait for BlockJoin {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &FeatureBuffer,
         pb: &mut PortBuffer,
-        caches: &[Box<dyn BlockCache>],
+        caches: &[BlockCache],
     ) {
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
     }
@@ -754,7 +754,7 @@ impl BlockTrait for BlockSum {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &FeatureBuffer,
         pb: &mut PortBuffer,
-        caches: &[Box<dyn BlockCache>],
+        caches: &[BlockCache],
     ) {
         self.internal_forward(pb);
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
@@ -906,7 +906,7 @@ impl BlockTrait for BlockTriangle {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &FeatureBuffer,
         pb: &mut PortBuffer,
-        caches: &[Box<dyn BlockCache>],
+        caches: &[BlockCache],
     ) {
         self.internal_forward(pb);
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches);

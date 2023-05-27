@@ -108,7 +108,7 @@ impl BlockTrait for BlockNormalize {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &FeatureBuffer,
         pb: &mut PortBuffer,
-        caches: &[Box<dyn BlockCache>],
+        caches: &[BlockCache],
     ) {
         self.internal_forward(pb);
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
@@ -239,7 +239,7 @@ impl BlockTrait for BlockStopBackward {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &FeatureBuffer,
         pb: &mut PortBuffer,
-        caches: &[Box<dyn BlockCache>],
+        caches: &[BlockCache],
     ) {
         self.internal_forward(pb);
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches);

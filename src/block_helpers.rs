@@ -14,11 +14,7 @@ use std::slice;
 
 
 pub fn szudziki_pair(x: u64, y: u64) -> u64 {
-    if x >= y {
-        (x * x) + x + y
-    } else {
-        (y * y) + x
-    }
+    x * 17 + y
 }
 
 
@@ -187,7 +183,7 @@ pub fn slearn2<'a>(
 pub fn ssetup_cache2<'a>(
     bg: &mut graph::BlockGraph,
     cache_fb: &feature_buffer::FeatureBuffer,
-    caches: &mut Vec<Box<dyn BlockCache>>,
+    caches: &mut Vec<BlockCache>,
 ) {
     let (create_block_run, create_further_blocks) = bg.blocks_final.split_at_mut(1);
     create_block_run[0].create_forward_cache(create_further_blocks, caches);
@@ -201,7 +197,7 @@ pub fn spredict2_with_cache<'a>(
     cache_fb: &feature_buffer::FeatureBuffer,
     fb: &feature_buffer::FeatureBuffer,
     pb: &mut port_buffer::PortBuffer,
-    caches: &[Box<dyn BlockCache>],
+    caches: &[BlockCache],
 ) -> f32 {
     pb.reset();
     let (block_run, further_blocks) = bg.blocks_final.split_at(1);
@@ -255,7 +251,7 @@ pub fn forward_with_cache(
     further_blocks: &[Box<dyn BlockTrait>],
     fb: &feature_buffer::FeatureBuffer,
     pb: &mut port_buffer::PortBuffer,
-    caches: &[Box<dyn BlockCache>],
+    caches: &[BlockCache],
 ) {
     match further_blocks.split_first() {
         Some((next_regressor, further_blocks)) => next_regressor
@@ -269,7 +265,7 @@ pub fn forward_with_cache(
 pub fn prepare_forward_cache(
     further_blocks: &mut [Box<dyn BlockTrait>],
     fb: &feature_buffer::FeatureBuffer,
-    caches: &mut [Box<dyn BlockCache>],
+    caches: &mut [BlockCache],
 ) {
     match further_blocks.split_first_mut() {
         Some((next_regressor, further_blocks)) => next_regressor
@@ -281,7 +277,7 @@ pub fn prepare_forward_cache(
 #[inline(always)]
 pub fn create_forward_cache(
     further_blocks: &mut [Box<dyn BlockTrait>],
-    caches: &mut Vec<Box<dyn BlockCache>>
+    caches: &mut Vec<BlockCache>
 ) {
     match further_blocks.split_first_mut() {
         Some((next_regressor, further_blocks)) => next_regressor

@@ -151,12 +151,40 @@ impl VowpalParser {
         input_bufread: &mut impl BufRead,
     ) -> Result<&[u32], Box<dyn Error>> {
         self.tmp_read_buf.truncate(0);
-        let rowlen1 = match input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
+        let tmp_read_buf_size = match input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
             Ok(0) => return Ok(&[]),
             Ok(n) => n,
             Err(e) => Err(e)?,
         };
+        return self.next_vowpal_to_size(tmp_read_buf_size);
+    }
 
+    pub fn next_vowpal_with_cache(
+        &mut self,
+        cached_input_bufread: &mut impl BufRead,
+        input_bufread: &mut impl BufRead,
+    ) -> Result<&[u32], Box<dyn Error>> {
+        self.tmp_read_buf.truncate(0);
+        let cached_tmp_read_buf_size = match cached_input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
+            Ok(0) => return Ok(&[]),
+            Ok(n) => n,
+            Err(e) => Err(e)?,
+        };
+        // ignore last newline byte
+        self.tmp_read_buf.truncate(cached_tmp_read_buf_size);
+
+        let tmp_read_buf_size = match input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
+            Ok(0) => return Ok(&[]),
+            Ok(n) => n,
+            Err(e) => Err(e)?,
+        };
+        return self.next_vowpal_to_size(cached_tmp_read_buf_size + tmp_read_buf_size - 1);
+    }
+
+    fn next_vowpal_to_size(
+        &mut self,
+        tmp_read_buf_size: usize
+    ) -> Result<&[u32], Box<dyn Error>> {
         let bufpos: usize = (self.vw_map.num_namespaces + HEADER_LEN as usize) as usize;
         self.output_buffer.truncate(bufpos);
         for i in &mut self.output_buffer[0..bufpos] {
@@ -177,7 +205,7 @@ impl VowpalParser {
                 0x7c => self.output_buffer[LABEL_OFFSET] = NO_LABEL, // when first character is |, this means there is no label
                 _ => {
                     // "flush" ascii 66, 6C, 75, 73, 68
-                    if rowlen1 >= 5
+                    if tmp_read_buf_size >= 5
                         && *p.add(0) == 0x66
                         && *p.add(1) == 0x6C
                         && *p.add(2) == 0x75
@@ -185,10 +213,10 @@ impl VowpalParser {
                         && *p.add(4) == 0x68
                     {
                         return Err(Box::new(FlushCommand));
-                    } else if rowlen1 >= "hogwild_load ".len() {
+                    } else if tmp_read_buf_size >= "hogwild_load ".len() {
                         // THIS IS SLOW, BUT IT IS CALLED VERY RARELY
                         // IF WE WILL AVE COMMANDS CALLED MORE FREQUENTLY, WE WILL NEED A FASTER IMPLEMENTATION
-                        let vecs = self.parse_cmd(0, rowlen1)?;
+                        let vecs = self.parse_cmd(0, tmp_read_buf_size)?;
                         if vecs.len() == 2 {
                             let command = String::from_utf8_lossy(&vecs[0]);
                             if command == "hogwild_load" {
@@ -213,7 +241,7 @@ impl VowpalParser {
                 }
             };
 
-            let rowlen = rowlen1 - 1; // ignore last newline byte
+            let rowlen = tmp_read_buf_size - 1; // ignore last newline byte
             if self.output_buffer[LABEL_OFFSET] != NO_LABEL {
                 // if we have a label, let's check if we also have label weight
                 while *p.add(i_end) != 0x20 && i_end < rowlen {

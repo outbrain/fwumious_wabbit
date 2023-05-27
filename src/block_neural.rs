@@ -363,7 +363,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &FeatureBuffer,
         pb: &mut PortBuffer,
-        caches: &[Box<dyn BlockCache>],
+        caches: &[BlockCache],
     ) {
         self.internal_forward(pb, 1.0);
 

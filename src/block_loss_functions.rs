@@ -189,7 +189,7 @@ impl BlockTrait for BlockSigmoid {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &FeatureBuffer,
         pb: &mut PortBuffer,
-        caches: &[Box<dyn BlockCache>],
+        caches: &[BlockCache],
     ) {
         self.internal_forward(fb, pb);
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches);

@@ -1,5 +1,6 @@
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::any::Any;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::io;
 use std::io::Cursor;
@@ -19,9 +20,15 @@ use crate::model_instance;
 use crate::optimizer;
 use crate::port_buffer;
 
-pub trait BlockCache {
-    fn as_any(&self) -> &dyn Any;
-    fn as_any_mut(&mut self) -> &mut dyn Any;
+pub enum BlockCache {
+    FFM {
+        ffm: Vec<f32>,
+        contra_fields: HashMap<u64, Vec<f32>>,
+    },
+    LR {
+        lr: Vec<f32>,
+        contra_fields: HashSet<u64>
+    },
 }
 
 pub trait BlockTrait {
@@ -46,14 +53,14 @@ pub trait BlockTrait {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
-        caches: &[Box<dyn BlockCache>],
+        caches: &[BlockCache],
     );
 
     fn prepare_forward_cache(
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
-        caches: &mut [Box<dyn BlockCache>],
+        caches: &mut [BlockCache],
     ) {
         block_helpers::prepare_forward_cache(further_blocks, fb, caches);
     }
@@ -61,7 +68,7 @@ pub trait BlockTrait {
     fn create_forward_cache(
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
-        caches: &mut Vec<Box<dyn BlockCache>>
+        caches: &mut Vec<BlockCache>
     ) {
         block_helpers::create_forward_cache(further_blocks, caches);
     }
@@ -386,7 +393,7 @@ impl Regressor {
         &self,
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
-        caches: &[Box<dyn BlockCache>],
+        caches: &[BlockCache],
     ) -> f32 {
         pb.reset(); // empty the tape
 
@@ -402,7 +409,7 @@ impl Regressor {
     pub fn setup_cache(
         &mut self,
         fb: &feature_buffer::FeatureBuffer,
-        caches: &mut Vec<Box<dyn BlockCache>>,
+        caches: &mut Vec<BlockCache>,
         should_create: bool,
     ) {
         let further_blocks = self.blocks_boxes.as_mut_slice();

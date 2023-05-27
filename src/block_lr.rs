@@ -1,5 +1,4 @@
 use std::any::Any;
-use std::collections::HashSet;
 
 use crate::feature_buffer;
 use crate::graph;
@@ -17,21 +16,6 @@ use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 use crate::block_helpers::szudziki_pair;
 use crate::regressor::BlockCache;
-
-struct BlockLRCache {
-    lr: Vec<f32>,
-    buffer: HashSet<u64>
-}
-
-impl BlockCache for BlockLRCache {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-}
 
 pub struct BlockLR<L: OptimizerTrait> {
     pub weights: Vec<WeightAndOptimizerData<L>>,
@@ -190,7 +174,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
-        caches: &[Box<dyn BlockCache>],
+        caches: &[BlockCache],
     ) {
         let Some((next_cache, further_caches)) = caches.split_first() else {
             log::warn!("Expected BlockLRCache caches, but non available, executing forward pass without cache");
@@ -198,7 +182,10 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
             return;
         };
 
-        let Some(cache) = next_cache.as_any().downcast_ref::<BlockLRCache>() else {
+        let BlockCache::LR {
+            lr,
+            contra_fields,
+        } = next_cache else {
             log::warn!("Unable to downcast cache to BlockLRCache, executing forward pass without cache");
             self.forward(further_blocks, fb, pb);
             return;
@@ -207,12 +194,12 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         unsafe {
             let mut lr_slice = &mut pb.tape
                 [self.output_offset..(self.output_offset + self.num_combos as usize)];
-            lr_slice.copy_from_slice(cache.lr.as_slice());
+            lr_slice.copy_from_slice(lr.as_slice());
 
             for feature in fb.lr_buffer.iter() {
                 let feature_index = feature.hash as usize;
                 let combo_index = feature.combo_index as usize;
-                if cache.buffer.contains(&szudziki_pair(feature.combo_index as u64, feature.hash as u64)) {
+                if contra_fields.contains(&szudziki_pair(feature.combo_index as u64, feature.hash as u64)) {
                     continue
                 }
                 let feature_value = feature.value;
@@ -226,12 +213,12 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
     fn create_forward_cache(
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
-        caches: &mut Vec<Box<dyn BlockCache>>,
+        caches: &mut Vec<BlockCache>,
     ) {
-        caches.push(Box::new(BlockLRCache {
+        caches.push(BlockCache::LR {
             lr: vec![0.0; self.num_combos as usize],
-            buffer: Default::default(),
-        }));
+            contra_fields: Default::default(),
+        });
         block_helpers::create_forward_cache(further_blocks, caches);
     }
 
@@ -239,25 +226,25 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
-        caches: &mut [Box<dyn BlockCache>],
+        caches: &mut [BlockCache],
     ) {
         let Some((next_cache, further_caches)) = caches.split_first_mut() else {
             log::warn!("Expected BlockLRCache caches, but non available, skipping cache preparation");
             return;
         };
 
-        let Some(cache) = next_cache.as_any_mut().downcast_mut::<BlockLRCache>() else {
+        let BlockCache::LR {
+            lr,
+            contra_fields
+        } = next_cache else {
             log::warn!("Unable to downcast cache to BlockLRCache, skipping cache preparation");
             return;
         };
 
         unsafe {
-            cache.buffer = fb.lr_buffer.iter()
-                .map(|feature| szudziki_pair(feature.combo_index as u64, feature.hash as u64))
-                .collect();
-            cache.lr.fill(0.0);
+            lr.fill(0.0);
 
-            let mut lr_slice = cache.lr.as_mut_slice();
+            let mut lr_slice = lr.as_mut_slice();
 
             for feature in fb.lr_buffer.iter() {
                 let feature_index = feature.hash as usize;
@@ -265,6 +252,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
                 let combo_index = feature.combo_index as usize;
                 *lr_slice.get_unchecked_mut(combo_index) +=
                     self.weights.get_unchecked(feature_index).weight * feature_value;
+                contra_fields.insert(szudziki_pair(combo_index as u64, feature_index as u64));
             }
         }
 

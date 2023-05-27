@@ -51,7 +51,12 @@ pub struct Predictor {
     vw_parser: VowpalParser,
     regressor: BoxedRegressorTrait,
     pb: PortBuffer,
-    caches: Vec<Box<dyn BlockCache>>
+    cache: PredictorCache,
+}
+
+pub struct PredictorCache  {
+    blocks: Vec<BlockCache>,
+    input_buffer: String,
 }
 
 impl Predictor {
@@ -69,18 +74,23 @@ impl Predictor {
     }
 
     unsafe fn predict_with_cache(&mut self, input_buffer: &str) -> f32 {
-        let mut buffered_input = Cursor::new(input_buffer);
-        let reading_result = self.vw_parser.next_vowpal(&mut buffered_input);
+        let mut cached_buffered_input = Cursor::new(&self.cache.input_buffer);
+        let mut buffered_input = Cursor::new(&input_buffer);
+        let reading_result = self.vw_parser
+            .next_vowpal_with_cache(&mut cached_buffered_input, &mut buffered_input);
+
         let buffer = match reading_result {
             Ok([]) => return -1.0, // EOF
             Ok(buffer2) => buffer2,
             Err(_e) => return -1.0,
         };
+
         self.feature_buffer_translator.translate(buffer, 0);
-        self.regressor.predict_with_cache(&self.feature_buffer_translator.feature_buffer, &mut self.pb, self.caches.as_slice())
+        self.regressor.predict_with_cache(&self.feature_buffer_translator.feature_buffer, &mut self.pb, self.cache.blocks.as_slice())
     }
 
     unsafe fn setup_cache(&mut self, input_buffer: &str) -> f32 {
+        self.cache.input_buffer = input_buffer.to_string();
         let mut buffered_input = Cursor::new(input_buffer);
         let reading_result = self.vw_parser.next_vowpal(&mut buffered_input);
         let buffer = match reading_result {
@@ -89,8 +99,8 @@ impl Predictor {
             Err(_e) => return -1.0,
         };
         self.feature_buffer_translator.translate(buffer, 0);
-        let is_empty = self.caches.is_empty();
-        self.regressor.setup_cache(&self.feature_buffer_translator.feature_buffer, &mut self.caches, is_empty);
+        let is_empty = self.cache.blocks.is_empty();
+        self.regressor.setup_cache(&self.feature_buffer_translator.feature_buffer, &mut self.cache.blocks, is_empty);
         return 0.0;
     }
 
@@ -123,7 +133,10 @@ pub extern "C" fn new_fw_predictor_prototype(command: *const c_char) -> *mut Ffi
         vw_parser,
         regressor: sharable_regressor,
         pb,
-        caches: Vec::new(),
+        cache: PredictorCache {
+            blocks: Vec::default(),
+            input_buffer: String::default(),
+        }
     };
     Box::into_raw(Box::new(predictor)).cast()
 }
@@ -139,7 +152,11 @@ pub unsafe extern "C" fn clone_lite(prototype: *mut FfiPredictor) -> *mut FfiPre
         vw_parser: prototype.vw_parser.clone(),
         regressor: prototype.regressor.clone(),
         pb: prototype.pb.clone(),
-        caches: Vec::new(),
+
+        cache: PredictorCache {
+            blocks: Vec::new(),
+            input_buffer: String::default(),
+        }
     };
     Box::into_raw(Box::new(lite_predictor)).cast()
 }
