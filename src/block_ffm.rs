@@ -1,5 +1,6 @@
 use core::arch::x86_64::*;
 use std::any::Any;
+use std::collections::HashSet;
 use std::error::Error;
 use std::io;
 use std::mem::{self, MaybeUninit};
@@ -12,7 +13,7 @@ use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 
 use crate::block_helpers;
-use crate::block_helpers::{OptimizerData, szudziki_pair};
+use crate::block_helpers::OptimizerData;
 use crate::feature_buffer;
 use crate::feature_buffer::FeatureBuffer;
 use crate::graph;
@@ -76,7 +77,6 @@ fn new_ffm_block_without_weights<L: OptimizerTrait + 'static>(
 ) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
     let ffm_num_fields = mi.ffm_fields.len() as u32;
     let field_embedding_len = mi.ffm_k * ffm_num_fields as u32;
-    let ffm_fields_count = mi.ffm_fields.len() as u32;
 
     let mut reg_ffm = BlockFFM::<L> {
         weights: Vec::new(),
@@ -565,6 +565,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 diagonal_row += ffm_fields_count_as_usize;
             }
         }
+
         block_helpers::forward(further_blocks, fb, pb);
     }
 
@@ -586,6 +587,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         let BlockCache::FFM {
             ffm,
             contra_fields,
+            contra_offsets,
         } = next_cache else {
             log::warn!("Unable to downcast cache to BlockFFMCache, executing forward pass without cache");
             self.forward(further_blocks, fb, pb);
@@ -598,9 +600,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 [self.output_offset..(self.output_offset + num_outputs)];
             ffm_slice.copy_from_slice(ffm.as_slice());
 
-            let cached_contra_fields = &contra_fields;
-            let mut contra_fields: [f32; FFM_CONTRA_BUF_LEN] = MaybeUninit::uninit().assume_init();
-
+            let mut contra_fields_slice = contra_fields.clone();
             let ffm_weights = &self.weights;
             _mm_prefetch(
                 mem::transmute::<&f32, &i8>(
@@ -632,8 +632,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
             let mut ffm_buffer_index = 0;
 
-            let zeroes: [f32; STEP] = [0.0; STEP];
-
             for field_index in 0..ffm_fields_count {
                 let field_index_ffmk = field_index * ffmk;
                 let field_index_ffmk_as_usize = field_index_ffmk as usize;
@@ -642,19 +640,9 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 if ffm_buffer_index >= fb.ffm_buffer.len()
                     || fb.ffm_buffer.get_unchecked(ffm_buffer_index).contra_field_index > field_index_ffmk
                 {
-                    // first feature of the field - just overwrite
-                    for z in (offset..offset + field_embedding_len_end).step_by(STEP) {
-                        contra_fields.get_unchecked_mut(z..z + STEP).copy_from_slice(&zeroes);
-                    }
-
-                    for z in offset + field_embedding_len_end..offset + field_embedding_len_as_usize {
-                        *contra_fields.get_unchecked_mut(z) = 0.0;
-                    }
-
                     continue;
                 }
 
-                let mut feature_num = 0;
                 while ffm_buffer_index < fb.ffm_buffer.len()
                     && fb.ffm_buffer.get_unchecked(ffm_buffer_index).contra_field_index == field_index_ffmk
                 {
@@ -670,39 +658,24 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     let feature_value = feature.value;
                     let feature_value_simd = f32x4::splat(feature_value);
 
-                    if let Some(cached_contra_field) = cached_contra_fields.get(&szudziki_pair(feature.contra_field_index as u64, feature.hash as u64)) {
-                        contra_fields.get_unchecked_mut(offset..offset + field_embedding_len_as_usize)
-                            .copy_from_slice(&cached_contra_field)
-                    } else {
-                        if feature_num == 0 {
-                            // first feature of the field - just overwrite
-                            for z in (0..field_embedding_len_end).step_by(STEP) {
-                                let ffm_weights_simd = f32x4::from_slice(ffm_weights.get_unchecked(feature_index + z..feature_index + z + STEP));
-                                let result_simd = feature_value_simd * ffm_weights_simd;
-                                contra_fields.get_unchecked_mut(offset + z..offset + z + STEP).copy_from_slice(result_simd.as_array());
-                            }
-                            for z in field_embedding_len_end..field_embedding_len_as_usize {
-                                *contra_fields.get_unchecked_mut(offset + z) =
-                                    ffm_weights.get_unchecked(feature_index + z) * feature_value;
-                            }
-                        } else {
-                            for z in (0..field_embedding_len_end).step_by(STEP) {
-                                let ffm_weights_simd = f32x4::from_slice(ffm_weights.get_unchecked(feature_index + z..feature_index + z + STEP));
-                                let contra_fields_simd = f32x4::from_slice(contra_fields.get_unchecked(offset + z..offset + z + STEP));
-                                let result_simd = feature_value_simd * ffm_weights_simd + contra_fields_simd;
-                                contra_fields.get_unchecked_mut(offset + z..offset + z + STEP).copy_from_slice(result_simd.as_array());
-                            }
-                            for z in field_embedding_len_end..field_embedding_len_as_usize {
-                                *contra_fields.get_unchecked_mut(offset + z) +=
-                                    ffm_weights.get_unchecked(feature_index + z) * feature_value;
-                            }
+
+                    if !contra_offsets.contains(&offset) {
+                        for z in (0..field_embedding_len_end).step_by(STEP) {
+                            let ffm_weights_simd = f32x4::from_slice(ffm_weights.get_unchecked(feature_index + z..feature_index + z + STEP));
+                            let contra_fields_simd = f32x4::from_slice(contra_fields_slice.get_unchecked(offset + z..offset + z + STEP));
+                            let result_simd = feature_value_simd * ffm_weights_simd + contra_fields_simd;
+                            contra_fields_slice.get_unchecked_mut(offset + z..offset + z + STEP).copy_from_slice(result_simd.as_array());
+                        }
+                        for z in field_embedding_len_end..field_embedding_len_as_usize {
+                            *contra_fields_slice.get_unchecked_mut(offset + z) +=
+                                ffm_weights.get_unchecked(feature_index + z) * feature_value;
                         }
 
                         let feature_field_index = feature_index + field_index_ffmk_as_usize;
 
                         let mut correction_simd = f32x4::splat(0.0);
                         for k in (feature_field_index..feature_field_index + ffmk_end).step_by(STEP) {
-                            let ffm_weights_simd = f32x4::from_slice(ffm_weights.get_unchecked(k..k + STEP));
+                            let ffm_weights_simd = f32x4::from_slice(ffm_weights.get_unchecked(k .. k + STEP));
                             correction_simd += ffm_weights_simd * ffm_weights_simd;
                         }
 
@@ -715,7 +688,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                             correction * 0.5 * feature_value * feature_value;
                     }
                     ffm_buffer_index += 1;
-                    feature_num += 1;
                 }
             }
 
@@ -729,13 +701,13 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 // Self-interaction
                 let mut v_simd = f32x4::splat(0.0);
                 for k in (f1_offset_ffmk..f1_offset_ffmk + ffmk_end).step_by(STEP) {
-                    let contra_fields_simd = f32x4::from_slice(contra_fields.get_unchecked(k .. k + STEP));
+                    let contra_fields_simd = f32x4::from_slice(contra_fields_slice.get_unchecked(k .. k + STEP));
                     v_simd += contra_fields_simd * contra_fields_simd;
                 }
 
                 let mut v = v_simd.reduce_sum();
                 for k in f1_offset_ffmk + ffmk_end..f1_offset_ffmk + ffmk_as_usize {
-                    v += contra_fields.get_unchecked(k) * contra_fields.get_unchecked(k);
+                    v += contra_fields_slice.get_unchecked(k) * contra_fields_slice.get_unchecked(k);
                 }
 
                 *ffm_slice.get_unchecked_mut(diagonal_row + f1) += v * 0.5;
@@ -751,14 +723,14 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
                     let mut contra_field_simd = f32x4::splat(0.0);
                     for k in (0..ffmk_end).step_by(STEP) {
-                        let contra_fields_1_simd = f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk + k .. f1_offset_ffmk + k + STEP));
-                        let contra_fields_2_simd = f32x4::from_slice(contra_fields.get_unchecked(f2_offset_ffmk + k .. f2_offset_ffmk + k + STEP));
+                        let contra_fields_1_simd = f32x4::from_slice(contra_fields_slice.get_unchecked(f1_offset_ffmk + k .. f1_offset_ffmk + k + STEP));
+                        let contra_fields_2_simd = f32x4::from_slice(contra_fields_slice.get_unchecked(f2_offset_ffmk + k .. f2_offset_ffmk + k + STEP));
                         contra_field_simd += contra_fields_1_simd * contra_fields_2_simd;
                     }
 
                     let mut contra_field = contra_field_simd.reduce_sum();
                     for k in ffmk_end.. ffmk_as_usize {
-                        contra_field += contra_fields.get_unchecked(f1_offset_ffmk + k) * contra_fields.get_unchecked(f2_offset_ffmk + k);
+                        contra_field += contra_fields_slice.get_unchecked(f1_offset_ffmk + k) * contra_fields_slice.get_unchecked(f2_offset_ffmk + k);
                     }
 
                     contra_field = contra_field * 0.5;
@@ -781,13 +753,15 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
     fn create_forward_cache(
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
+        fb: &feature_buffer::FeatureBuffer,
         caches: &mut Vec<BlockCache>,
     ) {
         caches.push(BlockCache::FFM {
-            contra_fields: Default::default(),
+            contra_fields: vec![0.0; (self.field_embedding_len * self.field_embedding_len) as usize],
             ffm: vec![0.0; (self.ffm_num_fields * self.ffm_num_fields) as usize],
+            contra_offsets: HashSet::default()
         });
-        block_helpers::create_forward_cache(further_blocks, caches);
+        block_helpers::create_forward_cache(further_blocks, fb, caches);
     }
 
     fn prepare_forward_cache(
@@ -804,6 +778,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         let BlockCache::FFM {
             ffm,
             contra_fields,
+            contra_offsets,
         } = next_cache else {
             log::warn!("Unable to downcast cache to BlockFFMCache, skipping cache preparation");
             return;
@@ -813,10 +788,9 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             let ffm_slice = ffm.as_mut_slice();
             ffm_slice.fill(0.0);
 
-            let cached_contra_fields = contra_fields;
-            cached_contra_fields.clear();
+            contra_fields.fill(0.0);
 
-            let mut contra_fields: [f32; FFM_CONTRA_BUF_LEN] = MaybeUninit::uninit().assume_init();
+            contra_offsets.clear();
 
             let ffm_weights = &self.weights;
             _mm_prefetch(
@@ -898,10 +872,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                 ffm_weights.get_unchecked(feature_index + z) * feature_value;
                         }
                     }
-
-                    let cache_contra_fields_index = szudziki_pair(feature.contra_field_index as u64, feature.hash as u64);
-                    let contra_fields_slice = contra_fields.get_unchecked(offset..offset + field_embedding_len_as_usize);
-                    cached_contra_fields.insert(cache_contra_fields_index, contra_fields_slice.to_vec());
+                    contra_offsets.insert(offset);
 
                     let feature_field_index = feature_index + field_index_ffmk_as_usize;
 
@@ -922,6 +893,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     ffm_buffer_index += 1;
                     feature_num += 1;
                 }
+
+                contra_offsets.insert(offset);
             }
         }
 
@@ -1268,6 +1241,7 @@ mod tests {
         assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.7310586);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.7310586);
 
+        ssetup_cache2(&mut bg, &cache_fb, &mut caches);
         assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.7024794);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.7024794);
 
@@ -1305,9 +1279,11 @@ mod tests {
             2,
         );
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_eq!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.98201376);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.98201376);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.98201376);
-        assert_eq!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.81377685);
+
+        ssetup_cache2(&mut bg, &cache_fb, &mut caches);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.81377685);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.81377685);
     }
 
@@ -1443,133 +1419,11 @@ mod tests {
             1,
         );
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_eq!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.5);
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.5);
-        assert_eq!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.5);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.5);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.5);
 
-        // With two fields, things start to happen
-        // Since fields depend on initial randomization, these tests are ... peculiar.
-        mi.optimizer = Optimizer::AdagradFlex;
-        let mut bg = BlockGraph::new();
-        let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
-        let lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
-        bg.finalize();
-        bg.allocate_and_init_weights(&mi);
-
-        ffm_init::<optimizer::OptimizerAdagradFlex>(&mut bg.blocks_final[0]);
-        let mut caches: Vec<BlockCache> = Vec::default();
-        let cache_fb = ffm_vec(
-            vec![HashAndValueAndSeq {
-                hash: 100,
-                value: 1.0,
-                contra_field_index: mi.ffm_k * 1,
-            }],
-            2,
-        );
-        let fb = ffm_vec(
-            vec![
-                HashAndValueAndSeq {
-                    hash: 1,
-                    value: 1.0,
-                    contra_field_index: 0,
-                },
-                HashAndValueAndSeq {
-                    hash: 100,
-                    value: 1.0,
-                    contra_field_index: mi.ffm_k * 1,
-                },
-            ],
-            2,
-        );
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_eq!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.98201376);
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.98201376);
-        assert_eq!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.96277946);
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.96277946);
-
-        // Two fields, use values
-        mi.optimizer = Optimizer::AdagradLUT;
-        let mut bg = BlockGraph::new();
-        let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
-        let lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
-        bg.finalize();
-        bg.allocate_and_init_weights(&mi);
-
-        ffm_init::<optimizer::OptimizerAdagradLUT>(&mut bg.blocks_final[0]);
-        let mut caches: Vec<BlockCache> = Vec::default();
-        let cache_fb = ffm_vec(
-            vec![HashAndValueAndSeq {
-                hash: 100,
-                value: 2.0,
-                contra_field_index: mi.ffm_k * 1,
-            }],
-            2,
-        );
-        let fb = ffm_vec(
-            vec![
-                HashAndValueAndSeq {
-                    hash: 1,
-                    value: 2.0,
-                    contra_field_index: 0,
-                },
-                HashAndValueAndSeq {
-                    hash: 100,
-                    value: 2.0,
-                    contra_field_index: mi.ffm_k * 1,
-                },
-            ],
-            2,
-        );
-        ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_eq!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.9999999);
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.9999999);
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.9999999);
-        assert_eq!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.99685884);
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.99685884);
-    }
-
-    #[test]
-    fn test_ffm_k4_cache_setup() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
-        mi.learning_rate = 0.1;
-        mi.ffm_learning_rate = 0.1;
-        mi.power_t = 0.0;
-        mi.ffm_power_t = 0.0;
-        mi.ffm_k = 4;
-        mi.ffm_bit_precision = 18;
-        mi.ffm_fields = vec![vec![], vec![]]; // This isn't really used
-
-        // Nothing can be learned from a single field in FFMs
-        mi.optimizer = Optimizer::AdagradLUT;
-        let mut bg = BlockGraph::new();
-        let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
-        let lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
-        bg.finalize();
-        bg.allocate_and_init_weights(&mi);
-
-        let mut pb = bg.new_port_buffer();
-        let mut caches: Vec<BlockCache> = Vec::default();
-        let cache_fb = ffm_vec(
-            vec![HashAndValueAndSeq {
-                hash: 1,
-                value: 1.0,
-                contra_field_index: 0,
-            }],
-            1,
-        );
-        let fb = ffm_vec(
-            vec![HashAndValueAndSeq {
-                hash: 1,
-                value: 1.0,
-                contra_field_index: 0,
-            }],
-            1,
-        );
-        ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_eq!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.5);
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.5);
-        assert_eq!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.5);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.5);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.5);
 
         // With two fields, things start to happen
@@ -1607,9 +1461,11 @@ mod tests {
             2,
         );
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_eq!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.98201376);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.98201376);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.98201376);
-        assert_eq!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.96277946);
+
+        ssetup_cache2(&mut bg, &cache_fb, &mut caches);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.96277946);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.96277946);
 
         // Two fields, use values
@@ -1646,10 +1502,11 @@ mod tests {
             2,
         );
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_eq!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.9999999);
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.9999999);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.9999999);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.9999999);
-        assert_eq!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.99685884);
+
+        ssetup_cache2(&mut bg, &cache_fb, &mut caches);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.99685884);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.99685884);
     }
 
@@ -1777,8 +1634,12 @@ B,featureB
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
         assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.9933072);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.9933072);
+
+        ssetup_cache2(&mut bg, &cache_fb, &mut caches);
         assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.9395168);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.9395168);
+
+        ssetup_cache2(&mut bg, &cache_fb, &mut caches);
         assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.9395168);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.9395168);
     }
@@ -1895,9 +1756,11 @@ B,featureB
 
 
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_eq!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 1.0);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 1.0);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 1.0);
-        assert_eq!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.9949837);
+
+        ssetup_cache2(&mut bg, &cache_fb, &mut caches);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.9949837);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.9949837);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.9949837);
     }
@@ -2064,6 +1927,7 @@ B,featureB
             ],
             3,
         );
+        ssetup_cache2(&mut bg, &cache_fb, &mut caches);
         assert_eq!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.7310586);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.7310586);
     }

@@ -186,7 +186,7 @@ pub fn ssetup_cache2<'a>(
     caches: &mut Vec<BlockCache>,
 ) {
     let (create_block_run, create_further_blocks) = bg.blocks_final.split_at_mut(1);
-    create_block_run[0].create_forward_cache(create_further_blocks, caches);
+    create_block_run[0].create_forward_cache(create_further_blocks, cache_fb, caches);
 
     let (prepare_block_run, prepare_further_blocks) = bg.blocks_final.split_at_mut(1);
     prepare_block_run[0].prepare_forward_cache(prepare_further_blocks, cache_fb, caches.as_mut_slice());
@@ -277,11 +277,12 @@ pub fn prepare_forward_cache(
 #[inline(always)]
 pub fn create_forward_cache(
     further_blocks: &mut [Box<dyn BlockTrait>],
+    fb: &feature_buffer::FeatureBuffer,
     caches: &mut Vec<BlockCache>
 ) {
     match further_blocks.split_first_mut() {
         Some((next_regressor, further_blocks)) => next_regressor
-            .create_forward_cache(further_blocks, caches),
+            .create_forward_cache(further_blocks, fb, caches),
         None => {}
     }
 }

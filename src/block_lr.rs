@@ -213,13 +213,14 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
     fn create_forward_cache(
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
+        fb: &feature_buffer::FeatureBuffer,
         caches: &mut Vec<BlockCache>,
     ) {
         caches.push(BlockCache::LR {
             lr: vec![0.0; self.num_combos as usize],
             contra_fields: Default::default(),
         });
-        block_helpers::create_forward_cache(further_blocks, caches);
+        block_helpers::create_forward_cache(further_blocks, fb, caches);
     }
 
     fn prepare_forward_cache(
