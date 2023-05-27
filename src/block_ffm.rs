@@ -658,7 +658,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     let feature_value = feature.value;
                     let feature_value_simd = f32x4::splat(feature_value);
 
-
                     if !contra_offsets.contains(&offset) {
                         for z in (0..field_embedding_len_end).step_by(STEP) {
                             let ffm_weights_simd = f32x4::from_slice(ffm_weights.get_unchecked(feature_index + z..feature_index + z + STEP));
@@ -759,7 +758,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         caches.push(BlockCache::FFM {
             contra_fields: vec![0.0; (self.field_embedding_len * self.field_embedding_len) as usize],
             ffm: vec![0.0; (self.ffm_num_fields * self.ffm_num_fields) as usize],
-            contra_offsets: HashSet::default()
+            contra_offsets: HashSet::default(),
         });
         block_helpers::create_forward_cache(further_blocks, fb, caches);
     }
@@ -791,6 +790,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             contra_fields.fill(0.0);
 
             contra_offsets.clear();
+            contra_multiplication_offsets.clear();
 
             let ffm_weights = &self.weights;
             _mm_prefetch(
@@ -833,7 +833,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     continue;
                 }
 
-                let mut feature_num = 0;
                 while ffm_buffer_index < fb.ffm_buffer.len()
                     && fb.ffm_buffer.get_unchecked(ffm_buffer_index).contra_field_index == field_index_ffmk
                 {
@@ -849,28 +848,15 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     let feature_value = feature.value;
                     let feature_value_simd = f32x4::splat(feature_value);
 
-                    if feature_num == 0 {
-                        // first feature of the field - just overwrite
-                        for z in (0..field_embedding_len_end).step_by(STEP) {
-                            let ffm_weights_simd = f32x4::from_slice(ffm_weights.get_unchecked(feature_index + z..feature_index + z + STEP));
-                            let result_simd = feature_value_simd * ffm_weights_simd;
-                            contra_fields.get_unchecked_mut(offset + z..offset + z + STEP).copy_from_slice(result_simd.as_array());
-                        }
-                        for z in field_embedding_len_end..field_embedding_len_as_usize {
-                            *contra_fields.get_unchecked_mut(offset + z) =
-                                ffm_weights.get_unchecked(feature_index + z) * feature_value;
-                        }
-                    } else {
-                        for z in (0..field_embedding_len_end).step_by(STEP) {
-                            let ffm_weights_simd = f32x4::from_slice(ffm_weights.get_unchecked(feature_index + z..feature_index + z + STEP));
-                            let contra_fields_simd = f32x4::from_slice(contra_fields.get_unchecked(offset + z..offset + z + STEP));
-                            let result_simd = feature_value_simd * ffm_weights_simd + contra_fields_simd;
-                            contra_fields.get_unchecked_mut(offset + z..offset + z + STEP).copy_from_slice(result_simd.as_array());
-                        }
-                        for z in field_embedding_len_end..field_embedding_len_as_usize {
-                            *contra_fields.get_unchecked_mut(offset + z) +=
-                                ffm_weights.get_unchecked(feature_index + z) * feature_value;
-                        }
+                    for z in (0..field_embedding_len_end).step_by(STEP) {
+                        let ffm_weights_simd = f32x4::from_slice(ffm_weights.get_unchecked(feature_index + z..feature_index + z + STEP));
+                        let contra_fields_simd = f32x4::from_slice(contra_fields.get_unchecked(offset + z..offset + z + STEP));
+                        let result_simd = feature_value_simd * ffm_weights_simd + contra_fields_simd;
+                        contra_fields.get_unchecked_mut(offset + z..offset + z + STEP).copy_from_slice(result_simd.as_array());
+                    }
+                    for z in field_embedding_len_end..field_embedding_len_as_usize {
+                        *contra_fields.get_unchecked_mut(offset + z) +=
+                            ffm_weights.get_unchecked(feature_index + z) * feature_value;
                     }
                     contra_offsets.insert(offset);
 
@@ -891,7 +877,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         correction * 0.5 * feature_value * feature_value;
 
                     ffm_buffer_index += 1;
-                    feature_num += 1;
                 }
 
                 contra_offsets.insert(offset);
