@@ -14,7 +14,6 @@ use crate::port_buffer;
 use block_helpers::WeightAndOptimizerData;
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
-use crate::block_helpers::szudziki_pair;
 use crate::regressor::BlockCache;
 
 pub struct BlockLR<L: OptimizerTrait> {
@@ -199,7 +198,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
             for feature in fb.lr_buffer.iter() {
                 let feature_index = feature.hash as usize;
                 let combo_index = feature.combo_index as usize;
-                if contra_fields.contains(&szudziki_pair(feature.combo_index as u64, feature.hash as u64)) {
+                if *contra_fields.get_unchecked(combo_index) {
                     continue
                 }
                 let feature_value = feature.value;
@@ -217,7 +216,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
     ) {
         caches.push(BlockCache::LR {
             lr: vec![0.0; self.num_combos as usize],
-            contra_fields: Default::default(),
+            contra_fields: vec![false; self.num_combos as usize]
         });
         block_helpers::create_forward_cache(further_blocks, caches);
     }
@@ -242,6 +241,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         };
 
         unsafe {
+            contra_fields.fill(false);
             lr.fill(0.0);
 
             let mut lr_slice = lr.as_mut_slice();
@@ -252,7 +252,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
                 let combo_index = feature.combo_index as usize;
                 *lr_slice.get_unchecked_mut(combo_index) +=
                     self.weights.get_unchecked(feature_index).weight * feature_value;
-                contra_fields.insert(szudziki_pair(combo_index as u64, feature_index as u64));
+                *contra_fields.get_unchecked_mut(combo_index) = true;
             }
         }
 

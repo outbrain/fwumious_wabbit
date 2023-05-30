@@ -12,12 +12,6 @@ use std::cmp::min;
 use std::mem::{self};
 use std::slice;
 
-
-pub fn szudziki_pair(x: u64, y: u64) -> u64 {
-    x * 17 + y
-}
-
-
 #[derive(Clone, Debug)]
 #[repr(C)]
 pub struct Weight {

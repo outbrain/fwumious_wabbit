@@ -27,7 +27,7 @@ pub enum BlockCache {
     },
     LR {
         lr: Vec<f32>,
-        contra_fields: HashSet<u64>
+        contra_fields: Vec<bool>
     },
 }
 
