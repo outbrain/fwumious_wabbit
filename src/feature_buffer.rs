@@ -185,7 +185,7 @@ impl FeatureBufferTranslator {
             self.feature_buffer.example_importance =
                 f32::from_bits(record_buffer[parser::EXAMPLE_IMPORTANCE_OFFSET]);
             self.feature_buffer.example_number = example_number;
-            let mut output_len: usize = 0;
+
             let mut hashes_vec_in: &mut Vec<HashAndValue> = &mut self.hashes_vec_in;
             let mut hashes_vec_out: &mut Vec<HashAndValue> = &mut self.hashes_vec_out;
             for (combo_index, feature_combo_desc) in

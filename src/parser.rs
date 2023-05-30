@@ -171,14 +171,14 @@ impl VowpalParser {
             Err(e) => Err(e)?,
         };
         // ignore last newline byte
-        self.tmp_read_buf.truncate(cached_tmp_read_buf_size);
+        self.tmp_read_buf.truncate(cached_tmp_read_buf_size - 1);
 
         let tmp_read_buf_size = match input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
             Ok(0) => return Ok(&[]),
             Ok(n) => n,
             Err(e) => Err(e)?,
         };
-        return self.next_vowpal_to_size(cached_tmp_read_buf_size + tmp_read_buf_size - 1);
+        return self.next_vowpal_to_size(cached_tmp_read_buf_size + tmp_read_buf_size);
     }
 
     fn next_vowpal_to_size(
