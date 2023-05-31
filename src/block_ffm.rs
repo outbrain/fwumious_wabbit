@@ -655,6 +655,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 }
 
                 let mut feature_num = 0;
+                let maybe_cached_contra_field = cached_contra_fields.get(&offset);
                 while ffm_buffer_index < fb.ffm_buffer.len()
                     && fb.ffm_buffer.get_unchecked(ffm_buffer_index).contra_field_index == field_index_ffmk
                 {
@@ -670,9 +671,12 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     let feature_value = feature.value;
                     let feature_value_simd = f32x4::splat(feature_value);
 
-                    if let Some(cached_contra_field) = cached_contra_fields.get(&offset) {
-                        contra_fields.get_unchecked_mut(offset..offset + field_embedding_len_as_usize)
-                            .copy_from_slice(&cached_contra_field)
+                    if let Some(cached_contra_field) = maybe_cached_contra_field {
+                        if feature_num == 0 {
+                            // Copy only once, skip other copying as the data for all features of that contra_index is already calculated
+                            contra_fields.get_unchecked_mut(offset..offset + field_embedding_len_as_usize)
+                                .copy_from_slice(&cached_contra_field)
+                        }
                     } else {
                         if feature_num == 0 {
                             // first feature of the field - just overwrite
