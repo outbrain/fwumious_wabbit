@@ -178,7 +178,7 @@ impl VowpalParser {
             Ok(n) => n,
             Err(e) => Err(e)?,
         };
-        return self.next_vowpal_to_size(cached_tmp_read_buf_size + tmp_read_buf_size);
+        return self.next_vowpal_to_size(cached_tmp_read_buf_size + tmp_read_buf_size - 1);
     }
 
     fn next_vowpal_to_size(
@@ -1047,6 +1047,56 @@ CC,featureC
                 NO_FEATURES,
                 292540976 & MASK31,
                 6.0f32.to_bits()
+            ]
+        );
+    }
+
+    #[test]
+    fn test_cache() {
+        // Test for perfect vowpal-compatible hashing
+        let vw_map_string = r#"
+AA,featureA
+BB,featureB
+CC,featureC
+"#;
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+
+        fn str_to_cursor(s: &str) -> Cursor<Vec<u8>> {
+            Cursor::new(s.as_bytes().to_vec())
+        }
+
+        let mut rr = VowpalParser::new(&vw);
+
+        let mut buf = str_to_cursor("|BB b |AA:3 a:2.0\n");
+        assert_eq!(
+            rr.next_vowpal(&mut buf).unwrap(),
+            [
+                8, 255, 1065353216, 2147876872, 1123906636, 2147483648, 292540976, 1086324736
+            ]
+        );
+
+        let cache_input_str = "|BB b\n";
+        let mut cache_buf = str_to_cursor(cache_input_str);
+        assert_eq!(
+            rr.next_vowpal(&mut cache_buf).unwrap(),
+            [
+                6,
+                255,
+                1065353216,
+                2147483648,
+                1123906636,
+                2147483648
+            ]
+        );
+
+        let mut cache_buf = str_to_cursor("|BB b \n");
+        let mut added_cache_buf = str_to_cursor("|AA:3 a:2.0\n");
+
+        // feature weight + namespace weight
+        assert_eq!(
+            rr.next_vowpal_with_cache(&mut cache_buf, &mut added_cache_buf).unwrap(),
+            [
+                8, 255, 1065353216, 2147876872, 1123906636, 2147483648, 292540976, 1086324736
             ]
         );
     }
