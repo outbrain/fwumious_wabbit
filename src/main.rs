@@ -20,7 +20,9 @@ use crate::hogwild::HogwildTrainer;
 use crate::multithread_helpers::BoxedRegressorTrait;
 
 extern crate blas;
-extern crate intel_mkl_src;
+extern crate openblas_src;
+//extern crate netlib_src;
+//extern crate intel_mkl_src;
 
 #[macro_use]
 extern crate nom;

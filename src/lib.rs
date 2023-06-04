@@ -27,7 +27,9 @@ mod version;
 mod vwmap;
 
 extern crate blas;
-extern crate intel_mkl_src;
+extern crate openblas_src;
+//extern crate intel_mkl_src;
+//extern crate netlib_src;
 
 use crate::feature_buffer::FeatureBufferTranslator;
 use crate::multithread_helpers::BoxedRegressorTrait;
