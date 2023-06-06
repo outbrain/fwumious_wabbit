@@ -11,6 +11,7 @@ use crate::vwmap;
 use crate::vwmap::NamespaceDescriptor;
 
 const WEIGHT_DELIM: &str = ":";
+const VERBOSE_FIELD_DELIM: &str = ",";
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct FeatureComboDesc {
@@ -213,7 +214,7 @@ impl ModelInstance {
             )));
         }
 
-        let namespaces_verbose: Vec<&str> = vsplit[0].split(',').collect(); // verbose names are separated by comma
+        let namespaces_verbose: Vec<&str> = vsplit[0].split(VERBOSE_FIELD_DELIM).collect(); // verbose names are separated by comma
         let mut namespace_descriptors: Vec<vwmap::NamespaceDescriptor> = Vec::new();
         for namespace_verbose in namespaces_verbose {
             let namespace_descriptor = feature_transform_parser::get_namespace_descriptor_verbose(
@@ -244,7 +245,7 @@ impl ModelInstance {
                 ),
             )));
         }
-        let namespaces_verbose: Vec<&str> = s.split(',').collect(); // verbose names are separated by comma
+        let namespaces_verbose: Vec<&str> = s.split(VERBOSE_FIELD_DELIM).collect(); // verbose names are separated by comma
         let mut field: FieldDesc = Vec::new();
         for namespace_verbose in namespaces_verbose {
             let namespace_descriptor = feature_transform_parser::get_namespace_descriptor_verbose(
