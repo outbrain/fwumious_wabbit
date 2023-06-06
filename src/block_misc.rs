@@ -6,6 +6,7 @@ use crate::feature_buffer;
 use crate::graph;
 use crate::port_buffer;
 use crate::regressor;
+
 use regressor::BlockTrait;
 
 #[derive(PartialEq)]
@@ -843,6 +844,7 @@ mod tests {
     use crate::block_misc::Observe;
     use crate::feature_buffer;
     use crate::graph::BlockGraph;
+    use crate::model_instance;
 
     fn fb_vec() -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {
@@ -1103,6 +1105,7 @@ mod tests {
 
     #[test]
     fn test_copy_to_join() {
+
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
         let input_block_1 = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
