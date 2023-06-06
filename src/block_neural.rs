@@ -358,8 +358,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
             block_helpers::forward_backward(further_blocks, fb, pb, update);
 
             if update && self.neuron_type == NeuronType::WeightedSum {
-                // first we need to initialize inputs to zero
-                // TODO - what to think about this buffer
+
                 let mut output_errors: [f32; MAX_NUM_INPUTS] =
                     MaybeUninit::uninit().assume_init();
                 output_errors
@@ -435,16 +434,16 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
                         sum += w;
                         sumsqr += w * w;
                     }
-                    let var1 = (sumsqr - sum * sum / bias_offset as f32) / bias_offset as f32;
-                    let var2 = var1.sqrt();
+
+                    let normalization_term = ((sumsqr - sum * sum / bias_offset as f32) / bias_offset as f32).sqrt();
                     for i in 0..bias_offset {
-                        self.weights.get_unchecked_mut(i).weight /= var2;
+                        self.weights.get_unchecked_mut(i).weight /= normalization_term;
                     }
                 }
 
                 input_tape.copy_from_slice(output_errors.get_unchecked(0..self.num_inputs));
             }
-        } // unsafe end
+        }
     }
 
     fn forward(
