@@ -22,8 +22,8 @@ pub fn new_relu_block(
     input: graph::BlockPtrOutput,
 ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
     let num_inputs = bg.get_num_output_values(vec![&input]);
-    assert!(num_inputs != 0);
-    let block = Box::new(BlockRELU {
+    assert_ne!(num_inputs, 0);
+    let mut block = Box::new(BlockRELU {
         output_offset: usize::MAX,
         input_offset: usize::MAX,
         num_inputs,
@@ -45,17 +45,17 @@ impl BlockTrait for BlockRELU {
     }
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
-        assert!(output.get_output_index() == 0);
-        self.num_inputs
+        assert_eq!(output.get_output_index(), 0);
+        return self.num_inputs;
     }
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
-        assert!(input.get_input_index() == 0);
+        assert_eq!(input.get_input_index(), 0);
         self.input_offset = offset;
     }
 
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
-        assert!(output.get_output_index() == 0);
+        assert_eq!(output.get_output_index(), 0);
         self.output_offset = offset;
     }
 

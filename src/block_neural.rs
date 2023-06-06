@@ -163,7 +163,7 @@ pub fn new_neuronlayer_block(
             )
         }
     }
-    .unwrap();
+        .unwrap();
 
     let mut block_outputs = bg.add_node(block, vec![input]).unwrap();
     assert_eq!(block_outputs.len(), 1);
@@ -594,7 +594,7 @@ mod tests {
             0.0, // max norm
             false,
         )
-        .unwrap();
+            .unwrap();
         let observe_block =
             block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0))
                 .unwrap();
@@ -629,7 +629,7 @@ mod tests {
             0.0,   // max norm
             false, // layer norm
         )
-        .unwrap();
+            .unwrap();
         let observe_block =
             block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0))
                 .unwrap();

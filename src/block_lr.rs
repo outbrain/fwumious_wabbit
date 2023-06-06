@@ -85,7 +85,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
     }
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
-        assert!(output.get_output_index() == 0);
+        assert_eq!(output.get_output_index(), 0);
         self.num_combos as usize
     }
 
@@ -94,7 +94,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
     }
 
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
-        assert!(output.get_output_index() == 0);
+        assert_eq!(output.get_output_index(), 0);
         debug_assert!(self.output_offset == usize::MAX); // We only allow a single call
         self.output_offset = offset;
     }

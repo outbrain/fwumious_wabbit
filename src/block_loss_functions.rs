@@ -37,7 +37,6 @@ pub fn new_logloss_block(
     Ok(block_outputs.pop().unwrap())
 }
 
-
 impl BlockTrait for BlockSigmoid {
     fn as_any(&mut self) -> &mut dyn Any {
         self
