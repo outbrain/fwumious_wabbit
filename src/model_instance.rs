@@ -10,6 +10,8 @@ use crate::feature_transform_parser;
 use crate::vwmap;
 use crate::vwmap::NamespaceDescriptor;
 
+const WEIGHT_DELIM: &str = ":";
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct FeatureComboDesc {
     pub namespace_descriptors: Vec<vwmap::NamespaceDescriptor>,
@@ -147,7 +149,7 @@ impl ModelInstance {
         vw: &vwmap::VwNamespaceMap,
         s: &str,
     ) -> Result<FeatureComboDesc, Box<dyn Error>> {
-        let vsplit: Vec<&str> = s.split(':').collect(); // We use : as a delimiter for weight
+        let vsplit: Vec<&str> = s.split(WEIGHT_DELIM).collect(); // We use : as a delimiter for weight
         let mut combo_weight: f32 = 1.0;
         if vsplit.len() > 2 {
             return Err(Box::new(IOError::new(
@@ -184,7 +186,7 @@ impl ModelInstance {
         vw: &vwmap::VwNamespaceMap,
         s: &str,
     ) -> Result<FeatureComboDesc, Box<dyn Error>> {
-        let vsplit: Vec<&str> = s.split(':').collect(); // We use : as a delimiter for weight
+        let vsplit: Vec<&str> = s.split(WEIGHT_DELIM).collect(); // We use : as a delimiter for weight
         let mut combo_weight: f32 = 1.0;
 
         if vsplit.len() == 2 {
@@ -232,7 +234,7 @@ impl ModelInstance {
         vw: &vwmap::VwNamespaceMap,
         s: &str,
     ) -> Result<FieldDesc, Box<dyn Error>> {
-        let vsplit: Vec<&str> = s.split(':').collect(); // We use : as a delimiter for weight
+        let vsplit: Vec<&str> = s.split(WEIGHT_DELIM).collect(); // We use : as a delimiter for weight
         if vsplit.len() > 1 {
             return Err(Box::new(IOError::new(
                 ErrorKind::Other,
@@ -259,7 +261,7 @@ impl ModelInstance {
         // Examples: 0:activation:relu
         // Examples: 4:maxnorm:5.0
         // Examples: 6:width:20
-        let vsplit: Vec<&str> = s.split(':').collect();
+        let vsplit: Vec<&str> = s.split(WEIGHT_DELIM).collect();
         if vsplit.len() != 3 {
             return Err(Box::new(IOError::new(
                 ErrorKind::Other,
