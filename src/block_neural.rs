@@ -204,7 +204,6 @@ impl<L: OptimizerTrait + 'static>  BlockNeuronLayer<L> {
                 self.num_neurons,
             );
 
-            // This is actually speed things up considerably.
             output_tape.copy_from_slice(self.weights.get_unchecked(self.bias_offset..));
             sgemv(
                 b'T',                               //   trans: u8,
@@ -253,8 +252,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
 
         unsafe {
             if update && self.neuron_type == NeuronType::WeightedSum {
-                // first we need to initialize inputs to zero
-                // TODO - what to think about this buffer
                 let mut output_errors: [f32; MAX_NUM_INPUTS] = MaybeUninit::uninit().assume_init();
                 output_errors
                     .get_unchecked_mut(0..self.num_inputs)
@@ -396,8 +393,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
                     self.weights[i as usize] = normal.sample(&mut self.rng) as f32;
                 }
             }
-            //            InitType::RandomFirst1 => { for i in 0..self.num_inputs { self.weights[i as usize] = 1.0}},
-            //            InitType::RandomFirst10 => { for i in 0..self.num_inputs { self.weights[i as usize] = 0.0}; self.weights[0] = 1.0;},
             InitType::One => {
                 for i in 0..self.weights_len {
                     self.weights[i as usize] = 1.0
