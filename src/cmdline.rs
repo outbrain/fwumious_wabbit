@@ -256,6 +256,18 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
              .multiple(false)
              .takes_value(true))
 
+        .arg(Arg::with_name("ffm_n_mc_preds")
+             .long("ffm_n_mc_preds")
+             .help("How many predictions will be run in the Monte Carlo dropout")
+             .value_name("ffm_n_montecarlo_preds")
+             .takes_value(true))
+
+        .arg(Arg::with_name("ffm_dropout_rate")
+             .long("ffm_dropout_rate")
+             .help("Percentage of pairs of features that will be masked out in the Monte Carlo dropout")
+             .value_name("ffm_dropout_rate")
+             .takes_value(true))
+
 
     // Daemon parameterts
         .arg(Arg::with_name("daemon")
