@@ -9,7 +9,7 @@ use crate::optimizer::OptimizerSGD;
 use crate::port_buffer;
 use crate::regressor::BlockTrait;
 use std::cmp::min;
-use std::mem::{self};
+use std::mem;
 use std::slice;
 
 #[derive(Clone, Debug)]

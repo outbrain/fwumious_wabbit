@@ -148,7 +148,7 @@ impl FeatureBufferTranslator {
         // in ffm we will simply mask the lower bits, so we spare them for k
         let ffm_hash_mask = ((1 << mi.ffm_bit_precision) - 1) ^ dimensions_mask;
 
-        let mut fb = FeatureBuffer {
+        let fb = FeatureBuffer {
             label: 0.0,
             example_importance: 1.0,
             example_number: 0,
@@ -173,10 +173,6 @@ impl FeatureBufferTranslator {
         }
     }
 
-    pub fn print(&self) {
-        log::info!("item out {:?}", self.feature_buffer.lr_buffer);
-    }
-
     pub fn translate(&mut self, record_buffer: &[u32], example_number: u64) {
         {
             let lr_buffer = &mut self.feature_buffer.lr_buffer;
@@ -185,7 +181,6 @@ impl FeatureBufferTranslator {
             self.feature_buffer.example_importance =
                 f32::from_bits(record_buffer[parser::EXAMPLE_IMPORTANCE_OFFSET]);
             self.feature_buffer.example_number = example_number;
-            let mut output_len: usize = 0;
             let mut hashes_vec_in: &mut Vec<HashAndValue> = &mut self.hashes_vec_in;
             let mut hashes_vec_out: &mut Vec<HashAndValue> = &mut self.hashes_vec_out;
             for (combo_index, feature_combo_desc) in

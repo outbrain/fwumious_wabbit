@@ -4,7 +4,6 @@ use std::error::Error;
 use crate::block_helpers;
 use crate::feature_buffer;
 use crate::graph;
-use crate::model_instance;
 use crate::port_buffer;
 use crate::regressor;
 use regressor::BlockTrait;

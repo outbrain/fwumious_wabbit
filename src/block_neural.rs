@@ -193,7 +193,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
         self
     }
 
-    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
+    fn allocate_and_init_weights(&mut self, _mi: &model_instance::ModelInstance) {
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.input_offset != usize::MAX);
 
@@ -231,8 +231,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
                     self.weights[i].weight = normal.sample(&mut self.rng) as f32;
                 }
             }
-            //            InitType::RandomFirst1 => { for i in 0..self.num_inputs { self.weights[i as usize].weight = 1.0}},
-            //            InitType::RandomFirst10 => { for i in 0..self.num_inputs { self.weights[i as usize].weight = 0.0}; self.weights[0].weight = 1.0;},
+
             InitType::One => {
                 for i in 0..self.weights_len {
                     self.weights[i as usize].weight = 1.0

@@ -24,12 +24,12 @@ impl FunctionExecutorTrait for FunctionExampleSqrt {
         &self,
         record_buffer: &[u32],
         to_namespace: &mut ExecutorToNamespace,
-        transform_executors: &TransformExecutors,
+        _transform_executors: &TransformExecutors,
     ) {
         feature_reader_float_namespace!(
             record_buffer,
             self.from_namespace.namespace_descriptor,
-            hash_index,
+            _hash_index,
             hash_value,
             float_value,
             {
@@ -95,12 +95,12 @@ impl FunctionExecutorTrait for TransformerBinner {
         &self,
         record_buffer: &[u32],
         to_namespace: &mut ExecutorToNamespace,
-        transform_executors: &TransformExecutors,
+        _transform_executors: &TransformExecutors,
     ) {
         feature_reader_float_namespace!(
             record_buffer,
             self.from_namespace.namespace_descriptor,
-            hash_index,
+            _hash_index,
             hash_value,
             float_value,
             {

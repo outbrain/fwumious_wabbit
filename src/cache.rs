@@ -5,12 +5,7 @@ use std::io::Read;
 use std::io::Write;
 use std::path;
 use std::{mem, slice};
-//use flate2::write::DeflateEncoder;
-//use flate2::Compression;
-//use flate2::read::DeflateDecoder;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-//use zstd::stream::{Encoder, Decoder};
-//use lz4::{Decoder, EncoderBuilder};
 
 use crate::vwmap;
 
@@ -22,7 +17,7 @@ Version incompatibilites:
 9->10: enable binning
 8->9: enabled multi-byte feature names in vw files
 7->8: add example importance to the parsed buffer format
-*/
+ */
 
 // Cache layout:
 // 4 bytes: Magic bytes
@@ -129,14 +124,6 @@ impl RecordCache {
                         fs::File::create(temporary_filename).unwrap(),
                     ));
                 } else {
-                    //                    rc.output_bufwriter = Box::new(io::BufWriter::new(DeflateEncoder::new(fs::File::create(temporary_filename).unwrap(),
-                    //                                                                    Compression::fast())));
-
-                    //                      rc.output_bufwriter = Box::new(io::BufWriter::new(zstd::stream::Encoder::new(fs::File::create(temporary_filename).unwrap(),
-                    //                                                                    -5).unwrap().auto_finish()));
-                    //                      rc.output_bufwriter = Box::new(io::BufWriter::new(lz4::EncoderBuilder::new()
-                    //                                                                      .level(3).build(fs::File::create(temporary_filename).unwrap()
-                    //                                                                    ).unwrap()));
                     let w = Wrapper {
                         s: Some(
                             lz4::EncoderBuilder::new()

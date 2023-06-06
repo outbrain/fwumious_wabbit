@@ -18,12 +18,12 @@ pub struct BlockRELU {
 
 pub fn new_relu_block(
     bg: &mut graph::BlockGraph,
-    mi: &model_instance::ModelInstance,
+    _mi: &model_instance::ModelInstance,
     input: graph::BlockPtrOutput,
 ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
     let num_inputs = bg.get_num_output_values(vec![&input]);
     assert!(num_inputs != 0);
-    let mut block = Box::new(BlockRELU {
+    let block = Box::new(BlockRELU {
         output_offset: usize::MAX,
         input_offset: usize::MAX,
         num_inputs,
@@ -38,7 +38,7 @@ impl BlockTrait for BlockRELU {
         self
     }
 
-    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {}
+    fn allocate_and_init_weights(&mut self, _mi: &model_instance::ModelInstance) {}
 
     fn get_num_output_slots(&self) -> usize {
         1
@@ -91,7 +91,7 @@ impl BlockTrait for BlockRELU {
                     *pb.tape.get_unchecked_mut(self.input_offset + i) *= gradient;
                 }
             }
-        } // unsafe end
+        }
     }
 
     fn forward(
@@ -114,7 +114,7 @@ impl BlockTrait for BlockRELU {
                 }
             }
             block_helpers::forward(further_blocks, fb, pb);
-        } // unsafe end
+        }
     }
 }
 
@@ -155,22 +155,5 @@ mod tests {
         let fb = fb_vec();
         assert_epsilon!(slearn2(&mut bg, &fb, &mut pb, true), 2.0);
         assert_epsilon!(slearn2(&mut bg, &fb, &mut pb, true), 2.0); // relu desnt learn
-    }
-    fn test_simple_negative() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
-        let mut bg = BlockGraph::new();
-        let input_block = block_misc::new_const_block(&mut bg, vec![-2.0]).unwrap();
-        let relu_block = new_relu_block(&mut bg, &mi, input_block).unwrap();
-        let observe_block =
-            block_misc::new_observe_block(&mut bg, relu_block, Observe::Forward, Some(1.0))
-                .unwrap();
-        bg.finalize();
-        bg.allocate_and_init_weights(&mi);
-
-        let mut pb = bg.new_port_buffer();
-
-        let fb = fb_vec();
-        assert_epsilon!(slearn2(&mut bg, &fb, &mut pb, true), 0.0);
-        assert_epsilon!(slearn2(&mut bg, &fb, &mut pb, true), 0.0); // relu desnt learn
     }
 }
