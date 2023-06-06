@@ -151,6 +151,7 @@ impl BlockTrait for BlockSigmoid {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
+        mask_interactions: bool,
     ) {
         unsafe {
             /*        if further_blocks.len() != 0 {
@@ -184,7 +185,7 @@ impl BlockTrait for BlockSigmoid {
             if self.copy_to_result {
                 pb.observations.push(prediction_probability);
             }
-            block_helpers::forward(further_blocks, fb, pb);
+            block_helpers::forward(further_blocks, fb, pb, mask_interactions);
         }
     }
 }

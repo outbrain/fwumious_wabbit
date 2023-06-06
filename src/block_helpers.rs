@@ -179,10 +179,11 @@ pub fn spredict2<'a>(
     fb: &feature_buffer::FeatureBuffer,
     pb: &mut port_buffer::PortBuffer,
     update: bool,
+    mask_interactions: bool,
 ) -> f32 {
     pb.reset();
     let (block_run, further_blocks) = bg.blocks_final.split_at(1);
-    block_run[0].forward(further_blocks, fb, pb);
+    block_run[0].forward(further_blocks, fb, pb, mask_interactions);
     let prediction_probability = pb.observations[0];
     return prediction_probability;
 }
@@ -207,9 +208,10 @@ pub fn forward(
     further_blocks: &[Box<dyn BlockTrait>],
     fb: &feature_buffer::FeatureBuffer,
     pb: &mut port_buffer::PortBuffer,
+    mask_interactions: bool,
 ) {
     match further_blocks.split_first() {
-        Some((next_regressor, further_blocks)) => next_regressor.forward(further_blocks, fb, pb),
+        Some((next_regressor, further_blocks)) => next_regressor.forward(further_blocks, fb, pb, mask_interactions),
         None => {}
     }
 }

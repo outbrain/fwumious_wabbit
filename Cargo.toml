@@ -29,6 +29,7 @@ blas = "0.22"
 intel-mkl-src = {version= "0.7.0", default-features = false, features=["download", "mkl-static-lp64-seq"]}
 log = "0.4"
 env_logger = "0.10.0"
+backtrace = "0.3"
 
 [build-dependencies]
 cbindgen = "0.23.0"

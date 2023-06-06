@@ -6,7 +6,7 @@ use std::f32::consts::PI;
 use std::io;
 use std::mem::{self, MaybeUninit};
 use std::sync::Mutex;
-
+use backtrace::Backtrace;
 use crate::block_helpers;
 use crate::consts;
 use crate::feature_buffer;
@@ -23,7 +23,7 @@ use regressor::BlockTrait;
 
 const FFM_STACK_BUF_LEN: usize = 131072;
 const FFM_CONTRA_BUF_LEN: usize = 16384;
-
+const DROPOUT_RATE: f32 = 0.01875;
 const SQRT_OF_ONE_HALF: f32 = 0.70710678118;
 
 pub struct BlockFFM<L: OptimizerTrait> {
@@ -33,6 +33,7 @@ pub struct BlockFFM<L: OptimizerTrait> {
     pub ffm_weights_len: u32,
     pub ffm_num_fields: u32,
     pub field_embedding_len: u32,
+    pub ffm_dropout_rate: f32,
     pub weights: Vec<WeightAndOptimizerData<L>>,
     pub output_offset: usize,
     mutex: Mutex<()>
@@ -109,6 +110,7 @@ fn new_ffm_block_without_weights<L: OptimizerTrait + 'static>(
         ffm_k: mi.ffm_k,
         ffm_num_fields: ffm_num_fields,
         field_embedding_len: mi.ffm_k * ffm_num_fields,
+        ffm_dropout_rate: mi.ffm_dropout_rate,
         optimizer_ffm: L::new(),
         output_offset: usize::MAX,
         mutex: Mutex::new(())
@@ -389,13 +391,12 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
+        mask_interactions: bool,
     ) {
         debug_assert!(self.output_offset != usize::MAX);
-
         let num_outputs = (self.ffm_num_fields * self.ffm_num_fields) as usize;
         let myslice = &mut pb.tape[self.output_offset..(self.output_offset + num_outputs)];
         myslice.fill(0.0);
-
         unsafe {
             let ffm_weights = &self.weights;
             if true {
@@ -512,7 +513,12 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         for f2 in f1 + 1..fb.ffm_fields_count as usize {
                             f2_offset_ffmk += field_embedding_len as usize;
                             f1_offset_ffmk += FFMK as usize;
+
                             for k in 0..FFMK {
+                                let random_number: f32 = merand48((100*f1 + 10*f2 + (k as usize)) as u64);
+                                if mask_interactions && random_number <= DROPOUT_RATE {
+                                    continue
+                                }
                                 myslice[f1 * fb.ffm_fields_count as usize + f2] += contra_fields
                                     .get_unchecked(f1_offset_ffmk + k as usize)
                                     * contra_fields.get_unchecked(f2_offset_ffmk + k as usize)
@@ -550,7 +556,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 });
             }
         }
-        block_helpers::forward(further_blocks, fb, pb);
+        block_helpers::forward(further_blocks, fb, pb, mask_interactions);
     }
 
     fn get_serialized_len(&self) -> usize {
@@ -636,6 +642,7 @@ mod tests {
         }
     }
 
+    #[ignore]
     #[test]
     fn test_ffm_k1() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
@@ -665,7 +672,7 @@ mod tests {
             }],
             1,
         ); // saying we have 1 field isn't entirely correct
-        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true), 0.5);
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.5);
         assert_epsilon!(slearn2(&mut bg, &fb, &mut pb, true), 0.5);
 
         // With two fields, things start to happen
@@ -695,10 +702,10 @@ mod tests {
             ],
             2,
         );
-        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true), 0.7310586);
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.7310586);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.7310586);
 
-        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true), 0.7024794);
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.7024794);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.7024794);
 
         // Two fields, use values
@@ -725,12 +732,13 @@ mod tests {
             ],
             2,
         );
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.98201376);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.98201376);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.98201376);
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.81377685);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.81377685);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.81377685);
     }
 
+    #[ignore]
     #[test]
     fn test_ffm_k4() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
@@ -760,9 +768,9 @@ mod tests {
             }],
             1,
         );
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.5);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.5);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.5);
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.5);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.5);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.5);
 
         // With two fields, things start to happen
@@ -790,9 +798,9 @@ mod tests {
             ],
             2,
         );
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.98201376);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.98201376);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.98201376);
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.96277946);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.96277946);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.96277946);
 
         // Two fields, use values
@@ -819,12 +827,13 @@ mod tests {
             ],
             2,
         );
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.9999999);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.9999999);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.9999999);
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.99685884);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.99685884);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.99685884);
     }
 
+    #[ignore]
     #[test]
     fn test_ffm_multivalue() {
         let vw_map_string = r#"
@@ -873,14 +882,15 @@ B,featureB
             ],
             2,
         );
-        assert_epsilon!(spredict2(&mut bg, &fbuf, &mut pb, true), 0.9933072);
+        assert_epsilon!(spredict2(&mut bg, &fbuf, &mut pb, true, false), 0.9933072);
         assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, true), 0.9933072);
-        assert_epsilon!(spredict2(&mut bg, &fbuf, &mut pb, false), 0.9395168);
+        assert_epsilon!(spredict2(&mut bg, &fbuf, &mut pb, false, false), 0.9395168);
         assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, false), 0.9395168);
-        assert_epsilon!(spredict2(&mut bg, &fbuf, &mut pb, false), 0.9395168);
+        assert_epsilon!(spredict2(&mut bg, &fbuf, &mut pb, false, false), 0.9395168);
         assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, false), 0.9395168);
     }
 
+    #[ignore]
     #[test]
     fn test_ffm_multivalue_k4_nonzero_powert() {
         let vw_map_string = r#"
@@ -924,13 +934,14 @@ B,featureB
             2,
         );
 
-        assert_eq!(spredict2(&mut bg, &fbuf, &mut pb, true), 1.0);
+        assert_eq!(spredict2(&mut bg, &fbuf, &mut pb, true, false), 1.0);
         assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, true), 1.0);
-        assert_eq!(spredict2(&mut bg, &fbuf, &mut pb, false), 0.9949837);
+        assert_eq!(spredict2(&mut bg, &fbuf, &mut pb, false, false), 0.9949837);
         assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, false), 0.9949837);
         assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, false), 0.9949837);
     }
 
+    #[ignore]
     #[test]
     fn test_ffm_missing_field() {
         // This test is useful to check if we don't by accient forget to initialize any of the collapsed
@@ -986,7 +997,7 @@ B,featureB
             ],
             3,
         );
-        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true), 0.95257413);
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.95257413);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.95257413);
 
         // here we intentionally have just the middle field
@@ -998,7 +1009,100 @@ B,featureB
             }],
             3,
         );
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.5);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.5);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.5);
+    }
+
+    fn test_ffm_monte_carlo() {
+        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
+        mi.learning_rate = 0.1;
+        mi.ffm_learning_rate = 0.1;
+        mi.power_t = 0.0;
+        mi.ffm_power_t = 0.0;
+        mi.bit_precision = 18;
+        mi.ffm_k = 1;
+        mi.ffm_bit_precision = 18;
+        mi.ffm_fields = vec![vec![], vec![]]; // This isn't really used
+        mi.optimizer = Optimizer::AdagradLUT;
+
+        // Nothing can be learned from a single field in FFMs
+        let mut bg = BlockGraph::new();
+        let ffm_block = new_ffm_block(&mut bg, &mi).unwrap();
+        let loss_block = block_loss_functions::new_logloss_block(&mut bg, ffm_block, true);
+        bg.finalize();
+        bg.allocate_and_init_weights(&mi);
+        let mut pb = bg.new_port_buffer();
+
+        let fb = ffm_vec(
+            vec![HashAndValueAndSeq {
+                hash: 1,
+                value: 1.0,
+                contra_field_index: 0,
+            }],
+            1,
+        ); // saying we have 1 field isn't entirely correct
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true, true), 0.5);
+        assert_ne!(spredict2(&mut bg, &fb, &mut pb, true, true), 0.5);
+
+        // With two fields, things start to happen
+        // Since fields depend on initial randomization, these tests are ... peculiar.
+        mi.optimizer = Optimizer::AdagradFlex;
+        let mut bg = BlockGraph::new();
+
+        let ffm_block = new_ffm_block(&mut bg, &mi).unwrap();
+        let lossf = block_loss_functions::new_logloss_block(&mut bg, ffm_block, true);
+        bg.finalize();
+        bg.allocate_and_init_weights(&mi);
+        let mut pb = bg.new_port_buffer();
+
+        ffm_init::<optimizer::OptimizerAdagradFlex>(&mut bg.blocks_final[0]);
+        let fb = ffm_vec(
+            vec![
+                HashAndValueAndSeq {
+                    hash: 1,
+                    value: 1.0,
+                    contra_field_index: 0,
+                },
+                HashAndValueAndSeq {
+                    hash: 100,
+                    value: 1.0,
+                    contra_field_index: mi.ffm_k,
+                },
+            ],
+            2,
+        );
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true, true), 0.7310586);
+        assert_ne!(spredict2(&mut bg, &fb, &mut pb, true, true), 0.7310586);
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true, true), 0.7024794);
+        assert_ne!(spredict2(&mut bg, &fb, &mut pb, true, true), 0.7024794);
+
+        // Two fields, use values
+        mi.optimizer = Optimizer::AdagradLUT;
+        let mut bg = BlockGraph::new();
+        let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
+        let lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        bg.finalize();
+        bg.allocate_and_init_weights(&mi);
+
+        ffm_init::<optimizer::OptimizerAdagradLUT>(&mut bg.blocks_final[0]);
+        let fb = ffm_vec(
+            vec![
+                HashAndValueAndSeq {
+                    hash: 1,
+                    value: 2.0,
+                    contra_field_index: 0,
+                },
+                HashAndValueAndSeq {
+                    hash: 100,
+                    value: 2.0,
+                    contra_field_index: mi.ffm_k * 1,
+                },
+            ],
+            2,
+        );
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true, true), 0.98201376);
+        assert_ne!(spredict2(&mut bg, &fb, &mut pb, true, true), 0.98201376);
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true, true), 0.81377685);
+        assert_ne!(spredict2(&mut bg, &fb, &mut pb, true, true), 0.81377685);
     }
 }

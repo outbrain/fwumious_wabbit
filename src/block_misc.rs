@@ -115,6 +115,7 @@ impl BlockTrait for BlockObserve {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
+        mask_interactions: bool,
     ) {
         debug_assert!(self.input_offset != usize::MAX);
 
@@ -124,7 +125,7 @@ impl BlockTrait for BlockObserve {
             );
         }
 
-        block_helpers::forward(further_blocks, fb, pb);
+        block_helpers::forward(further_blocks, fb, pb, mask_interactions);
 
         if self.observe == Observe::Backward {
             pb.observations.extend_from_slice(
@@ -224,9 +225,10 @@ impl BlockTrait for BlockSink {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
+        mask_interactions: bool,
     ) {
         debug_assert!(self.input_offset != usize::MAX);
-        block_helpers::forward(further_blocks, fb, pb);
+        block_helpers::forward(further_blocks, fb, pb, mask_interactions);
     }
 }
 
@@ -297,12 +299,13 @@ impl BlockTrait for BlockConsts {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
+        mask_interactions: bool,
     ) {
         debug_assert!(self.output_offset != usize::MAX);
         pb.tape[self.output_offset..(self.output_offset + self.consts.len())]
             .copy_from_slice(&self.consts);
 
-        block_helpers::forward(further_blocks, fb, pb);
+        block_helpers::forward(further_blocks, fb, pb, mask_interactions);
     }
 }
 
@@ -450,6 +453,7 @@ impl BlockTrait for BlockCopy {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
+        mask_interactions: bool,
     ) {
         // plain copy from input to output
         unsafe {
@@ -468,7 +472,7 @@ impl BlockTrait for BlockCopy {
                 );
             }
         }
-        block_helpers::forward(further_blocks, fb, pb);
+        block_helpers::forward(further_blocks, fb, pb, mask_interactions);
     }
 }
 
@@ -568,8 +572,9 @@ impl BlockTrait for BlockJoin {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
+        mask_interactions: bool,
     ) {
-        block_helpers::forward(further_blocks, fb, pb);
+        block_helpers::forward(further_blocks, fb, pb, mask_interactions);
     }
 }
 
@@ -666,6 +671,7 @@ impl BlockTrait for BlockSum {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
+        mask_interactions: bool,
     ) {
         debug_assert!(self.num_inputs > 0);
         debug_assert!(self.output_offset != usize::MAX);
@@ -676,7 +682,7 @@ impl BlockTrait for BlockSum {
             .sum();
         pb.tape[self.output_offset as usize] = wsum;
 
-        block_helpers::forward(further_blocks, fb, pb);
+        block_helpers::forward(further_blocks, fb, pb, mask_interactions);
     }
 }
 
@@ -810,6 +816,7 @@ impl BlockTrait for BlockTriangle {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
+        mask_interactions: bool,
     ) {
         unsafe {
             let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
@@ -832,7 +839,7 @@ impl BlockTrait for BlockTriangle {
                 output_index += 1;
             }
         }
-        block_helpers::forward(further_blocks, fb, pb);
+        block_helpers::forward(further_blocks, fb, pb, mask_interactions);
     }
 }
 
@@ -880,7 +887,7 @@ mod tests {
             ]
         ); // backward part -- 1 is distributed to both inputs
 
-        spredict2(&mut bg, &fb, &mut pb, true);
+        spredict2(&mut bg, &fb, &mut pb, true, false);
         assert_eq!(
             pb.observations,
             vec![
@@ -951,7 +958,7 @@ mod tests {
             ]
         ); // backward part  (6+11)
 
-        spredict2(&mut bg, &fb, &mut pb, false);
+        spredict2(&mut bg, &fb, &mut pb, false, false);
         assert_eq!(
             pb.observations,
             vec![
@@ -997,7 +1004,7 @@ mod tests {
             ]
         ); // backward part  (5+6+7)
 
-        spredict2(&mut bg, &fb, &mut pb, false);
+        spredict2(&mut bg, &fb, &mut pb, false, false);
         assert_eq!(
             pb.observations,
             vec![
@@ -1026,7 +1033,7 @@ mod tests {
         slearn2(&mut bg, &fb, &mut pb, true);
         assert_eq!(pb.observations, vec![2.0, 3.0,]); // join actually doesn't do anything
 
-        spredict2(&mut bg, &fb, &mut pb, false);
+        spredict2(&mut bg, &fb, &mut pb, false, false);
         assert_eq!(pb.observations, vec![2.0, 3.0,]); // join actually doesn't do anything
     }
 
@@ -1048,7 +1055,7 @@ mod tests {
         slearn2(&mut bg, &fb, &mut pb, true);
         assert_eq!(pb.observations, vec![2.0, 3.0, 4.0, 5.0, 6.0]); // join actually doesn't do anything
 
-        spredict2(&mut bg, &fb, &mut pb, false);
+        spredict2(&mut bg, &fb, &mut pb, false, false);
         assert_eq!(pb.observations, vec![2.0, 3.0, 4.0, 5.0, 6.0]); // join actually doesn't do anything
     }
 
@@ -1073,7 +1080,7 @@ mod tests {
         // Order depends on the input parameters order, not on order of adding to graph
         assert_eq!(pb.observations, vec![6.0, 7.0, 3.0, 4.0, 5.0, 1.0, 2.0]); // join actually doesn't do anything
 
-        spredict2(&mut bg, &fb, &mut pb, false);
+        spredict2(&mut bg, &fb, &mut pb, false, false);
         assert_eq!(pb.observations, vec![6.0, 7.0, 3.0, 4.0, 5.0, 1.0, 2.0]); // join actually doesn't do anything
     }
 
@@ -1098,7 +1105,7 @@ mod tests {
         // Order depends on the input parameters order, not on order of adding to graph
         assert_eq!(pb.observations, vec![6.0, 7.0, 1.0, 2.0, 3.0, 4.0, 5.0]); // join actually doesn't do anything
 
-        spredict2(&mut bg, &fb, &mut pb, false);
+        spredict2(&mut bg, &fb, &mut pb, false, false);
         assert_eq!(pb.observations, vec![6.0, 7.0, 1.0, 2.0, 3.0, 4.0, 5.0]); // join actually doesn't do anything
     }
 
@@ -1123,7 +1130,7 @@ mod tests {
         slearn2(&mut bg, &fb, &mut pb, true);
         assert_eq!(pb.observations, vec![2.0, 3.0, 2.0, 3.0, 12.0, 12.0]); // correct backwards pass
 
-        spredict2(&mut bg, &fb, &mut pb, false);
+        spredict2(&mut bg, &fb, &mut pb, false, false);
         assert_eq!(pb.observations, vec![2.0, 3.0, 2.0, 3.0, 2.0, 3.0]); // on backward pass this are leftovers
     }
 }

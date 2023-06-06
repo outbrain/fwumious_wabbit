@@ -99,6 +99,7 @@ impl BlockTrait for BlockRELU {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
+        mask_interactions: bool,
     ) {
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.input_offset != usize::MAX);
@@ -113,7 +114,7 @@ impl BlockTrait for BlockRELU {
                     *pb.tape.get_unchecked_mut(self.output_offset + i) = w;
                 }
             }
-            block_helpers::forward(further_blocks, fb, pb);
+            block_helpers::forward(further_blocks, fb, pb, mask_interactions);
         } // unsafe end
     }
 }
