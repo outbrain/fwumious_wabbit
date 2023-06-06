@@ -26,6 +26,7 @@ use blas::*;
 
 const MAX_NUM_INPUTS: usize = 16000;
 const USE_BLAS: bool = true;
+const WEIGHT_LNORM_CONST: f32 = 100.0;
 
 #[derive(PartialEq, Debug)]
 pub enum NeuronType {
@@ -428,9 +429,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
                 if self.layer_norm && fb.example_number % 10 == 0 {
                     let mut sum: f32 = 0.0;
                     let mut sumsqr: f32 = 0.0;
-                    let K = 100.0;
                     for i in 0..bias_offset {
-                        let w = self.weights.get_unchecked(i).weight - K;
+                        let w = self.weights.get_unchecked(i).weight - WEIGHT_LNORM_CONST;
                         sum += w;
                         sumsqr += w * w;
                     }
@@ -453,7 +453,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
         pb: &mut port_buffer::PortBuffer,
     ) {
         unsafe {
-            let frandseed = fb.example_number * fb.example_number;
+
             let bias_offset = self.num_inputs * self.num_neurons;
             let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
                 &mut pb.tape,
