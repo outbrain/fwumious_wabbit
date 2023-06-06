@@ -214,7 +214,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         let feature_contra_field_index = feature.contra_field_index as usize;
 
                         let contra_offset = feature_contra_field_index * ffm_fields_count_as_usize;
-
                         let contra_offset2 = contra_offset / ffmk_as_usize;
 
                         let mut vv = 0;
@@ -408,7 +407,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             let mut f1_offset = 0;
             let mut f1_index_offset = 0;
             let mut f1_ffmk = 0;
-            let mut diagonal_row = 0;
+            let mut self_interaction_index = 0;
             for f1 in 0..ffm_fields_count_as_usize {
                 let mut f1_offset_ffmk = f1_offset + f1_ffmk;
 
@@ -418,7 +417,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     v += contra_fields.get_unchecked(k) * contra_fields.get_unchecked(k);
                 }
 
-                *myslice.get_unchecked_mut(diagonal_row + f1) += v * 0.5;
+                *myslice.get_unchecked_mut(self_interaction_index + f1) += v * 0.5;
 
                 let mut f2_index_offset = f1_index_offset + ffm_fields_count_as_usize;
                 let mut f2_offset_ffmk = f1_offset + f1_ffmk;
@@ -444,7 +443,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 f1_offset += field_embedding_len_as_usize;
                 f1_ffmk += ffmk_as_usize;
                 f1_index_offset += ffm_fields_count_as_usize;
-                diagonal_row += ffm_fields_count_as_usize;
+                self_interaction_index += ffm_fields_count_as_usize;
             }
         }
 
