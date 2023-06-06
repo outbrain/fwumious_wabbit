@@ -147,7 +147,7 @@ impl ModelInstance {
         vw: &vwmap::VwNamespaceMap,
         s: &str,
     ) -> Result<FeatureComboDesc, Box<dyn Error>> {
-        let vsplit: Vec<&str> = s.split(":").collect(); // We use : as a delimiter for weight
+        let vsplit: Vec<&str> = s.split(':').collect(); // We use : as a delimiter for weight
         let mut combo_weight: f32 = 1.0;
         if vsplit.len() > 2 {
             return Err(Box::new(IOError::new(
@@ -174,7 +174,7 @@ impl ModelInstance {
             namespace_descriptors.push(namespace_descriptor);
         }
         Ok(FeatureComboDesc {
-            namespace_descriptors: namespace_descriptors,
+            namespace_descriptors,
             weight: combo_weight,
         })
     }
@@ -184,7 +184,7 @@ impl ModelInstance {
         vw: &vwmap::VwNamespaceMap,
         s: &str,
     ) -> Result<FeatureComboDesc, Box<dyn Error>> {
-        let vsplit: Vec<&str> = s.split(":").collect(); // We use : as a delimiter for weight
+        let vsplit: Vec<&str> = s.split(':').collect(); // We use : as a delimiter for weight
         let mut combo_weight: f32 = 1.0;
 
         if vsplit.len() == 2 {
@@ -211,7 +211,7 @@ impl ModelInstance {
             )));
         }
 
-        let namespaces_verbose: Vec<&str> = vsplit[0].split(",").collect(); // verbose names are separated by comma
+        let namespaces_verbose: Vec<&str> = vsplit[0].split(',').collect(); // verbose names are separated by comma
         let mut namespace_descriptors: Vec<vwmap::NamespaceDescriptor> = Vec::new();
         for namespace_verbose in namespaces_verbose {
             let namespace_descriptor = feature_transform_parser::get_namespace_descriptor_verbose(
@@ -222,7 +222,7 @@ impl ModelInstance {
             namespace_descriptors.push(namespace_descriptor);
         }
         Ok(FeatureComboDesc {
-            namespace_descriptors: namespace_descriptors,
+            namespace_descriptors,
             weight: combo_weight,
         })
     }
@@ -232,7 +232,7 @@ impl ModelInstance {
         vw: &vwmap::VwNamespaceMap,
         s: &str,
     ) -> Result<FieldDesc, Box<dyn Error>> {
-        let vsplit: Vec<&str> = s.split(":").collect(); // We use : as a delimiter for weight
+        let vsplit: Vec<&str> = s.split(':').collect(); // We use : as a delimiter for weight
         if vsplit.len() > 1 {
             return Err(Box::new(IOError::new(
                 ErrorKind::Other,
@@ -242,7 +242,7 @@ impl ModelInstance {
                 ),
             )));
         }
-        let namespaces_verbose: Vec<&str> = s.split(",").collect(); // verbose names are separated by comma
+        let namespaces_verbose: Vec<&str> = s.split(',').collect(); // verbose names are separated by comma
         let mut field: FieldDesc = Vec::new();
         for namespace_verbose in namespaces_verbose {
             let namespace_descriptor = feature_transform_parser::get_namespace_descriptor_verbose(
@@ -259,7 +259,7 @@ impl ModelInstance {
         // Examples: 0:activation:relu
         // Examples: 4:maxnorm:5.0
         // Examples: 6:width:20
-        let vsplit: Vec<&str> = s.split(":").collect();
+        let vsplit: Vec<&str> = s.split(':').collect();
         if vsplit.len() != 3 {
             return Err(Box::new(IOError::new(
                 ErrorKind::Other,
@@ -269,10 +269,8 @@ impl ModelInstance {
                 ),
             )));
         }
-        let layer_number: usize = vsplit[0].parse().expect(&format!(
-            "--nn can not parse the layer number: {}",
-            vsplit[0]
-        ));
+        let layer_number: usize = vsplit[0].parse().unwrap_or_else(|_| panic!("--nn can not parse the layer number: {}",
+            vsplit[0]));
         if layer_number >= self.nn_config.layers.len() {
             return Err(Box::new(IOError::new(
                 ErrorKind::Other,
@@ -287,8 +285,8 @@ impl ModelInstance {
         Ok(())
     }
 
-    pub fn new_from_cmdline<'a>(
-        cl: &clap::ArgMatches<'a>,
+    pub fn new_from_cmdline(
+        cl: &clap::ArgMatches<'_>,
         vw: &vwmap::VwNamespaceMap,
     ) -> Result<ModelInstance, Box<dyn Error>> {
         let mut mi = ModelInstance::new_empty()?;
@@ -310,13 +308,13 @@ impl ModelInstance {
             if !cl.is_present("hash") {
                 return Err(Box::new(IOError::new(
                     ErrorKind::Other,
-                    format!("--vwcompat requires use of --hash all"),
+                    "--vwcompat requires use of --hash all".to_string(),
                 )));
             } else if let Some(val) = cl.value_of("hash") {
                 if val != "all" {
                     return Err(Box::new(IOError::new(
                         ErrorKind::Other,
-                        format!("--vwcompat requires use of --hash all"),
+                        "--vwcompat requires use of --hash all".to_string(),
                     )));
                 }
             }
@@ -325,7 +323,7 @@ impl ModelInstance {
             if !cl.is_present("sgd") {
                 return Err(Box::new(IOError::new(
                     ErrorKind::Other,
-                    format!("--vwcompat requires use of --sgd"),
+                    "--vwcompat requires use of --sgd".to_string(),
                 )));
             }
         }
@@ -379,9 +377,9 @@ impl ModelInstance {
             mi.ffm_initialization_type = val.parse()?;
         }
 
-        mi.ffm_init_center = parse_float("ffm_init_center", mi.ffm_init_center, &cl);
-        mi.ffm_init_width = parse_float("ffm_init_width", mi.ffm_init_width, &cl);
-        mi.ffm_init_zero_band = parse_float("ffm_init_zero_band", mi.ffm_init_zero_band, &cl);
+        mi.ffm_init_center = parse_float("ffm_init_center", mi.ffm_init_center, cl);
+        mi.ffm_init_width = parse_float("ffm_init_width", mi.ffm_init_width, cl);
+        mi.ffm_init_zero_band = parse_float("ffm_init_zero_band", mi.ffm_init_zero_band, cl);
 
         if let Some(in_v) = cl.values_of("ffm_field") {
             for namespaces_str in in_v {
@@ -413,18 +411,18 @@ impl ModelInstance {
             mi.bit_precision = val.parse()?;
         }
 
-        mi.learning_rate = parse_float("learning_rate", mi.learning_rate, &cl);
-        mi.init_acc_gradient = parse_float("init_acc_gradient", mi.init_acc_gradient, &cl);
-        mi.power_t = parse_float("power_t", mi.power_t, &cl);
+        mi.learning_rate = parse_float("learning_rate", mi.learning_rate, cl);
+        mi.init_acc_gradient = parse_float("init_acc_gradient", mi.init_acc_gradient, cl);
+        mi.power_t = parse_float("power_t", mi.power_t, cl);
 
-        mi.ffm_learning_rate = parse_float("ffm_learning_rate", mi.learning_rate, &cl);
-        mi.ffm_init_acc_gradient = parse_float("ffm_init_acc_gradient", mi.init_acc_gradient, &cl);
-        mi.ffm_power_t = parse_float("ffm_power_t", mi.power_t, &cl);
+        mi.ffm_learning_rate = parse_float("ffm_learning_rate", mi.learning_rate, cl);
+        mi.ffm_init_acc_gradient = parse_float("ffm_init_acc_gradient", mi.init_acc_gradient, cl);
+        mi.ffm_power_t = parse_float("ffm_power_t", mi.power_t, cl);
 
-        mi.nn_learning_rate = parse_float("nn_learning_rate", mi.ffm_learning_rate, &cl);
+        mi.nn_learning_rate = parse_float("nn_learning_rate", mi.ffm_learning_rate, cl);
         mi.nn_init_acc_gradient =
-            parse_float("nn_init_acc_gradient", mi.ffm_init_acc_gradient, &cl);
-        mi.nn_power_t = parse_float("nn_power_t", mi.ffm_power_t, &cl);
+            parse_float("nn_init_acc_gradient", mi.ffm_init_acc_gradient, cl);
+        mi.nn_power_t = parse_float("nn_power_t", mi.ffm_power_t, cl);
 
         if let Some(val) = cl.value_of("nn_layers") {
             let nn_layers = val.parse()?;
@@ -451,7 +449,7 @@ impl ModelInstance {
             if val != "logistic" {
                 return Err(Box::new(IOError::new(
                     ErrorKind::Other,
-                    format!("--link only supports 'logistic'"),
+                    "--link only supports 'logistic'".to_string(),
                 )));
             }
         }
@@ -459,7 +457,7 @@ impl ModelInstance {
             if val != "logistic" {
                 return Err(Box::new(IOError::new(
                     ErrorKind::Other,
-                    format!("--loss_function only supports 'logistic'"),
+                    "--loss_function only supports 'logistic'".to_string(),
                 )));
             }
         }
@@ -468,7 +466,7 @@ impl ModelInstance {
             if v2.abs() > 0.00000001 {
                 return Err(Box::new(IOError::new(
                     ErrorKind::Other,
-                    format!("--l2 can only be 0.0"),
+                    "--l2 can only be 0.0".to_string(),
                 )));
             }
         }
@@ -486,17 +484,15 @@ impl ModelInstance {
             mi.optimizer = Optimizer::AdagradFlex;
         }
 
-        if mi.optimizer == Optimizer::AdagradFlex {
-            if mi.fastmath {
-                mi.optimizer = Optimizer::AdagradLUT;
-            }
+        if mi.optimizer == Optimizer::AdagradFlex && mi.fastmath {
+            mi.optimizer = Optimizer::AdagradLUT;
         }
 
         Ok(mi)
     }
 
-    pub fn update_hyperparameters_from_cmd<'a>(
-        cmd_arguments: &clap::ArgMatches<'a>,
+    pub fn update_hyperparameters_from_cmd(
+        cmd_arguments: &clap::ArgMatches<'_>,
         mi: &mut ModelInstance,
     ) -> Result<(), Box<dyn Error>> {
         /*! A method that enables updating hyperparameters of an existing (pre-loaded) model.

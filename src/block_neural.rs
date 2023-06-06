@@ -76,31 +76,31 @@ fn new_neuronlayer_without_weights<L: OptimizerTrait + 'static>(
     layer_norm: bool,
 ) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
     assert!(num_neurons > 0);
-    assert!((num_inputs as usize) < MAX_NUM_INPUTS);
+    assert!(num_inputs < MAX_NUM_INPUTS);
     assert!(num_inputs != 0);
 
     if dropout != 0.0 {
         panic!("Dropout in this binary is not supported due to bizzare side effects on inner loop unrolling");
     }
 
-    let weights_len = ((num_inputs + 1) * num_neurons as usize) as u32; // +1 is for bias term
+    let weights_len = ((num_inputs + 1) * num_neurons) as u32; // +1 is for bias term
 
     let mut rg = BlockNeuronLayer::<L> {
         weights: Vec::new(),
         weights_optimizer: Vec::new(),
         output_offset: usize::MAX,
         input_offset: usize::MAX,
-        num_inputs: num_inputs,
+        num_inputs,
         optimizer: L::new(),
-        weights_len: weights_len,
+        weights_len,
         neuron_type: ntype,
-        num_neurons: num_neurons,
-        init_type: init_type,
-        dropout: dropout,
+        num_neurons,
+        init_type,
+        dropout,
         dropout_inv: 1.0 / (1.0 - dropout),
-        max_norm: max_norm,
-        layer_norm: layer_norm,
-        rng: Xoshiro256PlusPlus::seed_from_u64(0 as u64),
+        max_norm,
+        layer_norm,
+        rng: Xoshiro256PlusPlus::seed_from_u64(0_u64),
         rng_scratchpad: Vec::new(),
         dropout_threshold: ((u32::MAX as f64) * (dropout as f64)) as u32,
     };
@@ -128,7 +128,7 @@ pub fn new_neuronlayer_block(
     let block = match mi.optimizer {
         model_instance::Optimizer::AdagradLUT => {
             new_neuronlayer_without_weights::<optimizer::OptimizerAdagradLUT>(
-                &mi,
+                mi,
                 num_inputs,
                 ntype,
                 num_neurons,
@@ -140,7 +140,7 @@ pub fn new_neuronlayer_block(
         }
         model_instance::Optimizer::AdagradFlex => {
             new_neuronlayer_without_weights::<optimizer::OptimizerAdagradFlex>(
-                &mi,
+                mi,
                 num_inputs,
                 ntype,
                 num_neurons,
@@ -152,7 +152,7 @@ pub fn new_neuronlayer_block(
         }
         model_instance::Optimizer::SGD => {
             new_neuronlayer_without_weights::<optimizer::OptimizerSGD>(
-                &mi,
+                mi,
                 num_inputs,
                 ntype,
                 num_neurons,
@@ -221,14 +221,14 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
                 let bound = 6.0_f64.sqrt() / ((self.num_inputs + self.num_neurons) as f64).sqrt();
                 let normal = Uniform::new(-bound, bound);
                 for i in 0..self.num_neurons * self.num_inputs {
-                    self.weights[i as usize].weight = normal.sample(&mut self.rng) as f32;
+                    self.weights[i].weight = normal.sample(&mut self.rng) as f32;
                 }
             }
             InitType::Hu => {
                 let normal =
-                    Normal::new(0.0, (2.0 / self.num_inputs as f64).sqrt() as f64).unwrap();
+                    Normal::new(0.0, (2.0 / self.num_inputs as f64).sqrt()).unwrap();
                 for i in 0..self.num_neurons * self.num_inputs {
-                    self.weights[i as usize].weight = normal.sample(&mut self.rng) as f32;
+                    self.weights[i].weight = normal.sample(&mut self.rng) as f32;
                 }
             }
             //            InitType::RandomFirst1 => { for i in 0..self.num_inputs { self.weights[i as usize].weight = 1.0}},
@@ -247,7 +247,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
 
         // Bias terms are always initialized to zero
         for i in 0..self.num_neurons {
-            self.weights[(self.num_neurons * self.num_inputs + i) as usize].weight = 0.0
+            self.weights[self.num_neurons * self.num_inputs + i].weight = 0.0
         }
     }
 
@@ -304,7 +304,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
                         let mut wsum: f32 = self.weights.get_unchecked(bias_offset + j).weight; // bias term
                         for i in 0..self.num_inputs {
                             wsum += input_tape.get_unchecked(i)
-                                * self.weights.get_unchecked(i + j_offset as usize).weight;
+                                * self.weights.get_unchecked(i + j_offset).weight;
                         }
                         j_offset += self.num_inputs;
                         *output_tape.get_unchecked_mut(j) = wsum * self.dropout_inv;
@@ -321,7 +321,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
                         dropout_inv,             //   alpha: f32,
                         std::mem::transmute::<&[Weight], &[f32]>(self.weights.get_unchecked(0..)), //  a: &[f32],
                         self.num_inputs as i32,             // lda: i32,
-                        &input_tape.get_unchecked(0..),     // x: &[f32],
+                        input_tape.get_unchecked(0..),     // x: &[f32],
                         1,                                  // incx: i32,
                         1.0,                                // beta: f32,
                         output_tape.get_unchecked_mut(0..), //y: &mut [f32],
@@ -345,7 +345,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
                         // I thought It might be related to from_raw_parts above, but it isn't
 
                         // Attempted fix of going through a #[inline(never)] function did not work
-                        self.rng.fill_bytes(&mut fill_view);
+                        self.rng.fill_bytes(fill_view);
                         //fill_bytes(&mut self.rng, &mut fill_view);
                         for j in 0..self.num_neurons {
                             if *self.rng_scratchpad.get_unchecked(j) < self.dropout_threshold {
@@ -358,94 +358,92 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
 
             block_helpers::forward_backward(further_blocks, fb, pb, update);
 
-            if update {
-                if self.neuron_type == NeuronType::WeightedSum {
-                    // first we need to initialize inputs to zero
-                    // TODO - what to think about this buffer
-                    let mut output_errors: [f32; MAX_NUM_INPUTS] =
-                        MaybeUninit::uninit().assume_init();
-                    output_errors
-                        .get_unchecked_mut(0..self.num_inputs)
-                        .fill(0.0);
+            if update && self.neuron_type == NeuronType::WeightedSum {
+                // first we need to initialize inputs to zero
+                // TODO - what to think about this buffer
+                let mut output_errors: [f32; MAX_NUM_INPUTS] =
+                    MaybeUninit::uninit().assume_init();
+                output_errors
+                    .get_unchecked_mut(0..self.num_inputs)
+                    .fill(0.0);
 
-                    let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
-                        &mut pb.tape,
-                        self.input_offset,
-                        self.num_inputs,
-                        self.output_offset,
-                        self.num_neurons,
-                    );
+                let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
+                    &mut pb.tape,
+                    self.input_offset,
+                    self.num_inputs,
+                    self.output_offset,
+                    self.num_neurons,
+                );
 
-                    for j in 0..self.num_neurons as usize {
-                        if self.dropout != 0.0
-                            && *self.rng_scratchpad.get_unchecked(j) < self.dropout_threshold
-                        {
-                            continue;
+                for j in 0..self.num_neurons {
+                    if self.dropout != 0.0
+                        && *self.rng_scratchpad.get_unchecked(j) < self.dropout_threshold
+                    {
+                        continue;
+                    }
+
+                    let general_gradient = output_tape.get_unchecked(j) * self.dropout_inv;
+
+                    let j_offset = j * self.num_inputs;
+                    for i in 0..self.num_inputs {
+                        let feature_value = input_tape.get_unchecked(i);
+                        let gradient = general_gradient * feature_value;
+                        let update = self.optimizer.calculate_update(
+                            gradient,
+                            &mut self
+                                .weights_optimizer
+                                .get_unchecked_mut(i + j_offset)
+                                .optimizer_data,
+                        );
+                        *output_errors.get_unchecked_mut(i) +=
+                            self.weights.get_unchecked(i + j_offset).weight * general_gradient;
+                        self.weights.get_unchecked_mut(i + j_offset).weight -= update;
+                    }
+                    {
+                        // Updating bias term:
+                        let gradient = general_gradient * 1.0;
+                        let update = self.optimizer.calculate_update(
+                            gradient,
+                            &mut self
+                                .weights_optimizer
+                                .get_unchecked_mut(bias_offset + j)
+                                .optimizer_data,
+                        );
+                        self.weights.get_unchecked_mut(bias_offset + j).weight -= update;
+                    }
+
+                    if self.max_norm != 0.0 && fb.example_number % 10 == 0 {
+                        let mut wsquaredsum = 0.000001; // Epsilon
+                        for i in 0..self.num_inputs {
+                            let w = self.weights.get_unchecked_mut(i + j_offset).weight;
+                            wsquaredsum += w * w;
                         }
-
-                        let general_gradient = output_tape.get_unchecked(j) * self.dropout_inv;
-
-                        let j_offset = j * self.num_inputs as usize;
-                        for i in 0..self.num_inputs as usize {
-                            let feature_value = input_tape.get_unchecked(i);
-                            let gradient = general_gradient * feature_value;
-                            let update = self.optimizer.calculate_update(
-                                gradient,
-                                &mut self
-                                    .weights_optimizer
-                                    .get_unchecked_mut(i + j_offset)
-                                    .optimizer_data,
-                            );
-                            *output_errors.get_unchecked_mut(i) +=
-                                self.weights.get_unchecked(i + j_offset).weight * general_gradient;
-                            self.weights.get_unchecked_mut(i + j_offset).weight -= update;
-                        }
-                        {
-                            // Updating bias term:
-                            let gradient = general_gradient * 1.0;
-                            let update = self.optimizer.calculate_update(
-                                gradient,
-                                &mut self
-                                    .weights_optimizer
-                                    .get_unchecked_mut(bias_offset + j)
-                                    .optimizer_data,
-                            );
-                            self.weights.get_unchecked_mut(bias_offset + j).weight -= update;
-                        }
-
-                        if self.max_norm != 0.0 && fb.example_number % 10 == 0 {
-                            let mut wsquaredsum = 0.000001; // Epsilon
-                            for i in 0..self.num_inputs as usize {
-                                let w = self.weights.get_unchecked_mut(i + j_offset).weight;
-                                wsquaredsum += w * w;
-                            }
-                            let norm = wsquaredsum.sqrt();
-                            if norm > self.max_norm {
-                                let scaling = self.max_norm / norm;
-                                for i in 0..self.num_inputs as usize {
-                                    self.weights.get_unchecked_mut(i + j_offset).weight *= scaling;
-                                }
+                        let norm = wsquaredsum.sqrt();
+                        if norm > self.max_norm {
+                            let scaling = self.max_norm / norm;
+                            for i in 0..self.num_inputs {
+                                self.weights.get_unchecked_mut(i + j_offset).weight *= scaling;
                             }
                         }
                     }
-                    if self.layer_norm && fb.example_number % 10 == 0 {
-                        let mut sum: f32 = 0.0;
-                        let mut sumsqr: f32 = 0.0;
-                        let K = 100.0;
-                        for i in 0..bias_offset {
-                            let w = self.weights.get_unchecked(i).weight - K;
-                            sum += w;
-                            sumsqr += w * w;
-                        }
-                        let var1 = (sumsqr - sum * sum / bias_offset as f32) / bias_offset as f32;
-                        let var2 = var1.sqrt();
-                        for i in 0..bias_offset {
-                            self.weights.get_unchecked_mut(i).weight /= var2;
-                        }
-                    }
-
-                    input_tape.copy_from_slice(output_errors.get_unchecked(0..self.num_inputs));
                 }
+                if self.layer_norm && fb.example_number % 10 == 0 {
+                    let mut sum: f32 = 0.0;
+                    let mut sumsqr: f32 = 0.0;
+                    let K = 100.0;
+                    for i in 0..bias_offset {
+                        let w = self.weights.get_unchecked(i).weight - K;
+                        sum += w;
+                        sumsqr += w * w;
+                    }
+                    let var1 = (sumsqr - sum * sum / bias_offset as f32) / bias_offset as f32;
+                    let var2 = var1.sqrt();
+                    for i in 0..bias_offset {
+                        self.weights.get_unchecked_mut(i).weight /= var2;
+                    }
+                }
+
+                input_tape.copy_from_slice(output_errors.get_unchecked(0..self.num_inputs));
             }
         } // unsafe end
     }
@@ -473,7 +471,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
                     let mut wsum: f32 = self.weights.get_unchecked(bias_offset + j).weight; // bias term
                     for i in 0..self.num_inputs {
                         wsum += input_tape.get_unchecked(i)
-                            * self.weights.get_unchecked(i + j_offset as usize).weight;
+                            * self.weights.get_unchecked(i + j_offset).weight;
                     }
                     j_offset += self.num_inputs;
                     *output_tape.get_unchecked_mut(j) = wsum;
@@ -490,7 +488,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
                     1.0,                     //   alpha: f32,
                     std::mem::transmute::<&[Weight], &[f32]>(self.weights.get_unchecked(0..)), //  a: &[f32],
                     self.num_inputs as i32,             //lda: i32,
-                    &input_tape.get_unchecked(0..),     //   x: &[f32],
+                    input_tape.get_unchecked(0..),     //   x: &[f32],
                     1,                                  //incx: i32,
                     1.0,                                // beta: f32,
                     output_tape.get_unchecked_mut(0..), //y: &mut [f32],
@@ -502,7 +500,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
     }
 
     fn get_serialized_len(&self) -> usize {
-        return self.weights_len as usize;
+        self.weights_len as usize
     }
 
     fn read_weights_from_buf(
@@ -647,7 +645,7 @@ mod tests {
         // on tape 0 input of 2.0 will be replaced with the gradient of 2.0
         // on tape 1 input has been consumed by returning function
         // on tape 2 the output was consumed by slearn
-        assert_eq!(pb.observations.len(), NUM_NEURONS as usize);
+        assert_eq!(pb.observations.len(), { NUM_NEURONS });
         assert_eq!(pb.observations[0], 2.0); // since we are using identity loss function, only one was consumed by slearn
         assert_eq!(pb.observations[1], 2.0); // since we are using identity loss function, only one was consumed by slearn
 

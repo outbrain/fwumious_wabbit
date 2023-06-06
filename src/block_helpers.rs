@@ -48,15 +48,15 @@ pub fn read_weights_from_buf<L>(
     weights: &mut Vec<L>,
     input_bufreader: &mut dyn io::Read,
 ) -> Result<(), Box<dyn Error>> {
-    if weights.len() == 0 {
-        return Err(format!("Loading weights to unallocated weighs buffer"))?;
+    if weights.is_empty() {
+        return Err("Loading weights to unallocated weighs buffer".to_string())?;
     }
     unsafe {
         let mut buf_view: &mut [u8] = slice::from_raw_parts_mut(
             weights.as_mut_ptr() as *mut u8,
             weights.len() * mem::size_of::<L>(),
         );
-        input_bufreader.read_exact(&mut buf_view)?;
+        input_bufreader.read_exact(buf_view)?;
     }
     Ok(())
 }
@@ -80,9 +80,9 @@ pub fn write_weights_to_buf<L>(
     weights: &Vec<L>,
     output_bufwriter: &mut dyn io::Write,
 ) -> Result<(), Box<dyn Error>> {
-    if weights.len() == 0 {
+    if weights.is_empty() {
         assert!(false);
-        return Err(format!("Writing weights of unallocated weights buffer"))?;
+        return Err("Writing weights of unallocated weights buffer".to_string())?;
     }
     unsafe {
         let buf_view: &[u8] = slice::from_raw_parts(
@@ -100,7 +100,7 @@ pub fn read_weights_only_from_buf2<L: OptimizerTrait>(
     input_bufreader: &mut dyn io::Read,
 ) -> Result<(), Box<dyn Error>> {
     const BUF_LEN: usize = 1024 * 1024;
-    let mut in_weights: Vec<WeightAndOptimizerData<L>> = Vec::with_capacity(BUF_LEN as usize);
+    let mut in_weights: Vec<WeightAndOptimizerData<L>> = Vec::with_capacity(BUF_LEN);
     let mut remaining_weights = weights_len;
     let mut out_idx: usize = 0;
     if weights_len != out_weights.len() {
@@ -115,7 +115,7 @@ pub fn read_weights_only_from_buf2<L: OptimizerTrait>(
                 in_weights.as_mut_ptr() as *mut u8,
                 chunk_size * mem::size_of::<WeightAndOptimizerData<L>>(),
             );
-            input_bufreader.read_exact(&mut in_weights_view)?;
+            input_bufreader.read_exact(in_weights_view)?;
             for w in &in_weights {
                 out_weights.get_unchecked_mut(out_idx).weight = w.weight;
                 out_idx += 1;
@@ -170,8 +170,8 @@ pub fn slearn2<'a>(
     pb.reset();
     let (block_run, further_blocks) = bg.blocks_final.split_at_mut(1);
     block_run[0].forward_backward(further_blocks, fb, pb, update);
-    let prediction_probability = pb.observations[0];
-    return prediction_probability;
+    
+    pb.observations[0]
 }
 
 pub fn spredict2<'a>(
@@ -183,8 +183,8 @@ pub fn spredict2<'a>(
     pb.reset();
     let (block_run, further_blocks) = bg.blocks_final.split_at(1);
     block_run[0].forward(further_blocks, fb, pb);
-    let prediction_probability = pb.observations[0];
-    return prediction_probability;
+    
+    pb.observations[0]
 }
 
 #[inline(always)]

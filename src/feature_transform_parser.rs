@@ -154,7 +154,7 @@ impl NamespaceTransformsParser {
 
         n.processing.set(true);
         for from_namespace in &n.from_namespaces {
-            self.depth_first_search(vw, nst, &from_namespace)?;
+            self.depth_first_search(vw, nst, from_namespace)?;
         }
         nst.add_transform(vw, &self.denormalized[verbose_name].definition)?;
 
@@ -228,10 +228,10 @@ impl NamespaceTransforms {
         }
 
         let nt = NamespaceTransform {
-            from_namespaces: from_namespaces,
-            to_namespace: to_namespace,
-            function_name: function_name,
-            function_parameters: function_parameters,
+            from_namespaces,
+            to_namespace,
+            function_name,
+            function_parameters,
         };
 
         // Now we try to setup a function and then throw it away - for early validation
@@ -249,18 +249,18 @@ pub fn get_namespace_descriptor(
     namespace_char: char,
 ) -> Result<vwmap::NamespaceDescriptor, Box<dyn Error>> {
     // Does not support transformed names
-    let namespace_descriptor = match vw
+    match vw
         .map_vwname_to_namespace_descriptor
         .get(&vec![namespace_char as u8])
     {
-        Some(namespace_descriptor) => return Ok(*namespace_descriptor),
+        Some(namespace_descriptor) => Ok(*namespace_descriptor),
         None => {
-            return Err(Box::new(IOError::new(
+            Err(Box::new(IOError::new(
                 ErrorKind::Other,
                 format!("Unknown namespace char in command line: {}", namespace_char),
             )))
         }
-    };
+    }
 }
 
 pub fn get_namespace_descriptor_verbose(
@@ -268,7 +268,7 @@ pub fn get_namespace_descriptor_verbose(
     vw: &vwmap::VwNamespaceMap,
     namespace_verbose: &str,
 ) -> Result<vwmap::NamespaceDescriptor, Box<dyn Error>> {
-    let namespace_descriptor = match vw
+    match vw
         .map_verbose_to_namespace_descriptor
         .get(namespace_verbose)
     {
@@ -280,7 +280,7 @@ pub fn get_namespace_descriptor_verbose(
                 .iter()
                 .filter(|x| x.to_namespace.namespace_verbose == namespace_verbose)
                 .collect();
-            if f.len() == 0 {
+            if f.is_empty() {
                 return Err(Box::new(IOError::new(
                     ErrorKind::Other,
                     format!(
@@ -295,7 +295,7 @@ pub fn get_namespace_descriptor_verbose(
     };
 }
 
-use nom;
+
 use nom::bytes::complete::take_while;
 use nom::character;
 use nom::character::complete;
@@ -305,11 +305,7 @@ use nom::AsChar;
 use nom::IResult;
 
 pub fn name_char(c: char) -> bool {
-    if AsChar::is_alphanum(c) || c == '_' {
-        return true;
-    } else {
-        return false;
-    }
+    AsChar::is_alphanum(c) || c == '_'
 }
 
 // identifier = namespace or function name
@@ -562,9 +558,9 @@ C,featureC,f32
         let r = parse_identifier("_a_b3_");
         assert_eq!(r.unwrap().1, "_a_b3_");
         let r = parse_identifier("#");
-        assert_eq!(r.is_err(), true);
+        assert!(r.is_err());
         let r = parse_identifier("3a"); // they have to start with alphabetic character or underscore
-        assert_eq!(r.is_err(), true);
+        assert!(r.is_err());
 
         let r = parse_function_params_namespaces("(a)");
         assert_eq!(r.unwrap().1, vec!["a"]);
@@ -573,16 +569,16 @@ C,featureC,f32
         let r = parse_function_params_namespaces("( a ,  b )");
         assert_eq!(r.unwrap().1, vec!["a", "b"]);
         let r = parse_function_params_namespaces("((a)");
-        assert_eq!(r.is_err(), true);
+        assert!(r.is_err());
         let r = parse_function_params_namespaces("()"); // empty list of namespaces is not allowed
-        assert_eq!(r.is_err(), true);
+        assert!(r.is_err());
 
         let r = parse_float("0.2");
         assert_eq!(r.unwrap().1, 0.2);
         let r = parse_float(" 0.2");
         assert_eq!(r.unwrap().1, 0.2);
         let r = parse_float("(a)");
-        assert_eq!(r.is_err(), true);
+        assert!(r.is_err());
 
         let r = parse_function_params_floats("(0.1)");
         assert_eq!(r.unwrap().1, vec![0.1]);

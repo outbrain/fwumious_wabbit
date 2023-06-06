@@ -31,7 +31,7 @@ pub fn new_normalize_layer_block(
     let mut block = Box::new(BlockNormalize {
         output_offset: usize::MAX,
         input_offset: usize::MAX,
-        num_inputs: num_inputs,
+        num_inputs,
     });
     let mut block_outputs = bg.add_node(block, vec![input])?;
     assert_eq!(block_outputs.len(), 1);
@@ -51,7 +51,7 @@ impl BlockTrait for BlockNormalize {
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert!(output.get_output_index() == 0);
-        return self.num_inputs;
+        self.num_inputs
     }
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
@@ -78,13 +78,13 @@ impl BlockTrait for BlockNormalize {
 
         unsafe {
             let mut mean: f32 = 0.0;
-            for i in 0..self.num_inputs as usize {
+            for i in 0..self.num_inputs {
                 mean += *pb.tape.get_unchecked_mut(self.input_offset + i);
             }
             mean /= self.num_inputs as f32;
             let meansq = mean * mean;
             let mut variance: f32 = 0.0;
-            for i in 0..self.num_inputs as usize {
+            for i in 0..self.num_inputs {
                 let w = meansq - *pb.tape.get_unchecked_mut(self.input_offset + i);
                 variance += w * w;
             }
@@ -121,13 +121,13 @@ impl BlockTrait for BlockNormalize {
 
         unsafe {
             let mut mean: f32 = 0.0;
-            for i in 0..self.num_inputs as usize {
+            for i in 0..self.num_inputs {
                 mean += *pb.tape.get_unchecked_mut(self.input_offset + i);
             }
             mean /= self.num_inputs as f32;
             let meansq = mean * mean;
             let mut variance: f32 = 0.0;
-            for i in 0..self.num_inputs as usize {
+            for i in 0..self.num_inputs {
                 let w = meansq - *pb.tape.get_unchecked_mut(self.input_offset + i);
                 variance += w * w;
             }
@@ -166,7 +166,7 @@ pub fn new_stop_block(
     let mut block = Box::new(BlockStopBackward {
         output_offset: usize::MAX,
         input_offset: usize::MAX,
-        num_inputs: num_inputs,
+        num_inputs,
     });
     let mut block_outputs = bg.add_node(block, vec![input])?;
     assert_eq!(block_outputs.len(), 1);
@@ -186,7 +186,7 @@ impl BlockTrait for BlockStopBackward {
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert!(output.get_output_index() == 0);
-        return self.num_inputs;
+        self.num_inputs
     }
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {

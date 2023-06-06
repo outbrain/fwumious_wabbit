@@ -33,7 +33,7 @@ impl OptimizerTrait for OptimizerSGD {
 
     #[inline(always)]
     unsafe fn calculate_update(&self, gradient: f32, _data: &mut Self::PerWeightStore) -> f32 {
-        return gradient * self.learning_rate;
+        gradient * self.learning_rate
     }
 
     fn initial_data(&self) -> Self::PerWeightStore {
@@ -85,7 +85,7 @@ impl OptimizerTrait for OptimizerAdagradFlex {
         if update.is_nan() || update.is_infinite() {
             return 0.0;
         }
-        return update;
+        update
     }
 
     fn initial_data(&self) -> Self::PerWeightStore {
@@ -152,7 +152,7 @@ impl OptimizerTrait for OptimizerAdagradLUT {
         *data = new_accumulated_gradient_squared;
         let key = new_accumulated_gradient_squared.to_bits() >> (31 - FASTMATH_LR_LUT_BITS);
         let update = gradient * *self.fastmath_lr_lut.get_unchecked(key as usize);
-        return update;
+        update
     }
 
     fn initial_data(&self) -> Self::PerWeightStore {

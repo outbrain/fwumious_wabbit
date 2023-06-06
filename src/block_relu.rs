@@ -26,7 +26,7 @@ pub fn new_relu_block(
     let mut block = Box::new(BlockRELU {
         output_offset: usize::MAX,
         input_offset: usize::MAX,
-        num_inputs: num_inputs,
+        num_inputs,
     });
     let mut block_outputs = bg.add_node(block, vec![input])?;
     assert_eq!(block_outputs.len(), 1);
@@ -46,7 +46,7 @@ impl BlockTrait for BlockRELU {
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert!(output.get_output_index() == 0);
-        return self.num_inputs;
+        self.num_inputs
     }
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
@@ -72,7 +72,7 @@ impl BlockTrait for BlockRELU {
         debug_assert!(self.num_inputs > 0);
 
         unsafe {
-            for i in 0..self.num_inputs as usize {
+            for i in 0..self.num_inputs {
                 let w = *pb.tape.get_unchecked_mut(self.input_offset + i);
                 if w < 0.0 {
                     *pb.tape.get_unchecked_mut(self.output_offset + i) = 0.0;
@@ -86,7 +86,7 @@ impl BlockTrait for BlockRELU {
             block_helpers::forward_backward(further_blocks, fb, pb, update);
 
             if update {
-                for i in 0..self.num_inputs as usize {
+                for i in 0..self.num_inputs {
                     let gradient = *pb.tape.get_unchecked(self.output_offset + i);
                     *pb.tape.get_unchecked_mut(self.input_offset + i) *= gradient;
                 }
@@ -105,7 +105,7 @@ impl BlockTrait for BlockRELU {
         debug_assert!(self.num_inputs > 0);
 
         unsafe {
-            for i in 0..self.num_inputs as usize {
+            for i in 0..self.num_inputs {
                 let w = *pb.tape.get_unchecked_mut(self.input_offset + i);
                 if w < 0.0 {
                     *pb.tape.get_unchecked_mut(self.output_offset + i) = 0.0;

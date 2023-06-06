@@ -35,7 +35,7 @@ fn new_lr_block_without_weights<L: OptimizerTrait + 'static>(
         weights_len: 0,
         optimizer_lr: L::new(),
         output_offset: usize::MAX,
-        num_combos: num_combos,
+        num_combos,
     };
     reg_lr
         .optimizer_lr
@@ -50,13 +50,13 @@ pub fn new_lr_block(
 ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
     let block = match mi.optimizer {
         model_instance::Optimizer::AdagradLUT => {
-            new_lr_block_without_weights::<optimizer::OptimizerAdagradLUT>(&mi)
+            new_lr_block_without_weights::<optimizer::OptimizerAdagradLUT>(mi)
         }
         model_instance::Optimizer::AdagradFlex => {
-            new_lr_block_without_weights::<optimizer::OptimizerAdagradFlex>(&mi)
+            new_lr_block_without_weights::<optimizer::OptimizerAdagradFlex>(mi)
         }
         model_instance::Optimizer::SGD => {
-            new_lr_block_without_weights::<optimizer::OptimizerSGD>(&mi)
+            new_lr_block_without_weights::<optimizer::OptimizerSGD>(mi)
         }
     }
     .unwrap();
@@ -180,7 +180,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
     }
 
     fn get_serialized_len(&self) -> usize {
-        return self.weights_len as usize;
+        self.weights_len as usize
     }
 
     fn read_weights_from_buf(

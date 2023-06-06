@@ -74,11 +74,11 @@ pub struct RecordCache {
 
 impl RecordCache {
     pub fn new(input_filename: &str, enabled: bool, vw_map: &vwmap::VwNamespaceMap) -> RecordCache {
-        let temporary_filename: String;
-        let final_filename: String;
+        
+        
         let gz: bool;
-        temporary_filename = format!("{}.fwcache.writing", input_filename);
-        final_filename = format!("{}.fwcache", input_filename);
+        let temporary_filename: String = format!("{}.fwcache.writing", input_filename);
+        let final_filename: String = format!("{}.fwcache", input_filename);
         if !input_filename.ends_with("gz") {
             gz = false;
         } else {
@@ -161,7 +161,7 @@ impl RecordCache {
                     record_buf.as_ptr() as *const u8,
                     record_buf.len() * element_size,
                 );
-                self.output_bufwriter.write_all(&vv)?;
+                self.output_bufwriter.write_all(vv)?;
             }
         }
         Ok(())

@@ -27,7 +27,7 @@ pub fn stable_logistic(t: f32) -> f32 {
 
 #[inline(always)]
 pub fn logistic(t: f32) -> f32 {
-    return (1.0 + (-t).exp()).recip();
+    (1.0 + (-t).exp()).recip()
 }
 
 pub struct BlockSigmoid {
@@ -44,10 +44,10 @@ pub fn new_logloss_block(
 ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
     let num_inputs = bg.get_num_output_values(vec![&input]);
     let block = Box::new(BlockSigmoid {
-        num_inputs: num_inputs as usize,
+        num_inputs,
         input_offset: usize::MAX,
         output_offset: usize::MAX,
-        copy_to_result: copy_to_result,
+        copy_to_result,
     });
     let mut block_outputs = bg.add_node(block, vec![input]).unwrap();
     assert_eq!(block_outputs.len(), 1);
@@ -63,7 +63,7 @@ pub fn new_without_weights(
         num_inputs: num_inputs as usize,
         input_offset: usize::MAX,
         output_offset: usize::MAX,
-        copy_to_result: copy_to_result,
+        copy_to_result,
     }))
 }
 

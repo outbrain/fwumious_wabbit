@@ -158,26 +158,26 @@ impl FeatureBufferTranslator {
         };
 
         // avoid doing any allocations in translate
-        let fbt = FeatureBufferTranslator {
+        
+        FeatureBufferTranslator {
             model_instance: mi.clone(), // not the nicest option
             hashes_vec_in: Vec::with_capacity(100),
             hashes_vec_out: Vec::with_capacity(100),
             feature_buffer: fb,
-            lr_hash_mask: lr_hash_mask,
-            ffm_hash_mask: ffm_hash_mask,
+            lr_hash_mask,
+            ffm_hash_mask,
             transform_executors:
                 feature_transform_executor::TransformExecutors::from_namespace_transforms(
                     &mi.transform_namespaces,
                 ),
-        };
-        fbt
+        }
     }
 
-    pub fn print(&self) -> () {
+    pub fn print(&self) {
         log::info!("item out {:?}", self.feature_buffer.lr_buffer);
     }
 
-    pub fn translate(&mut self, record_buffer: &[u32], example_number: u64) -> () {
+    pub fn translate(&mut self, record_buffer: &[u32], example_number: u64) {
         {
             let lr_buffer = &mut self.feature_buffer.lr_buffer;
             lr_buffer.truncate(0);
@@ -209,7 +209,7 @@ impl FeatureBufferTranslator {
                             lr_buffer.push(HashAndValue {
                                 hash: hash_index & self.lr_hash_mask,
                                 value: hash_value * feature_combo_weight,
-                                combo_index: combo_index,
+                                combo_index,
                             });
                         }
                     );
@@ -225,14 +225,14 @@ impl FeatureBufferTranslator {
                             hashes_vec_in.push(HashAndValue {
                                 hash: hash_index,
                                 value: hash_value,
-                                combo_index: combo_index,
+                                combo_index,
                             });
                         }
                     );
                     for namespace_descriptor in unsafe {
                         feature_combo_desc
                             .namespace_descriptors
-                            .get_unchecked(1 as usize..num_namespaces)
+                            .get_unchecked(1_usize..num_namespaces)
                     } {
                         hashes_vec_out.truncate(0);
                         for handv in &(*hashes_vec_in) {
@@ -247,7 +247,7 @@ impl FeatureBufferTranslator {
                                     hashes_vec_out.push(HashAndValue {
                                         hash: hash_index ^ half_hash,
                                         value: handv.value * hash_value,
-                                        combo_index: combo_index,
+                                        combo_index,
                                     });
                                 }
                             );
@@ -258,7 +258,7 @@ impl FeatureBufferTranslator {
                         lr_buffer.push(HashAndValue {
                             hash: handv.hash & self.lr_hash_mask,
                             value: handv.value * feature_combo_weight,
-                            combo_index: combo_index,
+                            combo_index,
                         });
                     }
                 }
@@ -296,7 +296,7 @@ impl FeatureBufferTranslator {
                                     hash: hash_index & self.ffm_hash_mask,
                                     value: hash_value,
                                     contra_field_index: contra_field_index as u32
-                                        * self.model_instance.ffm_k as u32,
+                                        * self.model_instance.ffm_k,
                                 });
                             }
                         );
@@ -320,7 +320,7 @@ mod tests {
     }
 
     fn nd(start: u32, end: u32) -> u32 {
-        return (start << 16) + end;
+        (start << 16) + end
     }
 
     fn ns_desc(i: u16) -> NamespaceDescriptor {
