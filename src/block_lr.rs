@@ -183,7 +183,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
 
         let BlockCache::LR {
             lr,
-            contra_fields,
+            combo_indexes,
         } = next_cache else {
             log::warn!("Unable to downcast cache to BlockLRCache, executing forward pass without cache");
             self.forward(further_blocks, fb, pb);
@@ -196,11 +196,11 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
             lr_slice.copy_from_slice(lr.as_slice());
 
             for feature in fb.lr_buffer.iter() {
-                let feature_index = feature.hash as usize;
                 let combo_index = feature.combo_index as usize;
-                if *contra_fields.get_unchecked(combo_index) {
+                if *combo_indexes.get_unchecked(combo_index) {
                     continue
                 }
+                let feature_index = feature.hash as usize;
                 let feature_value = feature.value;
                 *lr_slice.get_unchecked_mut(combo_index) +=
                     self.weights.get_unchecked(feature_index).weight * feature_value;
@@ -216,7 +216,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
     ) {
         caches.push(BlockCache::LR {
             lr: vec![0.0; self.num_combos as usize],
-            contra_fields: vec![false; self.num_combos as usize]
+            combo_indexes: vec![false; self.num_combos as usize]
         });
         block_helpers::create_forward_cache(further_blocks, caches);
     }
@@ -234,14 +234,14 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
 
         let BlockCache::LR {
             lr,
-            contra_fields
+            combo_indexes
         } = next_cache else {
             log::warn!("Unable to downcast cache to BlockLRCache, skipping cache preparation");
             return;
         };
 
         unsafe {
-            contra_fields.fill(false);
+            combo_indexes.fill(false);
             lr.fill(0.0);
 
             let mut lr_slice = lr.as_mut_slice();
@@ -252,7 +252,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
                 let combo_index = feature.combo_index as usize;
                 *lr_slice.get_unchecked_mut(combo_index) +=
                     self.weights.get_unchecked(feature_index).weight * feature_value;
-                *contra_fields.get_unchecked_mut(combo_index) = true;
+                *combo_indexes.get_unchecked_mut(combo_index) = true;
             }
         }
 

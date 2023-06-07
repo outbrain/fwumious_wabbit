@@ -66,7 +66,7 @@ impl BlockSigmoid {
             debug_assert!(self.input_offset != usize::MAX);
             debug_assert!(self.output_offset != usize::MAX);
             let wsum: f32 = {
-                let myslice = &pb
+                let myslice = pb
                     .tape
                     .get_unchecked(self.input_offset..(self.input_offset + self.num_inputs));
                 myslice.iter().sum()
