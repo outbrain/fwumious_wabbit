@@ -462,7 +462,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
         pb: &mut port_buffer::PortBuffer,
     ) {
         unsafe {
-            let frandseed = fb.example_number * fb.example_number;
+
             let bias_offset = self.num_inputs * self.num_neurons;
             let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
                 &mut pb.tape,
