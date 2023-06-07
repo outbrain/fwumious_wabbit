@@ -102,16 +102,18 @@ fn new_ffm_block_without_weights<L: OptimizerTrait + 'static>(
     mi: &model_instance::ModelInstance,
 ) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
     let ffm_num_fields = mi.ffm_fields.len() as u32;
+    let field_embedding_len = mi.ffm_k * ffm_num_fields as u32;
+
     let mut reg_ffm = BlockFFM::<L> {
         weights: Vec::new(),
         ffm_weights_len: 0,
         local_data_ffm_values: Vec::with_capacity(1024),
         ffm_k: mi.ffm_k,
-        ffm_num_fields: ffm_num_fields,
-        field_embedding_len: mi.ffm_k * ffm_num_fields,
+        ffm_num_fields,
+        field_embedding_len,
         optimizer_ffm: L::new(),
         output_offset: usize::MAX,
-        mutex: Mutex::new(())
+        mutex: Mutex::new(()),
     };
 
     if mi.ffm_k > 0 {
@@ -128,7 +130,7 @@ fn new_ffm_block_without_weights<L: OptimizerTrait + 'static>(
     // Verify that forward pass will have enough stack for temporary buffer
     if reg_ffm.ffm_k as usize * mi.ffm_fields.len() * mi.ffm_fields.len() > FFM_CONTRA_BUF_LEN {
         return Err(format!("FFM_CONTRA_BUF_LEN is {}. It needs to be at least ffm_k * number_of_fields^2. number_of_fields: {}, ffm_k: {}, please recompile with larger constant",
-                    FFM_CONTRA_BUF_LEN, mi.ffm_fields.len(), reg_ffm.ffm_k))?;
+                           FFM_CONTRA_BUF_LEN, mi.ffm_fields.len(), reg_ffm.ffm_k))?;
     }
 
     Ok(Box::new(reg_ffm))
@@ -228,7 +230,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     myslice.fill(0.0); // TODO : is this really needed?
 
                     let mut local_data_ffm_values = $local_data_ffm_values;
-                     //   let mut local_data_ffm_values = &mut $local_data_ffm_values;
 
                     let ffm_weights = &mut self.weights;
                     let fc = (fb.ffm_fields_count  * self.ffm_k) as usize;
@@ -623,7 +624,7 @@ mod tests {
             example_number: 0,
             lr_buffer: Vec::new(),
             ffm_buffer: v,
-            ffm_fields_count: ffm_fields_count,
+            ffm_fields_count,
         }
     }
 

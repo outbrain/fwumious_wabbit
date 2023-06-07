@@ -9,22 +9,6 @@ use crate::port_buffer;
 use crate::regressor;
 use regressor::BlockTrait;
 
-//use fastapprox::fast::sigmoid; // surprisingly this doesn't work very well
-
-/* We tested standard stable logistic function, but it gives slightly
-worse logloss results than plain logistic on our data */
-/*
-#[inline(always)]
-pub fn stable_logistic(t: f32) -> f32 {
-    if t > 0.0 {
-        return (1.0 +(-t).exp()).recip();
-    } else {
-        let texp = t.exp();
-        return texp / (1.0 + texp);
-    }
-}
-*/
-
 #[inline(always)]
 pub fn logistic(t: f32) -> f32 {
     return (1.0 + (-t).exp()).recip();
@@ -47,7 +31,7 @@ pub fn new_logloss_block(
         num_inputs: num_inputs as usize,
         input_offset: usize::MAX,
         output_offset: usize::MAX,
-        copy_to_result: copy_to_result,
+        copy_to_result,
     });
     let mut block_outputs = bg.add_node(block, vec![input]).unwrap();
     assert_eq!(block_outputs.len(), 1);
@@ -63,7 +47,7 @@ pub fn new_without_weights(
         num_inputs: num_inputs as usize,
         input_offset: usize::MAX,
         output_offset: usize::MAX,
-        copy_to_result: copy_to_result,
+        copy_to_result,
     }))
 }
 

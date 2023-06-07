@@ -14,12 +14,6 @@ use std::slice;
 
 #[derive(Clone, Debug)]
 #[repr(C)]
-pub struct Weight {
-    pub weight: f32,
-}
-
-#[derive(Clone, Debug)]
-#[repr(C)]
 pub struct OptimizerData<L: OptimizerTrait> {
     pub optimizer_data: L::PerWeightStore,
 }
@@ -143,21 +137,21 @@ pub fn get_input_output_borrows(
         len2
     );
     unsafe {
-        if start2 > start1 {
+        return if start2 > start1 {
             let (rest, second) = i.split_at_mut(start2);
             let (rest, first) = rest.split_at_mut(start1);
-            return (
+            (
                 first.get_unchecked_mut(0..len1),
                 second.get_unchecked_mut(0..len2),
-            );
+            )
         } else {
             let (rest, first) = i.split_at_mut(start1);
             let (rest, second) = rest.split_at_mut(start2);
-            return (
+            (
                 first.get_unchecked_mut(0..len1),
                 second.get_unchecked_mut(0..len2),
-            );
-        }
+            )
+        };
     }
 }
 
@@ -183,8 +177,7 @@ pub fn spredict2<'a>(
     pb.reset();
     let (block_run, further_blocks) = bg.blocks_final.split_at(1);
     block_run[0].forward(further_blocks, fb, pb);
-    let prediction_probability = pb.observations[0];
-    return prediction_probability;
+    pb.observations[0]
 }
 
 #[inline(always)]
