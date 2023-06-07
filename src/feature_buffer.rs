@@ -258,7 +258,7 @@ impl FeatureBufferTranslator {
                         lr_buffer.push(HashAndValue {
                             hash: handv.hash & self.lr_hash_mask,
                             value: handv.value * feature_combo_weight,
-                            combo_index: combo_index,
+                            combo_index,
                         });
                     }
                 }
@@ -292,6 +292,7 @@ impl FeatureBufferTranslator {
                             hash_index,
                             hash_value,
                             {
+
                                 ffm_buffer.push(HashAndValueAndSeq {
                                     hash: hash_index & self.ffm_hash_mask,
                                     value: hash_value,
@@ -357,7 +358,7 @@ mod tests {
             vec![HashAndValue {
                 hash: 116060,
                 value: 1.0,
-                combo_index: 1
+                combo_index: 1,
             }]
         ); // vw compatibility - no feature is no feature
     }
@@ -384,7 +385,7 @@ mod tests {
             vec![HashAndValue {
                 hash: 0xfea,
                 value: 1.0,
-                combo_index: 0
+                combo_index: 0,
             }]
         );
 
@@ -402,12 +403,12 @@ mod tests {
                 HashAndValue {
                     hash: 0xfea,
                     value: 1.0,
-                    combo_index: 0
+                    combo_index: 0,
                 },
                 HashAndValue {
                     hash: 0xfeb,
                     value: 1.0,
-                    combo_index: 0
+                    combo_index: 0,
                 }
             ]
         );
@@ -441,7 +442,7 @@ mod tests {
             vec![HashAndValue {
                 hash: 0xfea,
                 value: 1.0,
-                combo_index: 0
+                combo_index: 0,
             }]
         );
 
@@ -453,12 +454,12 @@ mod tests {
                 HashAndValue {
                     hash: 0xfea,
                     value: 1.0,
-                    combo_index: 0
+                    combo_index: 0,
                 },
                 HashAndValue {
                     hash: 0xfeb,
                     value: 1.0,
-                    combo_index: 1
+                    combo_index: 1,
                 }
             ]
         );
@@ -497,7 +498,7 @@ mod tests {
             vec![HashAndValue {
                 hash: 208368,
                 value: 1.0,
-                combo_index: 0
+                combo_index: 0,
             }]
         );
     }
@@ -520,7 +521,7 @@ mod tests {
             vec![HashAndValue {
                 hash: 0xfea,
                 value: 2.0,
-                combo_index: 0
+                combo_index: 0,
             }]
         );
     }
@@ -551,7 +552,7 @@ mod tests {
             vec![HashAndValueAndSeq {
                 hash: 0xfea,
                 value: 1.0,
-                contra_field_index: 0
+                contra_field_index: 0,
             }]
         );
     }
@@ -579,22 +580,22 @@ mod tests {
                 HashAndValueAndSeq {
                     hash: 0xfea,
                     value: 2.0,
-                    contra_field_index: 0
+                    contra_field_index: 0,
                 },
                 HashAndValueAndSeq {
                     hash: 0xfeb,
                     value: 3.0,
-                    contra_field_index: 0
+                    contra_field_index: 0,
                 },
                 HashAndValueAndSeq {
                     hash: 0xfea,
                     value: 2.0,
-                    contra_field_index: 1
+                    contra_field_index: 1,
                 },
                 HashAndValueAndSeq {
                     hash: 0xfeb,
                     value: 3.0,
-                    contra_field_index: 1
+                    contra_field_index: 1,
                 },
                 HashAndValueAndSeq {
                     hash: 0xfec,
@@ -630,32 +631,32 @@ mod tests {
                 HashAndValueAndSeq {
                     hash: 0xfff,
                     value: 2.0,
-                    contra_field_index: 0
+                    contra_field_index: 0,
                 },
                 HashAndValueAndSeq {
                     hash: 0xfeb,
                     value: 3.0,
-                    contra_field_index: 0
+                    contra_field_index: 0,
                 },
                 HashAndValueAndSeq {
                     hash: 0xfff,
                     value: 2.0,
-                    contra_field_index: 1
+                    contra_field_index: 1,
                 },
                 HashAndValueAndSeq {
                     hash: 0xfeb,
                     value: 3.0,
-                    contra_field_index: 1
+                    contra_field_index: 1,
                 },
                 HashAndValueAndSeq {
                     hash: 0x1,
                     value: 1.0,
-                    contra_field_index: 1
+                    contra_field_index: 1,
                 },
                 HashAndValueAndSeq {
                     hash: 0x1,
                     value: 1.0,
-                    contra_field_index: 2
+                    contra_field_index: 2,
                 },
             ]
         );
@@ -677,32 +678,32 @@ mod tests {
                 HashAndValueAndSeq {
                     hash: 0xffc,
                     value: 2.0,
-                    contra_field_index: 0
+                    contra_field_index: 0,
                 },
                 HashAndValueAndSeq {
                     hash: 0xfe8,
                     value: 3.0,
-                    contra_field_index: 0
+                    contra_field_index: 0,
                 },
                 HashAndValueAndSeq {
                     hash: 0xffc,
                     value: 2.0,
-                    contra_field_index: 3
+                    contra_field_index: 3,
                 },
                 HashAndValueAndSeq {
                     hash: 0xfe8,
                     value: 3.0,
-                    contra_field_index: 3
+                    contra_field_index: 3,
                 },
                 HashAndValueAndSeq {
                     hash: 0x0,
                     value: 1.0,
-                    contra_field_index: 3
+                    contra_field_index: 3,
                 },
                 HashAndValueAndSeq {
                     hash: 0x0,
                     value: 1.0,
-                    contra_field_index: 6
+                    contra_field_index: 6,
                 },
             ]
         );
@@ -752,12 +753,12 @@ mod tests {
                 HashAndValue {
                     hash: 0xffc,
                     value: 1.0,
-                    combo_index: 0
+                    combo_index: 0,
                 },
                 HashAndValue {
                     hash: 0xffa,
                     value: 1.0,
-                    combo_index: 0
+                    combo_index: 0,
                 }
             ]
         );

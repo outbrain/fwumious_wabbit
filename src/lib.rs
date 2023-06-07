@@ -56,7 +56,7 @@ pub struct Predictor {
 
 pub struct PredictorCache  {
     blocks: Vec<BlockCache>,
-    input_buffer: String,
+    input_buffer_size: usize,
 }
 
 impl Predictor {
@@ -74,10 +74,9 @@ impl Predictor {
     }
 
     unsafe fn predict_with_cache(&mut self, input_buffer: &str) -> f32 {
-        let mut cached_buffered_input = Cursor::new(&self.cache.input_buffer);
         let mut buffered_input = Cursor::new(&input_buffer);
         let reading_result = self.vw_parser
-            .next_vowpal_with_cache(&mut cached_buffered_input, &mut buffered_input);
+            .next_vowpal_with_cache(&mut buffered_input, self.cache.input_buffer_size);
 
         let buffer = match reading_result {
             Ok([]) => return -1.0, // EOF
@@ -90,14 +89,15 @@ impl Predictor {
     }
 
     unsafe fn setup_cache(&mut self, input_buffer: &str) -> f32 {
-        self.cache.input_buffer = input_buffer.to_string();
         let mut buffered_input = Cursor::new(input_buffer);
-        let reading_result = self.vw_parser.next_vowpal(&mut buffered_input);
-        let buffer = match reading_result {
-            Ok([]) => return -1.0, // EOF
+        let reading_result = self.vw_parser.next_vowpal_with_size(&mut buffered_input);
+        let (buffer, input_buffer_size) = match reading_result {
+            Ok(([], _)) => return -1.0, // EOF
             Ok(buffer2) => buffer2,
             Err(_e) => return -1.0,
         };
+        // ignore last newline byte
+        self.cache.input_buffer_size = input_buffer_size;
         self.feature_buffer_translator.translate(buffer, 0);
         let is_empty = self.cache.blocks.is_empty();
         self.regressor.setup_cache(&self.feature_buffer_translator.feature_buffer, &mut self.cache.blocks, is_empty);
@@ -135,7 +135,7 @@ pub extern "C" fn new_fw_predictor_prototype(command: *const c_char) -> *mut Ffi
         pb,
         cache: PredictorCache {
             blocks: Vec::default(),
-            input_buffer: String::default(),
+            input_buffer_size: 0,
         }
     };
     Box::into_raw(Box::new(predictor)).cast()
@@ -155,7 +155,7 @@ pub unsafe extern "C" fn clone_lite(prototype: *mut FfiPredictor) -> *mut FfiPre
 
         cache: PredictorCache {
             blocks: Vec::new(),
-            input_buffer: String::default(),
+            input_buffer_size: 0,
         }
     };
     Box::into_raw(Box::new(lite_predictor)).cast()

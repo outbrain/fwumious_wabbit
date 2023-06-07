@@ -159,26 +159,41 @@ impl VowpalParser {
         return self.next_vowpal_to_size(tmp_read_buf_size);
     }
 
-    pub fn next_vowpal_with_cache(
+    pub fn next_vowpal_with_size(
         &mut self,
-        cached_input_bufread: &mut impl BufRead,
         input_bufread: &mut impl BufRead,
-    ) -> Result<&[u32], Box<dyn Error>> {
+    ) -> Result<(&[u32], usize), Box<dyn Error>> {
         self.tmp_read_buf.truncate(0);
-        let cached_tmp_read_buf_size = match cached_input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
-            Ok(0) => return Ok(&[]),
+        let tmp_read_buf_size = match input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
+            Ok(0) => return Ok((&[], 0)),
             Ok(n) => n,
             Err(e) => Err(e)?,
         };
-        // ignore last newline byte
-        self.tmp_read_buf.truncate(cached_tmp_read_buf_size - 1);
+        let size = if self.tmp_read_buf.last().map_or(false, |value| *value == 0x0a) {
+            tmp_read_buf_size - 1
+        } else {
+            tmp_read_buf_size
+        };
+        match self.next_vowpal_to_size(tmp_read_buf_size) {
+            Ok(n) => Ok((n, size)),
+            Err(e) => Err(e)?,
+        }
+    }
+
+
+    pub fn next_vowpal_with_cache(
+        &mut self,
+        input_bufread: &mut impl BufRead,
+        cached_tmp_read_buf_size: usize,
+    ) -> Result<&[u32], Box<dyn Error>> {
+        self.tmp_read_buf.truncate(cached_tmp_read_buf_size);
 
         let tmp_read_buf_size = match input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
             Ok(0) => return Ok(&[]),
             Ok(n) => n,
             Err(e) => Err(e)?,
         };
-        return self.next_vowpal_to_size(cached_tmp_read_buf_size + tmp_read_buf_size - 1);
+        return self.next_vowpal_to_size(cached_tmp_read_buf_size + tmp_read_buf_size);
     }
 
     fn next_vowpal_to_size(
@@ -1067,18 +1082,21 @@ CC,featureC
 
         let mut rr = VowpalParser::new(&vw);
 
-        let mut buf = str_to_cursor("|BB b |AA:3 a:2.0\n");
+        let mut buf = str_to_cursor("|BB b |AA:3 a:2.0 \n");
+        let buf_result =
+            [8, 255, 1065353216, 2147876872, 1123906636, 2147483648, 292540976, 1086324736];
+
         assert_eq!(
             rr.next_vowpal(&mut buf).unwrap(),
-            [
-                8, 255, 1065353216, 2147876872, 1123906636, 2147483648, 292540976, 1086324736
-            ]
+            buf_result
         );
 
-        let cache_input_str = "|BB b\n";
+        let cache_input_str = "|BB b \n";
         let mut cache_buf = str_to_cursor(cache_input_str);
+        let (cache_result, cache_result_size) = rr.next_vowpal_with_size(&mut cache_buf).unwrap();
+
         assert_eq!(
-            rr.next_vowpal(&mut cache_buf).unwrap(),
+            cache_result,
             [
                 6,
                 255,
@@ -1089,15 +1107,133 @@ CC,featureC
             ]
         );
 
-        let mut cache_buf = str_to_cursor("|BB b \n");
-        let mut added_cache_buf = str_to_cursor("|AA:3 a:2.0\n");
+        let mut added_cache_buf = str_to_cursor("|AA:3 a:2.0 \n");
 
         // feature weight + namespace weight
         assert_eq!(
-            rr.next_vowpal_with_cache(&mut cache_buf, &mut added_cache_buf).unwrap(),
-            [
-                8, 255, 1065353216, 2147876872, 1123906636, 2147483648, 292540976, 1086324736
-            ]
+            rr.next_vowpal_with_cache(&mut added_cache_buf, cache_result_size).unwrap(),
+            buf_result
         );
+    }
+
+
+    #[test]
+    fn test_next_vowpal_from_position_2() {
+        // Test for perfect vowpal-compatible hashing
+        let vw_map_string = r#"
+AD,active_tab,
+Ao,ad_title_hash,
+AP,advertiser_id,
+Aa,browser_family,
+Ab,browser_version,
+AQ,campaign_id,
+Af,card_idx,
+At,conv_clicks,f32
+Ay,count_clicks_6h,f32
+Az,count_pv_24h,f32
+AY,country_v2,
+AG,day_of_week,
+AS,dma_code_v2,
+As,fcap_doc_count,f32
+BH,fcap_img_exp_intervals,
+AE,feed_idx,
+AT,from_cat,
+BI,from_cat_iab2,
+AH,from_doc,
+AW,from_language_lower,
+AI,from_src,
+Ae,idx,
+AL,image_uuid,
+Ax,interactions_count_click,f32
+Aw,interactions_count_page_view,f32
+Au,last_click_hrs,f32
+Av,last_pv_hrs,f32
+BD,multi_adv_clicked,
+BC,multi_cat_clicked,
+BE,multi_cmp_clicked,
+BF,multi_source_pv,
+BG,multi_weighted_adv_converged,
+Ac,os_family,
+Ad,os_version,
+BL,page_referrer_multiValue,
+AN,platform_upper,
+Ar,postal_code,
+AO,publisher_id,
+AZ,region_v2,
+Aq,requested_lst_num,f32
+Ah,screen_h,f32
+Ag,screen_w,f32
+AB,second_context_ctr,f32
+AU,to_cat,
+AJ,to_doc,
+Ap,to_doc_title_hash,
+AR,to_doc_top_keyword,
+AX,to_language_lower,
+AK,to_src,
+Am,top_image_labels,
+Ak,ui_abtest_id,
+Al,ui_abtest_variant_id,
+AV,user_interest,
+AF,user_local_hour,
+AC,viewability_prob,f32
+An,viewport_distance,f32
+BK,widget_data_sources,
+BJ,widget_data_widgets,
+AM,widget_id_gen,
+Aj,window_h,f32
+Ai,window_w,f32
+_namespace_skip_prefix,2
+"#;
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+
+        fn str_to_cursor(s: &str) -> Cursor<Vec<u8>> {
+            Cursor::new(s.as_bytes().to_vec())
+        }
+
+        let mut rr = VowpalParser::new(&vw);
+
+        let mut buf = str_to_cursor("|AT AT2301 |Av Av \n");
+        let buf_result =
+            [66, 255, 1065353216, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 621731558, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2151678018, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 830516975, 2143289344];
+        assert_eq!(
+            rr.next_vowpal(&mut buf).unwrap(),
+            buf_result
+        );
+
+        let mut buf = str_to_cursor("|AT AT2301 |Av Av |Ax Ax |An An0 |AE AE |AC AC0.21293139457702637 |AB AB0.0014225668821381183 |Aa AaChrome |Ag Ag1792 |AV AV |AO AO2571 |BI BI640 |Ac AcMac_OS |BL BL |AD AD1 |Ar Ar28037 |Af Af |AG AG7 |Aw Aw |Au Au |AZ AZMD |AN ANDESKTOP |AW AWes |Ay Ay |Ak Ak0 |Aj Aj294 |Ae Ae0 |AM AM174 |BJ BJ |BD BD |AI AI98310 |BK BK |At At |Ah Ah1120 |AY AYES |Ad Ad10.15.7 |Ab Ab112.0.0.0 |Ai Ai1792 |AH AH1145887945 |BF BF |BC BC |Al Al0 |BG BG |AS AS |Az Az |BE BE |AF AF08 |AJ AJ4627197312 |AU AU2006 |AQ AQ1055916426 |Am Ambook_font_publication |AX AXes |AK AK4102986 |Ao Ao-4757584104389244634 |AP AP54951432 |AR ARdemuestra |Ap Ap-4757584104389244634 |AL AL90e085132e0d923452285bf643b460b3b29e87aa4d54ccc4e53e6eedbeffbe4f |BH BH |Aq Aq1 |As As0 \n");
+        let buf_result =
+            [96, 255, 1065353216, 1547305923, 155134961, 2092629910, 615315132, 773930589, 934304032, 1140906196, 2152988758, 2152726610, 2153381980, 2925489, 2120118545, 429524425, 2153644128, 1848334989, 2102552990, 621731558, 1717132636, 2053269928, 1908756034, 1737198855, 1292739571, 2104930503, 2151809092, 2152464462, 2152595536, 2151678018, 929605245, 955670924, 2129558223, 2130774038, 1455166370, 1591600733, 1615192701, 1531780491, 1872504576, 1407291844, 1152149902, 567504919, 2153513054, 2153119832, 2152333388, 2152202314, 258228766, 322117837, 1618245923, 324627801, 182891891, 950102217, 480817187, 1568763925, 109399514, 582305520, 1306256650, 2152071240, 2151940166, 1992649640, 1294237052, 1657777368, 2152857684, 2153250906, 830516975, 2143289344, 708356075, 2143289344, 1792232037, 0, 2019030585, 1046088368, 396757798, 985298284, 669592595, 1155530752, 1110666914, 2143289344, 1327372501, 2143289344, 2056166874, 2143289344, 1908503282, 1133707264, 817092508, 2143289344, 2064319797, 1150025728, 509279549, 1155530752, 1256723720, 2143289344, 93821232, 1065353216, 171059996, 0];
+        assert_eq!(
+            rr.next_vowpal(&mut buf).unwrap(),
+            buf_result
+        );
+
+        let cache_input_str = "|AT AT2301 |Av Av |Ax Ax |An An0 |AE AE |AC AC0.21293139457702637 |AB AB0.0014225668821381183 |Aa AaChrome |Ag Ag1792 |AV AV |AO AO2571 |BI BI640 |Ac AcMac_OS |BL BL |AD AD1 |Ar Ar28037 |Af Af |AG AG7 |Aw Aw |Au Au |AZ AZMD |AN ANDESKTOP |AW AWes |Ay Ay |Ak Ak0 |Aj Aj294 |Ae Ae0 |AM AM174 |BJ BJ |BD BD |AI AI98310 |BK BK |At At |Ah Ah1120 |AY AYES |Ad Ad10.15.7 |Ab Ab112.0.0.0 |Ai Ai1792 |AH AH1145887945 |BF BF |BC BC |Al Al0 |BG BG |AS AS |Az Az |BE BE |AF AF08 \n";
+
+        let mut cache_buf = str_to_cursor(cache_input_str);
+        let (cache_result, cache_result_size) = rr.next_vowpal_with_size(&mut cache_buf).unwrap();
+        let mut cache_buf = str_to_cursor(cache_input_str);
+        assert_eq!(
+            cache_result,
+            [92, 255, 1065353216, 1547305923, 2147483648, 2147483648, 615315132, 773930589, 2147483648, 1140906196, 2152988758, 2152726610, 2153381980, 2925489, 2120118545, 429524425, 2147483648, 2147483648, 2102552990, 621731558, 1717132636, 2053269928, 1908756034, 1737198855, 1292739571, 2147483648, 2151809092, 2152464462, 2152595536, 2151678018, 929605245, 955670924, 2129558223, 2130774038, 1455166370, 1591600733, 1615192701, 1531780491, 1872504576, 1407291844, 1152149902, 567504919, 2147483648, 2153119832, 2152333388, 2152202314, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 2147483648, 1568763925, 109399514, 582305520, 1306256650, 2152071240, 2151940166, 1992649640, 1294237052, 1657777368, 2152857684, 2153250906, 830516975, 2143289344, 708356075, 2143289344, 1792232037, 0, 2019030585, 1046088368, 396757798, 985298284, 669592595, 1155530752, 1110666914, 2143289344, 1327372501, 2143289344, 2056166874, 2143289344, 1908503282, 1133707264, 817092508, 2143289344, 2064319797, 1150025728, 509279549, 1155530752, 1256723720, 2143289344]
+        );
+
+        let mut added_cache_buf = str_to_cursor("|AJ AJ4627197312 |AU AU2006 |AQ AQ1055916426 |Am Ambook_font_publication |AX AXes |AK AK4102986 |Ao Ao-4757584104389244634 |AP AP54951432 |AR ARdemuestra |Ap Ap-4757584104389244634 |AL AL90e085132e0d923452285bf643b460b3b29e87aa4d54ccc4e53e6eedbeffbe4f |BH BH |Aq Aq1 |As As0 \n");
+
+        // feature weight + namespace weight
+        assert_eq!(
+            rr.next_vowpal_with_cache(&mut added_cache_buf, cache_result_size).unwrap(),
+            buf_result
+        );
+
+
+        let mut added_cache_buf = str_to_cursor("|AJ AJ4627197312 |AU AU2006 |AQ AQ1055916426 |Am Ambook_font_publication |AX AXes |AK AK4102986 |Ao Ao-4757584104389244634 |AP AP54951432 |AR ARdemuestra |Ap Ap-4757584104389244634 |AL AL90e085132e0d923452285bf643b460b3b29e87aa4d54ccc4e53e6eedbeffbe4f |BH BH |Aq Aq1 |As As0 \n");
+
+        // feature weight + namespace weight
+        assert_eq!(
+            rr.next_vowpal_with_cache(&mut added_cache_buf, cache_result_size).unwrap(),
+            buf_result
+        );
+
     }
 }
