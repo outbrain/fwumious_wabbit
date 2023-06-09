@@ -568,7 +568,7 @@ impl TransformerCombine {
             },
         };
         let mut executor_from_namespaces: [ExecutorFromNamespace; 4] =
-            [c.clone(), c.clone(), c.clone(), c];
+            [c.clone(), c.clone(), c.clone(), c.clone()];
         for (x, namespace) in from_namespaces.iter().enumerate() {
             executor_from_namespaces[x].namespace_descriptor = namespace.namespace_descriptor;
         }
