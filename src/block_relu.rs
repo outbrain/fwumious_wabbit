@@ -46,7 +46,7 @@ impl BlockTrait for BlockRELU {
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert_eq!(output.get_output_index(), 0);
-        return self.num_inputs;
+	self.num_inputs
     }
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
