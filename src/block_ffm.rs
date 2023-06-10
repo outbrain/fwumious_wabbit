@@ -199,10 +199,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                 for z in 0..ffm_fields_count_as_usize {
                                     _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(feature_index + ffmk_as_usize)), _MM_HINT_T0);
                                     for k in 0..ffmk_as_usize {
-                                        let ffm_weight = ffm_weights.get_unchecked(feature_index + k);
-                                        if *ffm_weight != 0.0 {
-                                            *contra_fields.get_unchecked_mut(offset + k) += ffm_weight * feature_value;
-                                        }
+                                        *contra_fields.get_unchecked_mut(offset + k) += ffm_weights.get_unchecked(feature_index + k) * feature_value;
                                     }
 
                                     offset += fc;
@@ -399,11 +396,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         }
                     } else {
                         for z in 0..field_embedding_len_as_usize {
-                            let ffm_weight = ffm_weights.get_unchecked(feature_index + z);
-                            if *ffm_weight != 0.0 {
-                                *contra_fields.get_unchecked_mut(offset + z) +=
-                                    ffm_weight * feature_value;
-                            }
+                            *contra_fields.get_unchecked_mut(offset + z) +=
+                                    ffm_weights.get_unchecked(feature_index + z) * feature_value;
                         }
                     }
 
@@ -411,10 +405,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
                     let mut correction = 0.0;
                     for k in feature_field_index..feature_field_index + ffmk_as_usize {
-                        let ffm_weight = ffm_weights.get_unchecked(k);
-                        if *ffm_weight != 0.0 {
-                            correction += ffm_weight * ffm_weight;
-                        }
+                        correction += ffm_weights.get_unchecked(k) * ffm_weights.get_unchecked(k);
                     }
 
                     *myslice.get_unchecked_mut(((feature.contra_field_index / ffmk) * ffm_fields_count_plus_one) as usize) -=
@@ -587,11 +578,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                             }
                         } else {
                             for z in 0..field_embedding_len_as_usize {
-                                let ffm_weight = ffm_weights.get_unchecked(feature_index + z);
-                                if *ffm_weight != 0.0 {
-                                    *contra_fields.get_unchecked_mut(offset + z) +=
-                                        ffm_weight * feature_value;
-                                }
+                                *contra_fields.get_unchecked_mut(offset + z) +=
+                                    ffm_weights.get_unchecked(feature_index + z) * feature_value;
                             }
                         }
 
@@ -599,10 +587,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
                         let mut correction = 0.0;
                         for k in feature_field_index..feature_field_index + ffmk_as_usize {
-                            let ffm_weight = ffm_weights.get_unchecked(k);
-                            if *ffm_weight != 0.0 {
-                                correction += ffm_weight * ffm_weight;
-                            }
+                            correction += ffm_weights.get_unchecked(k) * ffm_weights.get_unchecked(k);
                         }
 
                         *ffm_slice.get_unchecked_mut(((feature.contra_field_index / ffmk) * ffm_fields_count_plus_one) as usize) -=
@@ -761,11 +746,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         }
                     } else {
                         for z in 0..field_embedding_len_as_usize {
-                            let ffm_weight = ffm_weights.get_unchecked(feature_index + z);
-                            if *ffm_weight != 0.0 {
-                                *contra_fields.get_unchecked_mut(offset + z) +=
-                                    ffm_weight * feature_value;
-                            }
+                            *contra_fields.get_unchecked_mut(offset + z) +=
+                                ffm_weights.get_unchecked(feature_index + z) * feature_value;
                         }
                     }
 
