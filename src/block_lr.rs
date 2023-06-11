@@ -1,6 +1,6 @@
 use std::any::Any;
 
-use crate::feature_buffer;
+use crate::{feature_buffer, parser};
 use crate::graph;
 use crate::model_instance;
 use crate::optimizer;
@@ -247,6 +247,9 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
             let mut lr_slice = lr.as_mut_slice();
 
             for feature in fb.lr_buffer.iter() {
+                if (feature.hash & parser::IS_NOT_SINGLE_MASK) == 0 {
+                    continue;
+                }
                 let feature_index = feature.hash as usize;
                 let feature_value = feature.value;
                 let combo_index = feature.combo_index as usize;

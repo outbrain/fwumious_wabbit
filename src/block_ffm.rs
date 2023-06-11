@@ -10,7 +10,7 @@ use merand48::*;
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 
-use crate::block_helpers;
+use crate::{block_helpers, parser};
 use crate::block_helpers::OptimizerData;
 use crate::feature_buffer;
 use crate::feature_buffer::FeatureBuffer;
@@ -494,7 +494,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             ffm_slice.copy_from_slice(ffm.as_slice());
 
             let cached_contra_fields = &contra_fields;
-            let mut contra_fields: [f32; FFM_CONTRA_BUF_LEN] = MaybeUninit::uninit().assume_init();
 
             let ffm_weights = &self.weights;
             _mm_prefetch(
@@ -523,6 +522,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             let field_embedding_len_as_usize = self.field_embedding_len as usize;
             let field_embedding_len_end = field_embedding_len_as_usize - field_embedding_len_as_usize % STEP;
 
+            let mut contra_fields: [f32; FFM_CONTRA_BUF_LEN] = MaybeUninit::uninit().assume_init();
+
             let mut ffm_buffer_index = 0;
 
             let zeroes: [f32; STEP] = [0.0; STEP];
@@ -548,11 +549,11 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 }
 
                 let mut feature_num = 0;
-                let maybe_cached_contra_fields = cached_contra_fields.get(&offset);
+                let maybe_cached_contra_field = cached_contra_fields.get(&offset);
                 while ffm_buffer_index < fb.ffm_buffer.len()
                     && fb.ffm_buffer.get_unchecked(ffm_buffer_index).contra_field_index == field_index_ffmk
                 {
-                    if let Some(cached_contra_field) = maybe_cached_contra_fields {
+                    if let Some(cached_contra_field) = maybe_cached_contra_field {
                         if feature_num == 0 {
                             // Copy only once, skip other copying as the data for all features of that contra_index is already calculated
                             contra_fields.get_unchecked_mut(offset..offset + field_embedding_len_as_usize)
@@ -571,7 +572,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         let feature_value = feature.value;
 
                         if feature_num == 0 {
-                            // first feature of the field - just overwrite
                             for z in 0..field_embedding_len_as_usize {
                                 *contra_fields.get_unchecked_mut(offset + z) =
                                     ffm_weights.get_unchecked(feature_index + z) * feature_value;
@@ -683,8 +683,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             let cached_contra_fields = contra_fields;
             cached_contra_fields.clear();
 
-            let mut contra_fields: [f32; FFM_CONTRA_BUF_LEN] = MaybeUninit::uninit().assume_init();
-
             let ffm_weights = &self.weights;
             _mm_prefetch(
                 mem::transmute::<&f32, &i8>(
@@ -711,6 +709,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
             let field_embedding_len_as_usize = self.field_embedding_len as usize;
 
+            let mut contra_fields: [f32; FFM_CONTRA_BUF_LEN] = MaybeUninit::uninit().assume_init();
+
             let mut ffm_buffer_index = 0;
 
             for field_index in 0..ffm_fields_count {
@@ -724,6 +724,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     continue;
                 }
 
+                let mut has_features = false;
                 let mut feature_num = 0;
                 while ffm_buffer_index < fb.ffm_buffer.len()
                     && fb.ffm_buffer.get_unchecked(ffm_buffer_index).contra_field_index == field_index_ffmk
@@ -736,36 +737,43 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         _MM_HINT_T0,
                     );
                     let feature = fb.ffm_buffer.get_unchecked(ffm_buffer_index);
-                    let feature_index = feature.hash as usize;
-                    let feature_value = feature.value;
 
-                    if feature_num == 0 {
-                        for z in 0..field_embedding_len_as_usize {
-                            *contra_fields.get_unchecked_mut(offset + z) =
-                                ffm_weights.get_unchecked(feature_index + z) * feature_value;
+                    if has_features || (feature.hash & parser::IS_NOT_SINGLE_MASK) != 0 {
+                        let feature_index = feature.hash as usize;
+                        let feature_value = feature.value;
+                        has_features = true;
+
+                        if feature_num == 0 {
+                            for z in 0..field_embedding_len_as_usize {
+                                *contra_fields.get_unchecked_mut(offset + z) =
+                                    ffm_weights.get_unchecked(feature_index + z) * feature_value;
+                            }
+                        } else {
+                            for z in 0..field_embedding_len_as_usize {
+                                *contra_fields.get_unchecked_mut(offset + z) +=
+                                    ffm_weights.get_unchecked(feature_index + z) * feature_value;
+                            }
                         }
-                    } else {
-                        for z in 0..field_embedding_len_as_usize {
-                            *contra_fields.get_unchecked_mut(offset + z) +=
-                                ffm_weights.get_unchecked(feature_index + z) * feature_value;
+
+                        let feature_field_index = feature_index + field_index_ffmk_as_usize;
+
+                        let mut correction = 0.0;
+                        for k in feature_field_index..feature_field_index + ffmk_as_usize {
+                            correction += ffm_weights.get_unchecked(k) * ffm_weights.get_unchecked(k);
                         }
+
+                        *ffm_slice.get_unchecked_mut(((feature.contra_field_index / ffmk) * ffm_fields_count_plus_one) as usize) -=
+                            correction * 0.5 * feature_value * feature_value;
                     }
-
-                    let feature_field_index = feature_index + field_index_ffmk_as_usize;
-
-                    let mut correction = 0.0;
-                    for k in feature_field_index..feature_field_index + ffmk_as_usize {
-                        correction += ffm_weights.get_unchecked(k) * ffm_weights.get_unchecked(k);
-                    }
-
-                    *ffm_slice.get_unchecked_mut(((feature.contra_field_index / ffmk) * ffm_fields_count_plus_one) as usize) -=
-                        correction * 0.5 * feature_value * feature_value;
 
                     ffm_buffer_index += 1;
                     feature_num += 1;
                 }
-                let contra_fields_slice = contra_fields.get_unchecked(offset..offset + field_embedding_len_as_usize);
-                cached_contra_fields.insert(offset, contra_fields_slice.to_vec());
+
+                if has_features {
+                    let contra_fields_slice = contra_fields.get_unchecked(offset..offset + field_embedding_len_as_usize);
+                    cached_contra_fields.insert(offset, contra_fields_slice.to_vec());
+                }
             }
         }
 
