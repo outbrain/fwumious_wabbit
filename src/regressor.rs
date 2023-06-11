@@ -20,14 +20,17 @@ use crate::model_instance;
 use crate::optimizer;
 use crate::port_buffer;
 
+pub const FFM_CONTRA_BUF_LEN: usize = 16384;
+
 pub enum BlockCache {
     FFM {
+        contra_fields: [f32; FFM_CONTRA_BUF_LEN],
+        contra_fields_present: Vec<bool>,
         ffm: Vec<f32>,
-        contra_fields: HashMap<usize, Vec<f32>>,
     },
     LR {
+        combo_indexes: Vec<bool>,
         lr: Vec<f32>,
-        combo_indexes: Vec<bool>
     },
 }
 

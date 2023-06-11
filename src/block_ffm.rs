@@ -20,11 +20,11 @@ use crate::optimizer;
 use crate::port_buffer;
 use crate::port_buffer::PortBuffer;
 use crate::regressor;
-use crate::regressor::BlockCache;
+use crate::regressor::{BlockCache, FFM_CONTRA_BUF_LEN};
 
 const FFM_STACK_BUF_LEN: usize = 131072;
-const FFM_CONTRA_BUF_LEN: usize = 16384;
 const STEP: usize = 4;
+const ZEROES: [f32; STEP] = [0.0; STEP];
 
 pub struct BlockFFM<L: OptimizerTrait> {
     pub optimizer_ffm: L,
@@ -352,8 +352,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
             let mut ffm_buffer_index = 0;
 
-            let zeroes: [f32; STEP] = [0.0; STEP];
-
             for field_index in 0..ffm_fields_count {
                 let field_index_ffmk = field_index * ffmk;
                 let field_index_ffmk_as_usize = field_index_ffmk as usize;
@@ -364,7 +362,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 {
                     // first feature of the field - just overwrite
                     for z in (offset..offset + field_embedding_len_end).step_by(STEP) {
-                        contra_fields.get_unchecked_mut(z..z + STEP).copy_from_slice(&zeroes);
+                        contra_fields.get_unchecked_mut(z..z + STEP).copy_from_slice(&ZEROES);
                     }
 
                     for z in offset + field_embedding_len_end..offset + field_embedding_len_as_usize {
@@ -479,8 +477,9 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         };
 
         let BlockCache::FFM {
-            ffm,
             contra_fields,
+            contra_fields_present,
+            ffm,
         } = next_cache else {
             log::warn!("Unable to downcast cache to BlockFFMCache, executing forward pass without cache");
             self.forward(further_blocks, fb, pb);
@@ -493,7 +492,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 [self.output_offset..(self.output_offset + num_outputs)];
             ffm_slice.copy_from_slice(ffm.as_slice());
 
-            let cached_contra_fields = &contra_fields;
+            let cached_contra_fields = contra_fields;
 
             let ffm_weights = &self.weights;
             _mm_prefetch(
@@ -526,8 +525,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
             let mut ffm_buffer_index = 0;
 
-            let zeroes: [f32; STEP] = [0.0; STEP];
-
             for field_index in 0..ffm_fields_count {
                 let field_index_ffmk = field_index * ffmk;
                 let field_index_ffmk_as_usize = field_index_ffmk as usize;
@@ -538,7 +535,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 {
                     // first feature of the field - just overwrite
                     for z in (offset..offset + field_embedding_len_end).step_by(STEP) {
-                        contra_fields.get_unchecked_mut(z..z + STEP).copy_from_slice(&zeroes);
+                        contra_fields.get_unchecked_mut(z..z + STEP).copy_from_slice(&ZEROES);
                     }
 
                     for z in offset + field_embedding_len_end..offset + field_embedding_len_as_usize {
@@ -549,15 +546,15 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 }
 
                 let mut feature_num = 0;
-                let maybe_cached_contra_field = cached_contra_fields.get(&offset);
+                let is_contra_fields_present = *contra_fields_present.get_unchecked(field_index as usize);
                 while ffm_buffer_index < fb.ffm_buffer.len()
                     && fb.ffm_buffer.get_unchecked(ffm_buffer_index).contra_field_index == field_index_ffmk
                 {
-                    if let Some(cached_contra_field) = maybe_cached_contra_field {
+                    if is_contra_fields_present {
                         if feature_num == 0 {
                             // Copy only once, skip other copying as the data for all features of that contra_index is already calculated
                             contra_fields.get_unchecked_mut(offset..offset + field_embedding_len_as_usize)
-                                .copy_from_slice(&cached_contra_field)
+                                .copy_from_slice(cached_contra_fields.get_unchecked(offset..offset + field_embedding_len_as_usize));
                         }
                     } else {
                         _mm_prefetch(
@@ -650,10 +647,16 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         further_blocks: &mut [Box<dyn BlockTrait>],
         caches: &mut Vec<BlockCache>,
     ) {
-        caches.push(BlockCache::FFM {
-            contra_fields: Default::default(),
-            ffm: vec![0.0; (self.ffm_num_fields * self.ffm_num_fields) as usize],
-        });
+        unsafe {
+            let mut contra_fields: [f32; FFM_CONTRA_BUF_LEN] = MaybeUninit::uninit().assume_init();
+
+            caches.push(BlockCache::FFM {
+                contra_fields: MaybeUninit::uninit().assume_init(),
+                contra_fields_present: vec![false; self.ffm_num_fields as usize],
+                ffm: vec![0.0; (self.ffm_num_fields * self.ffm_num_fields) as usize],
+            });
+        }
+
         block_helpers::create_forward_cache(further_blocks, caches);
     }
 
@@ -669,8 +672,9 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         };
 
         let BlockCache::FFM {
-            ffm,
             contra_fields,
+            contra_fields_present,
+            ffm,
         } = next_cache else {
             log::warn!("Unable to downcast cache to BlockFFMCache, skipping cache preparation");
             return;
@@ -681,7 +685,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             ffm_slice.fill(0.0);
 
             let cached_contra_fields = contra_fields;
-            cached_contra_fields.clear();
 
             let ffm_weights = &self.weights;
             _mm_prefetch(
@@ -770,9 +773,10 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     feature_num += 1;
                 }
 
+                *contra_fields_present.get_unchecked_mut(field_index as usize) = has_features;
                 if has_features {
                     let contra_fields_slice = contra_fields.get_unchecked(offset..offset + field_embedding_len_as_usize);
-                    cached_contra_fields.insert(offset, contra_fields_slice.to_vec());
+                    cached_contra_fields.get_unchecked_mut(offset..offset + field_embedding_len_as_usize).copy_from_slice(contra_fields_slice);
                 }
             }
         }
