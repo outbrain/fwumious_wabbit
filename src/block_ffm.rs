@@ -23,6 +23,7 @@ use crate::regressor;
 use crate::regressor::{BlockCache, FFM_CONTRA_BUF_LEN};
 
 const FFM_STACK_BUF_LEN: usize = 131072;
+const FFM_CONTRA_CACHE_BUF_LEN: usize = 1024;
 const STEP: usize = 4;
 const ZEROES: [f32; STEP] = [0.0; STEP];
 
@@ -372,6 +373,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     continue;
                 }
 
+                let ffm_index = (((field_index_ffmk) / ffmk) * ffm_fields_count_plus_one) as usize;
+
                 let mut feature_num = 0;
                 while ffm_buffer_index < fb.ffm_buffer.len()
                     && fb.ffm_buffer.get_unchecked(ffm_buffer_index).contra_field_index == field_index_ffmk
@@ -406,8 +409,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         correction += ffm_weights.get_unchecked(k) * ffm_weights.get_unchecked(k);
                     }
 
-                    *myslice.get_unchecked_mut(((feature.contra_field_index / ffmk) * ffm_fields_count_plus_one) as usize) -=
-                        correction * 0.5 * feature_value * feature_value;
+                    *myslice.get_unchecked_mut(ffm_index) -= correction * 0.5 * feature_value * feature_value;
 
                     ffm_buffer_index += 1;
                     feature_num += 1;
@@ -545,8 +547,10 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     continue;
                 }
 
-                let mut feature_num = 0;
+                let ffm_index = (((field_index_ffmk) / ffmk) * ffm_fields_count_plus_one) as usize;
                 let is_contra_fields_present = *contra_fields_present.get_unchecked(field_index as usize);
+
+                let mut feature_num = 0;
                 while ffm_buffer_index < fb.ffm_buffer.len()
                     && fb.ffm_buffer.get_unchecked(ffm_buffer_index).contra_field_index == field_index_ffmk
                 {
@@ -587,8 +591,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                             correction += ffm_weights.get_unchecked(k) * ffm_weights.get_unchecked(k);
                         }
 
-                        *ffm_slice.get_unchecked_mut(((feature.contra_field_index / ffmk) * ffm_fields_count_plus_one) as usize) -=
-                            correction * 0.5 * feature_value * feature_value;
+                        *ffm_slice.get_unchecked_mut(ffm_index) -= correction * 0.5 * feature_value * feature_value;
                     }
                     ffm_buffer_index += 1;
                     feature_num += 1;
@@ -712,7 +715,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
             let field_embedding_len_as_usize = self.field_embedding_len as usize;
 
-            let mut contra_fields: [f32; FFM_CONTRA_BUF_LEN] = MaybeUninit::uninit().assume_init();
+            let mut contra_fields: [f32; FFM_CONTRA_CACHE_BUF_LEN] = MaybeUninit::uninit().assume_init();
 
             let mut ffm_buffer_index = 0;
 
@@ -727,6 +730,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     continue;
                 }
 
+                let ffm_index = (((field_index_ffmk) / ffmk) * ffm_fields_count_plus_one) as usize;
                 let mut has_features = false;
                 let mut feature_num = 0;
                 while ffm_buffer_index < fb.ffm_buffer.len()
@@ -748,12 +752,12 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
                         if feature_num == 0 {
                             for z in 0..field_embedding_len_as_usize {
-                                *contra_fields.get_unchecked_mut(offset + z) =
+                                *contra_fields.get_unchecked_mut(z) =
                                     ffm_weights.get_unchecked(feature_index + z) * feature_value;
                             }
                         } else {
                             for z in 0..field_embedding_len_as_usize {
-                                *contra_fields.get_unchecked_mut(offset + z) +=
+                                *contra_fields.get_unchecked_mut(z) +=
                                     ffm_weights.get_unchecked(feature_index + z) * feature_value;
                             }
                         }
@@ -765,8 +769,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                             correction += ffm_weights.get_unchecked(k) * ffm_weights.get_unchecked(k);
                         }
 
-                        *ffm_slice.get_unchecked_mut(((feature.contra_field_index / ffmk) * ffm_fields_count_plus_one) as usize) -=
-                            correction * 0.5 * feature_value * feature_value;
+                        *ffm_slice.get_unchecked_mut(ffm_index) -= correction * 0.5 * feature_value * feature_value;
                     }
 
                     ffm_buffer_index += 1;
@@ -775,7 +778,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
                 *contra_fields_present.get_unchecked_mut(field_index as usize) = has_features;
                 if has_features {
-                    let contra_fields_slice = contra_fields.get_unchecked(offset..offset + field_embedding_len_as_usize);
+                    let contra_fields_slice = contra_fields.get_unchecked(0..field_embedding_len_as_usize);
                     cached_contra_fields.get_unchecked_mut(offset..offset + field_embedding_len_as_usize).copy_from_slice(contra_fields_slice);
                 }
             }
