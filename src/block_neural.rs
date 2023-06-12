@@ -385,6 +385,11 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
 
                         let general_gradient = output_tape.get_unchecked(j) * self.dropout_inv;
 
+			// if this is zero, subsequent multiplications make no sense
+			if general_gradient == 0.0 {
+			    continue;
+			}
+
                         let j_offset = j * self.num_inputs as usize;
                         for i in 0..self.num_inputs as usize {
                             let feature_value = input_tape.get_unchecked(i);
@@ -457,7 +462,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
         pb: &mut port_buffer::PortBuffer,
     ) {
         unsafe {
-            let frandseed = fb.example_number * fb.example_number;
+
             let bias_offset = self.num_inputs * self.num_neurons;
             let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
                 &mut pb.tape,
