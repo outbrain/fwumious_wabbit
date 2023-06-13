@@ -168,7 +168,7 @@ pub fn new_neuronlayer_block(
             )
         }
     }
-    .unwrap();
+        .unwrap();
 
     let mut block_outputs = bg.add_node(block, vec![input]).unwrap();
     assert_eq!(block_outputs.len(), 1);
@@ -281,6 +281,10 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
                     }
 
                     let general_gradient = output_tape.get_unchecked(j) * self.dropout_inv;
+                    // if this is zero, subsequent multiplications make no sense
+                    if general_gradient == 0.0 {
+                        continue;
+                    }
 
                     let j_offset = j * self.num_inputs as usize;
                     for i in 0..self.num_inputs as usize {
@@ -549,7 +553,7 @@ mod tests {
             0.0, // max norm
             false,
         )
-        .unwrap();
+            .unwrap();
         let observe_block =
             block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0))
                 .unwrap();
@@ -584,7 +588,7 @@ mod tests {
             0.0,   // max norm
             false, // layer norm
         )
-        .unwrap();
+            .unwrap();
         let observe_block =
             block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0))
                 .unwrap();
