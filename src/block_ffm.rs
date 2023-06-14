@@ -373,7 +373,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     continue;
                 }
 
-                let ffm_index = (((field_index_ffmk) / ffmk) * ffm_fields_count_plus_one) as usize;
+                let ffm_index = (field_index * ffm_fields_count_plus_one) as usize;
 
                 let mut feature_num = 0;
                 while ffm_buffer_index < fb.ffm_buffer.len()
@@ -547,7 +547,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     continue;
                 }
 
-                let ffm_index = (((field_index_ffmk) / ffmk) * ffm_fields_count_plus_one) as usize;
+                let ffm_index = (field_index * ffm_fields_count_plus_one) as usize;
                 let is_contra_fields_present = *contra_fields_present.get_unchecked(field_index as usize);
 
                 let mut feature_num = 0;
@@ -730,7 +730,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     continue;
                 }
 
-                let ffm_index = (((field_index_ffmk) / ffmk) * ffm_fields_count_plus_one) as usize;
+                let ffm_index = (field_index_ffmk * ffm_fields_count_plus_one) as usize;
                 let mut has_features = false;
                 let mut feature_num = 0;
                 while ffm_buffer_index < fb.ffm_buffer.len()

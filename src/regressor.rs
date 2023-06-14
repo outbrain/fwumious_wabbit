@@ -1,6 +1,5 @@
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::any::Any;
-use std::collections::HashMap;
 use std::error::Error;
 use std::io;
 use std::io::Cursor;
