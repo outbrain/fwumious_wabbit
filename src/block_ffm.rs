@@ -176,7 +176,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                             continue;
                         }
 
-                        let mut feature_num = 0;
+                        let mut is_first_feature = true;
                         while ffm_buffer_index < fb.ffm_buffer.len() && fb.ffm_buffer.get_unchecked(ffm_buffer_index).contra_field_index == field_index_ffmk {
                             _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(ffm_buffer_index + 1).hash as usize)), _MM_HINT_T0);
 
@@ -186,7 +186,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                             let mut feature_index = feature.hash as usize;
                             let mut offset: usize = field_index_ffmk as usize;
 
-                            if feature_num == 0 {
+                            if is_first_feature {
                                 for z in 0..ffm_fields_count_as_usize {
                                     _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(feature_index + ffmk_as_usize)), _MM_HINT_T0);
                                     for k in 0..ffmk_as_usize {
@@ -196,6 +196,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                     offset += fc;
                                     feature_index += ffmk_as_usize;
                                 }
+                                is_first_feature = false;
                             } else {
                                 for z in 0..ffm_fields_count_as_usize {
                                     _mm_prefetch(mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(feature_index + ffmk_as_usize)), _MM_HINT_T0);
@@ -209,7 +210,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                             }
 
                             ffm_buffer_index += 1;
-                            feature_num += 1;
                         }
                     }
 
@@ -375,7 +375,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
                 let ffm_index = (field_index * ffm_fields_count_plus_one) as usize;
 
-                let mut feature_num = 0;
+                let mut is_first_feature = true;
                 while ffm_buffer_index < fb.ffm_buffer.len()
                     && fb.ffm_buffer.get_unchecked(ffm_buffer_index).contra_field_index == field_index_ffmk
                 {
@@ -390,15 +390,28 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     let feature_index = feature.hash as usize;
                     let feature_value = feature.value;
 
-                    if feature_num == 0 {
-                        for z in 0..field_embedding_len_as_usize {
-                            *contra_fields.get_unchecked_mut(offset + z) =
-                                ffm_weights.get_unchecked(feature_index + z) * feature_value;
-                        }
-                    } else {
-                        for z in 0..field_embedding_len_as_usize {
-                            *contra_fields.get_unchecked_mut(offset + z) +=
+                    if is_first_feature {
+                        if feature_value == 1.0 {
+                            contra_fields.get_unchecked_mut(offset..offset + field_embedding_len_as_usize)
+                                .copy_from_slice(ffm_weights.get_unchecked(feature_index..feature_index + field_embedding_len_as_usize));
+                        } else {
+                            for z in 0..field_embedding_len_as_usize {
+                                *contra_fields.get_unchecked_mut(offset + z) =
                                     ffm_weights.get_unchecked(feature_index + z) * feature_value;
+                            }
+                        }
+                        is_first_feature = false;
+                    } else {
+                        if feature_value == 1.0 {
+                            for z in 0..field_embedding_len_as_usize {
+                                *contra_fields.get_unchecked_mut(offset + z) +=
+                                    *ffm_weights.get_unchecked(feature_index + z);
+                            }
+                        } else {
+                            for z in 0..field_embedding_len_as_usize {
+                                *contra_fields.get_unchecked_mut(offset + z) +=
+                                    ffm_weights.get_unchecked(feature_index + z) * feature_value;
+                            }
                         }
                     }
 
@@ -412,7 +425,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     *myslice.get_unchecked_mut(ffm_index) -= correction * 0.5 * feature_value * feature_value;
 
                     ffm_buffer_index += 1;
-                    feature_num += 1;
                 }
             }
 
@@ -550,12 +562,12 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 let ffm_index = (field_index * ffm_fields_count_plus_one) as usize;
                 let is_contra_fields_present = *contra_fields_present.get_unchecked(field_index as usize);
 
-                let mut feature_num = 0;
+                let mut is_first_feature = true;
                 while ffm_buffer_index < fb.ffm_buffer.len()
                     && fb.ffm_buffer.get_unchecked(ffm_buffer_index).contra_field_index == field_index_ffmk
                 {
                     if is_contra_fields_present {
-                        if feature_num == 0 {
+                        if is_first_feature {
                             // Copy only once, skip other copying as the data for all features of that contra_index is already calculated
                             contra_fields.get_unchecked_mut(offset..offset + field_embedding_len_as_usize)
                                 .copy_from_slice(cached_contra_fields.get_unchecked(offset..offset + field_embedding_len_as_usize));
@@ -572,15 +584,28 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         let feature_index = feature.hash as usize;
                         let feature_value = feature.value;
 
-                        if feature_num == 0 {
-                            for z in 0..field_embedding_len_as_usize {
-                                *contra_fields.get_unchecked_mut(offset + z) =
-                                    ffm_weights.get_unchecked(feature_index + z) * feature_value;
+                        if is_first_feature {
+                            if feature_value == 1.0 {
+                                contra_fields.get_unchecked_mut(offset..offset + field_embedding_len_as_usize)
+                                    .copy_from_slice(ffm_weights.get_unchecked(feature_index..feature_index + field_embedding_len_as_usize));
+                            } else {
+                                for z in 0..field_embedding_len_as_usize {
+                                    *contra_fields.get_unchecked_mut(offset + z) =
+                                        ffm_weights.get_unchecked(feature_index + z) * feature_value;
+                                }
                             }
+                            is_first_feature = false;
                         } else {
-                            for z in 0..field_embedding_len_as_usize {
-                                *contra_fields.get_unchecked_mut(offset + z) +=
-                                    ffm_weights.get_unchecked(feature_index + z) * feature_value;
+                            if feature_value == 1.0 {
+                                for z in 0..field_embedding_len_as_usize {
+                                    *contra_fields.get_unchecked_mut(offset + z) +=
+                                        *ffm_weights.get_unchecked(feature_index + z);
+                                }
+                            } else {
+                                for z in 0..field_embedding_len_as_usize {
+                                    *contra_fields.get_unchecked_mut(offset + z) +=
+                                        ffm_weights.get_unchecked(feature_index + z) * feature_value;
+                                }
                             }
                         }
 
@@ -594,7 +619,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         *ffm_slice.get_unchecked_mut(ffm_index) -= correction * 0.5 * feature_value * feature_value;
                     }
                     ffm_buffer_index += 1;
-                    feature_num += 1;
                 }
             }
 
@@ -732,7 +756,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
                 let ffm_index = (field_index_ffmk * ffm_fields_count_plus_one) as usize;
                 let mut has_features = false;
-                let mut feature_num = 0;
+                let mut is_first_feature = true;
                 while ffm_buffer_index < fb.ffm_buffer.len()
                     && fb.ffm_buffer.get_unchecked(ffm_buffer_index).contra_field_index == field_index_ffmk
                 {
@@ -750,15 +774,28 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         let feature_value = feature.value;
                         has_features = true;
 
-                        if feature_num == 0 {
-                            for z in 0..field_embedding_len_as_usize {
-                                *contra_fields.get_unchecked_mut(z) =
-                                    ffm_weights.get_unchecked(feature_index + z) * feature_value;
+                        if is_first_feature {
+                            if feature_value == 1.0 {
+                                contra_fields.get_unchecked_mut(0..field_embedding_len_as_usize)
+                                    .copy_from_slice(ffm_weights.get_unchecked(feature_index..feature_index + field_embedding_len_as_usize));
+                            } else {
+                                for z in 0..field_embedding_len_as_usize {
+                                    *contra_fields.get_unchecked_mut( z) =
+                                        ffm_weights.get_unchecked(feature_index + z) * feature_value;
+                                }
                             }
+                            is_first_feature = false;
                         } else {
-                            for z in 0..field_embedding_len_as_usize {
-                                *contra_fields.get_unchecked_mut(z) +=
-                                    ffm_weights.get_unchecked(feature_index + z) * feature_value;
+                            if feature_value == 1.0 {
+                                for z in 0..field_embedding_len_as_usize {
+                                    *contra_fields.get_unchecked_mut( z) +=
+                                        *ffm_weights.get_unchecked(feature_index + z);
+                                }
+                            } else {
+                                for z in 0..field_embedding_len_as_usize {
+                                    *contra_fields.get_unchecked_mut(z) +=
+                                        ffm_weights.get_unchecked(feature_index + z) * feature_value;
+                                }
                             }
                         }
 
@@ -773,7 +810,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     }
 
                     ffm_buffer_index += 1;
-                    feature_num += 1;
                 }
 
                 *contra_fields_present.get_unchecked_mut(field_index as usize) = has_features;
