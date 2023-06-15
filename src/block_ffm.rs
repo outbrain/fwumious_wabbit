@@ -391,6 +391,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     let feature_value = feature.value;
 
                     if is_first_feature {
+                        is_first_feature = false;
                         if feature_value == 1.0 {
                             contra_fields.get_unchecked_mut(offset..offset + field_embedding_len_as_usize)
                                 .copy_from_slice(ffm_weights.get_unchecked(feature_index..feature_index + field_embedding_len_as_usize));
@@ -400,7 +401,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                     ffm_weights.get_unchecked(feature_index + z) * feature_value;
                             }
                         }
-                        is_first_feature = false;
                     } else {
                         if feature_value == 1.0 {
                             for z in 0..field_embedding_len_as_usize {
@@ -568,6 +568,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 {
                     if is_contra_fields_present {
                         if is_first_feature {
+                            is_first_feature = false;
                             // Copy only once, skip other copying as the data for all features of that contra_index is already calculated
                             contra_fields.get_unchecked_mut(offset..offset + field_embedding_len_as_usize)
                                 .copy_from_slice(cached_contra_fields.get_unchecked(offset..offset + field_embedding_len_as_usize));
@@ -585,6 +586,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         let feature_value = feature.value;
 
                         if is_first_feature {
+                            is_first_feature = false;
                             if feature_value == 1.0 {
                                 contra_fields.get_unchecked_mut(offset..offset + field_embedding_len_as_usize)
                                     .copy_from_slice(ffm_weights.get_unchecked(feature_index..feature_index + field_embedding_len_as_usize));
@@ -594,7 +596,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                         ffm_weights.get_unchecked(feature_index + z) * feature_value;
                                 }
                             }
-                            is_first_feature = false;
                         } else {
                             if feature_value == 1.0 {
                                 for z in 0..field_embedding_len_as_usize {
