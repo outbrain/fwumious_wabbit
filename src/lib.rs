@@ -21,6 +21,7 @@ mod optimizer;
 mod parser;
 mod persistence;
 mod port_buffer;
+mod radix_tree;
 mod regressor;
 mod serving;
 mod version;

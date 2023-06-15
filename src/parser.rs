@@ -7,6 +7,7 @@ use std::io::Error as IOError;
 use std::io::ErrorKind;
 use std::str;
 use std::string::String;
+use crate::radix_tree::{NamespaceDescriptorWithHash, RadixTree};
 
 const RECBUF_LEN: usize = 2048;
 pub const HEADER_LEN: u32 = 3;
@@ -22,8 +23,8 @@ pub const FLOAT32_ONE: u32 = 1065353216; // 1.0f32.to_bits()
 #[derive(Clone)]
 pub struct VowpalParser {
     vw_map: vwmap::VwNamespaceMap,
+    map_vwname_to_namespace_descriptor: RadixTree,
     tmp_read_buf: Vec<u8>,
-    namespace_hash_seeds: [u32; 256], // Each namespace has its hash seed
     pub output_buffer: Vec<u32>,
 }
 
@@ -74,21 +75,26 @@ organization of records buffer
 
 impl VowpalParser {
     pub fn new(vw: &vwmap::VwNamespaceMap) -> VowpalParser {
-        let mut rr = VowpalParser {
+        let mut map_vwname_to_namespace_descriptor = RadixTree::default();
+        for (namespace_vwname_as_bytes, namespace_descriptor) in vw.map_vwname_to_namespace_descriptor.iter() {
+            let namespace_hash_seed = murmur3::hash32(str::from_utf8(&namespace_vwname_as_bytes).unwrap());
+            map_vwname_to_namespace_descriptor.insert(
+                namespace_vwname_as_bytes,
+                NamespaceDescriptorWithHash::new(namespace_descriptor.clone(), namespace_hash_seed)
+            );
+        }
+
+        let mut parser = VowpalParser {
             vw_map: (*vw).clone(),
+            map_vwname_to_namespace_descriptor,
             tmp_read_buf: Vec::with_capacity(RECBUF_LEN),
             output_buffer: Vec::with_capacity(RECBUF_LEN * 2),
-            namespace_hash_seeds: [0; 256],
         };
-        rr.output_buffer.resize(
+        parser.output_buffer.resize(
             (vw.num_namespaces as u32 * NAMESPACE_DESC_LEN + HEADER_LEN) as usize,
             0,
         );
-        for i in 0..vw.num_namespaces {
-            let namespace_vwname_str = &vw.vw_source.entries[i].namespace_vwname;
-            rr.namespace_hash_seeds[i] = murmur3::hash32(namespace_vwname_str);
-        }
-        rr
+        parser
     }
 
     pub fn print(&self) -> () {
@@ -335,9 +341,7 @@ impl VowpalParser {
 
                     let current_vwname = self.tmp_read_buf.get_unchecked(i_start..i_end_first_part);
 
-                    let current_namespace_descriptor = match self
-                        .vw_map
-                        .map_vwname_to_namespace_descriptor
+                    let current_namespace_descriptor_with_hash = match self.map_vwname_to_namespace_descriptor
                         .get(current_vwname)
                     {
                         Some(v) => v,
@@ -353,11 +357,10 @@ impl VowpalParser {
                             )))
                         }
                     };
+                    let current_namespace_descriptor = current_namespace_descriptor_with_hash.descriptor;
                     let current_namespace_index =
                         current_namespace_descriptor.namespace_index as usize;
-                    current_namespace_hash_seed = *self
-                        .namespace_hash_seeds
-                        .get_unchecked(current_namespace_index);
+                    current_namespace_hash_seed = current_namespace_descriptor_with_hash.hash_seed;
                     current_namespace_index_offset =
                         current_namespace_index * NAMESPACE_DESC_LEN as usize + HEADER_LEN as usize;
                     current_namespace_format = current_namespace_descriptor.namespace_format;

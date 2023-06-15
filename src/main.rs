@@ -47,6 +47,7 @@ mod multithread_helpers;
 mod optimizer;
 mod parser;
 mod persistence;
+mod radix_tree;
 mod regressor;
 mod serving;
 mod version;
