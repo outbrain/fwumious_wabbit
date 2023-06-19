@@ -492,6 +492,7 @@ impl ModelInstance {
             }
         }
 
+	println!("{:?}", mi);
         Ok(mi)
     }
 
