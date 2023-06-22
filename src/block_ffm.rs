@@ -2,7 +2,6 @@ use core::arch::x86_64::*;
 use merand48::*;
 use std::any::Any;
 use std::error::Error;
-use std::f32::consts::PI;
 use std::io;
 use std::mem::{self, MaybeUninit};
 use std::sync::Mutex;
@@ -11,12 +10,12 @@ use crate::block_helpers;
 use crate::consts;
 use crate::feature_buffer;
 use crate::graph;
-use crate::graph::BlockGraph;
 use crate::model_instance;
 use crate::optimizer;
 use crate::port_buffer;
 use crate::regressor;
 
+use crate::graph::BlockGraph;
 use block_helpers::WeightAndOptimizerData;
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
@@ -24,7 +23,7 @@ use regressor::BlockTrait;
 const FFM_STACK_BUF_LEN: usize = 131072;
 const FFM_CONTRA_BUF_LEN: usize = 16384;
 
-const SQRT_OF_ONE_HALF: f32 = 0.70710678118;
+const SQRT_OF_ONE_HALF: f32 = 0.707_106_77;
 
 pub struct BlockFFM<L: OptimizerTrait> {
     pub optimizer_ffm: L,
@@ -70,7 +69,7 @@ macro_rules! specialize_k {
 impl<L: OptimizerTrait + 'static> BlockFFM<L> {
     fn set_weights(&mut self, lower_bound: f32, difference: f32) {
         for i in 0..self.ffm_weights_len {
-            let w = difference * merand48(i as u64) as f32 + lower_bound;
+            let w = difference * merand48(i as u64) + lower_bound;
             self.weights[i as usize].weight = w;
             self.weights[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
         }
@@ -83,13 +82,13 @@ pub fn new_ffm_block(
 ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
     let block = match mi.optimizer {
         model_instance::Optimizer::AdagradLUT => {
-            new_ffm_block_without_weights::<optimizer::OptimizerAdagradLUT>(&mi)
+            new_ffm_block_without_weights::<optimizer::OptimizerAdagradLUT>(mi)
         }
         model_instance::Optimizer::AdagradFlex => {
-            new_ffm_block_without_weights::<optimizer::OptimizerAdagradFlex>(&mi)
+            new_ffm_block_without_weights::<optimizer::OptimizerAdagradFlex>(mi)
         }
         model_instance::Optimizer::SGD => {
-            new_ffm_block_without_weights::<optimizer::OptimizerSGD>(&mi)
+            new_ffm_block_without_weights::<optimizer::OptimizerSGD>(mi)
         }
     }
     .unwrap();
@@ -190,7 +189,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert!(output.get_output_index() == 0);
-        return (self.ffm_num_fields * self.ffm_num_fields) as usize;
+        (self.ffm_num_fields * self.ffm_num_fields) as usize
     }
 
     fn get_num_output_slots(&self) -> usize {
@@ -367,7 +366,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
             if local_data_ffm_len < FFM_STACK_BUF_LEN {
                 // Fast-path - using on-stack data structures
-                let mut local_data_ffm_values: [f32; FFM_STACK_BUF_LEN as usize] =
+                let mut local_data_ffm_values: [f32; FFM_STACK_BUF_LEN] =
                     MaybeUninit::uninit().assume_init(); //[0.0; FFM_STACK_BUF_LEN as usize];
                 core_macro!(local_data_ffm_values);
             } else {
@@ -434,7 +433,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                 .contra_field_index
                                 > field_index_ffmk
                         {
-                            for z in 0..field_embedding_len as usize {
+                            for z in 0..field_embedding_len {
                                 // first time we see this field - just overwrite
                                 *contra_fields.get_unchecked_mut(offset + z) = 0.0;
                             }
@@ -499,7 +498,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     }
 
                     for f1 in 0..fb.ffm_fields_count as usize {
-                        let f1_offset = f1 * field_embedding_len as usize;
+                        let f1_offset = f1 * field_embedding_len;
                         let f1_offset2 = f1 * fb.ffm_fields_count as usize;
                         let f1_ffmk = f1 * FFMK as usize;
                         let mut f2_offset_ffmk = f1_offset + f1_ffmk;
@@ -511,7 +510,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         }
 
                         for f2 in f1 + 1..fb.ffm_fields_count as usize {
-                            f2_offset_ffmk += field_embedding_len as usize;
+                            f2_offset_ffmk += field_embedding_len;
                             f1_offset_ffmk += FFMK as usize;
                             for k in 0..FFMK {
                                 myslice[f1 * fb.ffm_fields_count as usize + f2] += contra_fields
@@ -536,8 +535,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                             //    continue	// not combining within a field
                             //}
                             let joint_value = left_hash.value * right_hash.value;
-                            let lindex = (left_hash.hash + right_hash.contra_field_index) as u32;
-                            let rindex = (right_hash.hash + left_hash.contra_field_index) as u32;
+                            let lindex = left_hash.hash + right_hash.contra_field_index;
+                            let rindex = right_hash.hash + left_hash.contra_field_index;
                             for k in 0..FFMK {
                                 let left_hash_weight =
                                     ffm_weights.get_unchecked((lindex + k) as usize).weight;
@@ -555,7 +554,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
     }
 
     fn get_serialized_len(&self) -> usize {
-        return self.ffm_weights_len as usize;
+        self.ffm_weights_len as usize
     }
 
     fn read_weights_from_buf(
@@ -628,7 +627,7 @@ mod tests {
         }
     }
 
-    fn ffm_init<T: OptimizerTrait + 'static>(block_ffm: &mut Box<dyn BlockTrait>) -> () {
+    fn ffm_init<T: OptimizerTrait + 'static>(block_ffm: &mut Box<dyn BlockTrait>) {
         let mut block_ffm = block_ffm.as_any().downcast_mut::<BlockFFM<T>>().unwrap();
 
         for i in 0..block_ffm.weights.len() {
@@ -721,7 +720,7 @@ mod tests {
                 HashAndValueAndSeq {
                     hash: 100,
                     value: 2.0,
-                    contra_field_index: mi.ffm_k * 1,
+                    contra_field_index: mi.ffm_k,
                 },
             ],
             2,
@@ -786,7 +785,7 @@ mod tests {
                 HashAndValueAndSeq {
                     hash: 100,
                     value: 1.0,
-                    contra_field_index: mi.ffm_k * 1,
+                    contra_field_index: mi.ffm_k,
                 },
             ],
             2,
@@ -815,7 +814,7 @@ mod tests {
                 HashAndValueAndSeq {
                     hash: 100,
                     value: 2.0,
-                    contra_field_index: mi.ffm_k * 1,
+                    contra_field_index: mi.ffm_k,
                 },
             ],
             2,
@@ -869,17 +868,17 @@ B,featureB
                 HashAndValueAndSeq {
                     hash: 100,
                     value: 2.0,
-                    contra_field_index: mi.ffm_k * 1,
+                    contra_field_index: mi.ffm_k,
                 },
             ],
             2,
         );
-        assert_epsilon!(spredict2(&mut bg, &fbuf, &mut pb, true), 0.9933072);
-        assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, true), 0.9933072);
-        assert_epsilon!(spredict2(&mut bg, &fbuf, &mut pb, false), 0.9395168);
-        assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, false), 0.9395168);
-        assert_epsilon!(spredict2(&mut bg, &fbuf, &mut pb, false), 0.9395168);
-        assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, false), 0.9395168);
+        assert_epsilon!(spredict2(&mut bg, fbuf, &mut pb, true), 0.9933072);
+        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, true), 0.9933072);
+        assert_epsilon!(spredict2(&mut bg, fbuf, &mut pb, false), 0.9395168);
+        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 0.9395168);
+        assert_epsilon!(spredict2(&mut bg, fbuf, &mut pb, false), 0.9395168);
+        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 0.9395168);
     }
 
     #[test]
@@ -919,17 +918,17 @@ B,featureB
                 HashAndValueAndSeq {
                     hash: 100,
                     value: 2.0,
-                    contra_field_index: mi.ffm_k * 1,
+                    contra_field_index: mi.ffm_k,
                 },
             ],
             2,
         );
 
-        assert_eq!(spredict2(&mut bg, &fbuf, &mut pb, true), 1.0);
-        assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, true), 1.0);
-        assert_eq!(spredict2(&mut bg, &fbuf, &mut pb, false), 0.9949837);
-        assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, false), 0.9949837);
-        assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, false), 0.9949837);
+        assert_eq!(spredict2(&mut bg, fbuf, &mut pb, true), 1.0);
+        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, true), 1.0);
+        assert_eq!(spredict2(&mut bg, fbuf, &mut pb, false), 0.9949837);
+        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 0.9949837);
+        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 0.9949837);
     }
 
     #[test]
@@ -977,7 +976,7 @@ B,featureB
                 HashAndValueAndSeq {
                     hash: 5,
                     value: 1.0,
-                    contra_field_index: mi.ffm_k * 1,
+                    contra_field_index: mi.ffm_k,
                 },
                 HashAndValueAndSeq {
                     hash: 100,
@@ -995,7 +994,7 @@ B,featureB
             vec![HashAndValueAndSeq {
                 hash: 5,
                 value: 1.0,
-                contra_field_index: mi.ffm_k * 1,
+                contra_field_index: mi.ffm_k,
             }],
             3,
         );

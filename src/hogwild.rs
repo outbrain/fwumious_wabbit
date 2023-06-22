@@ -79,10 +79,10 @@ impl HogwildWorker {
             feature_buffer_translator,
             port_buffer
         };
-        let thread = thread::spawn(move || {
+        
+        thread::spawn(move || {
             worker.train(receiver)
-        });
-        thread
+        })
     }
 
     pub fn train(&mut self, receiver: Arc<Mutex<Receiver<Vec<u32>>>>) {

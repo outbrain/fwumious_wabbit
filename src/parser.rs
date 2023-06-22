@@ -91,7 +91,7 @@ impl VowpalParser {
         rr
     }
 
-    pub fn print(&self) -> () {
+    pub fn print(&self) {
         log::info!("item out {:?}", self.output_buffer);
     }
 
@@ -104,18 +104,18 @@ impl VowpalParser {
     ) -> Result<f32, Box<dyn Error>> {
         unsafe {
             if i_end - i_start == 4
-                && self.tmp_read_buf[i_start + 0] == 'N' as u8
-                && self.tmp_read_buf[i_start + 1] == 'O' as u8
-                && self.tmp_read_buf[i_start + 2] == 'N' as u8
-                && self.tmp_read_buf[i_start + 3] == 'E' as u8
+                && self.tmp_read_buf[i_start] == b'N'
+                && self.tmp_read_buf[i_start + 1] == b'O'
+                && self.tmp_read_buf[i_start + 2] == b'N'
+                && self.tmp_read_buf[i_start + 3] == b'E'
             {
                 return Ok(f32::NAN);
             }
 
             match str::from_utf8_unchecked(&self.tmp_read_buf[i_start..i_end]).parse::<f32>() {
-                Ok(f) => return Ok(f),
+                Ok(f) => Ok(f),
                 Err(_e) => {
-                    return Err(Box::new(IOError::new(
+                    Err(Box::new(IOError::new(
                         ErrorKind::Other,
                         format!(
                             "{}: {}",
@@ -124,8 +124,8 @@ impl VowpalParser {
                         ),
                     )))
                 }
-            };
-        };
+            }
+        }
     }
 
     // This is a very very slow implementation, but it's ok, this is called extremely infrequently to decode a command
@@ -157,7 +157,7 @@ impl VowpalParser {
             Err(e) => Err(e)?,
         };
 
-        let bufpos: usize = (self.vw_map.num_namespaces + HEADER_LEN as usize) as usize;
+        let bufpos: usize = self.vw_map.num_namespaces + HEADER_LEN as usize;
         self.output_buffer.truncate(bufpos);
         for i in &mut self.output_buffer[0..bufpos] {
             *i = NO_FEATURES
@@ -200,13 +200,13 @@ impl VowpalParser {
                         } else {
                             return Err(Box::new(IOError::new(
                                 ErrorKind::Other,
-                                format!("Cannot parse an example"),
+                                "Cannot parse an example".to_string(),
                             )));
                         }
                     } else {
                         return Err(Box::new(IOError::new(
                             ErrorKind::Other,
-                            format!("Cannot parse an example"),
+                            "Cannot parse an example".to_string(),
                         )));
                         //                            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown first character of the label: ascii {:?}", *p.add(0)))))
                     }
@@ -391,7 +391,7 @@ impl VowpalParser {
                                     | (((bufpos_namespace_start << 16) + self.output_buffer.len())
                                         as u32);
                             if current_namespace_weight * feature_weight != 1.0 {
-                                return Err(Box::new(IOError::new(ErrorKind::Other, format!("Namespaces that are f32 can not have weight attached neither to namespace nor to a single feature (basically they can\' use :weight syntax"))));
+                                return Err(Box::new(IOError::new(ErrorKind::Other, "Namespaces that are f32 can not have weight attached neither to namespace nor to a single feature (basically they can\' use :weight syntax".to_string())));
                             }
                         } else {
                             self.output_buffer
@@ -421,10 +421,10 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use std::io::Cursor;
-    use vwmap;
+    
 
     fn nd(start: u32, end: u32) -> u32 {
-        return (start << 16) + end;
+        (start << 16) + end
     }
 
     #[test]
@@ -712,9 +712,8 @@ C,featureC
 
         // flush should return [999]
         let mut buf = str_to_cursor("flush");
-        assert_eq!(
-            rr.next_vowpal(&mut buf).err().unwrap().is::<FlushCommand>(),
-            true
+        assert!(
+            rr.next_vowpal(&mut buf).err().unwrap().is::<FlushCommand>()
         );
 
         // Unrecognized label -> Error
@@ -774,29 +773,28 @@ C,featureC
 
         // flush should return FlushCommand
         let mut buf = str_to_cursor("flush");
-        assert_eq!(
-            rr.next_vowpal(&mut buf).err().unwrap().is::<FlushCommand>(),
-            true
+        assert!(
+            rr.next_vowpal(&mut buf).err().unwrap().is::<FlushCommand>()
         );
 
         // flush should return FlushCommand
         let mut buf = str_to_cursor("hogwild_load /path/to/filename");
         let result = rr.next_vowpal(&mut buf).err().unwrap();
-        assert_eq!(result.is::<HogwildLoadCommand>(), true);
+        assert!(result.is::<HogwildLoadCommand>());
         let hogwild_command = result.downcast_ref::<HogwildLoadCommand>().unwrap();
         assert_eq!(hogwild_command.filename, "/path/to/filename");
 
         // flush should return FlushCommand
         let mut buf = str_to_cursor("hogwild_load   /path/to/filename");
         let result = rr.next_vowpal(&mut buf).err().unwrap();
-        assert_eq!(result.is::<HogwildLoadCommand>(), true);
+        assert!(result.is::<HogwildLoadCommand>());
         let hogwild_command = result.downcast_ref::<HogwildLoadCommand>().unwrap();
         assert_eq!(hogwild_command.filename, "/path/to/filename");
 
         // flush should return FlushCommand
         let mut buf = str_to_cursor("hogwild_load   /path/to/filename  ");
         let result = rr.next_vowpal(&mut buf).err().unwrap();
-        assert_eq!(result.is::<HogwildLoadCommand>(), true);
+        assert!(result.is::<HogwildLoadCommand>());
         let hogwild_command = result.downcast_ref::<HogwildLoadCommand>().unwrap();
         assert_eq!(hogwild_command.filename, "/path/to/filename");
 

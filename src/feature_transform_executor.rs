@@ -31,8 +31,7 @@ pub enum SeedNumber {
     Default = 0,
     One = 1,
     Two = 2,
-    Three = 3,
-    Four = 4,
+    Three = 3
 }
 
 #[derive(Clone)]
@@ -62,21 +61,19 @@ impl ExecutorToNamespace {
         if !f.is_finite() {
             // these handle INF, -INF and NAN
             self.emit_i32::<SEED_ID>(f.to_bits() as i32, hash_value);
-        } else {
-            if interpolated {
-                let floor = f.floor();
-                let floor_int = floor as i32;
-                let part = f - floor;
-                if part != 0.0 {
-                    self.emit_i32::<SEED_ID>(floor_int + 1, hash_value * part);
-                }
-                let part = 1.0 - part;
-                if part != 0.0 {
-                    self.emit_i32::<SEED_ID>(floor_int, hash_value * part);
-                }
-            } else {
-                self.emit_i32::<SEED_ID>(f as i32, hash_value);
+        } else if interpolated {
+            let floor = f.floor();
+            let floor_int = floor as i32;
+            let part = f - floor;
+            if part != 0.0 {
+                self.emit_i32::<SEED_ID>(floor_int + 1, hash_value * part);
             }
+            let part = 1.0 - part;
+            if part != 0.0 {
+                self.emit_i32::<SEED_ID>(floor_int, hash_value * part);
+            }
+        } else {
+            self.emit_i32::<SEED_ID>(f as i32, hash_value);
         }
     }
 
@@ -210,11 +207,11 @@ impl TransformExecutors {
         let mut namespaces_to: Vec<ExecutorToNamespace> = Vec::new();
         for transformed_namespace in &namespace_transforms.v {
             let transformed_namespace_executor =
-                TransformExecutor::from_namespace_transform(&transformed_namespace).unwrap();
+                TransformExecutor::from_namespace_transform(transformed_namespace).unwrap();
             executors.push(transformed_namespace_executor);
         }
         TransformExecutors {
-            executors: executors,
+            executors,
         }
     }
 
@@ -268,7 +265,7 @@ mod tests {
             namespace_seeds: default_seeds(1), // These are precomputed namespace seeds
             tmp_data: Vec::new(),
         };
-        let mut to_namespace = to_namespace_empty.clone();
+        let mut to_namespace = to_namespace_empty;
         to_namespace.emit_f32::<{ SeedNumber::Default as usize }>(5.4, 20.0, true);
         let to_data_1: i32 = 6;
         let to_data_1_value = 20.0 * (5.4 - 5.0);

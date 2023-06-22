@@ -10,7 +10,7 @@ impl PortBuffer {
         PortBuffer {
             tape: Default::default(),
             observations: Default::default(),
-            tape_len: tape_len,
+            tape_len,
         }
     }
 
