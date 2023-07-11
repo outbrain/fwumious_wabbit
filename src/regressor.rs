@@ -55,7 +55,7 @@ pub trait BlockTrait {
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize;
     fn get_num_output_slots(&self) -> usize;
     fn get_input_offset(&mut self, input: graph::InputSlot) -> Result<usize, Box<dyn Error>> {
-        Err(format!("get_input_offset() is only supported by CopyBlock"))?
+        Err("get_input_offset() is only supported by CopyBlock".to_string())?
     }
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {}
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {}
@@ -91,7 +91,7 @@ pub struct Regressor {
 }
 
 pub fn get_regressor_without_weights(mi: &model_instance::ModelInstance) -> Regressor {
-    Regressor::new_without_weights(&mi)
+    Regressor::new_without_weights(mi)
 }
 
 pub fn get_regressor_with_weights(mi: &model_instance::ModelInstance) -> Regressor {
@@ -132,7 +132,7 @@ impl Regressor {
             output = block_misc::new_join_block(&mut bg, vec![output, triangle_ffm]).unwrap();
         }
 
-        if mi.nn_config.layers.len() > 0 {
+        if !mi.nn_config.layers.is_empty() {
             let mut join_block: Option<graph::BlockPtrOutput> = None;
             if mi.nn_config.topology == "one" {
                 let (a1, a2) = block_misc::new_copy_block_2(&mut bg, output).unwrap();
@@ -144,7 +144,7 @@ impl Regressor {
                 let (a1, a2) = block_misc::new_copy_block_2(&mut bg, output).unwrap();
                 output = a1;
                 join_block = Some(a2);
-                output = block_normalize::new_normalize_layer_block(&mut bg, &mi, output).unwrap();
+                output = block_normalize::new_normalize_layer_block(&mut bg, mi, output).unwrap();
 
                 /*let (a1, a2) = block_misc::new_copy_block_2(&mut bg, output).unwrap();
                 output = a1;
@@ -156,7 +156,7 @@ impl Regressor {
                 let (a1, a2) = block_misc::new_copy_block_2(&mut bg, output).unwrap();
                 output = a1;
                 join_block = Some(a2);
-                output = block_normalize::new_stop_block(&mut bg, &mi, output).unwrap();
+                output = block_normalize::new_stop_block(&mut bg, mi, output).unwrap();
             } else {
                 Err(format!(
                     "unknown nn topology: \"{}\"",
@@ -194,7 +194,7 @@ impl Regressor {
                 let init_type_str: String =
                     layer.remove("init").unwrap_or("hu".to_string()).to_string();
 
-                if layer.len() > 0 {
+                if !layer.is_empty() {
                     panic!(
                         "Unknown --nn parameter for layer number {} : {:?}",
                         layer_num, layer
@@ -234,7 +234,7 @@ impl Regressor {
                 //                        width, neuron_type, dropout, maxnorm, init_type);
                 output = block_neural::new_neuronlayer_block(
                     &mut bg,
-                    &mi,
+                    mi,
                     output,
                     neuron_type,
                     width,
@@ -247,14 +247,14 @@ impl Regressor {
 
                 if layernorm == NNLayerNorm::BeforeRelu {
                     output =
-                        block_normalize::new_normalize_layer_block(&mut bg, &mi, output).unwrap();
+                        block_normalize::new_normalize_layer_block(&mut bg, mi, output).unwrap();
                 }
                 if activation == NNActivation::Relu {
-                    output = block_relu::new_relu_block(&mut bg, &mi, output).unwrap();
+                    output = block_relu::new_relu_block(&mut bg, mi, output).unwrap();
                 }
                 if layernorm == NNLayerNorm::AfterRelu {
                     output =
-                        block_normalize::new_normalize_layer_block(&mut bg, &mi, output).unwrap();
+                        block_normalize::new_normalize_layer_block(&mut bg, mi, output).unwrap();
                 }
             }
             // If we have split
@@ -264,7 +264,7 @@ impl Regressor {
             }
             output = block_neural::new_neuron_block(
                 &mut bg,
-                &mi,
+                mi,
                 output,
                 block_neural::NeuronType::WeightedSum,
                 block_neural::InitType::One,
@@ -330,9 +330,9 @@ impl Regressor {
         block_helpers::forward_backward(further_blocks, fb, pb, update);
 
         assert_eq!(pb.observations.len(), 1);
-        let prediction_probability = pb.observations.pop().unwrap();
+        
 
-        return prediction_probability;
+        pb.observations.pop().unwrap()
     }
 
     pub fn predict(
@@ -347,9 +347,9 @@ impl Regressor {
         block_helpers::forward(further_blocks, fb, pb);
 
         assert_eq!(pb.observations.len(), 1);
-        let prediction_probability = pb.observations.pop().unwrap();
+        
 
-        return prediction_probability;
+        pb.observations.pop().unwrap()
     }
 
     // Yeah, this is weird. I just didn't want to break the format compatibility at this point
@@ -362,7 +362,7 @@ impl Regressor {
             .iter()
             .map(|block| block.get_serialized_len())
             .sum::<usize>() as u64;
-        output_bufwriter.write_u64::<LittleEndian>(length as u64)?;
+        output_bufwriter.write_u64::<LittleEndian>(length)?;
 
         for v in &self.blocks_boxes {
             v.write_weights_to_buf(output_bufwriter)?;
@@ -403,7 +403,7 @@ impl Regressor {
         // make sure we are creating immutable regressor from SGD mi
         assert!(mi.optimizer == model_instance::Optimizer::SGD);
 
-        let mut rg = Regressor::new_without_weights(&mi);
+        let mut rg = Regressor::new_without_weights(mi);
         rg.immutable = true;
         Ok(rg)
     }
@@ -442,8 +442,8 @@ impl Regressor {
         // Only to be used by unit tests
         // make sure we are creating immutable regressor from SGD mi
         assert!(mi.optimizer == model_instance::Optimizer::SGD);
-        let mut rg = self.immutable_regressor_without_weights(&mi)?;
-        rg.allocate_and_init_weights(&mi);
+        let mut rg = self.immutable_regressor_without_weights(mi)?;
+        rg.allocate_and_init_weights(mi);
 
         let mut tmp_vec: Vec<u8> = Vec::new();
         for (i, v) in &mut self.blocks_boxes.iter().enumerate() {

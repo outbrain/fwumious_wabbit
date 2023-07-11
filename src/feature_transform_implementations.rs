@@ -24,12 +24,12 @@ impl FunctionExecutorTrait for FunctionExampleSqrt {
         &self,
         record_buffer: &[u32],
         to_namespace: &mut ExecutorToNamespace,
-        transform_executors: &TransformExecutors,
+        _transform_executors: &TransformExecutors,
     ) {
         feature_reader_float_namespace!(
             record_buffer,
             self.from_namespace.namespace_descriptor,
-            hash_index,
+            _hash_index,
             hash_value,
             float_value,
             {
@@ -49,7 +49,7 @@ impl FunctionExampleSqrt {
         function_params: &Vec<f32>,
     ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
         // For simplicity of example, we just assert instead of full error reporting
-        assert!(function_params.len() == 0);
+        assert!(function_params.is_empty());
         assert!(from_namespaces.len() == 1);
         assert!(from_namespaces[0].namespace_descriptor.namespace_type == NamespaceType::Primitive);
         assert!(from_namespaces[0].namespace_descriptor.namespace_format == NamespaceFormat::F32);
@@ -95,12 +95,12 @@ impl FunctionExecutorTrait for TransformerBinner {
         &self,
         record_buffer: &[u32],
         to_namespace: &mut ExecutorToNamespace,
-        transform_executors: &TransformExecutors,
+        _transform_executors: &TransformExecutors,
     ) {
         feature_reader_float_namespace!(
             record_buffer,
             self.from_namespace.namespace_descriptor,
-            hash_index,
+            _hash_index,
             hash_value,
             float_value,
             {
@@ -135,7 +135,7 @@ impl TransformerBinner {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes up to two float arguments, example {}(A)(2.0, 3.5). Both are optional.\nFirst parameter is the minimum parameter to apply function at (default: -MAX), second parameter is resolution (default: 1.0))", function_name, function_name))));
         }
 
-        let greater_than = match function_params.get(0) {
+        let greater_than = match function_params.first() {
             Some(&greater_than) => greater_than,
             None => 0.0,
         };
@@ -176,10 +176,10 @@ impl TransformerBinner {
             from_namespace: ExecutorFromNamespace {
                 namespace_descriptor: from_namespaces[0].namespace_descriptor,
             },
-            resolution: resolution,
-            greater_than: greater_than,
-            function_pointer: function_pointer,
-            interpolated: interpolated,
+            resolution,
+            greater_than,
+            function_pointer,
+            interpolated,
         }))
     }
 }
@@ -270,7 +270,7 @@ impl TransformerLogRatioBinner {
             return Err(Box::new(IOError::new(ErrorKind::Other, format!("Function {} takes up to two float arguments, example {}(A)(2.0, 3.5). Both are optional.\nFirst parameter is the minimum parameter to apply function at (default: -MAX), second parameter is resolution (default: 1.0))", function_name, function_name))));
         }
 
-        let greater_than = match function_params.get(0) {
+        let greater_than = match function_params.first() {
             Some(&greater_than) => greater_than,
             None => 0.0,
         };
@@ -311,9 +311,9 @@ impl TransformerLogRatioBinner {
             from_namespace2: ExecutorFromNamespace {
                 namespace_descriptor: from_namespaces[1].namespace_descriptor,
             },
-            resolution: resolution,
-            greater_than: greater_than,
-            interpolated: interpolated,
+            resolution,
+            greater_than,
+            interpolated,
         }))
     }
 }
@@ -539,7 +539,7 @@ impl TransformerCombine {
         from_namespaces: &Vec<feature_transform_parser::Namespace>,
         function_params: &Vec<f32>,
     ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
-        if function_params.len() != 0 {
+        if !function_params.is_empty() {
             return Err(Box::new(IOError::new(
                 ErrorKind::Other,
                 format!(
@@ -593,7 +593,7 @@ mod tests {
     }
 
     fn nd(start: u32, end: u32) -> u32 {
-        return (start << 16) + end;
+        (start << 16) + end
     }
 
     fn ns_desc(i: u16) -> NamespaceDescriptor {
@@ -693,7 +693,7 @@ mod tests {
         transformer.execute_function(&record_buffer, &mut to_namespace, &mut transform_executors);
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
-        let mut to_namespace_comparison = to_namespace_empty.clone();
+        let mut to_namespace_comparison = to_namespace_empty;
         to_namespace_comparison
             .emit_i32::<{ SeedNumber::One as usize }>((300.0_f32 - 40.0_f32).sqrt() as i32, 1.0f32);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
@@ -746,7 +746,7 @@ mod tests {
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
         to_namespace_comparison
-            .emit_i32_i32::<{ SeedNumber::One as usize }>(3 as i32, 7 as i32, 1.0);
+            .emit_i32_i32::<{ SeedNumber::One as usize }>(3_i32, 7_i32, 1.0);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
 
         // Now let's have 30.0/60.0
@@ -849,7 +849,7 @@ mod tests {
         transformer.execute_function(&record_buffer, &mut to_namespace, &mut transform_executors);
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
-        let mut to_namespace_comparison = to_namespace_empty.clone();
+        let mut to_namespace_comparison = to_namespace_empty;
         to_namespace_comparison.emit_f32::<{ SeedNumber::Three as usize }>(
             (50_f32 - 40_f32).ln(),
             1.0,
@@ -923,7 +923,7 @@ mod tests {
         transformer.execute_function(&record_buffer, &mut to_namespace, &mut transform_executors);
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
-        let mut to_namespace_comparison = to_namespace_empty.clone();
+        let mut to_namespace_comparison = to_namespace_empty;
         to_namespace_comparison.emit_i32::<{ SeedNumber::Default as usize }>(
             (1775699190 & MASK31) as i32,
             2.0f32 * 40.,
@@ -978,9 +978,9 @@ mod tests {
         transformer.execute_function(&record_buffer, &mut to_namespace, &mut transform_executors);
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
-        let mut to_namespace_comparison = to_namespace_empty.clone();
+        let mut to_namespace_comparison = to_namespace_empty;
         to_namespace_comparison
-            .emit_i32::<{ SeedNumber::Default as usize }>((1775699190 ^ 1775699190) as i32, 3.0f32);
+            .emit_i32::<{ SeedNumber::Default as usize }>(1775699190 ^ 1775699190, 3.0f32);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
     }
 }

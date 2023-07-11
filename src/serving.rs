@@ -61,11 +61,11 @@ impl WorkerThread {
         receiver: Arc<Mutex<mpsc::Receiver<net::TcpStream>>>,
     ) -> Result<thread::JoinHandle<u32>, Box<dyn Error>> {
         let mut wt = WorkerThread {
-            id: id,
-            re_fixed: re_fixed,
-            fbt: fbt,
-            pa: pa,
-            pb: pb,
+            id,
+            re_fixed,
+            fbt,
+            pa,
+            pb,
         };
         let thread = thread::spawn(move || {
             wt.start(receiver);
@@ -117,7 +117,7 @@ impl WorkerThread {
                             &hogwild_command.filename,
                         ) {
                             Ok(_) => {
-                                let p_res = format!("hogwild_load success\n");
+                                let p_res = "hogwild_load success\n".to_string();
                                 match writer.write_all(p_res.as_bytes()) {
                                     Ok(_) => {}
                                     Err(_e) => {
@@ -127,7 +127,7 @@ impl WorkerThread {
                             }
                             Err(_e) => {
                                 // TODO This kind of error should fold the whole daemon...
-                                let p_res = format!("ERR: hogwild_load fail\n");
+                                let p_res = "ERR: hogwild_load fail\n".to_string();
                                 match writer.write_all(p_res.as_bytes()) {
                                     Ok(_) => {}
                                     Err(_e) => {
@@ -138,7 +138,7 @@ impl WorkerThread {
                             }
                         }
                     } else {
-                        let p_res = format!("ERR: {}\n", e.to_string());
+                        let p_res = format!("ERR: {}\n", e);
                         match writer.write_all(p_res.as_bytes()) {
                             Ok(_) => match writer.flush() {
                                 Ok(_) => {}
@@ -168,7 +168,7 @@ impl WorkerThread {
         }
     }
 
-    pub fn start(&mut self, receiver: Arc<Mutex<mpsc::Receiver<net::TcpStream>>>) -> () {
+    pub fn start(&mut self, receiver: Arc<Mutex<mpsc::Receiver<net::TcpStream>>>) {
         // Simple endless serving loop: receive new connection and serve it
         // when handle_connection exits, the connection is dropped
         loop {
@@ -181,8 +181,8 @@ impl WorkerThread {
 }
 
 impl Serving {
-    pub fn new<'a>(
-        cl: &clap::ArgMatches<'a>,
+    pub fn new(
+        cl: &clap::ArgMatches<'_>,
         vw: &vwmap::VwNamespaceMap,
         re_fixed: Box<regressor::Regressor>,
         mi: &model_instance::ModelInstance,
@@ -197,9 +197,9 @@ impl Serving {
         let listening_interface = format!("127.0.0.1:{}", port);
         log::info!("Starting to listen on {}", listening_interface);
         let mut s = Serving {
-            listening_interface: listening_interface.to_string(),
+            listening_interface,
             worker_threads: Vec::new(),
-            sender: sender,
+            sender,
             foreground: cl.is_present("foreground"),
         };
 
@@ -226,7 +226,7 @@ impl Serving {
         let re_fixed2 = BoxedRegressorTrait::new(re_fixed);
         let pb = re_fixed2.new_portbuffer();
         let fbt = feature_buffer::FeatureBufferTranslator::new(mi);
-        let pa = parser::VowpalParser::new(&vw);
+        let pa = parser::VowpalParser::new(vw);
         for i in 0..num_children {
             let newt = WorkerThread::new(
                 i,
@@ -265,12 +265,12 @@ mod tests {
 
     impl IsEmpty for std::io::BufReader<mockstream::SharedMockStream> {
         fn is_empty(&mut self) -> bool {
-            return true;
+            true
         }
     }
     impl IsEmpty for std::io::BufReader<mockstream::FailingMockStream> {
         fn is_empty(&mut self) -> bool {
-            return true;
+            true
         }
     }
 
@@ -293,9 +293,9 @@ C,featureC
 
         let mut newt = WorkerThread {
             id: 1,
-            fbt: fbt,
-            pa: pa,
-            re_fixed: re_fixed,
+            fbt,
+            pa,
+            re_fixed,
             pb,
         };
 
@@ -330,7 +330,7 @@ C,featureC
                 newt.handle_connection(&mut reader, &mut writer)
             );
             let x = mocked_stream.pop_bytes_written();
-            assert_eq!(&x[..] == &b"ERR: Cannot parse an example\n"[..], true);
+            assert!(&x[..] == &b"ERR: Cannot parse an example\n"[..]);
         }
 
         // Non Working stream test
@@ -347,7 +347,7 @@ C,featureC
                 newt.handle_connection(&mut reader, &mut writer)
             );
             let mut reader = BufReader::new(mocked_stream_error.clone());
-            let mut writer = BufWriter::new(mocked_stream_error.clone());
+            let mut writer = BufWriter::new(mocked_stream_error);
             // Now there will be an error
             assert_eq!(
                 ConnectionEnd::StreamFlushError,
@@ -367,7 +367,7 @@ C,featureC
             example_number: 0,
             lr_buffer: v1,
             ffm_buffer: v2,
-            ffm_fields_count: ffm_fields_count,
+            ffm_fields_count,
         }
     }
 
@@ -422,9 +422,9 @@ C,featureC
 
         let mut newt = WorkerThread {
             id: 1,
-            fbt: fbt,
-            pa: pa,
-            re_fixed: re_fixed,
+            fbt,
+            pa,
+            re_fixed,
             pb,
         };
 
@@ -438,7 +438,7 @@ C,featureC
 
             // now let's start playing
             mocked_stream
-                .push_bytes_to_read(&format!("hogwild_load {}", &regressor_filepath_1).as_bytes());
+                .push_bytes_to_read(format!("hogwild_load {}", &regressor_filepath_1).as_bytes());
             assert_eq!(
                 ConnectionEnd::EndOfStream,
                 newt.handle_connection(&mut reader, &mut writer)
@@ -451,7 +451,7 @@ C,featureC
 
             // now incompatible regressor - should return error
             mocked_stream
-                .push_bytes_to_read(&format!("hogwild_load {}", &regressor_filepath_2).as_bytes());
+                .push_bytes_to_read(format!("hogwild_load {}", &regressor_filepath_2).as_bytes());
             assert_eq!(
                 ConnectionEnd::EndOfStream,
                 newt.handle_connection(&mut reader, &mut writer)
