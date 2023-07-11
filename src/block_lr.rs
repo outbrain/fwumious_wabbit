@@ -50,13 +50,13 @@ pub fn new_lr_block(
 ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
     let block = match mi.optimizer {
         model_instance::Optimizer::AdagradLUT => {
-            new_lr_block_without_weights::<optimizer::OptimizerAdagradLUT>(&mi)
+            new_lr_block_without_weights::<optimizer::OptimizerAdagradLUT>(mi)
         }
         model_instance::Optimizer::AdagradFlex => {
-            new_lr_block_without_weights::<optimizer::OptimizerAdagradFlex>(&mi)
+            new_lr_block_without_weights::<optimizer::OptimizerAdagradFlex>(mi)
         }
         model_instance::Optimizer::SGD => {
-            new_lr_block_without_weights::<optimizer::OptimizerSGD>(&mi)
+            new_lr_block_without_weights::<optimizer::OptimizerSGD>(mi)
         }
     }
     .unwrap();
@@ -89,7 +89,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         self.num_combos as usize
     }
 
-    fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
+    fn set_input_offset(&mut self, _input: graph::InputSlot, _offset: usize) {
         panic!("You cannnot set_input_offset() for BlockLR");
     }
 
@@ -109,7 +109,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
     ) {
         debug_assert!(self.output_offset != usize::MAX);
 
-        let mut wsum: f32 = 0.0;
         unsafe {
             {
                 let myslice = &mut pb.tape.get_unchecked_mut(
@@ -161,7 +160,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         debug_assert!(self.output_offset != usize::MAX);
 
         let fbuf = &fb.lr_buffer;
-        let mut wsum: f32 = 0.0;
 
         {
             unsafe {
@@ -180,7 +178,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
     }
 
     fn get_serialized_len(&self) -> usize {
-        return self.weights_len as usize;
+        self.weights_len as usize
     }
 
     fn read_weights_from_buf(
@@ -202,7 +200,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         input_bufreader: &mut dyn io::Read,
         forward: &mut Box<dyn BlockTrait>,
     ) -> Result<(), Box<dyn Error>> {
-        let mut forward = forward
+        let forward = forward
             .as_any()
             .downcast_mut::<BlockLR<optimizer::OptimizerSGD>>()
             .unwrap();
@@ -216,8 +214,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
     /// Sets internal state of weights based on some completely object-dependent parameters
     fn testing_set_weights(
         &mut self,
-        aa: i32,
-        bb: i32,
+        _aa: i32,
+        _bb: i32,
         index: usize,
         w: &[f32],
     ) -> Result<(), Box<dyn Error>> {

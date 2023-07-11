@@ -4,14 +4,13 @@ use std::error::Error;
 use crate::block_helpers;
 use crate::feature_buffer;
 use crate::graph;
-use crate::model_instance;
 use crate::port_buffer;
 use crate::regressor;
 use regressor::BlockTrait;
 
 #[inline(always)]
 pub fn logistic(t: f32) -> f32 {
-    return (1.0 + (-t).exp()).recip();
+    (1.0 + (-t).exp()).recip()
 }
 
 pub struct BlockSigmoid {
@@ -28,7 +27,7 @@ pub fn new_logloss_block(
 ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
     let num_inputs = bg.get_num_output_values(vec![&input]);
     let block = Box::new(BlockSigmoid {
-        num_inputs: num_inputs as usize,
+        num_inputs,
         input_offset: usize::MAX,
         output_offset: usize::MAX,
         copy_to_result,
@@ -36,19 +35,6 @@ pub fn new_logloss_block(
     let mut block_outputs = bg.add_node(block, vec![input]).unwrap();
     assert_eq!(block_outputs.len(), 1);
     Ok(block_outputs.pop().unwrap())
-}
-
-pub fn new_without_weights(
-    mi: &model_instance::ModelInstance,
-    num_inputs: u32,
-    copy_to_result: bool,
-) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
-    Ok(Box::new(BlockSigmoid {
-        num_inputs: num_inputs as usize,
-        input_offset: usize::MAX,
-        output_offset: usize::MAX,
-        copy_to_result,
-    }))
 }
 
 impl BlockTrait for BlockSigmoid {

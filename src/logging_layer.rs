@@ -14,7 +14,7 @@ pub fn initialize_logging_layer() {
         _ => builder.filter_level(log::LevelFilter::Info),
     };
 
-    if let Ok(_) = builder.try_init() {
+    if builder.try_init().is_ok() {
 	log::info!("Initialized the logger ..")
     }
 }

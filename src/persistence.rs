@@ -11,7 +11,7 @@ use crate::model_instance;
 use crate::optimizer;
 use crate::regressor;
 use crate::vwmap;
-use clap;
+
 use crate::multithread_helpers::BoxedRegressorTrait;
 use crate::regressor::Regressor;
 
@@ -30,7 +30,7 @@ impl model_instance::ModelInstance {
     ) -> Result<model_instance::ModelInstance, Box<dyn Error>> {
         let len = input_bufreader.read_u64::<LittleEndian>()?;
         let mi: model_instance::ModelInstance =
-            serde_json::from_reader(input_bufreader.take(len as u64))?;
+            serde_json::from_reader(input_bufreader.take(len))?;
         Ok(mi)
     }
 }
@@ -48,7 +48,7 @@ impl vwmap::VwNamespaceMap {
     ) -> Result<vwmap::VwNamespaceMap, Box<dyn Error>> {
         let len = input_bufreader.read_u64::<LittleEndian>()?;
         let vw_source: vwmap::VwNamespaceMapSource =
-            serde_json::from_reader(input_bufreader.take(len as u64))?;
+            serde_json::from_reader(input_bufreader.take(len))?;
         let vw = vwmap::VwNamespaceMap::new_from_source(vw_source)?;
         Ok(vw)
     }
@@ -62,7 +62,7 @@ pub fn save_sharable_regressor_to_filename(
 ) -> Result<(), Box<dyn Error>> {
     let output_bufwriter = &mut io::BufWriter::new(
         fs::File::create(filename)
-            .expect(format!("Cannot open {} to save regressor to", filename).as_str()),
+            .unwrap_or_else(|_| panic!("Cannot open {} to save regressor to", filename)),
     );
     write_regressor_header(output_bufwriter)?;
     vwmap.save_to_buf(output_bufwriter)?;
@@ -79,7 +79,7 @@ pub fn save_regressor_to_filename(
 ) -> Result<(), Box<dyn Error>> {
     let output_bufwriter = &mut io::BufWriter::new(
         fs::File::create(filename)
-            .expect(format!("Cannot open {} to save regressor to", filename).as_str()),
+            .unwrap_or_else(|_| panic!("Cannot open {} to save regressor to", filename)),
     );
     write_regressor_header(output_bufwriter)?;
     vwmap.save_to_buf(output_bufwriter)?;
@@ -116,7 +116,7 @@ fn load_regressor_without_weights(
 
     match cmd_arguments {
         Some(cmd_args) => {
-            model_instance::ModelInstance::update_hyperparameters_from_cmd(&cmd_args, &mut mi)?;
+            model_instance::ModelInstance::update_hyperparameters_from_cmd(cmd_args, &mut mi)?;
         }
         _ => (),
     }
@@ -266,7 +266,7 @@ B,featureB
             mi.optimizer = model_instance::Optimizer::SGD;
             let re_fixed = re.immutable_regressor(&mi).unwrap();
             // predict with the same feature vector
-            assert_eq!(re_fixed.predict(&fbuf, &mut pb), CONST_RESULT);
+            assert_eq!(re_fixed.predict(fbuf, &mut pb), CONST_RESULT);
             mi.optimizer = model_instance::Optimizer::AdagradFlex;
         }
         // Now we test saving and loading a) regular regressor, b) fixed regressor
@@ -291,7 +291,7 @@ B,featureB
         }
     }
 
-    fn ffm_fixed_init(rg: &mut Regressor) -> () {
+    fn ffm_fixed_init(rg: &mut Regressor) {
         // This is a bit of black magic - we "know" that FFM is at index 1 and we downcast...
         let block_ffm = &mut rg.blocks_boxes[1];
         let mut block_ffm = block_ffm
@@ -316,7 +316,7 @@ B,featureB
             example_number: 0,
             lr_buffer: Vec::new(),
             ffm_buffer: v,
-            ffm_fields_count: ffm_fields_count,
+            ffm_fields_count,
         }
     }
 
@@ -378,7 +378,7 @@ B,featureB
             let re_fixed = re.immutable_regressor(&mi).unwrap();
             // predict with the same feature vector
             mi.optimizer = Optimizer::AdagradFlex;
-            assert_epsilon!(re_fixed.predict(&fbuf, &mut pb), CONST_RESULT);
+            assert_epsilon!(re_fixed.predict(fbuf, &mut pb), CONST_RESULT);
         }
         // Now we test saving and loading a) regular regressor, b) fixed regressor
         {
@@ -415,7 +415,7 @@ B,featureB
             example_number: 0,
             lr_buffer: v1,
             ffm_buffer: v2,
-            ffm_fields_count: ffm_fields_count,
+            ffm_fields_count,
         }
     }
 

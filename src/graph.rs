@@ -152,7 +152,7 @@ impl BlockGraph {
             self.nodes[e.get_node_id()].edges_out[e.get_output_index()] = bpi;
         }
         let mut newnode = BlockGraphNode {
-            edges_in: edges_in,
+            edges_in,
             edges_out: Vec::new(),
         };
 
@@ -166,7 +166,7 @@ impl BlockGraph {
                 .edges_out
                 .push(BLOCK_PTR_INPUT_DEFAULT); // make empty spaceg
         }
-        return Ok(vo);
+        Ok(vo)
     }
 
     pub fn println(&self) {
@@ -205,11 +205,11 @@ impl BlockGraph {
 
     pub fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
         assert!(
-            self.blocks_final.len() > 0,
+            !self.blocks_final.is_empty(),
             "There are no blocks in the final graph? Have you called finalize() yet?"
         );
         for i in 0..self.blocks_final.len() {
-            self.blocks_final[i].allocate_and_init_weights(&mi);
+            self.blocks_final[i].allocate_and_init_weights(mi);
         }
     }
 
@@ -272,7 +272,7 @@ impl BlockGraph {
                 {
                     self.blocks[bptr].set_output_offset(bo, offset);
                     self.blocks[i].set_input_offset(InputSlot(input_index), offset);
-                    offset += output_len as usize;
+                    offset += output_len;
                 } else {
                     panic!(
                         "Type of block not supported in scheduling: {:?}",
@@ -464,7 +464,7 @@ mod tests {
             block_misc::new_observe_block(&mut bg, const_block_output, Observe::Forward, Some(1.0))
                 .unwrap();
         //        assert_eq!(output_node, ());
-        let list = bg.finalize();
+        bg.finalize();
         assert_eq!(bg.tape_size, 1);
     }
 
@@ -487,7 +487,7 @@ mod tests {
         let re_ffm = block_ffm::new_ffm_block(&mut bg, &mi).unwrap();
         let joined = block_misc::new_join_block(&mut bg, vec![re_lr, re_ffm]).unwrap();
         let lossf = block_loss_functions::new_logloss_block(&mut bg, joined, true);
-        let list = bg.finalize();
+        bg.finalize();
     }
 
     #[test]

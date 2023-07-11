@@ -59,7 +59,7 @@ impl VwNamespaceMap {
             map_verbose_to_namespace_descriptor: HashMap::new(),
             map_vwname_to_namespace_descriptor: HashMap::new(),
             map_vwname_to_name: HashMap::new(),
-            vw_source: vw_source,
+            vw_source,
         };
 
         for vw_entry in &vw.vw_source.entries {
@@ -76,9 +76,9 @@ impl VwNamespaceMap {
             vw.map_vwname_to_name
                 .insert(vwname_str.as_bytes().to_vec(), String::from(name_str));
             vw.map_vwname_to_namespace_descriptor
-                .insert(vwname_str.as_bytes().to_vec(), namespace_descriptor.clone());
+                .insert(vwname_str.as_bytes().to_vec(), namespace_descriptor);
             vw.map_verbose_to_namespace_descriptor
-                .insert(String::from(name_str), namespace_descriptor.clone());
+                .insert(String::from(name_str), namespace_descriptor);
 
             if vw_entry.namespace_index as usize > vw.num_namespaces {
                 vw.num_namespaces = vw_entry.namespace_index as usize;
@@ -89,13 +89,11 @@ impl VwNamespaceMap {
     }
 
     pub fn new_from_csv_filepath(path: PathBuf) -> Result<VwNamespaceMap, Box<dyn Error>> {
-        let mut input_bufreader = fs::File::open(&path).expect(
-            &format!(
+        let mut input_bufreader = fs::File::open(&path).unwrap_or_else(|_| { panic!("{}", format!(
                 "Could not find vw_namespace_map.csv in input dataset directory of {:?}",
                 path
             )
-            .to_string(),
-        );
+            ) });
         let mut s = String::new();
         input_bufreader.read_to_string(&mut s)?;
         VwNamespaceMap::new(&s)
@@ -141,7 +139,7 @@ impl VwNamespaceMap {
                 namespace_vwname: vwname_str.to_string(),
                 namespace_verbose: name_str.to_string(),
                 namespace_index: i as u16,
-                namespace_format: namespace_format,
+                namespace_format,
             });
         }
 

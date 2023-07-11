@@ -38,7 +38,7 @@ pub struct BlockFFM<L: OptimizerTrait> {
 impl<L: OptimizerTrait + 'static> BlockFFM<L> {
     fn set_weights(&mut self, lower_bound: f32, difference: f32) {
         for i in 0..self.ffm_weights_len {
-            let w = difference * merand48(i as u64) as f32 + lower_bound;
+            let w = difference * merand48(i as u64) + lower_bound;
             self.weights[i as usize] = w;
             self.optimizer[i as usize].optimizer_data = self.optimizer_ffm.initial_data();
         }
@@ -51,13 +51,13 @@ pub fn new_ffm_block(
 ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
     let block = match mi.optimizer {
         model_instance::Optimizer::AdagradLUT => {
-            new_ffm_block_without_weights::<optimizer::OptimizerAdagradLUT>(&mi)
+            new_ffm_block_without_weights::<optimizer::OptimizerAdagradLUT>(mi)
         }
         model_instance::Optimizer::AdagradFlex => {
-            new_ffm_block_without_weights::<optimizer::OptimizerAdagradFlex>(&mi)
+            new_ffm_block_without_weights::<optimizer::OptimizerAdagradFlex>(mi)
         }
         model_instance::Optimizer::SGD => {
-            new_ffm_block_without_weights::<optimizer::OptimizerSGD>(&mi)
+            new_ffm_block_without_weights::<optimizer::OptimizerSGD>(mi)
         }
     }.unwrap();
     let mut block_outputs = bg.add_node(block, vec![]).unwrap();
@@ -501,7 +501,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
     }
 
     fn get_serialized_len(&self) -> usize {
-        return self.ffm_weights_len as usize;
+        self.ffm_weights_len as usize
     }
 
     fn write_weights_to_buf(
@@ -524,7 +524,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert_eq!(output.get_output_index(), 0);
-        return (self.ffm_num_fields * self.ffm_num_fields) as usize;
+        (self.ffm_num_fields * self.ffm_num_fields) as usize
     }
 
     fn get_num_output_slots(&self) -> usize {
@@ -599,7 +599,7 @@ mod tests {
         }
     }
 
-    fn ffm_init<T: OptimizerTrait + 'static>(block_ffm: &mut Box<dyn BlockTrait>) -> () {
+    fn ffm_init<T: OptimizerTrait + 'static>(block_ffm: &mut Box<dyn BlockTrait>) {
         let mut block_ffm = block_ffm.as_any().downcast_mut::<BlockFFM<T>>().unwrap();
 
         for i in 0..block_ffm.weights.len() {
@@ -692,7 +692,7 @@ mod tests {
                 HashAndValueAndSeq {
                     hash: 100,
                     value: 2.0,
-                    contra_field_index: mi.ffm_k * 1,
+                    contra_field_index: mi.ffm_k,
                 },
             ],
             2,
@@ -757,7 +757,7 @@ mod tests {
                 HashAndValueAndSeq {
                     hash: 100,
                     value: 1.0,
-                    contra_field_index: mi.ffm_k * 1,
+                    contra_field_index: mi.ffm_k,
                 },
             ],
             2,
@@ -786,7 +786,7 @@ mod tests {
                 HashAndValueAndSeq {
                     hash: 100,
                     value: 2.0,
-                    contra_field_index: mi.ffm_k * 1,
+                    contra_field_index: mi.ffm_k,
                 },
             ],
             2,
@@ -840,17 +840,17 @@ B,featureB
                 HashAndValueAndSeq {
                     hash: 100,
                     value: 2.0,
-                    contra_field_index: mi.ffm_k * 1,
+                    contra_field_index: mi.ffm_k,
                 },
             ],
             2,
         );
-        assert_epsilon!(spredict2(&mut bg, &fbuf, &mut pb, true), 0.9933072);
-        assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, true), 0.9933072);
-        assert_epsilon!(spredict2(&mut bg, &fbuf, &mut pb, false), 0.9395168);
-        assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, false), 0.9395168);
-        assert_epsilon!(spredict2(&mut bg, &fbuf, &mut pb, false), 0.9395168);
-        assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, false), 0.9395168);
+        assert_epsilon!(spredict2(&mut bg, fbuf, &mut pb, true), 0.9933072);
+        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, true), 0.9933072);
+        assert_epsilon!(spredict2(&mut bg, fbuf, &mut pb, false), 0.9395168);
+        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 0.9395168);
+        assert_epsilon!(spredict2(&mut bg, fbuf, &mut pb, false), 0.9395168);
+        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 0.9395168);
     }
 
     #[test]
@@ -890,17 +890,17 @@ B,featureB
                 HashAndValueAndSeq {
                     hash: 100,
                     value: 2.0,
-                    contra_field_index: mi.ffm_k * 1,
+                    contra_field_index: mi.ffm_k,
                 },
             ],
             2,
         );
 
-        assert_eq!(spredict2(&mut bg, &fbuf, &mut pb, true), 1.0);
-        assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, true), 1.0);
-        assert_eq!(spredict2(&mut bg, &fbuf, &mut pb, false), 0.9949837);
-        assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, false), 0.9949837);
-        assert_eq!(slearn2(&mut bg, &fbuf, &mut pb, false), 0.9949837);
+        assert_eq!(spredict2(&mut bg, fbuf, &mut pb, true), 1.0);
+        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, true), 1.0);
+        assert_eq!(spredict2(&mut bg, fbuf, &mut pb, false), 0.9949837);
+        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 0.9949837);
+        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 0.9949837);
     }
 
     #[test]
@@ -948,7 +948,7 @@ B,featureB
                 HashAndValueAndSeq {
                     hash: 5,
                     value: 1.0,
-                    contra_field_index: mi.ffm_k * 1,
+                    contra_field_index: mi.ffm_k,
                 },
                 HashAndValueAndSeq {
                     hash: 100,
@@ -966,7 +966,7 @@ B,featureB
             vec![HashAndValueAndSeq {
                 hash: 5,
                 value: 1.0,
-                contra_field_index: mi.ffm_k * 1,
+                contra_field_index: mi.ffm_k,
             }],
             3,
         );
