@@ -14,12 +14,6 @@ use std::slice;
 
 #[derive(Clone, Debug)]
 #[repr(C)]
-pub struct Weight {
-    pub weight: f32,
-}
-
-#[derive(Clone, Debug)]
-#[repr(C)]
 pub struct OptimizerData<L: OptimizerTrait> {
     pub optimizer_data: L::PerWeightStore,
 }
