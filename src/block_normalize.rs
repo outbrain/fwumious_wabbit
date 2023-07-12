@@ -26,7 +26,7 @@ pub struct BlockNormalize {
 
 pub fn new_normalize_layer_block(
     bg: &mut graph::BlockGraph,
-    mi: &model_instance::ModelInstance,
+    _mi: &model_instance::ModelInstance,
     input: graph::BlockPtrOutput,
 ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
     let num_inputs = bg.get_num_output_values(vec![&input]);
@@ -34,7 +34,7 @@ pub fn new_normalize_layer_block(
     let mut block = Box::new(BlockNormalize {
         output_offset: usize::MAX,
         input_offset: usize::MAX,
-        num_inputs: num_inputs,
+        num_inputs,
     });
     let mut block_outputs = bg.add_node(block, vec![input])?;
     assert_eq!(block_outputs.len(), 1);
@@ -46,7 +46,7 @@ impl BlockTrait for BlockNormalize {
         self
     }
 
-    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {}
+    fn allocate_and_init_weights(&mut self, _mi: &model_instance::ModelInstance) {}
 
     fn get_num_output_slots(&self) -> usize {
         1
@@ -80,8 +80,27 @@ impl BlockTrait for BlockNormalize {
         debug_assert!(self.num_inputs > 0);
 
         unsafe {
-            let variance_inv = self.internal_forward(pb);
+            let mut mean: f32 = 0.0;
+            for i in 0..self.num_inputs {
+                mean += *pb.tape.get_unchecked_mut(self.input_offset + i);
+            }
+            mean /= self.num_inputs as f32;
+            let meansq = mean * mean;
+            let mut variance: f32 = 0.0;
+            for i in 0..self.num_inputs {
+                let w = meansq - *pb.tape.get_unchecked_mut(self.input_offset + i);
+                variance += w * w;
+            }
+            variance += EPS;
+            variance /= self.num_inputs as f32;
+            variance = variance.sqrt();
 
+            let variance_inv = 1.0 / variance;
+
+            for i in 0..self.num_inputs {
+                *pb.tape.get_unchecked_mut(self.output_offset + i) =
+                    (*pb.tape.get_unchecked(self.input_offset + i) - mean) * variance_inv;
+            }
             block_helpers::forward_backward(further_blocks, fb, pb, update);
 
             if update {
@@ -90,7 +109,7 @@ impl BlockTrait for BlockNormalize {
                         *pb.tape.get_unchecked_mut(self.output_offset + i) * variance_inv;
                 }
             }
-        } // unsafe end
+        }
     }
 
     fn forward(
@@ -127,13 +146,13 @@ impl BlockNormalize {
 
         unsafe {
             let mut mean: f32 = 0.0;
-            for i in 0..self.num_inputs as usize {
+            for i in 0..self.num_inputs {
                 mean += *pb.tape.get_unchecked_mut(self.input_offset + i);
             }
             mean /= self.num_inputs as f32;
             let meansq = mean * mean;
             let mut variance: f32 = 0.0;
-            for i in 0..self.num_inputs as usize {
+            for i in 0..self.num_inputs {
                 let w = meansq - *pb.tape.get_unchecked_mut(self.input_offset + i);
                 variance += w * w;
             }
@@ -148,9 +167,8 @@ impl BlockNormalize {
                     *pb.tape.get_unchecked(self.input_offset + i) * variance_inv;
             }
 
-            return variance_inv;
-        } // unsafe end
-
+            variance_inv
+        }
     }
 }
 
@@ -166,12 +184,12 @@ pub struct BlockStopBackward {
 
 pub fn new_stop_block(
     bg: &mut graph::BlockGraph,
-    mi: &model_instance::ModelInstance,
+    _mi: &model_instance::ModelInstance,
     input: graph::BlockPtrOutput,
 ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
     let num_inputs = bg.get_num_output_values(vec![&input]);
     debug_assert!(num_inputs != 0);
-    let mut block = Box::new(BlockStopBackward {
+    let block = Box::new(BlockStopBackward {
         output_offset: usize::MAX,
         input_offset: usize::MAX,
         num_inputs,
@@ -186,7 +204,7 @@ impl BlockTrait for BlockStopBackward {
         self
     }
 
-    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {}
+    fn allocate_and_init_weights(&mut self, _mi: &model_instance::ModelInstance) {}
 
     fn get_num_output_slots(&self) -> usize {
         1
@@ -256,6 +274,7 @@ impl BlockStopBackward {
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.input_offset != usize::MAX);
         debug_assert!(self.num_inputs > 0);
+
         pb.tape.copy_within(
             self.input_offset..(self.input_offset + self.num_inputs),
             self.output_offset,

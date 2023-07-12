@@ -63,7 +63,6 @@ pub struct BlockNeuronLayer<L: OptimizerTrait> {
     rng: Xoshiro256PlusPlus,
     rng_scratchpad: Vec<u32>,
     dropout_threshold: u32,
-
     bias_offset: usize,
 }
 
@@ -167,8 +166,7 @@ pub fn new_neuronlayer_block(
                 layer_norm,
             )
         }
-    }
-        .unwrap();
+    }.unwrap();
 
     let mut block_outputs = bg.add_node(block, vec![input]).unwrap();
     assert_eq!(block_outputs.len(), 1);
@@ -416,8 +414,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
                     self.weights[i as usize] = normal.sample(&mut self.rng) as f32;
                 }
             }
-            //            InitType::RandomFirst1 => { for i in 0..self.num_inputs { self.weights[i as usize] = 1.0}},
-            //            InitType::RandomFirst10 => { for i in 0..self.num_inputs { self.weights[i as usize] = 0.0}; self.weights[0] = 1.0;},
             InitType::One => {
                 for i in 0..self.weights_len {
                     self.weights[i as usize] = 1.0
@@ -552,8 +548,7 @@ mod tests {
             0.0, // dropout
             0.0, // max norm
             false,
-        )
-            .unwrap();
+        ).unwrap();
         let observe_block =
             block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0))
                 .unwrap();
@@ -587,8 +582,7 @@ mod tests {
             0.0,   // dropout
             0.0,   // max norm
             false, // layer norm
-        )
-            .unwrap();
+        ).unwrap();
         let observe_block =
             block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0))
                 .unwrap();

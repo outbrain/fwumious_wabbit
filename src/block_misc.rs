@@ -4,9 +4,9 @@ use std::error::Error;
 use crate::block_helpers;
 use crate::feature_buffer;
 use crate::graph;
-use crate::model_instance;
 use crate::port_buffer;
 use crate::regressor;
+
 use regressor::BlockTrait;
 use crate::feature_buffer::FeatureBuffer;
 use crate::port_buffer::PortBuffer;
@@ -33,10 +33,10 @@ pub fn new_observe_block(
 ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
     let num_inputs = bg.get_num_output_values(vec![&input]);
     let block = Box::new(BlockObserve {
-        num_inputs: num_inputs as usize,
+        num_inputs,
         input_offset: usize::MAX,
-        observe: observe,
-        replace_backward_with: replace_backward_with,
+        observe,
+        replace_backward_with,
     });
     let mut block_outputs = bg.add_node(block, vec![input])?;
     assert_eq!(block_outputs.len(), 1);
@@ -60,7 +60,7 @@ impl BlockTrait for BlockObserve {
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert!(output.get_output_index() == 0);
-        return self.num_inputs;
+        self.num_inputs
     }
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
@@ -199,8 +199,8 @@ pub fn new_sink_block(
     let num_inputs = bg.get_num_output_values(vec![&input]);
     let block = Box::new(BlockSink {
         input_offset: usize::MAX,
-        num_inputs: num_inputs,
-        sink_type: sink_type,
+        num_inputs,
+        sink_type,
     });
     let mut block_outputs = bg.add_node(block, vec![input])?;
     assert_eq!(block_outputs.len(), 0);
@@ -292,7 +292,7 @@ pub fn new_const_block(
 ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
     let block = Box::new(BlockConsts {
         output_offset: usize::MAX,
-        consts: consts,
+        consts,
     });
     let mut block_outputs = bg.add_node(block, vec![])?;
     assert_eq!(block_outputs.len(), 1);
@@ -324,7 +324,7 @@ impl BlockTrait for BlockConsts {
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert!(output.get_output_index() == 0);
-        self.consts.len() as usize
+        self.consts.len()
     }
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
@@ -391,7 +391,7 @@ pub fn new_copy_block(
     let mut block = Box::new(BlockCopy {
         output_offsets: vec![usize::MAX; num_output_slots],
         input_offset: usize::MAX,
-        num_inputs: num_inputs as usize,
+        num_inputs,
     });
     let block_outputs = bg.add_node(block, vec![input])?;
     assert_eq!(block_outputs.len(), num_output_slots);
@@ -564,7 +564,7 @@ pub fn new_join_block(
     let mut block = Box::new(BlockJoin {
         output_offset: usize::MAX,
         input_offset: usize::MAX,
-        num_inputs: num_inputs,
+        num_inputs,
     });
     let mut block_outputs = bg.add_node(block, inputs)?;
     assert_eq!(block_outputs.len(), 1);
@@ -648,7 +648,6 @@ impl BlockTrait for BlockJoin {
         block_helpers::forward(further_blocks, fb, pb);
     }
 
-
     fn forward_with_cache(
         &self,
         further_blocks: &[Box<dyn BlockTrait>],
@@ -672,7 +671,7 @@ fn new_sum_without_weights(num_inputs: usize) -> Result<Box<dyn BlockTrait>, Box
     let mut rg = BlockSum {
         output_offset: usize::MAX,
         input_offset: usize::MAX,
-        num_inputs: num_inputs,
+        num_inputs,
     };
     Ok(Box::new(rg))
 }
@@ -731,7 +730,7 @@ impl BlockTrait for BlockSum {
             if update {
                 pb.tape
                     .get_unchecked_mut(
-                        self.input_offset..(self.input_offset + self.num_inputs as usize),
+                        self.input_offset..(self.input_offset + self.num_inputs),
                     )
                     .fill(general_gradient);
             }
@@ -772,16 +771,11 @@ impl BlockSum {
         debug_assert!(self.num_inputs > 0);
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.input_offset != usize::MAX);
-        unsafe {
-            let wsum: f32 = pb
-                .tape
-                .get_unchecked_mut(
-                    self.input_offset..(self.input_offset + self.num_inputs as usize),
-                )
-                .iter()
-                .sum();
-            pb.tape[self.output_offset as usize] = wsum;
-        }
+
+        let wsum: f32 = pb.tape[self.input_offset..(self.input_offset + self.num_inputs)]
+            .iter()
+            .sum();
+        pb.tape[self.output_offset] = wsum;
     }
 }
 
@@ -816,8 +810,8 @@ pub fn new_triangle_block(
         output_offset: usize::MAX,
         input_offset: usize::MAX,
         num_inputs: square_width * square_width,
-        num_outputs: num_outputs,
-        square_width: square_width,
+        num_outputs,
+        square_width,
     });
     let mut block_outputs = bg.add_node(block, vec![input])?;
     assert_eq!(block_outputs.len(), 1);
@@ -952,6 +946,7 @@ mod tests {
     use crate::block_misc::Observe;
     use crate::feature_buffer;
     use crate::graph::BlockGraph;
+    use crate::model_instance;
 
     fn fb_vec() -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {
@@ -1008,7 +1003,7 @@ mod tests {
         let triangle_block = new_triangle_block(&mut bg, observe_block_backward).unwrap();
         let observe_block_forward =
             block_misc::new_observe_block(&mut bg, triangle_block, Observe::Forward, None).unwrap();
-        let sink = block_misc::new_sink_block(
+        block_misc::new_sink_block(
             &mut bg,
             observe_block_forward,
             block_misc::SinkType::Untouched,
