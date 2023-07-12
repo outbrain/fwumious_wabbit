@@ -1207,6 +1207,7 @@ mod tests {
 
     #[test]
     fn test_copy_to_join() {
+
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
         let input_block_1 = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
