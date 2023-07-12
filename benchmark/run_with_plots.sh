@@ -1,5 +1,3 @@
 #!/bin/bash
-if [ $1 = "--rebuild" ]; then
-  cargo build --release
-fi
+cargo build --release
 python3 benchmark.py fw all True

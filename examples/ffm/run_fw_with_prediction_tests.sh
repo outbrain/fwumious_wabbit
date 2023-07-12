@@ -70,13 +70,11 @@ rm -rf predictions
 mkdir -p models
 mkdir -p predictions
 
-if [ $1 == "--rebuild" ]; then
-  echo "Building FW"
-  (
-    cd $PROJECT_ROOT
-    cargo build --release
-  )
-fi
+echo "Building FW"
+(
+  cd $PROJECT_ROOT
+  cargo build --release
+)
 
 # Change this to your preference if required - this is tailored for the toy example
 namespaces="--keep A --keep B --interactions AB --ffm_k 10 --ffm_field A --ffm_field B"
