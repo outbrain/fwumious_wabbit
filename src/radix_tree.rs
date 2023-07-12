@@ -74,3 +74,91 @@ impl RadixTree {
         node.value.as_ref()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::vwmap::{NamespaceFormat, NamespaceType};
+    use super::*;
+
+    #[test]
+    fn test_insert_and_get() {
+        let mut tree = RadixTree::new();
+
+        let namespace_descriptor_with_hash_1 = NamespaceDescriptorWithHash {
+            descriptor: NamespaceDescriptor {
+                namespace_index: 0,
+                namespace_type: NamespaceType::Primitive,
+                namespace_format: NamespaceFormat::Categorical
+            },
+            hash_seed: 1
+        };
+
+        let namespace_descriptor_with_hash_2 = NamespaceDescriptorWithHash {
+            descriptor: NamespaceDescriptor {
+                namespace_index: 10,
+                namespace_type: NamespaceType::Primitive,
+                namespace_format: NamespaceFormat::Categorical
+            },
+            hash_seed: 2
+        };
+
+        let namespace_descriptor_with_hash_3 = NamespaceDescriptorWithHash {
+            descriptor: NamespaceDescriptor {
+                namespace_index: 20,
+                namespace_type: NamespaceType::Primitive,
+                namespace_format: NamespaceFormat::Categorical
+            },
+            hash_seed: 3
+        };
+
+        tree.insert(b"A", namespace_descriptor_with_hash_1);
+        tree.insert(b"AB", namespace_descriptor_with_hash_2);
+        tree.insert(b"ABC", namespace_descriptor_with_hash_3);
+
+        assert_eq!(tree.get(b"A"), Some(&namespace_descriptor_with_hash_1));
+        assert_eq!(tree.get(b"AB"), Some(&namespace_descriptor_with_hash_2));
+        assert_eq!(tree.get(b"ABC"), Some(&namespace_descriptor_with_hash_3));
+        assert_eq!(tree.get(b"ABCD"), None);
+    }
+
+    #[test]
+    fn test_insert_and_get_empty_key() {
+        let mut tree = RadixTree::new();
+
+        let namespace_descriptor_with_hash = NamespaceDescriptorWithHash {
+            descriptor: NamespaceDescriptor {
+                namespace_index: 0,
+                namespace_type: NamespaceType::Primitive,
+                namespace_format: NamespaceFormat::Categorical
+            },
+            hash_seed: 1
+        };
+
+        tree.insert(b"", namespace_descriptor_with_hash);
+
+        assert_eq!(tree.get(b""), Some(&namespace_descriptor_with_hash));
+        assert_eq!(tree.get(b"A"), None);
+    }
+
+    #[test]
+    fn test_insert_and_get_long_key() {
+        let mut tree = RadixTree::new();
+
+        let namespace_descriptor_with_hash = NamespaceDescriptorWithHash {
+            descriptor: NamespaceDescriptor {
+                namespace_index: 0,
+                namespace_type: NamespaceType::Primitive,
+                namespace_format: NamespaceFormat::Categorical
+            },
+            hash_seed: 1
+        };
+
+        tree.insert(b"AB", namespace_descriptor_with_hash);
+
+        assert_eq!(tree.get(b"AB"), Some(&namespace_descriptor_with_hash));
+        assert_eq!(tree.get(b"A"), None);
+        assert_eq!(tree.get(b"B"), None);
+        assert_eq!(tree.get(b"ABC"), None);
+    }
+
+}

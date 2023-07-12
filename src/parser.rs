@@ -110,10 +110,10 @@ impl VowpalParser {
     ) -> Result<f32, Box<dyn Error>> {
         unsafe {
             if i_end - i_start == 4
-                && *self.tmp_read_buf.get_unchecked(i_start) == 'N'
-                && *self.tmp_read_buf.get_unchecked(i_start + 1) == 'O'
-                && *self.tmp_read_buf.get_unchecked(i_start + 2) == 'N'
-                && *self.tmp_read_buf.get_unchecked(i_start + 3) == 'E'
+                && *self.tmp_read_buf.get_unchecked(i_start) == b'N'
+                && *self.tmp_read_buf.get_unchecked(i_start + 1) == b'O'
+                && *self.tmp_read_buf.get_unchecked(i_start + 2) == b'N'
+                && *self.tmp_read_buf.get_unchecked(i_start + 3) == b'E'
             {
                 return Ok(f32::NAN);
             }
