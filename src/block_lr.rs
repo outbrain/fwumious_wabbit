@@ -155,7 +155,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
                     self.weights.get_unchecked_mut(feature_index).weight -= update;
                 }
             }
-        } // end of unsafe
+        }
     }
 
     fn forward(

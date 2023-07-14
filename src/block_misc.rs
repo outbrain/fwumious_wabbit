@@ -300,7 +300,7 @@ pub fn new_const_block(
 }
 
 impl BlockConsts {
-    #[inline(always)]
+
     fn internal_forward(
         &self,
         pb: &mut port_buffer::PortBuffer,
@@ -734,7 +734,7 @@ impl BlockTrait for BlockSum {
                     )
                     .fill(general_gradient);
             }
-        } // unsafe end
+        }
     }
 
     fn forward(
@@ -882,7 +882,7 @@ impl BlockTrait for BlockTriangle {
                     }
                 }
             }
-        } // unsafe end
+        }
     }
 
     fn forward(

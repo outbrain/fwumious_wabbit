@@ -222,7 +222,7 @@ impl<L: OptimizerTrait + 'static>  BlockNeuronLayer<L> {
                 output_tape.get_unchecked_mut(0..), //y: &mut [f32],
                 1,                                  //incy: i32
             );
-        } // unsafe end
+        }
 
     }
 }
@@ -346,7 +346,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
 
                 input_tape.copy_from_slice(output_errors.get_unchecked(0..self.num_inputs));
             }
-        } // unsafe end
+        }
     }
 
     fn forward(

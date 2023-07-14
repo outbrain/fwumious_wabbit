@@ -305,7 +305,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
                 core_macro!(local_data_ffm_values);
             }
-        } // unsafe end
+        }
     }
 
     fn forward(

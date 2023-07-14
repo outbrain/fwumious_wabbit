@@ -56,7 +56,7 @@ impl BlockRELU {
                     *pb.tape.get_unchecked_mut(self.output_offset + i) = w;
                 }
             }
-        } // unsafe end
+        }
     }
 }
 
