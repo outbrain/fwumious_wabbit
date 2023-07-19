@@ -8,6 +8,9 @@ use crate::port_buffer;
 use crate::regressor;
 
 use regressor::BlockTrait;
+use crate::feature_buffer::FeatureBuffer;
+use crate::port_buffer::PortBuffer;
+use crate::regressor::BlockCache;
 
 #[derive(PartialEq)]
 pub enum Observe {
@@ -140,6 +143,41 @@ impl BlockTrait for BlockObserve {
             None => {}
         }
     }
+
+    #[inline(always)]
+    fn forward_with_cache(
+        &self,
+        further_blocks: &[Box<dyn BlockTrait>],
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
+        caches: &[BlockCache],
+    ) {
+        debug_assert!(self.input_offset != usize::MAX);
+        debug_assert!(self.input_offset != usize::MAX);
+
+        if self.observe == Observe::Forward {
+            pb.observations.extend_from_slice(
+                &pb.tape[self.input_offset..(self.input_offset + self.num_inputs)],
+            );
+        }
+
+        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+
+        if self.observe == Observe::Backward {
+            pb.observations.extend_from_slice(
+                &pb.tape[self.input_offset..(self.input_offset + self.num_inputs)],
+            );
+        }
+
+        // replace inputs with whatever we wanted
+        match self.replace_backward_with {
+            Some(value) => {
+                pb.tape[self.input_offset..(self.input_offset + self.num_inputs)].fill(value)
+            }
+            None => {}
+        }
+    }
+
 }
 
 pub enum SinkType {
@@ -228,6 +266,19 @@ impl BlockTrait for BlockSink {
         debug_assert!(self.input_offset != usize::MAX);
         block_helpers::forward(further_blocks, fb, pb);
     }
+
+    #[inline(always)]
+    fn forward_with_cache(
+        &self,
+        further_blocks: &[Box<dyn BlockTrait>],
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
+        caches: &[BlockCache],
+    ) {
+        debug_assert!(self.input_offset != usize::MAX);
+        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+    }
+
 }
 
 pub struct BlockConsts {
@@ -246,6 +297,18 @@ pub fn new_const_block(
     let mut block_outputs = bg.add_node(block, vec![])?;
     assert_eq!(block_outputs.len(), 1);
     Ok(block_outputs.pop().unwrap())
+}
+
+impl BlockConsts {
+
+    fn internal_forward(
+        &self,
+        pb: &mut port_buffer::PortBuffer,
+    ) {
+        debug_assert!(self.output_offset != usize::MAX);
+        pb.tape[self.output_offset..(self.output_offset + self.consts.len())]
+            .copy_from_slice(&self.consts);
+    }
 }
 
 impl BlockTrait for BlockConsts {
@@ -284,11 +347,7 @@ impl BlockTrait for BlockConsts {
         pb: &mut port_buffer::PortBuffer,
         update: bool,
     ) {
-        debug_assert!(self.output_offset != usize::MAX);
-
-        pb.tape[self.output_offset..(self.output_offset + self.consts.len())]
-            .copy_from_slice(&self.consts);
-
+        self.internal_forward(pb);
         block_helpers::forward_backward(further_blocks, fb, pb, update);
     }
 
@@ -298,12 +357,21 @@ impl BlockTrait for BlockConsts {
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
     ) {
-        debug_assert!(self.output_offset != usize::MAX);
-        pb.tape[self.output_offset..(self.output_offset + self.consts.len())]
-            .copy_from_slice(&self.consts);
-
+        self.internal_forward(pb);
         block_helpers::forward(further_blocks, fb, pb);
     }
+
+    fn forward_with_cache(
+        &self,
+        further_blocks: &[Box<dyn BlockTrait>],
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
+        caches: &[BlockCache],
+    ) {
+        self.internal_forward(pb);
+        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+    }
+
 }
 
 pub struct BlockCopy {
@@ -403,20 +471,7 @@ impl BlockTrait for BlockCopy {
             // CopyBlock supports two modes:
             // If input is the same as the first output offset, there is just one copy to be done.
             //
-            let output_offset_0 = *self.output_offsets.get_unchecked(0);
-            if self.input_offset != output_offset_0 {
-                pb.tape.copy_within(
-                    self.input_offset..(self.input_offset + self.num_inputs),
-                    output_offset_0,
-                );
-            }
-            for &output_offset in self.output_offsets.get_unchecked(1..) {
-                debug_assert!(output_offset != usize::MAX);
-                pb.tape.copy_within(
-                    self.input_offset..(self.input_offset + self.num_inputs),
-                    output_offset,
-                );
-            }
+            self.internal_forward(pb);
             block_helpers::forward_backward(further_blocks, fb, pb, update);
 
             if update {
@@ -451,7 +506,29 @@ impl BlockTrait for BlockCopy {
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
     ) {
-        // plain copy from input to output
+        self.internal_forward(pb);
+        block_helpers::forward(further_blocks, fb, pb);
+    }
+
+    fn forward_with_cache(
+        &self,
+        further_blocks: &[Box<dyn BlockTrait>],
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
+        caches: &[BlockCache],
+    ) {
+        self.internal_forward(pb);
+        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+    }
+
+}
+
+impl BlockCopy {
+    #[inline(always)]
+    fn internal_forward(
+        &self,
+        pb: &mut port_buffer::PortBuffer,
+    ) {
         unsafe {
             let output_offset_0 = *self.output_offsets.get_unchecked(0);
             if self.input_offset != output_offset_0 {
@@ -468,7 +545,6 @@ impl BlockTrait for BlockCopy {
                 );
             }
         }
-        block_helpers::forward(further_blocks, fb, pb);
     }
 }
 
@@ -571,6 +647,17 @@ impl BlockTrait for BlockJoin {
     ) {
         block_helpers::forward(further_blocks, fb, pb);
     }
+
+    fn forward_with_cache(
+        &self,
+        further_blocks: &[Box<dyn BlockTrait>],
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
+        caches: &[BlockCache],
+    ) {
+        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+    }
+
 }
 
 pub struct BlockSum {
@@ -634,22 +721,11 @@ impl BlockTrait for BlockSum {
         pb: &mut port_buffer::PortBuffer,
         update: bool,
     ) {
-        debug_assert!(self.num_inputs > 0);
-        debug_assert!(self.output_offset != usize::MAX);
-        debug_assert!(self.input_offset != usize::MAX);
+        self.internal_forward(pb);
+
+        block_helpers::forward_backward(further_blocks, fb, pb, update);
 
         unsafe {
-            let wsum: f32 = pb
-                .tape
-                .get_unchecked_mut(
-                    self.input_offset..(self.input_offset + self.num_inputs),
-                )
-                .iter()
-                .sum();
-            pb.tape[self.output_offset] = wsum;
-
-            block_helpers::forward_backward(further_blocks, fb, pb, update);
-
             let general_gradient = pb.tape[self.output_offset];
             if update {
                 pb.tape
@@ -658,13 +734,38 @@ impl BlockTrait for BlockSum {
                     )
                     .fill(general_gradient);
             }
-        } // unsafe end
+        }
     }
 
     fn forward(
         &self,
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
+        pb: &mut port_buffer::PortBuffer,
+    ) {
+        self.internal_forward(pb);
+
+        block_helpers::forward(further_blocks, fb, pb);
+    }
+
+    fn forward_with_cache(
+        &self,
+        further_blocks: &[Box<dyn BlockTrait>],
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
+        caches: &[BlockCache],
+    ) {
+        self.internal_forward(pb);
+        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+    }
+
+}
+
+
+impl BlockSum {
+    #[inline(always)]
+    fn internal_forward(
+        &self,
         pb: &mut port_buffer::PortBuffer,
     ) {
         debug_assert!(self.num_inputs > 0);
@@ -675,8 +776,6 @@ impl BlockTrait for BlockSum {
             .iter()
             .sum();
         pb.tape[self.output_offset] = wsum;
-
-        block_helpers::forward(further_blocks, fb, pb);
     }
 }
 
@@ -757,28 +856,9 @@ impl BlockTrait for BlockTriangle {
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.num_inputs > 0);
 
-        unsafe {
-            {
-                let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
-                    &mut pb.tape,
-                    self.input_offset,
-                    self.num_inputs,
-                    self.output_offset,
-                    self.num_outputs,
-                );
+        self.internal_forward(pb);
 
-                let mut output_index: usize = 0;
-                for i in 0..self.square_width {
-                    for j in 0..i {
-                        *output_tape.get_unchecked_mut(output_index) =
-                            *input_tape.get_unchecked(i * self.square_width + j) * 2.0;
-                        output_index += 1;
-                    }
-                    *output_tape.get_unchecked_mut(output_index) =
-                        *input_tape.get_unchecked(i * self.square_width + i);
-                    output_index += 1;
-                }
-            }
+        unsafe {
 
             block_helpers::forward_backward(further_blocks, fb, pb, update);
 
@@ -802,13 +882,36 @@ impl BlockTrait for BlockTriangle {
                     }
                 }
             }
-        } // unsafe end
+        }
     }
 
     fn forward(
         &self,
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
+        pb: &mut port_buffer::PortBuffer,
+    ) {
+        self.internal_forward(pb);
+        block_helpers::forward(further_blocks, fb, pb);
+    }
+
+    fn forward_with_cache(
+        &self,
+        further_blocks: &[Box<dyn BlockTrait>],
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
+        caches: &[BlockCache],
+    ) {
+        self.internal_forward(pb);
+        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+    }
+
+}
+
+impl BlockTriangle {
+    #[inline(always)]
+    fn internal_forward(
+        &self,
         pb: &mut port_buffer::PortBuffer,
     ) {
         unsafe {
@@ -832,7 +935,6 @@ impl BlockTrait for BlockTriangle {
                 output_index += 1;
             }
         }
-        block_helpers::forward(further_blocks, fb, pb);
     }
 }
 

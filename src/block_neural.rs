@@ -21,6 +21,9 @@ use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 
 use blas::*;
+use crate::feature_buffer::FeatureBuffer;
+use crate::port_buffer::PortBuffer;
+use crate::regressor::BlockCache;
 
 const MAX_NUM_INPUTS: usize = 16000;
 
@@ -204,6 +207,7 @@ impl<L: OptimizerTrait + 'static>  BlockNeuronLayer<L> {
                 self.num_neurons,
             );
 
+            // This is actually speed things up considerably.
             output_tape.copy_from_slice(self.weights.get_unchecked(self.bias_offset..));
             sgemv(
                 b'T',                               //   trans: u8,
@@ -218,7 +222,7 @@ impl<L: OptimizerTrait + 'static>  BlockNeuronLayer<L> {
                 output_tape.get_unchecked_mut(0..), //y: &mut [f32],
                 1,                                  //incy: i32
             );
-        } // unsafe end
+        }
 
     }
 }
@@ -252,6 +256,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
 
         unsafe {
             if update && self.neuron_type == NeuronType::WeightedSum {
+                // first we need to initialize inputs to zero
+                // TODO - what to think about this buffer
                 let mut output_errors: [f32; MAX_NUM_INPUTS] = MaybeUninit::uninit().assume_init();
                 output_errors
                     .get_unchecked_mut(0..self.num_inputs)
@@ -273,7 +279,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
                     }
 
                     let general_gradient = output_tape.get_unchecked(j) * self.dropout_inv;
-
                     // if this is zero, subsequent multiplications make no sense
                     if general_gradient == 0.0 {
                         continue;
@@ -341,7 +346,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
 
                 input_tape.copy_from_slice(output_errors.get_unchecked(0..self.num_inputs));
             }
-        } // unsafe end
+        }
     }
 
     fn forward(
@@ -355,6 +360,17 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
         block_helpers::forward(further_blocks, fb, pb);
     }
 
+    fn forward_with_cache(
+        &self,
+        further_blocks: &[Box<dyn BlockTrait>],
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
+        caches: &[BlockCache],
+    ) {
+        self.internal_forward(pb, 1.0);
+
+        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+    }
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
         debug_assert!(self.output_offset != usize::MAX);

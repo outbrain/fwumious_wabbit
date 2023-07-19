@@ -24,6 +24,8 @@ extern crate intel_mkl_src;
 
 #[macro_use]
 extern crate nom;
+extern crate core;
+
 mod block_ffm;
 mod block_helpers;
 mod block_loss_functions;
@@ -45,6 +47,7 @@ mod multithread_helpers;
 mod optimizer;
 mod parser;
 mod persistence;
+mod radix_tree;
 mod regressor;
 mod serving;
 mod version;

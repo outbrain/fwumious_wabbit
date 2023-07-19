@@ -19,6 +19,20 @@ use crate::model_instance;
 use crate::optimizer;
 use crate::port_buffer;
 
+pub const FFM_CONTRA_BUF_LEN: usize = 16384;
+
+pub enum BlockCache {
+    FFM {
+        contra_fields: [f32; FFM_CONTRA_BUF_LEN],
+        contra_fields_present: Vec<bool>,
+        ffm: Vec<f32>,
+    },
+    LR {
+        combo_indexes: Vec<bool>,
+        lr: Vec<f32>,
+    },
+}
+
 pub trait BlockTrait {
     fn as_any(&mut self) -> &mut dyn Any; // This enables downcasting
     fn forward_backward(
@@ -35,6 +49,31 @@ pub trait BlockTrait {
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
     );
+
+    fn forward_with_cache(
+        &self,
+        further_blocks: &[Box<dyn BlockTrait>],
+        fb: &feature_buffer::FeatureBuffer,
+        pb: &mut port_buffer::PortBuffer,
+        caches: &[BlockCache],
+    );
+
+    fn prepare_forward_cache(
+        &mut self,
+        further_blocks: &mut [Box<dyn BlockTrait>],
+        fb: &feature_buffer::FeatureBuffer,
+        caches: &mut [BlockCache],
+    ) {
+        block_helpers::prepare_forward_cache(further_blocks, fb, caches);
+    }
+
+    fn create_forward_cache(
+        &mut self,
+        further_blocks: &mut [Box<dyn BlockTrait>],
+        caches: &mut Vec<BlockCache>
+    ) {
+        block_helpers::create_forward_cache(further_blocks, caches);
+    }
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {}
     fn get_serialized_len(&self) -> usize {
@@ -350,6 +389,36 @@ impl Regressor {
         
 
         pb.observations.pop().unwrap()
+    }
+
+    pub fn predict_with_cache(
+        &self,
+        fb: &feature_buffer::FeatureBuffer,
+        pb: &mut port_buffer::PortBuffer,
+        caches: &[BlockCache],
+    ) -> f32 {
+        pb.reset(); // empty the tape
+
+        let further_blocks = &self.blocks_boxes[..];
+        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+
+        assert_eq!(pb.observations.len(), 1);
+        let prediction_probability = pb.observations.pop().unwrap();
+
+        return prediction_probability;
+    }
+
+    pub fn setup_cache(
+        &mut self,
+        fb: &feature_buffer::FeatureBuffer,
+        caches: &mut Vec<BlockCache>,
+        should_create: bool,
+    ) {
+        let further_blocks = self.blocks_boxes.as_mut_slice();
+        if should_create {
+            block_helpers::create_forward_cache(further_blocks, caches);
+        }
+        block_helpers::prepare_forward_cache(further_blocks, fb, caches.as_mut_slice());
     }
 
     // Yeah, this is weird. I just didn't want to break the format compatibility at this point

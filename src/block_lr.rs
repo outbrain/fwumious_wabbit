@@ -1,6 +1,6 @@
 use std::any::Any;
 
-use crate::feature_buffer;
+use crate::{feature_buffer, parser};
 use crate::graph;
 use crate::model_instance;
 use crate::optimizer;
@@ -14,6 +14,7 @@ use crate::port_buffer;
 use block_helpers::WeightAndOptimizerData;
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
+use crate::regressor::BlockCache;
 
 pub struct BlockLR<L: OptimizerTrait> {
     pub weights: Vec<WeightAndOptimizerData<L>>,
@@ -21,6 +22,32 @@ pub struct BlockLR<L: OptimizerTrait> {
     pub optimizer_lr: L,
     pub output_offset: usize,
     pub num_combos: u32,
+}
+
+impl<L: OptimizerTrait + 'static> BlockLR<L> {
+
+    fn internal_forward(
+        &self,
+        fb: &feature_buffer::FeatureBuffer,
+        pb: &mut port_buffer::PortBuffer,
+    ) {
+        debug_assert!(self.output_offset != usize::MAX);
+
+        {
+            unsafe {
+                let myslice = &mut pb.tape
+                    [self.output_offset..(self.output_offset + self.num_combos as usize)];
+                myslice.fill(0.0);
+                for feature in fb.lr_buffer.iter() {
+                    let feature_index = feature.hash as usize;
+                    let feature_value = feature.value;
+                    let combo_index = feature.combo_index as usize;
+                    *myslice.get_unchecked_mut(combo_index) +=
+                        self.weights.get_unchecked(feature_index).weight * feature_value;
+                }
+            }
+        }
+    }
 }
 
 fn new_lr_block_without_weights<L: OptimizerTrait + 'static>(
@@ -107,27 +134,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         pb: &mut port_buffer::PortBuffer,
         update: bool,
     ) {
-        debug_assert!(self.output_offset != usize::MAX);
-
         unsafe {
-            {
-                let myslice = &mut pb.tape.get_unchecked_mut(
-                    self.output_offset..(self.output_offset + self.num_combos as usize),
-                );
-                myslice.fill(0.0);
-
-                for hashvalue in fb.lr_buffer.iter() {
-                    // Prefetch couple of indexes from the future to prevent pipeline stalls due to memory latencies
-                    //            for (i, hashvalue) in fb.lr_buffer.iter().enumerate() {
-                    // _mm_prefetch(mem::transmute::<&f32, &i8>(&self.weights.get_unchecked((fb.lr_buffer.get_unchecked(i+8).hash) as usize).weight), _MM_HINT_T0);  // No benefit for now
-                    let feature_index = hashvalue.hash;
-                    let feature_value: f32 = hashvalue.value;
-                    let combo_index = hashvalue.combo_index;
-                    let feature_weight = self.weights.get_unchecked(feature_index as usize).weight;
-                    *myslice.get_unchecked_mut(combo_index as usize) +=
-                        feature_weight * feature_value;
-                }
-            }
+            self.internal_forward(fb, pb);
 
             block_helpers::forward_backward(further_blocks, fb, pb, update);
 
@@ -136,11 +144,10 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
                     self.output_offset..(self.output_offset + self.num_combos as usize),
                 );
 
-                for hashvalue in fb.lr_buffer.iter() {
-                    let feature_index = hashvalue.hash as usize;
-                    let feature_value: f32 = hashvalue.value;
-                    let general_gradient = myslice.get_unchecked(hashvalue.combo_index as usize);
-                    let gradient = general_gradient * feature_value;
+                for feature in fb.lr_buffer.iter() {
+                    let feature_index = feature.hash as usize;
+                    let feature_value = feature.value;
+                    let gradient = myslice.get_unchecked(feature.combo_index as usize) * feature_value;
                     let update = self.optimizer_lr.calculate_update(
                         gradient,
                         &mut self.weights.get_unchecked_mut(feature_index).optimizer_data,
@@ -148,7 +155,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
                     self.weights.get_unchecked_mut(feature_index).weight -= update;
                 }
             }
-        } // end of unsafe
+        }
     }
 
     fn forward(
@@ -157,24 +164,102 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
     ) {
-        debug_assert!(self.output_offset != usize::MAX);
+        self.internal_forward(fb, pb);
+        block_helpers::forward(further_blocks, fb, pb);
+    }
 
-        let fbuf = &fb.lr_buffer;
+    fn forward_with_cache(
+        &self,
+        further_blocks: &[Box<dyn BlockTrait>],
+        fb: &feature_buffer::FeatureBuffer,
+        pb: &mut port_buffer::PortBuffer,
+        caches: &[BlockCache],
+    ) {
+        let Some((next_cache, further_caches)) = caches.split_first() else {
+            log::warn!("Expected BlockLRCache caches, but non available, executing forward pass without cache");
+            self.forward(further_blocks, fb, pb);
+            return;
+        };
 
-        {
-            unsafe {
-                let myslice = &mut pb.tape
-                    [self.output_offset..(self.output_offset + self.num_combos as usize)];
-                myslice.fill(0.0);
-                for val in fbuf {
-                    let hash = val.hash as usize;
-                    let feature_value: f32 = val.value;
-                    *myslice.get_unchecked_mut(val.combo_index as usize) +=
-                        self.weights.get_unchecked(hash).weight * feature_value;
+        let BlockCache::LR {
+            lr,
+            combo_indexes,
+        } = next_cache else {
+            log::warn!("Unable to downcast cache to BlockLRCache, executing forward pass without cache");
+            self.forward(further_blocks, fb, pb);
+            return;
+        };
+
+        unsafe {
+            let mut lr_slice = &mut pb.tape
+                [self.output_offset..(self.output_offset + self.num_combos as usize)];
+            lr_slice.copy_from_slice(lr.as_slice());
+
+            for feature in fb.lr_buffer.iter() {
+                let combo_index = feature.combo_index as usize;
+                if *combo_indexes.get_unchecked(combo_index) {
+                    continue
                 }
+                let feature_index = feature.hash as usize;
+                let feature_value = feature.value;
+                *lr_slice.get_unchecked_mut(combo_index) +=
+                    self.weights.get_unchecked(feature_index).weight * feature_value;
             }
         }
-        block_helpers::forward(further_blocks, fb, pb);
+        block_helpers::forward_with_cache(further_blocks, fb, pb, further_caches);
+    }
+
+    fn create_forward_cache(
+        &mut self,
+        further_blocks: &mut [Box<dyn BlockTrait>],
+        caches: &mut Vec<BlockCache>,
+    ) {
+        caches.push(BlockCache::LR {
+            lr: vec![0.0; self.num_combos as usize],
+            combo_indexes: vec![false; self.num_combos as usize]
+        });
+        block_helpers::create_forward_cache(further_blocks, caches);
+    }
+
+    fn prepare_forward_cache(
+        &mut self,
+        further_blocks: &mut [Box<dyn BlockTrait>],
+        fb: &feature_buffer::FeatureBuffer,
+        caches: &mut [BlockCache],
+    ) {
+        let Some((next_cache, further_caches)) = caches.split_first_mut() else {
+            log::warn!("Expected BlockLRCache caches, but non available, skipping cache preparation");
+            return;
+        };
+
+        let BlockCache::LR {
+            lr,
+            combo_indexes
+        } = next_cache else {
+            log::warn!("Unable to downcast cache to BlockLRCache, skipping cache preparation");
+            return;
+        };
+
+        unsafe {
+            combo_indexes.fill(false);
+            lr.fill(0.0);
+
+            let mut lr_slice = lr.as_mut_slice();
+
+            for feature in fb.lr_buffer.iter() {
+                if (feature.hash & parser::IS_NOT_SINGLE_MASK) == 0 {
+                    continue;
+                }
+                let feature_index = feature.hash as usize;
+                let feature_value = feature.value;
+                let combo_index = feature.combo_index as usize;
+                *lr_slice.get_unchecked_mut(combo_index) +=
+                    self.weights.get_unchecked(feature_index).weight * feature_value;
+                *combo_indexes.get_unchecked_mut(combo_index) = true;
+            }
+        }
+
+        block_helpers::prepare_forward_cache(further_blocks, fb, further_caches);
     }
 
     fn get_serialized_len(&self) -> usize {

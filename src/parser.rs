@@ -7,6 +7,7 @@ use std::io::Error as IOError;
 use std::io::ErrorKind;
 use std::str;
 use std::string::String;
+use crate::radix_tree::{NamespaceDescriptorWithHash, RadixTree};
 
 const RECBUF_LEN: usize = 2048;
 pub const HEADER_LEN: u32 = 3;
@@ -22,8 +23,8 @@ pub const FLOAT32_ONE: u32 = 1065353216; // 1.0f32.to_bits()
 #[derive(Clone)]
 pub struct VowpalParser {
     vw_map: vwmap::VwNamespaceMap,
+    map_vwname_to_namespace_descriptor: RadixTree,
     tmp_read_buf: Vec<u8>,
-    namespace_hash_seeds: [u32; 256], // Each namespace has its hash seed
     pub output_buffer: Vec<u32>,
 }
 
@@ -74,21 +75,26 @@ organization of records buffer
 
 impl VowpalParser {
     pub fn new(vw: &vwmap::VwNamespaceMap) -> VowpalParser {
-        let mut rr = VowpalParser {
+        let mut map_vwname_to_namespace_descriptor = RadixTree::default();
+        for (namespace_vwname_as_bytes, namespace_descriptor) in vw.map_vwname_to_namespace_descriptor.iter() {
+            let namespace_hash_seed = murmur3::hash32(str::from_utf8(&namespace_vwname_as_bytes).unwrap());
+            map_vwname_to_namespace_descriptor.insert(
+                namespace_vwname_as_bytes,
+                NamespaceDescriptorWithHash::new(namespace_descriptor.clone(), namespace_hash_seed)
+            );
+        }
+
+        let mut parser = VowpalParser {
             vw_map: (*vw).clone(),
+            map_vwname_to_namespace_descriptor,
             tmp_read_buf: Vec::with_capacity(RECBUF_LEN),
             output_buffer: Vec::with_capacity(RECBUF_LEN * 2),
-            namespace_hash_seeds: [0; 256],
         };
-        rr.output_buffer.resize(
+        parser.output_buffer.resize(
             (vw.num_namespaces as u32 * NAMESPACE_DESC_LEN + HEADER_LEN) as usize,
             0,
         );
-        for i in 0..vw.num_namespaces {
-            let namespace_vwname_str = &vw.vw_source.entries[i].namespace_vwname;
-            rr.namespace_hash_seeds[i] = murmur3::hash32(namespace_vwname_str);
-        }
-        rr
+        parser
     }
 
     pub fn print(&self) {
@@ -104,15 +110,15 @@ impl VowpalParser {
     ) -> Result<f32, Box<dyn Error>> {
         unsafe {
             if i_end - i_start == 4
-                && self.tmp_read_buf[i_start] == b'N'
-                && self.tmp_read_buf[i_start + 1] == b'O'
-                && self.tmp_read_buf[i_start + 2] == b'N'
-                && self.tmp_read_buf[i_start + 3] == b'E'
+                && *self.tmp_read_buf.get_unchecked(i_start) == b'N'
+                && *self.tmp_read_buf.get_unchecked(i_start + 1) == b'O'
+                && *self.tmp_read_buf.get_unchecked(i_start + 2) == b'N'
+                && *self.tmp_read_buf.get_unchecked(i_start + 3) == b'E'
             {
                 return Ok(f32::NAN);
             }
 
-            match str::from_utf8_unchecked(&self.tmp_read_buf[i_start..i_end]).parse::<f32>() {
+            match str::from_utf8_unchecked(self.tmp_read_buf.get_unchecked(i_start..i_end)).parse::<f32>() {
                 Ok(f) => Ok(f),
                 Err(_e) => {
                     Err(Box::new(IOError::new(
@@ -120,7 +126,7 @@ impl VowpalParser {
                         format!(
                             "{}: {}",
                             error_str,
-                            String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end])
+                            String::from_utf8_lossy(self.tmp_read_buf.get_unchecked(i_start..i_end))
                         ),
                     )))
                 }
@@ -151,33 +157,76 @@ impl VowpalParser {
         input_bufread: &mut impl BufRead,
     ) -> Result<&[u32], Box<dyn Error>> {
         self.tmp_read_buf.truncate(0);
-        let rowlen1 = match input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
+        let tmp_read_buf_size = match input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
             Ok(0) => return Ok(&[]),
             Ok(n) => n,
             Err(e) => Err(e)?,
         };
+        return self.next_vowpal_to_size(tmp_read_buf_size);
+    }
 
-        let bufpos: usize = self.vw_map.num_namespaces + HEADER_LEN as usize;
-        self.output_buffer.truncate(bufpos);
-        for i in &mut self.output_buffer[0..bufpos] {
-            *i = NO_FEATURES
+    pub fn next_vowpal_with_size(
+        &mut self,
+        input_bufread: &mut impl BufRead,
+    ) -> Result<(&[u32], usize), Box<dyn Error>> {
+        self.tmp_read_buf.truncate(0);
+        let tmp_read_buf_size = match input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
+            Ok(0) => return Ok((&[], 0)),
+            Ok(n) => n,
+            Err(e) => Err(e)?,
+        };
+        let size = if self.tmp_read_buf.last().map_or(false, |value| *value == 0x0a) {
+            tmp_read_buf_size - 1
+        } else {
+            tmp_read_buf_size
+        };
+        match self.next_vowpal_to_size(tmp_read_buf_size) {
+            Ok(n) => Ok((n, size)),
+            Err(e) => Err(e)?,
         }
+    }
+
+
+    pub fn next_vowpal_with_cache(
+        &mut self,
+        input_bufread: &mut impl BufRead,
+        cached_tmp_read_buf_size: usize,
+    ) -> Result<&[u32], Box<dyn Error>> {
+        self.tmp_read_buf.truncate(cached_tmp_read_buf_size);
+
+        let tmp_read_buf_size = match input_bufread.read_until(0x0a, &mut self.tmp_read_buf) {
+            Ok(0) => return Ok(&[]),
+            Ok(n) => n,
+            Err(e) => Err(e)?,
+        };
+        return self.next_vowpal_to_size(cached_tmp_read_buf_size + tmp_read_buf_size);
+    }
+
+    fn next_vowpal_to_size(
+        &mut self,
+        tmp_read_buf_size: usize
+    ) -> Result<&[u32], Box<dyn Error>> {
+        let bufpos: usize = (self.vw_map.num_namespaces + HEADER_LEN as usize) as usize;
 
         let mut current_namespace_num_of_features = 0;
 
         unsafe {
+            self.output_buffer.get_unchecked_mut(0..bufpos)
+                .fill(NO_FEATURES);
+            self.output_buffer.truncate(bufpos);
+
             let p = self.tmp_read_buf.as_ptr();
             let mut i_start: usize;
             let mut i_end: usize = 0;
 
             // first token is a label or "flush" command
             match *p.add(0) {
-                0x31 => self.output_buffer[LABEL_OFFSET] = 1, // 1
-                0x2d => self.output_buffer[LABEL_OFFSET] = 0, // -1
-                0x7c => self.output_buffer[LABEL_OFFSET] = NO_LABEL, // when first character is |, this means there is no label
+                0x31 => *self.output_buffer.get_unchecked_mut(LABEL_OFFSET) = 1, // 1
+                0x2d => *self.output_buffer.get_unchecked_mut(LABEL_OFFSET) = 0, // -1
+                0x7c => *self.output_buffer.get_unchecked_mut(LABEL_OFFSET) = NO_LABEL, // when first character is |, this means there is no label
                 _ => {
                     // "flush" ascii 66, 6C, 75, 73, 68
-                    if rowlen1 >= 5
+                    if tmp_read_buf_size >= 5
                         && *p.add(0) == 0x66
                         && *p.add(1) == 0x6C
                         && *p.add(2) == 0x75
@@ -185,10 +234,10 @@ impl VowpalParser {
                         && *p.add(4) == 0x68
                     {
                         return Err(Box::new(FlushCommand));
-                    } else if rowlen1 >= "hogwild_load ".len() {
+                    } else if tmp_read_buf_size >= "hogwild_load ".len() {
                         // THIS IS SLOW, BUT IT IS CALLED VERY RARELY
                         // IF WE WILL AVE COMMANDS CALLED MORE FREQUENTLY, WE WILL NEED A FASTER IMPLEMENTATION
-                        let vecs = self.parse_cmd(0, rowlen1)?;
+                        let vecs = self.parse_cmd(0, tmp_read_buf_size)?;
                         if vecs.len() == 2 {
                             let command = String::from_utf8_lossy(&vecs[0]);
                             if command == "hogwild_load" {
@@ -213,8 +262,10 @@ impl VowpalParser {
                 }
             };
 
-            let rowlen = rowlen1 - 1; // ignore last newline byte
-            if self.output_buffer[LABEL_OFFSET] != NO_LABEL {
+            let rowlen = tmp_read_buf_size - 1; // ignore last newline byte
+            if *self.output_buffer.get_unchecked(LABEL_OFFSET) == NO_LABEL {
+                *self.output_buffer.get_unchecked_mut(EXAMPLE_IMPORTANCE_OFFSET) = FLOAT32_ONE;
+            } else {
                 // if we have a label, let's check if we also have label weight
                 while *p.add(i_end) != 0x20 && i_end < rowlen {
                     i_end += 1;
@@ -224,8 +275,10 @@ impl VowpalParser {
                 } // find first non-space
                   //if next character is not "|", we assume it's a example importance
                   //i_end +=1;
-                if *p.add(i_end) != 0x7c {
-                    // this token does not start with "|", so it has to be example improtance floating point
+                if *p.add(i_end) == 0x7c {
+                    *self.output_buffer.get_unchecked_mut(EXAMPLE_IMPORTANCE_OFFSET) = FLOAT32_ONE;
+                } else {
+                    // this token does not start with "|", so it has to be example importance floating point
                     i_start = i_end;
                     while *p.add(i_end) != 0x20 && i_end < rowlen {
                         i_end += 1;
@@ -241,12 +294,8 @@ impl VowpalParser {
                             format!("Example importance cannot be negative: {:?}! ", importance),
                         )));
                     }
-                    self.output_buffer[EXAMPLE_IMPORTANCE_OFFSET] = importance.to_bits();
-                } else {
-                    self.output_buffer[EXAMPLE_IMPORTANCE_OFFSET] = FLOAT32_ONE;
+                    *self.output_buffer.get_unchecked_mut(EXAMPLE_IMPORTANCE_OFFSET) = importance.to_bits();
                 }
-            } else {
-                self.output_buffer[EXAMPLE_IMPORTANCE_OFFSET] = FLOAT32_ONE;
             }
             // Then we look for first namespace
             while *p.add(i_end) != 0x7c && i_end < rowlen {
@@ -279,22 +328,20 @@ impl VowpalParser {
                     // "|"
                     // new namespace index
                     i_start += 1;
-                    if i_end_first_part != i_end {
+                    current_namespace_weight = if i_end_first_part != i_end {
                         // Non-empty part after ":" is namespace weight
-                        current_namespace_weight = self.parse_float_or_error(
+                        self.parse_float_or_error(
                             i_end_first_part + 1,
                             i_end,
                             "Failed parsing namespace weight",
-                        )?;
+                        )?
                     } else {
-                        current_namespace_weight = 1.0;
-                    }
+                        1.0
+                    };
 
-                    let current_vwname = &self.tmp_read_buf[i_start..i_end_first_part];
+                    let current_vwname = self.tmp_read_buf.get_unchecked(i_start..i_end_first_part);
 
-                    let current_namespace_descriptor = match self
-                        .vw_map
-                        .map_vwname_to_namespace_descriptor
+                    let current_namespace_descriptor_with_hash = match self.map_vwname_to_namespace_descriptor
                         .get(current_vwname)
                     {
                         Some(v) => v,
@@ -310,11 +357,10 @@ impl VowpalParser {
                             )))
                         }
                     };
+                    let current_namespace_descriptor = current_namespace_descriptor_with_hash.descriptor;
                     let current_namespace_index =
                         current_namespace_descriptor.namespace_index as usize;
-                    current_namespace_hash_seed = *self
-                        .namespace_hash_seeds
-                        .get_unchecked(current_namespace_index);
+                    current_namespace_hash_seed = current_namespace_descriptor_with_hash.hash_seed;
                     current_namespace_index_offset =
                         current_namespace_index * NAMESPACE_DESC_LEN as usize + HEADER_LEN as usize;
                     current_namespace_format = current_namespace_descriptor.namespace_format;
@@ -322,48 +368,45 @@ impl VowpalParser {
                     bufpos_namespace_start = self.output_buffer.len(); // this is only used if we will have multiple values
                 } else {
                     // We have a feature! Let's hash it and write it to the buffer
-                    // println!("item out {:?}", std::str::from_utf8(&rr.tmp_read_buf[i_start..i_end]));
-                    //   print!("F {:?}\n", String::from_utf8_lossy(&self.tmp_read_buf[i_start..i_end_first_part]));
                     let h = murmur3::hash32_with_seed(
-                        &self.tmp_read_buf[i_start..i_end_first_part],
+                        self.tmp_read_buf.get_unchecked(i_start..i_end_first_part),
                         current_namespace_hash_seed,
                     ) & MASK31;
 
-                    let feature_weight: f32 = match i_end - i_end_first_part {
-                        0 => 1.0,
-                        _ => self.parse_float_or_error(
+                    let feature_weight: f32 = if i_end_first_part != i_end {
+                        // Non-empty part after ":" is namespace weight
+                        self.parse_float_or_error(
                             i_end_first_part + 1,
                             i_end,
                             "Failed parsing feature weight",
-                        )?,
+                        )?
+                    } else {
+                        1.0
                     };
 
                     // We have three options:
                     // - first feature, no weights -> put it in-place
                     // - if it's second feature and first one was "simple", then promote it
                     // -- and then just add feature to the end of the buffer
-                    if current_namespace_weight == 1.0
-                        && feature_weight == 1.0
-                        && current_namespace_num_of_features == 0
+                    if current_namespace_num_of_features == 0
                         && current_namespace_format == vwmap::NamespaceFormat::Categorical
+                        && current_namespace_weight == 1.0
+                        && feature_weight == 1.0
                     {
                         *self
                             .output_buffer
                             .get_unchecked_mut(current_namespace_index_offset) = h;
                     } else {
+                        let feature_output = *self
+                            .output_buffer
+                            .get_unchecked(current_namespace_index_offset);
                         if (current_namespace_num_of_features == 1)
-                            && (*self
-                                .output_buffer
-                                .get_unchecked(current_namespace_index_offset)
+                            && (feature_output
                                 & IS_NOT_SINGLE_MASK)
                                 == 0
                         {
                             // We need to promote feature currently written in-place to out of place
-                            self.output_buffer.push(
-                                *self
-                                    .output_buffer
-                                    .get_unchecked(current_namespace_index_offset),
-                            );
+                            self.output_buffer.push(feature_output);
                             self.output_buffer.push(FLOAT32_ONE);
                             debug_assert_eq!(
                                 current_namespace_format,
@@ -375,34 +418,29 @@ impl VowpalParser {
                             // The namespace_skip_prefix allows us to parse a value A100, where A is one byte prefix which gets ignored
                             let float_start =
                                 i_start + self.vw_map.vw_source.namespace_skip_prefix as usize;
-                            let float_value: f32 = match i_end_first_part - float_start {
-                                0 => f32::NAN,
-                                _ => self.parse_float_or_error(
+                            let float_value: f32 = if i_end_first_part != float_start {
+                                self.parse_float_or_error(
                                     float_start,
                                     i_end_first_part,
                                     "Failed parsing feature value to float (for float namespace)",
-                                )?,
+                                )?
+                            } else {
+                                f32::NAN
                             };
                             self.output_buffer.push(float_value.to_bits());
-                            *self
-                                .output_buffer
-                                .get_unchecked_mut(current_namespace_index_offset) =
-                                IS_NOT_SINGLE_MASK
-                                    | (((bufpos_namespace_start << 16) + self.output_buffer.len())
-                                        as u32);
                             if current_namespace_weight * feature_weight != 1.0 {
                                 return Err(Box::new(IOError::new(ErrorKind::Other, "Namespaces that are f32 can not have weight attached neither to namespace nor to a single feature (basically they can\' use :weight syntax".to_string())));
                             }
                         } else {
                             self.output_buffer
                                 .push((current_namespace_weight * feature_weight).to_bits());
-                            *self
-                                .output_buffer
-                                .get_unchecked_mut(current_namespace_index_offset) =
-                                IS_NOT_SINGLE_MASK
-                                    | (((bufpos_namespace_start << 16) + self.output_buffer.len())
-                                        as u32);
                         }
+                        *self
+                            .output_buffer
+                            .get_unchecked_mut(current_namespace_index_offset) =
+                            IS_NOT_SINGLE_MASK
+                                | (((bufpos_namespace_start << 16) + self.output_buffer.len())
+                                as u32);
                     }
                     current_namespace_num_of_features += 1;
                 }
@@ -421,7 +459,7 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use std::io::Cursor;
-    
+
 
     fn nd(start: u32, end: u32) -> u32 {
         (start << 16) + end
@@ -1020,4 +1058,55 @@ CC,featureC
             ]
         );
     }
+
+    #[test]
+    fn test_cache() {
+        // Test for perfect vowpal-compatible hashing
+        let vw_map_string = r#"
+AA,featureA
+BB,featureB
+CC,featureC
+"#;
+        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+
+        fn str_to_cursor(s: &str) -> Cursor<Vec<u8>> {
+            Cursor::new(s.as_bytes().to_vec())
+        }
+
+        let mut rr = VowpalParser::new(&vw);
+
+        let mut buf = str_to_cursor("|BB b |AA:3 a:2.0 \n");
+        let buf_result =
+            [8, 255, 1065353216, 2147876872, 1123906636, 2147483648, 292540976, 1086324736];
+
+        assert_eq!(
+            rr.next_vowpal(&mut buf).unwrap(),
+            buf_result
+        );
+
+        let cache_input_str = "|BB b \n";
+        let mut cache_buf = str_to_cursor(cache_input_str);
+        let (cache_result, cache_result_size) = rr.next_vowpal_with_size(&mut cache_buf).unwrap();
+
+        assert_eq!(
+            cache_result,
+            [
+                6,
+                255,
+                1065353216,
+                2147483648,
+                1123906636,
+                2147483648
+            ]
+        );
+
+        let mut added_cache_buf = str_to_cursor("|AA:3 a:2.0 \n");
+
+        // feature weight + namespace weight
+        assert_eq!(
+            rr.next_vowpal_with_cache(&mut added_cache_buf, cache_result_size).unwrap(),
+            buf_result
+        );
+    }
+
 }
