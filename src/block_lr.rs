@@ -163,7 +163,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
-        mask_interactions: bool,
     ) {
         self.internal_forward(fb, pb);
         block_helpers::forward(further_blocks, fb, pb);
@@ -175,6 +174,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
         caches: &[BlockCache],
+        mask_interactions: bool,
     ) {
         let Some((next_cache, further_caches)) = caches.split_first() else {
             log::warn!("Expected BlockLRCache caches, but non available, executing forward pass without cache");
@@ -207,7 +207,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
                     self.weights.get_unchecked(feature_index).weight * feature_value;
             }
         }
-        block_helpers::forward_with_cache(further_blocks, fb, pb, further_caches);
+        block_helpers::forward_with_cache(further_blocks, fb, pb, further_caches, mask_interactions);
     }
 
     fn create_forward_cache(

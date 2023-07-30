@@ -18,7 +18,7 @@ use crate::graph;
 use crate::model_instance;
 use crate::optimizer;
 use crate::port_buffer;
-const N_MC_PREDS: usize = 2;
+const N_MC_PREDS: usize = 5;
 
 pub const FFM_CONTRA_BUF_LEN: usize = 16384;
 
@@ -49,7 +49,6 @@ pub trait BlockTrait {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
-        mask_interactions: bool,
     );
 
     fn forward_with_cache(
@@ -58,6 +57,7 @@ pub trait BlockTrait {
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
         caches: &[BlockCache],
+        mask_interactions: bool,
     );
 
     fn prepare_forward_cache(
@@ -129,7 +129,6 @@ pub struct Regressor {
     pub blocks_boxes: Vec<Box<dyn BlockTrait>>,
     pub tape_len: usize,
     pub immutable: bool,
-    pub ffm_n_mc_preds: u32,
 }
 
 pub fn get_regressor_without_weights(mi: &model_instance::ModelInstance) -> Regressor {
@@ -162,7 +161,6 @@ impl Regressor {
             regressor_name: format!("Regressor with optimizer \"{:?}\"", mi.optimizer),
             immutable: false,
             tape_len: usize::MAX,
-            ffm_n_mc_preds: mi.ffm_n_mc_preds,
         };
 
         let mut bg = graph::BlockGraph::new();
@@ -171,7 +169,7 @@ impl Regressor {
 
         if mi.ffm_k > 0 {
             let mut block_ffm = block_ffm::new_ffm_block(&mut bg, mi).unwrap();
-            // if performance of current version is too bad, we can improve by adding a block to the triangle block
+            // TODO: <Implementation suggestion> if performance of current version is too bad, we can improve by adding a block to the triangle block
             // and do the masking there, cause it wouldn't be calling the whole graph multiple times
             let mut triangle_ffm = block_misc::new_triangle_block(&mut bg, block_ffm).unwrap();
             output = block_misc::new_join_block(&mut bg, vec![output, triangle_ffm]).unwrap();
@@ -387,13 +385,9 @@ impl Regressor {
     ) -> f32 {
         // TODO: we should find a way of not using unsafe
         pb.reset(); // empty the tape
-        //log::info!("Running Predict (montecarlo mode)");
+
         let further_blocks = &self.blocks_boxes[..];
-        let mut predictions_sum: f32 = 0.0;
-        let ffm_n_mc_preds = &self.ffm_n_mc_preds;
-        // We call once using all interactions
-        //log::info!("first without masking");
-        block_helpers::forward(further_blocks, fb, pb, false);
+        block_helpers::forward(further_blocks, fb, pb);
 
         assert_eq!(pb.observations.len(), 1);
 
@@ -408,13 +402,14 @@ impl Regressor {
         caches: &[BlockCache],
     ) -> f32 {
         pb.reset(); // empty the tape
-
+        let mut predictions_sum: f32 = 0.0;
         let further_blocks = &self.blocks_boxes[..];
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
-
-        assert_eq!(pb.observations.len(), 1);
-        let prediction_probability = pb.observations.pop().unwrap();
-
+        // First call with no dropout
+        block_helpers::forward_with_cache(further_blocks, fb, pb, caches, false);
+        // Next calls with dropout
+        for n in 1..N_MC_PREDS {
+            block_helpers::forward_with_cache(further_blocks, fb, pb, true);
+        }
         assert_eq!(pb.observations.len(), N_MC_PREDS);
         for i in 1..(N_MC_PREDS + 1) {
             predictions_sum += pb.observations.pop().unwrap();

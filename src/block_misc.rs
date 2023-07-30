@@ -118,7 +118,6 @@ impl BlockTrait for BlockObserve {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
-        mask_interactions: bool,
     ) {
         debug_assert!(self.input_offset != usize::MAX);
 
@@ -128,7 +127,7 @@ impl BlockTrait for BlockObserve {
             );
         }
 
-        block_helpers::forward(further_blocks, fb, pb, mask_interactions);
+        block_helpers::forward(further_blocks, fb, pb);
 
         if self.observe == Observe::Backward {
             pb.observations.extend_from_slice(
@@ -152,6 +151,7 @@ impl BlockTrait for BlockObserve {
         fb: &FeatureBuffer,
         pb: &mut PortBuffer,
         caches: &[BlockCache],
+        mask_interactions: bool,
     ) {
         debug_assert!(self.input_offset != usize::MAX);
         debug_assert!(self.input_offset != usize::MAX);
@@ -162,7 +162,7 @@ impl BlockTrait for BlockObserve {
             );
         }
 
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        block_helpers::forward_with_cache(further_blocks, fb, pb, caches, mask_interactions);
 
         if self.observe == Observe::Backward {
             pb.observations.extend_from_slice(
@@ -263,10 +263,9 @@ impl BlockTrait for BlockSink {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
-        mask_interactions: bool,
     ) {
         debug_assert!(self.input_offset != usize::MAX);
-        block_helpers::forward(further_blocks, fb, pb, mask_interactions);
+        block_helpers::forward(further_blocks, fb, pb);
     }
 
     #[inline(always)]
@@ -276,9 +275,10 @@ impl BlockTrait for BlockSink {
         fb: &FeatureBuffer,
         pb: &mut PortBuffer,
         caches: &[BlockCache],
+        mask_interactions: bool,
     ) {
         debug_assert!(self.input_offset != usize::MAX);
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        block_helpers::forward_with_cache(further_blocks, fb, pb, caches, mask_interactions);
     }
 
 }
@@ -358,10 +358,9 @@ impl BlockTrait for BlockConsts {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
-        mask_interactions: bool,
     ) {
         self.internal_forward(pb);
-        block_helpers::forward(further_blocks, fb, pb, mask_interactions);
+        block_helpers::forward(further_blocks, fb, pb);
     }
 
     fn forward_with_cache(
@@ -370,9 +369,10 @@ impl BlockTrait for BlockConsts {
         fb: &FeatureBuffer,
         pb: &mut PortBuffer,
         caches: &[BlockCache],
+        mask_interactions: bool,
     ) {
         self.internal_forward(pb);
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        block_helpers::forward_with_cache(further_blocks, fb, pb, caches, mask_interactions);
     }
 
 }
@@ -508,7 +508,6 @@ impl BlockTrait for BlockCopy {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
-        mask_interactions: bool,
     ) {
         self.internal_forward(pb);
         block_helpers::forward(further_blocks, fb, pb);
@@ -520,9 +519,10 @@ impl BlockTrait for BlockCopy {
         fb: &FeatureBuffer,
         pb: &mut PortBuffer,
         caches: &[BlockCache],
+        mask_interactions: bool,
     ) {
         self.internal_forward(pb);
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        block_helpers::forward_with_cache(further_blocks, fb, pb, caches, mask_interactions);
     }
 
 }
@@ -648,9 +648,8 @@ impl BlockTrait for BlockJoin {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
-        mask_interactions: bool,
     ) {
-        block_helpers::forward(further_blocks, fb, pb, mask_interactions);
+        block_helpers::forward(further_blocks, fb, pb);
     }
 
     fn forward_with_cache(
@@ -659,8 +658,9 @@ impl BlockTrait for BlockJoin {
         fb: &FeatureBuffer,
         pb: &mut PortBuffer,
         caches: &[BlockCache],
+        mask_interactions: bool,
     ) {
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        block_helpers::forward_with_cache(further_blocks, fb, pb, caches, mask_interactions);
     }
 
 }
@@ -747,11 +747,10 @@ impl BlockTrait for BlockSum {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
-        mask_interactions: bool,
     ) {
         self.internal_forward(pb);
 
-        block_helpers::forward(further_blocks, fb, pb, mask_interactions);
+        block_helpers::forward(further_blocks, fb, pb);
     }
 
     fn forward_with_cache(
@@ -760,9 +759,10 @@ impl BlockTrait for BlockSum {
         fb: &FeatureBuffer,
         pb: &mut PortBuffer,
         caches: &[BlockCache],
+        mask_interactions: bool,
     ) {
         self.internal_forward(pb);
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        block_helpers::forward_with_cache(further_blocks, fb, pb, caches, mask_interactions);
     }
 
 }
@@ -896,7 +896,6 @@ impl BlockTrait for BlockTriangle {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
-        mask_interactions: bool,
     ) {
         self.internal_forward(pb);
         block_helpers::forward(further_blocks, fb, pb);
@@ -908,9 +907,10 @@ impl BlockTrait for BlockTriangle {
         fb: &FeatureBuffer,
         pb: &mut PortBuffer,
         caches: &[BlockCache],
+        mask_interactions: bool,
     ) {
         self.internal_forward(pb);
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        block_helpers::forward_with_cache(further_blocks, fb, pb, caches, mask_interactions);
     }
 
 }

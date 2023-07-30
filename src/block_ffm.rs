@@ -314,7 +314,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         further_blocks: &[Box<dyn BlockTrait>],
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
-        mask_interactions: bool,
     ) {
         debug_assert!(self.output_offset != usize::MAX);
         let num_outputs = (self.ffm_num_fields * self.ffm_num_fields) as usize;
@@ -480,6 +479,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         fb: &FeatureBuffer,
         pb: &mut PortBuffer,
         caches: &[BlockCache],
+        mask_interactions: bool,
     ) {
         debug_assert!(self.output_offset != usize::MAX);
 
@@ -649,6 +649,10 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
                     let mut contra_field = 0.0;
                     for k in 0.. ffmk_as_usize {
+                        let random_number: f32 = merand48((100*f1 + 10*f2 + (k as usize)) as u64);
+                        if mask_interactions && random_number <= DROPOUT_RATE {
+                            continue
+                        }
                         contra_field += contra_fields.get_unchecked(f1_offset_ffmk + k) * contra_fields.get_unchecked(f2_offset_ffmk + k);
                     }
 
@@ -666,7 +670,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 self_interaction_index += ffm_fields_count_as_usize;
             }
         }
-        block_helpers::forward_with_cache(further_blocks, fb, pb, further_caches);
+        block_helpers::forward_with_cache(further_blocks, fb, pb, further_caches, mask_interactions);
     }
 
     fn create_forward_cache(
@@ -1120,7 +1124,7 @@ mod tests {
             1,
         ); // saying we have 1 field isn't entirely correct
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.5);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches, false), 0.5);
         assert_epsilon!(slearn2(&mut bg, &fb, &mut pb, true), 0.5);
 
         // With two fields, things start to happen
@@ -1161,11 +1165,11 @@ mod tests {
             2,
         );
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.7310586);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches, false), 0.7310586);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.7310586);
 
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.7024794);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches, false), 0.7024794);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.7024794);
 
         // Two fields, use values
@@ -1202,11 +1206,11 @@ mod tests {
             2,
         );
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.98201376);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches, false), 0.98201376);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.98201376);
 
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.81377685);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches, false), 0.81377685);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.81377685);
     }
 
@@ -1342,11 +1346,11 @@ mod tests {
             1,
         );
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.5);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches, false), 0.5);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.5);
 
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.5);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches, false), 0.5);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.5);
 
         // With two fields, things start to happen
@@ -1384,11 +1388,11 @@ mod tests {
             2,
         );
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.98201376);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches, false), 0.98201376);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.98201376);
 
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.96277946);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches, false), 0.96277946);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.96277946);
 
         // Two fields, use values
@@ -1425,11 +1429,11 @@ mod tests {
             2,
         );
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.9999999);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches, false), 0.9999999);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.9999999);
 
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.99685884);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches, false), 0.99685884);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.99685884);
     }
 
@@ -1556,15 +1560,15 @@ B,featureB
             2,
         );
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.9933072);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches, false), 0.9933072);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.9933072);
 
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.9395168);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches, false), 0.9395168);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.9395168);
 
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.9395168);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches, false), 0.9395168);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.9395168);
     }
 
@@ -1681,11 +1685,11 @@ B,featureB
 
 
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 1.0);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches, false), 1.0);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 1.0);
 
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.9949837);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches, false), 0.9949837);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.9949837);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.9949837);
     }
@@ -1834,7 +1838,7 @@ B,featureB
             3,
         );
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.95257413);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches, false), 0.95257413);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.95257413);
 
         // here we intentionally have missing fields
@@ -1854,7 +1858,7 @@ B,featureB
             3,
         );
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_eq!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.7310586);
+        assert_eq!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches, false), 0.7310586);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.7310586);
     }
 

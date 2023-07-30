@@ -186,10 +186,11 @@ pub fn spredict2_with_cache<'a>(
     fb: &feature_buffer::FeatureBuffer,
     pb: &mut port_buffer::PortBuffer,
     caches: &[BlockCache],
+    mask_interactions: bool,
 ) -> f32 {
     pb.reset();
     let (block_run, further_blocks) = bg.blocks_final.split_at(1);
-    block_run[0].forward_with_cache(further_blocks, fb, pb, caches);
+    block_run[0].forward_with_cache(further_blocks, fb, pb, caches, mask_interactions);
 
     let prediction_probability = pb.observations[0];
     return prediction_probability;
@@ -204,7 +205,7 @@ pub fn spredict2<'a>(
 ) -> f32 {
     pb.reset();
     let (block_run, further_blocks) = bg.blocks_final.split_at(1);
-    block_run[0].forward(further_blocks, fb, pb, mask_interactions);
+    block_run[0].forward(further_blocks, fb, pb);
     pb.observations[0]
 }
 
@@ -228,10 +229,9 @@ pub fn forward(
     further_blocks: &[Box<dyn BlockTrait>],
     fb: &feature_buffer::FeatureBuffer,
     pb: &mut port_buffer::PortBuffer,
-    mask_interactions: bool,
 ) {
     match further_blocks.split_first() {
-        Some((next_regressor, further_blocks)) => next_regressor.forward(further_blocks, fb, pb, mask_interactions),
+        Some((next_regressor, further_blocks)) => next_regressor.forward(further_blocks, fb, pb),
         None => {}
     }
 }
@@ -242,10 +242,11 @@ pub fn forward_with_cache(
     fb: &feature_buffer::FeatureBuffer,
     pb: &mut port_buffer::PortBuffer,
     caches: &[BlockCache],
+    mask_interactions: bool,
 ) {
     match further_blocks.split_first() {
         Some((next_regressor, further_blocks)) => next_regressor
-            .forward_with_cache(further_blocks, fb, pb, caches),
+            .forward_with_cache(further_blocks, fb, pb, caches, mask_interactions),
         None => {}
     }
 }
