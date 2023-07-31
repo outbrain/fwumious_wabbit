@@ -201,7 +201,6 @@ pub fn spredict2<'a>(
     fb: &feature_buffer::FeatureBuffer,
     pb: &mut port_buffer::PortBuffer,
     update: bool,
-    mask_interactions: bool,
 ) -> f32 {
     pb.reset();
     let (block_run, further_blocks) = bg.blocks_final.split_at(1);

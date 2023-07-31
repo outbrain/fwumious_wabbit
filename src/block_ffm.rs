@@ -1020,7 +1020,7 @@ mod tests {
             }],
             1,
         ); // saying we have 1 field isn't entirely correct
-        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.5);
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true), 0.5);
         assert_epsilon!(slearn2(&mut bg, &fb, &mut pb, true), 0.5);
 
         // With two fields, things start to happen
@@ -1050,10 +1050,10 @@ mod tests {
             ],
             2,
         );
-        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.7310586);
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true), 0.7310586);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.7310586);
 
-        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.7024794);
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true), 0.7024794);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.7024794);
 
         // Two fields, use values
@@ -1080,9 +1080,9 @@ mod tests {
             ],
             2,
         );
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.98201376);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.98201376);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.98201376);
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.81377685);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.81377685);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.81377685);
     }
 
@@ -1245,9 +1245,9 @@ mod tests {
             }],
             1,
         );
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.5);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.5);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.5);
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.5);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.5);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.5);
 
         // With two fields, things start to happen
@@ -1275,9 +1275,9 @@ mod tests {
             ],
             2,
         );
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.98201376);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.98201376);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.98201376);
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.96277946);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.96277946);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.96277946);
 
         // Two fields, use values
@@ -1304,9 +1304,9 @@ mod tests {
             ],
             2,
         );
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.9999999);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.9999999);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.9999999);
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.99685884);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.99685884);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.99685884);
     }
 
@@ -1752,7 +1752,7 @@ B,featureB
             ],
             3,
         );
-        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.95257413);
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true), 0.95257413);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.95257413);
 
         // here we intentionally have just the middle field
@@ -1764,7 +1764,7 @@ B,featureB
             }],
             3,
         );
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true, false), 0.5);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.5);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.5);
     }
 
@@ -1892,8 +1892,8 @@ B,featureB
             }],
             1,
         ); // saying we have 1 field isn't entirely correct
-        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true, true), 0.5);
-        assert_ne!(spredict2(&mut bg, &fb, &mut pb, true, true), 0.5);
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true), 0.5);
+        assert_ne!(spredict2(&mut bg, &fb, &mut pb, true), 0.5);
 
         // With two fields, things start to happen
         // Since fields depend on initial randomization, these tests are ... peculiar.
@@ -1922,10 +1922,10 @@ B,featureB
             ],
             2,
         );
-        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true, true), 0.7310586);
-        assert_ne!(spredict2(&mut bg, &fb, &mut pb, true, true), 0.7310586);
-        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true, true), 0.7024794);
-        assert_ne!(spredict2(&mut bg, &fb, &mut pb, true, true), 0.7024794);
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true), 0.7310586);
+        assert_ne!(spredict2(&mut bg, &fb, &mut pb, true), 0.7310586);
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true), 0.7024794);
+        assert_ne!(spredict2(&mut bg, &fb, &mut pb, true), 0.7024794);
 
         // Two fields, use values
         mi.optimizer = Optimizer::AdagradLUT;
@@ -1951,9 +1951,9 @@ B,featureB
             ],
             2,
         );
-        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true, true), 0.98201376);
-        assert_ne!(spredict2(&mut bg, &fb, &mut pb, true, true), 0.98201376);
-        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true, true), 0.81377685);
-        assert_ne!(spredict2(&mut bg, &fb, &mut pb, true, true), 0.81377685);
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true), 0.98201376);
+        assert_ne!(spredict2(&mut bg, &fb, &mut pb, true), 0.98201376);
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb, true), 0.81377685);
+        assert_ne!(spredict2(&mut bg, &fb, &mut pb, true), 0.81377685);
     }
 }

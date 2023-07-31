@@ -990,7 +990,7 @@ mod tests {
             ]
         ); // backward part -- 1 is distributed to both inputs
 
-        spredict2(&mut bg, &fb, &mut pb, true, false);
+        spredict2(&mut bg, &fb, &mut pb, true);
         assert_eq!(
             pb.observations,
             vec![
@@ -1061,7 +1061,7 @@ mod tests {
             ]
         ); // backward part  (6+11)
 
-        spredict2(&mut bg, &fb, &mut pb, false, false);
+        spredict2(&mut bg, &fb, &mut pb, false);
         assert_eq!(
             pb.observations,
             vec![
@@ -1107,7 +1107,7 @@ mod tests {
             ]
         ); // backward part  (5+6+7)
 
-        spredict2(&mut bg, &fb, &mut pb, false, false);
+        spredict2(&mut bg, &fb, &mut pb, false);
         assert_eq!(
             pb.observations,
             vec![
@@ -1136,7 +1136,7 @@ mod tests {
         slearn2(&mut bg, &fb, &mut pb, true);
         assert_eq!(pb.observations, vec![2.0, 3.0,]); // join actually doesn't do anything
 
-        spredict2(&mut bg, &fb, &mut pb, false, false);
+        spredict2(&mut bg, &fb, &mut pb, false);
         assert_eq!(pb.observations, vec![2.0, 3.0,]); // join actually doesn't do anything
     }
 
@@ -1158,7 +1158,7 @@ mod tests {
         slearn2(&mut bg, &fb, &mut pb, true);
         assert_eq!(pb.observations, vec![2.0, 3.0, 4.0, 5.0, 6.0]); // join actually doesn't do anything
 
-        spredict2(&mut bg, &fb, &mut pb, false, false);
+        spredict2(&mut bg, &fb, &mut pb, false);
         assert_eq!(pb.observations, vec![2.0, 3.0, 4.0, 5.0, 6.0]); // join actually doesn't do anything
     }
 
@@ -1183,7 +1183,7 @@ mod tests {
         // Order depends on the input parameters order, not on order of adding to graph
         assert_eq!(pb.observations, vec![6.0, 7.0, 3.0, 4.0, 5.0, 1.0, 2.0]); // join actually doesn't do anything
 
-        spredict2(&mut bg, &fb, &mut pb, false, false);
+        spredict2(&mut bg, &fb, &mut pb, false);
         assert_eq!(pb.observations, vec![6.0, 7.0, 3.0, 4.0, 5.0, 1.0, 2.0]); // join actually doesn't do anything
     }
 
@@ -1208,7 +1208,7 @@ mod tests {
         // Order depends on the input parameters order, not on order of adding to graph
         assert_eq!(pb.observations, vec![6.0, 7.0, 1.0, 2.0, 3.0, 4.0, 5.0]); // join actually doesn't do anything
 
-        spredict2(&mut bg, &fb, &mut pb, false, false);
+        spredict2(&mut bg, &fb, &mut pb, false);
         assert_eq!(pb.observations, vec![6.0, 7.0, 1.0, 2.0, 3.0, 4.0, 5.0]); // join actually doesn't do anything
     }
 
@@ -1234,7 +1234,7 @@ mod tests {
         slearn2(&mut bg, &fb, &mut pb, true);
         assert_eq!(pb.observations, vec![2.0, 3.0, 2.0, 3.0, 12.0, 12.0]); // correct backwards pass
 
-        spredict2(&mut bg, &fb, &mut pb, false, false);
+        spredict2(&mut bg, &fb, &mut pb, false);
         assert_eq!(pb.observations, vec![2.0, 3.0, 2.0, 3.0, 2.0, 3.0]); // on backward pass this are leftovers
     }
 }
