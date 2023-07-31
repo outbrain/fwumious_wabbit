@@ -408,7 +408,7 @@ impl Regressor {
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches, false);
         // Next calls with dropout
         for n in 1..N_MC_PREDS {
-            block_helpers::forward_with_cache(further_blocks, fb, pb, true);
+            block_helpers::forward_with_cache(further_blocks, fb, pb, caches, true);
         }
         assert_eq!(pb.observations.len(), N_MC_PREDS);
         for i in 1..(N_MC_PREDS + 1) {
