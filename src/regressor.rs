@@ -3,7 +3,6 @@ use std::any::Any;
 use std::error::Error;
 use std::io;
 use std::io::Cursor;
-use backtrace::Backtrace;
 use crate::block_ffm;
 use crate::block_helpers;
 use crate::block_loss_functions;

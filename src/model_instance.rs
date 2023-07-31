@@ -77,10 +77,6 @@ pub struct ModelInstance {
     pub ffm_learning_rate: f32,
     #[serde(default = "default_f32_zero")]
     pub ffm_power_t: f32,
-    #[serde(default = "default_u32_zero")]
-    pub ffm_n_mc_preds: u32,
-    #[serde(default = "default_f32_zero")]
-    pub ffm_dropout_rate: f32,
 
     #[serde(default = "default_f32_zero")]
     pub nn_init_acc_gradient: f32,
@@ -145,8 +141,6 @@ impl ModelInstance {
             optimizer: Optimizer::SGD,
             transform_namespaces: feature_transform_parser::NamespaceTransforms::new(),
             nn_config: NNConfig::new(),
-            ffm_n_mc_preds: 30,
-            ffm_dropout_rate: 0.05
         };
         Ok(mi)
     }
@@ -381,12 +375,6 @@ impl ModelInstance {
                 )));
             }
         }
-
-        if let Some(val) = cl.value_of("ffm_n_mc_preds") {
-            mi.ffm_n_mc_preds = val.parse()?;
-        }
-
-        mi.ffm_dropout_rate = parse_float("ffm_dropout_rate", mi.ffm_dropout_rate, &cl);
 
         if let Some(val) = cl.value_of("ffm_initialization_type") {
             mi.ffm_initialization_type = val.parse()?;

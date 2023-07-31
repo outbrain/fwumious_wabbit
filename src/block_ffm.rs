@@ -316,9 +316,11 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         pb: &mut port_buffer::PortBuffer,
     ) {
         debug_assert!(self.output_offset != usize::MAX);
+
         let num_outputs = (self.ffm_num_fields * self.ffm_num_fields) as usize;
         let myslice = &mut pb.tape[self.output_offset..(self.output_offset + num_outputs)];
         myslice.fill(0.0);
+        +
         unsafe {
             let ffm_weights = &self.weights;
             _mm_prefetch(
