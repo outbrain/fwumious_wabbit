@@ -17,7 +17,7 @@ use crate::graph;
 use crate::model_instance;
 use crate::optimizer;
 use crate::port_buffer;
-const N_MC_PREDS: usize = 5;
+const N_MC_PREDS: usize = 0;
 
 pub const FFM_CONTRA_BUF_LEN: usize = 16384;
 
@@ -406,15 +406,16 @@ impl Regressor {
         // First call with no dropout
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches, false);
         // Next calls with dropout
-        for n in 1..N_MC_PREDS {
-            block_helpers::forward_with_cache(further_blocks, fb, pb, caches, true);
-        }
+        //for n in 1..N_MC_PREDS {
+        //    block_helpers::forward_with_cache(further_blocks, fb, pb, caches, true);
+        //}
         assert_eq!(pb.observations.len(), N_MC_PREDS);
-        for i in 1..(N_MC_PREDS + 1) {
-            predictions_sum += pb.observations.pop().unwrap();
-        }
+        //for i in 1..(N_MC_PREDS + 1) {
+        //    predictions_sum += pb.observations.pop().unwrap();
+        //}
 
-        return predictions_sum/ (N_MC_PREDS as f32);
+        return predictions_sum
+        // (N_MC_PREDS as f32);
     }
 
     pub fn setup_cache(
