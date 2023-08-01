@@ -653,7 +653,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     for k in 0.. ffmk_as_usize {
                         let random_number: f32 = merand48((100*f1 + 10*f2 + (k as usize)) as u64);
                         if mask_interactions && random_number <= DROPOUT_RATE {
-                            continue
+                            log::info!("Skipping interaction, random number = {}", random_number);
+                            continue;
                         }
                         contra_field += contra_fields.get_unchecked(f1_offset_ffmk + k) * contra_fields.get_unchecked(f2_offset_ffmk + k);
                     }
