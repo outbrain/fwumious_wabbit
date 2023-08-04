@@ -18,7 +18,7 @@ use std::path::Path;
 use std::time::Instant;
 use crate::hogwild::HogwildTrainer;
 use crate::multithread_helpers::BoxedRegressorTrait;
-
+use std::collections::HashSet;
 extern crate blas;
 extern crate intel_mkl_src;
 
@@ -254,7 +254,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
         };
 
         let mut pa = parser::VowpalParser::new(&vw);
-
+//	let mut predHash = HashSet::new();
         let now = Instant::now();
         let mut example_num = 0;
         loop {
@@ -290,8 +290,8 @@ fn main2() -> Result<(), Box<dyn Error>> {
                     hogwild_trainer.digest_example(Vec::from(buffer));
                 } else {
                     fbt.translate(buffer, example_num);
-                    prediction = sharable_regressor.learn(&fbt.feature_buffer, &mut pb, update);
-                }
+		    prediction = sharable_regressor.learn(&fbt.feature_buffer, &mut pb, update);
+		}
             } else {
                 fbt.translate(buffer, example_num);
                 if example_num > predictions_after {

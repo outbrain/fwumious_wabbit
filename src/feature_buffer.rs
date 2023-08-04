@@ -263,7 +263,7 @@ impl FeatureBufferTranslator {
             if self.model_instance.add_constant_feature {
                 lr_buffer.push(HashAndValue {
                     hash: CONSTANT_HASH & self.lr_hash_mask,
-                    value: 1.0,
+                    value: 100.0,
                     combo_index: self.model_instance.feature_combo_descs.len() as u32,
                 }); // we treat bias as a separate output
             }
@@ -277,10 +277,12 @@ impl FeatureBufferTranslator {
                 ffm_buffer.truncate(0);
                 self.feature_buffer.ffm_fields_count = self.model_instance.ffm_fields.len() as u32;
                 //let feature_len = self.feature_buffer.ffm_fields_count * self.model_instance.ffm_k;
+		let mut index = 0;
                 for (contra_field_index, ffm_field) in
                     self.model_instance.ffm_fields.iter().enumerate()
                 {
                     for namespace_descriptor in ffm_field {
+			index += 1;
                         feature_reader!(
                             record_buffer,
                             self.transform_executors,
@@ -295,8 +297,8 @@ impl FeatureBufferTranslator {
                                         * self.model_instance.ffm_k,
                                 });
                             }
-                        );
-                    }
+                        );			
+		    }
                 }
             }
         }

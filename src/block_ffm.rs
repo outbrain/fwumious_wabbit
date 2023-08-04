@@ -251,7 +251,10 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     }
 
                     block_helpers::forward_backward(further_blocks, fb, pb, update);
-
+		    let last_observation = pb.observations.last().copied().unwrap();
+		    if last_observation < 0.0001 || last_observation > 0.9999 {
+			return;
+		    }
                     if update {
                         let mut local_index: usize = 0;
                         let myslice = &mut pb.tape[self.output_offset..(self.output_offset + num_outputs)];

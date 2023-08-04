@@ -37,7 +37,6 @@ macro_rules! assert_epsilon {
     };
 }
 
-// It's OK! I am a limo driver!
 pub fn read_weights_from_buf<L>(
     weights: &mut Vec<L>,
     input_bufreader: &mut dyn io::Read,

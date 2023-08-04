@@ -130,7 +130,10 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
             }
 
             block_helpers::forward_backward(further_blocks, fb, pb, update);
-
+	    let last_observation = pb.observations.last().copied().unwrap();
+	    if last_observation < 0.0001 || last_observation > 0.9999 {
+		return;
+	    }
             if update {
                 let myslice = &mut pb.tape.get_unchecked(
                     self.output_offset..(self.output_offset + self.num_combos as usize),
