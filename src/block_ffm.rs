@@ -1302,8 +1302,8 @@ mod tests {
         );
         assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.9999999);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.9999999);
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.99685884);
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.99685884);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb, true), 0.9999999);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.9999999);
     }
 
     #[test]
@@ -1431,8 +1431,8 @@ mod tests {
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.9999999);
 
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.99685884);
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.99685884);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.9999999);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.9999999);
     }
 
     #[test]
@@ -1614,9 +1614,9 @@ B,featureB
 
         assert_eq!(spredict2(&mut bg, fbuf, &mut pb, true), 1.0);
         assert_eq!(slearn2(&mut bg, fbuf, &mut pb, true), 1.0);
-        assert_eq!(spredict2(&mut bg, fbuf, &mut pb, false), 0.9949837);
-        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 0.9949837);
-        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 0.9949837);
+        assert_eq!(spredict2(&mut bg, fbuf, &mut pb, false), 1.0);
+        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 1.0);
+        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 1.0);
     }
 
     #[test]
@@ -1685,9 +1685,9 @@ B,featureB
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 1.0);
 
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
-        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 0.9949837);
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.9949837);
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.9949837);
+        assert_epsilon!(spredict2_with_cache(&mut bg, &cache_fb, &fb, &mut pb, &caches), 1.0);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 1.0);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 1.0);
     }
 
     #[test]

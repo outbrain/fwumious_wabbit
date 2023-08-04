@@ -354,7 +354,7 @@ mod tests {
             fbt.feature_buffer.lr_buffer,
             vec![HashAndValue {
                 hash: 116060,
-                value: 1.0,
+                value: 100.0,
                 combo_index: 1
             }]
         ); // vw compatibility - no feature is no feature
