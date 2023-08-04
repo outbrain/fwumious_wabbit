@@ -72,8 +72,8 @@ mkdir -p predictions
 
 echo "Building FW"
 (
-	cd $PROJECT_ROOT
-	cargo build --release
+  cd $PROJECT_ROOT
+  cargo build --release
 )
 
 # Change this to your preference if required - this is tailored for the toy example

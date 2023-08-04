@@ -7,7 +7,7 @@ use crate::feature_buffer;
 use crate::graph;
 use crate::optimizer::OptimizerSGD;
 use crate::port_buffer;
-use crate::regressor::BlockTrait;
+use crate::regressor::{BlockCache, BlockTrait};
 use std::cmp::min;
 use std::mem;
 use std::slice;
@@ -167,6 +167,33 @@ pub fn slearn2<'a>(
     pb.observations[0]
 }
 
+pub fn ssetup_cache2<'a>(
+    bg: &mut graph::BlockGraph,
+    cache_fb: &feature_buffer::FeatureBuffer,
+    caches: &mut Vec<BlockCache>,
+) {
+    let (create_block_run, create_further_blocks) = bg.blocks_final.split_at_mut(1);
+    create_block_run[0].create_forward_cache(create_further_blocks, caches);
+
+    let (prepare_block_run, prepare_further_blocks) = bg.blocks_final.split_at_mut(1);
+    prepare_block_run[0].prepare_forward_cache(prepare_further_blocks, cache_fb, caches.as_mut_slice());
+}
+
+pub fn spredict2_with_cache<'a>(
+    bg: &mut graph::BlockGraph,
+    cache_fb: &feature_buffer::FeatureBuffer,
+    fb: &feature_buffer::FeatureBuffer,
+    pb: &mut port_buffer::PortBuffer,
+    caches: &[BlockCache],
+) -> f32 {
+    pb.reset();
+    let (block_run, further_blocks) = bg.blocks_final.split_at(1);
+    block_run[0].forward_with_cache(further_blocks, fb, pb, caches);
+
+    let prediction_probability = pb.observations[0];
+    return prediction_probability;
+}
+
 pub fn spredict2<'a>(
     bg: &mut graph::BlockGraph,
     fb: &feature_buffer::FeatureBuffer,
@@ -205,3 +232,45 @@ pub fn forward(
         None => {}
     }
 }
+
+#[inline(always)]
+pub fn forward_with_cache(
+    further_blocks: &[Box<dyn BlockTrait>],
+    fb: &feature_buffer::FeatureBuffer,
+    pb: &mut port_buffer::PortBuffer,
+    caches: &[BlockCache],
+) {
+    match further_blocks.split_first() {
+        Some((next_regressor, further_blocks)) => next_regressor
+            .forward_with_cache(further_blocks, fb, pb, caches),
+        None => {}
+    }
+}
+
+
+#[inline(always)]
+pub fn prepare_forward_cache(
+    further_blocks: &mut [Box<dyn BlockTrait>],
+    fb: &feature_buffer::FeatureBuffer,
+    caches: &mut [BlockCache],
+) {
+    match further_blocks.split_first_mut() {
+        Some((next_regressor, further_blocks)) => next_regressor
+            .prepare_forward_cache(further_blocks, fb, caches),
+        None => {}
+    }
+}
+
+#[inline(always)]
+pub fn create_forward_cache(
+    further_blocks: &mut [Box<dyn BlockTrait>],
+    caches: &mut Vec<BlockCache>
+) {
+    match further_blocks.split_first_mut() {
+        Some((next_regressor, further_blocks)) => next_regressor
+            .create_forward_cache(further_blocks, caches),
+        None => {}
+    }
+}
+
+
