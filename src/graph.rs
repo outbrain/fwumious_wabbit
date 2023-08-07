@@ -126,7 +126,7 @@ impl BlockGraph {
             edges_in = new_edges_in;
         } else if block.get_block_type() == BlockType::Copy {
             // if we connect copy to copy... we simply increase number of copies of existing input block
-            assert!(edges_in.len() == 1);
+            assert_eq!(edges_in.len(), 1);
             let edge_in = &edges_in[0];
             let node_id_in = edge_in.get_node_id();
             if self.blocks[node_id_in].get_block_type() == BlockType::Copy {
@@ -521,7 +521,7 @@ mod tests {
                 .as_any()
                 .downcast_mut::<block_misc::BlockCopy>()
                 .unwrap();
-            assert!(copy_block_1.input_offset != copy_block_1.output_offsets[0]);
+            assert_ne!(copy_block_1.input_offset, copy_block_1.output_offsets[0]);
         }
         {
             // But second one can re-use the input as output
@@ -529,7 +529,7 @@ mod tests {
                 .as_any()
                 .downcast_mut::<block_misc::BlockCopy>()
                 .unwrap();
-            assert!(copy_block_2.input_offset == copy_block_2.output_offsets[0]);
+            assert_eq!(copy_block_2.input_offset, copy_block_2.output_offsets[0]);
         }
     }
 
