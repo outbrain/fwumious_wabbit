@@ -75,6 +75,7 @@ impl OptimizerTrait for OptimizerAdagradFlex {
 
     #[inline(always)]
     unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32 {
+
         let accumulated_gradient_squared = *data;
         let gradient_squared = gradient * gradient;
         let new_accumulated_gradient_squared = accumulated_gradient_squared + gradient_squared;
@@ -148,7 +149,8 @@ impl OptimizerTrait for OptimizerAdagradLUT {
         let accumulated_gradient_squared = *data;
         debug_assert!(accumulated_gradient_squared >= 0.0);
         let gradient_squared = gradient * gradient;
-        let new_accumulated_gradient_squared = accumulated_gradient_squared + gradient_squared;
+        let new_accumulated_gradient_squared = accumulated_gradient_squared + gradient_squared * 0.99;
+
         *data = new_accumulated_gradient_squared;
         let key = new_accumulated_gradient_squared.to_bits() >> (31 - FASTMATH_LR_LUT_BITS);
         let update = gradient * *self.fastmath_lr_lut.get_unchecked(key as usize);
