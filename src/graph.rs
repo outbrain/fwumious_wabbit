@@ -177,10 +177,7 @@ impl BlockGraph {
     }
 
     pub fn get_tape_size(&self) -> usize {
-        assert!(
-            self.tape_size != usize::MAX,
-            "get_tape_size() called on a graph before calling finalize()"
-        );
+        assert_ne!(self.tape_size, usize::MAX, "get_tape_size() called on a graph before calling finalize()");
         self.tape_size
     }
 

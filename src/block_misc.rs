@@ -383,7 +383,7 @@ pub fn new_copy_block(
     num_output_slots: usize,
 ) -> Result<Vec<graph::BlockPtrOutput>, Box<dyn Error>> {
     let num_inputs = bg.get_num_output_values(vec![&input]);
-    assert!(num_inputs != 0);
+    assert_ne!(num_inputs, 0);
 
     let mut block = Box::new(BlockCopy {
         output_offsets: vec![usize::MAX; num_output_slots],
@@ -580,7 +580,7 @@ impl BlockTrait for BlockJoin {
     }
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
-        assert!(output.get_output_index() == 0);
+        assert_eq!(output.get_output_index(), 0);
         self.num_inputs
     }
 
