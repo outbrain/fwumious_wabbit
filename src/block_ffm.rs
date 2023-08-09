@@ -141,7 +141,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     let ffmk: u32 = self.ffm_k;
                     let ffmk_as_usize: usize = ffmk as usize;
 
-                    let ffm_fields_count: u32 = fb.ffm_fields_count;
+                    let ffm_fields_count: u32 = self.ffm_num_fields;
                     let ffm_fields_count_as_usize: usize = ffm_fields_count as usize;
 
                     let fc: usize = ffm_fields_count_as_usize * ffmk_as_usize;
@@ -264,7 +264,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
                         for feature in &fb.ffm_buffer {
                             let mut feature_index = feature.hash as usize;
-                            let contra_offset = (feature.contra_field_index * fb.ffm_fields_count) as usize / ffmk_as_usize;
+                            let contra_offset = (feature.contra_field_index * ffm_fields_count) as usize / ffmk_as_usize;
 
                             for z in 0..ffm_fields_count_as_usize {
                                 let general_gradient = myslice.get_unchecked(contra_offset + z);
@@ -287,7 +287,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 }
             } // End of macro
 
-            let local_data_ffm_len = fb.ffm_buffer.len() * (self.ffm_k * fb.ffm_fields_count) as usize;
+            let local_data_ffm_len = fb.ffm_buffer.len() * (self.ffm_k * self.ffm_num_fields) as usize;
             if local_data_ffm_len < FFM_STACK_BUF_LEN {
                 // Fast-path - using on-stack data structures
                 let mut local_data_ffm_values: [f32; FFM_STACK_BUF_LEN as usize] =
@@ -341,7 +341,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             let ffmk: u32 = self.ffm_k;
             let ffmk_as_usize: usize = ffmk as usize;
 
-            let ffm_fields_count: u32 = fb.ffm_fields_count;
+            let ffm_fields_count: u32 = self.ffm_num_fields;
             let ffm_fields_count_as_usize: usize = ffm_fields_count as usize;
             let ffm_fields_count_plus_one = ffm_fields_count + 1;
 
@@ -527,7 +527,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             let ffmk: u32 = self.ffm_k;
             let ffmk_as_usize: usize = ffmk as usize;
 
-            let ffm_fields_count: u32 = fb.ffm_fields_count;
+            let ffm_fields_count: u32 = self.ffm_num_fields;
             let ffm_fields_count_as_usize: usize = ffm_fields_count as usize;
             let ffm_fields_count_plus_one = ffm_fields_count + 1;
 
@@ -733,7 +733,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             let ffmk: u32 = self.ffm_k;
             let ffmk_as_usize: usize = ffmk as usize;
 
-            let ffm_fields_count: u32 = fb.ffm_fields_count;
+            let ffm_fields_count: u32 = self.ffm_num_fields;
             let ffm_fields_count_as_usize: usize = ffm_fields_count as usize;
             let ffm_fields_count_plus_one = ffm_fields_count + 1;
 
@@ -971,7 +971,6 @@ mod tests {
             example_number: 0,
             lr_buffer: Vec::new(),
             ffm_buffer: v,
-            ffm_fields_count,
         }
     }
 

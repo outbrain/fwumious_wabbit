@@ -222,7 +222,6 @@ B,featureB
             example_number: 0,
             lr_buffer: v,
             ffm_buffer: Vec::new(),
-            ffm_fields_count: 0,
         }
     }
 
@@ -308,7 +307,6 @@ B,featureB
 
     fn ffm_vec(
         v: Vec<feature_buffer::HashAndValueAndSeq>,
-        ffm_fields_count: u32,
     ) -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {
             label: 0.0,
@@ -316,7 +314,6 @@ B,featureB
             example_number: 0,
             lr_buffer: Vec::new(),
             ffm_buffer: v,
-            ffm_fields_count,
         }
     }
 
@@ -361,7 +358,6 @@ B,featureB
                     contra_field_index: 1,
                 },
             ],
-            2,
         );
         pb.reset();
         p = re.learn(fbuf, &mut pb, true);
@@ -407,7 +403,6 @@ B,featureB
     fn lr_and_ffm_vec(
         v1: Vec<feature_buffer::HashAndValue>,
         v2: Vec<feature_buffer::HashAndValueAndSeq>,
-        ffm_fields_count: u32,
     ) -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {
             label: 0.0,
@@ -415,7 +410,6 @@ B,featureB
             example_number: 0,
             lr_buffer: v1,
             ffm_buffer: v2,
-            ffm_fields_count,
         }
     }
 
@@ -476,7 +470,6 @@ B,featureB
                     contra_field_index: 1,
                 },
             ],
-            2,
         );
         let fbuf_2 = &lr_and_ffm_vec(
             vec![
@@ -508,7 +501,6 @@ B,featureB
                     contra_field_index: 1,
                 },
             ],
-            2,
         );
 
         p = re_1.learn(fbuf_1, &mut pb_1, true);
