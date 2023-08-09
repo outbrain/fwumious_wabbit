@@ -93,10 +93,6 @@ pub fn new_lr_block(
 }
 
 impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
         self.weights = vec![
             WeightAndOptimizerData::<L> {
@@ -105,10 +101,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
             };
             self.weights_len as usize
         ];
-    }
-
-    fn get_num_output_slots(&self) -> usize {
-        1
     }
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {

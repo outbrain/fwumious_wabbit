@@ -34,7 +34,10 @@ pub enum BlockCache {
 }
 
 pub trait BlockTrait {
-    fn as_any(&mut self) -> &mut dyn Any; // This enables downcasting
+    fn as_any(&mut self) -> &mut dyn Any {
+        // This enables downcasting
+        self
+    }
     fn forward_backward(
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
@@ -75,16 +78,21 @@ pub trait BlockTrait {
         block_helpers::create_forward_cache(further_blocks, caches);
     }
 
-    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {}
+    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
+
+    }
+
     fn get_serialized_len(&self) -> usize {
         0
     }
+
     fn write_weights_to_buf(
         &self,
         output_bufwriter: &mut dyn io::Write,
     ) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
+
     fn read_weights_from_buf(
         &mut self,
         input_bufreader: &mut dyn io::Read,
@@ -92,7 +100,11 @@ pub trait BlockTrait {
         Ok(())
     }
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize;
-    fn get_num_output_slots(&self) -> usize;
+
+    fn get_num_output_slots(&self) -> usize {
+        1
+    }
+
     fn get_input_offset(&mut self, input: graph::InputSlot) -> Result<usize, Box<dyn Error>> {
         Err("get_input_offset() is only supported by CopyBlock".to_string())?
     }

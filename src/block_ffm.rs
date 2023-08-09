@@ -110,10 +110,6 @@ fn new_ffm_block_without_weights<L: OptimizerTrait + 'static>(
 }
 
 impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
     #[inline(always)]
     fn forward_backward(
         &mut self,
@@ -899,10 +895,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert_eq!(output.get_output_index(), 0);
         (self.ffm_num_fields * self.ffm_num_fields) as usize
-    }
-
-    fn get_num_output_slots(&self) -> usize {
-        1
     }
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {

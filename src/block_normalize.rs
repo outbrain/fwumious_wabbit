@@ -42,15 +42,6 @@ pub fn new_normalize_layer_block(
 }
 
 impl BlockTrait for BlockNormalize {
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn allocate_and_init_weights(&mut self, _mi: &model_instance::ModelInstance) {}
-
-    fn get_num_output_slots(&self) -> usize {
-        1
-    }
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert_eq!(output.get_output_index(), 0);
@@ -205,10 +196,6 @@ impl BlockTrait for BlockStopBackward {
     }
 
     fn allocate_and_init_weights(&mut self, _mi: &model_instance::ModelInstance) {}
-
-    fn get_num_output_slots(&self) -> usize {
-        1
-    }
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert_eq!(output.get_output_index(), 0);

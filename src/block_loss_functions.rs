@@ -82,13 +82,6 @@ impl BlockSigmoid {
 }
 
 impl BlockTrait for BlockSigmoid {
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn get_num_output_slots(&self) -> usize {
-        1
-    }
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert!(output.get_output_index() == 0);

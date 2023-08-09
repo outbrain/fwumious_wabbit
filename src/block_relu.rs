@@ -62,19 +62,10 @@ impl BlockRELU {
 
 
 impl BlockTrait for BlockRELU {
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn allocate_and_init_weights(&mut self, _mi: &model_instance::ModelInstance) {}
-
-    fn get_num_output_slots(&self) -> usize {
-        1
-    }
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert_eq!(output.get_output_index(), 0);
-	self.num_inputs
+	    self.num_inputs
     }
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
