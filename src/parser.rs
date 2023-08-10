@@ -1184,9 +1184,10 @@ CC,featureC
         let mut cache_buf = str_to_cursor(cache_input_str);
         let (cache_result, cache_result_size) = rr.next_vowpal_with_size(&mut cache_buf).unwrap();
 
+        let empty_result: &[u32] = &[];
         assert_eq!(
             cache_result,
-            []
+            empty_result
         );
 
         let mut added_cache_buf = str_to_cursor("|BB b |AA:3 a:2.0 \n");
