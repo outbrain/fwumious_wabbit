@@ -62,6 +62,9 @@ impl BlockRELU {
 
 
 impl BlockTrait for BlockRELU {
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert_eq!(output.get_output_index(), 0);

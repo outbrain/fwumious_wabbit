@@ -42,6 +42,9 @@ pub fn new_normalize_layer_block(
 }
 
 impl BlockTrait for BlockNormalize {
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert_eq!(output.get_output_index(), 0);

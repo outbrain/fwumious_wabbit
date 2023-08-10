@@ -34,10 +34,7 @@ pub enum BlockCache {
 }
 
 pub trait BlockTrait {
-    fn as_any(&mut self) -> &mut dyn Any {
-        // This enables downcasting
-        self
-    }
+    fn as_any(&mut self) -> &mut dyn Any; // This enables downcasting
     fn forward_backward(
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],

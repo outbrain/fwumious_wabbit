@@ -228,6 +228,10 @@ impl<L: OptimizerTrait + 'static>  BlockNeuronLayer<L> {
 }
 
 impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
     #[inline(always)]
     fn forward_backward(
         &mut self,

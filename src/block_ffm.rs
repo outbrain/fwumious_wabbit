@@ -110,6 +110,10 @@ fn new_ffm_block_without_weights<L: OptimizerTrait + 'static>(
 }
 
 impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
     #[inline(always)]
     fn forward_backward(
         &mut self,
