@@ -8,7 +8,6 @@ mod block_normalize;
 mod block_relu;
 mod cache;
 mod cmdline;
-mod consts;
 mod feature_buffer;
 mod feature_transform_executor;
 mod feature_transform_implementations;
