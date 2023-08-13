@@ -117,7 +117,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
     }
 
     fn set_input_offset(&mut self, _input: graph::InputSlot, _offset: usize) {
-        panic!("You cannnot set_input_offset() for BlockLR");
+        panic!("You cannot set_input_offset() for BlockLR");
     }
 
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {

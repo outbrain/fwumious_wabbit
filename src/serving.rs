@@ -330,7 +330,7 @@ C,featureC
                 newt.handle_connection(&mut reader, &mut writer)
             );
             let x = mocked_stream.pop_bytes_written();
-            assert!(&x[..] == &b"ERR: Cannot parse an example\n"[..]);
+            assert_eq!(&x[..], &b"ERR: Cannot parse an example\n"[..]);
         }
 
         // Non Working stream test

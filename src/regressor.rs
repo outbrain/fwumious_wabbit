@@ -470,7 +470,7 @@ impl Regressor {
         mi: &model_instance::ModelInstance,
     ) -> Result<Regressor, Box<dyn Error>> {
         // make sure we are creating immutable regressor from SGD mi
-        assert!(mi.optimizer == model_instance::Optimizer::SGD);
+        assert_eq!(mi.optimizer, model_instance::Optimizer::SGD);
 
         let mut rg = Regressor::new_without_weights(mi);
         rg.immutable = true;
@@ -510,7 +510,7 @@ impl Regressor {
     ) -> Result<Regressor, Box<dyn Error>> {
         // Only to be used by unit tests
         // make sure we are creating immutable regressor from SGD mi
-        assert!(mi.optimizer == model_instance::Optimizer::SGD);
+        assert_eq!(mi.optimizer, model_instance::Optimizer::SGD);
         let mut rg = self.immutable_regressor_without_weights(mi)?;
         rg.allocate_and_init_weights(mi);
 
