@@ -54,28 +54,24 @@ impl BlockTrait for BlockObserve {
         graph::BlockType::Observe
     }
 
-    fn get_num_output_slots(&self) -> usize {
-        1
-    } // It is a pass-through
-
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
-        assert!(output.get_output_index() == 0);
+        assert_eq!(output.get_output_index(), 0);
         self.num_inputs
     }
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
-        assert!(input.get_input_index() == 0);
-        assert!(self.input_offset == usize::MAX); // We only allow a single call
+        assert_eq!(input.get_input_index(), 0);
+        assert_eq!(self.input_offset, usize::MAX); // We only allow a single call
         self.input_offset = offset;
     }
 
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
-        assert!(output.get_output_index() == 0);
+        assert_eq!(output.get_output_index(), 0);
         assert_eq!(self.input_offset, offset); // this block type has special treatment
     }
 
     fn get_input_offset(&mut self, input: graph::InputSlot) -> Result<usize, Box<dyn Error>> {
-        assert!(input.get_input_index() == 0);
+        assert_eq!(input.get_input_index(), 0);
         Ok(self.input_offset)
     }
 
@@ -228,8 +224,8 @@ impl BlockTrait for BlockSink {
     }
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
-        assert!(input.get_input_index() == 0);
-        assert!(self.input_offset == usize::MAX); // We only allow a single call
+        assert_eq!(input.get_input_index(), 0);
+        assert_eq!(self.input_offset, usize::MAX); // We only allow a single call
         self.input_offset = offset;
     }
 
@@ -318,24 +314,17 @@ impl BlockTrait for BlockConsts {
         self
     }
 
-    fn get_num_output_slots(&self) -> usize {
-        1
-    }
-
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
-        assert!(output.get_output_index() == 0);
+        assert_eq!(output.get_output_index(), 0);
         self.consts.len()
     }
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
-        panic!("You cannnot set input_tape_index for BlockConsts");
+        panic!("You cannot set input_tape_index for BlockConsts");
     }
 
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
-        assert!(
-            output.get_output_index() == 0,
-            "Only supports a single output for BlockConsts"
-        );
+        assert_eq!(output.get_output_index(), 0, "Only supports a single output for BlockConsts");
         self.output_offset = offset;
     }
 
@@ -386,7 +375,7 @@ pub fn new_copy_block(
     num_output_slots: usize,
 ) -> Result<Vec<graph::BlockPtrOutput>, Box<dyn Error>> {
     let num_inputs = bg.get_num_output_values(vec![&input]);
-    assert!(num_inputs != 0);
+    assert_ne!(num_inputs, 0);
 
     let mut block = Box::new(BlockCopy {
         output_offsets: vec![usize::MAX; num_output_slots],
@@ -403,7 +392,7 @@ pub fn new_copy_block_2(
     input: graph::BlockPtrOutput,
 ) -> Result<(graph::BlockPtrOutput, graph::BlockPtrOutput), Box<dyn Error>> {
     let mut outputs = new_copy_block(bg, input, 2)?;
-    assert!(outputs.len() == 2);
+    assert_eq!(outputs.len(), 2);
     let output_2 = outputs.pop().unwrap();
     let output_1 = outputs.pop().unwrap();
     Ok((output_1, output_2))
@@ -433,13 +422,13 @@ impl BlockTrait for BlockCopy {
     }
 
     fn get_input_offset(&mut self, input: graph::InputSlot) -> Result<usize, Box<dyn Error>> {
-        assert!(input.get_input_index() == 0);
+        assert_eq!(input.get_input_index(), 0);
         Ok(self.input_offset)
     }
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
-        assert!(input.get_input_index() == 0);
-        assert!(self.input_offset == usize::MAX); // We only allow a single call
+        assert_eq!(input.get_input_index(), 0);
+        assert_eq!(self.input_offset, usize::MAX); // We only allow a single call
         self.input_offset = offset;
     }
 
@@ -447,10 +436,9 @@ impl BlockTrait for BlockCopy {
         assert!(output.get_output_index() < self.output_offsets.len());
         if output.get_output_index() == 0 {
             // output index 0 is special - as it is zero copy from input
-            //assert!(self.input_offset == offset);
             self.output_offsets[0] = offset;
         } else {
-            assert!(self.output_offsets[output.get_output_index()] == usize::MAX); // We only allow a single call
+            assert_eq!(self.output_offsets[output.get_output_index()], usize::MAX); // We only allow a single call
             self.output_offsets[output.get_output_index()] = offset;
         }
     }
@@ -464,7 +452,6 @@ impl BlockTrait for BlockCopy {
         update: bool,
     ) {
         debug_assert!(self.input_offset != usize::MAX);
-        //debug_assert!(self.input_offset == self.output_offsets[0]);
         debug_assert!(self.num_inputs > 0);
 
         unsafe {
@@ -559,7 +546,7 @@ pub fn new_join_block(
     inputs: Vec<graph::BlockPtrOutput>,
 ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
     let num_inputs = bg.get_num_output_values(inputs.iter().collect());
-    assert!(num_inputs != 0);
+    assert_ne!(num_inputs, 0);
 
     let mut block = Box::new(BlockJoin {
         output_offset: usize::MAX,
@@ -580,12 +567,8 @@ impl BlockTrait for BlockJoin {
         graph::BlockType::Join
     }
 
-    fn get_num_output_slots(&self) -> usize {
-        1
-    }
-
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
-        assert!(output.get_output_index() == 0);
+        assert_eq!(output.get_output_index(), 0);
         self.num_inputs
     }
 
@@ -595,9 +578,8 @@ impl BlockTrait for BlockJoin {
     }
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
-        //assert!(input.get_input_index() <= 1);    // We now support multiple joins, so no need to assume just one
         if input.get_input_index() == 0 {
-            assert!(self.input_offset == usize::MAX); // We only allow a single call
+            assert_eq!(self.input_offset, usize::MAX); // We only allow a single call
             self.input_offset = offset;
         } else if input.get_input_index() >= 1 {
             assert!(
@@ -618,8 +600,8 @@ impl BlockTrait for BlockJoin {
     }
 
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
-        assert!(output.get_output_index() == 0);
-        assert!(self.output_offset == usize::MAX); // We only allow a single call
+        assert_eq!(output.get_output_index(), 0);
+        assert_eq!(self.output_offset, usize::MAX); // We only allow a single call
         self.output_offset = offset;
     }
 
@@ -692,24 +674,20 @@ impl BlockTrait for BlockSum {
         self
     }
 
-    fn get_num_output_slots(&self) -> usize {
-        1
-    }
-
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
-        assert!(output.get_output_index() == 0);
+        assert_eq!(output.get_output_index(), 0);
         1
     }
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
-        assert!(input.get_input_index() == 0);
-        assert!(self.input_offset == usize::MAX); // We only allow a single call
+        assert_eq!(input.get_input_index(), 0);
+        assert_eq!(self.input_offset, usize::MAX); // We only allow a single call
         self.input_offset = offset;
     }
 
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
-        assert!(output.get_output_index() == 0);
-        assert!(self.output_offset == usize::MAX); // We only allow a single call
+        assert_eq!(output.get_output_index(), 0);
+        assert_eq!(self.output_offset, usize::MAX); // We only allow a single call
         self.output_offset = offset;
     }
 
@@ -798,7 +776,7 @@ pub fn new_triangle_block(
     input: graph::BlockPtrOutput,
 ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
     let num_inputs = bg.get_num_output_values(vec![&input]);
-    assert!(num_inputs != 0);
+    assert_ne!(num_inputs, 0);
 
     let num_inputs_sqrt = (num_inputs as f32).sqrt() as usize;
     if num_inputs_sqrt * num_inputs_sqrt != num_inputs {
@@ -823,24 +801,20 @@ impl BlockTrait for BlockTriangle {
         self
     }
 
-    fn get_num_output_slots(&self) -> usize {
-        1
-    }
-
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
-        assert!(output.get_output_index() == 0);
+        assert_eq!(output.get_output_index(), 0);
         self.num_outputs
     }
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
-        assert!(input.get_input_index() == 0);
-        assert!(self.input_offset == usize::MAX); // We only allow a single call
+        assert_eq!(input.get_input_index(), 0);
+        assert_eq!(self.input_offset, usize::MAX); // We only allow a single call
         self.input_offset = offset;
     }
 
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
-        assert!(output.get_output_index() == 0);
-        assert!(self.output_offset == usize::MAX); // We only allow a single call
+        assert_eq!(output.get_output_index(), 0);
+        assert_eq!(self.output_offset, usize::MAX); // We only allow a single call
         self.output_offset = offset;
     }
 
@@ -955,7 +929,6 @@ mod tests {
             example_number: 0,
             lr_buffer: Vec::new(),
             ffm_buffer: Vec::new(),
-            ffm_fields_count: 0,
         }
     }
 

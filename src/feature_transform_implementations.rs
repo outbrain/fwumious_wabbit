@@ -50,9 +50,9 @@ impl FunctionExampleSqrt {
     ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
         // For simplicity of example, we just assert instead of full error reporting
         assert!(function_params.is_empty());
-        assert!(from_namespaces.len() == 1);
-        assert!(from_namespaces[0].namespace_descriptor.namespace_type == NamespaceType::Primitive);
-        assert!(from_namespaces[0].namespace_descriptor.namespace_format == NamespaceFormat::F32);
+        assert_eq!(from_namespaces.len(), 1);
+        assert_eq!(from_namespaces[0].namespace_descriptor.namespace_type, NamespaceType::Primitive);
+        assert_eq!(from_namespaces[0].namespace_descriptor.namespace_format, NamespaceFormat::F32);
         Ok(Box::new(Self {
             from_namespace: ExecutorFromNamespace {
                 namespace_descriptor: from_namespaces[0].namespace_descriptor,

@@ -86,24 +86,20 @@ impl BlockTrait for BlockSigmoid {
         self
     }
 
-    fn get_num_output_slots(&self) -> usize {
-        1
-    }
-
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
-        assert!(output.get_output_index() == 0);
+        assert_eq!(output.get_output_index(), 0);
         1
     }
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
-        assert!(input.get_input_index() == 0);
-        assert!(self.input_offset == usize::MAX); // We only allow a single call
+        assert_eq!(input.get_input_index(), 0);
+        assert_eq!(self.input_offset, usize::MAX); // We only allow a single call
         self.input_offset = offset;
     }
 
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
-        assert!(self.output_offset == usize::MAX); // We only allow a single call
-        assert!(output.get_output_index() == 0);
+        assert_eq!(self.output_offset, usize::MAX); // We only allow a single call
+        assert_eq!(output.get_output_index(), 0);
         self.output_offset = offset;
     }
 
