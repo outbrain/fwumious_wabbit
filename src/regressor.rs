@@ -538,7 +538,6 @@ mod tests {
             example_number: 0,
             lr_buffer: v,
             ffm_buffer: Vec::new(),
-            ffm_fields_count: 0,
         }
     }
 
