@@ -3,14 +3,14 @@ use std::error::Error;
 
 use crate::block_helpers;
 use crate::feature_buffer;
+use crate::feature_buffer::FeatureBuffer;
 use crate::graph;
 use crate::model_instance;
 use crate::port_buffer;
-use crate::regressor;
-use regressor::BlockTrait;
-use crate::feature_buffer::FeatureBuffer;
 use crate::port_buffer::PortBuffer;
+use crate::regressor;
 use crate::regressor::BlockCache;
+use regressor::BlockTrait;
 
 const EPS: f32 = 1e-2;
 
@@ -130,10 +130,7 @@ impl BlockTrait for BlockNormalize {
 
 impl BlockNormalize {
     #[inline(always)]
-    fn internal_forward(
-        &self,
-        pb: &mut port_buffer::PortBuffer,
-    ) -> f32 {
+    fn internal_forward(&self, pb: &mut port_buffer::PortBuffer) -> f32 {
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.input_offset != usize::MAX);
         debug_assert!(self.num_inputs > 0);
@@ -252,15 +249,11 @@ impl BlockTrait for BlockStopBackward {
         self.internal_forward(pb);
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
     }
-
 }
 
 impl BlockStopBackward {
     #[inline(always)]
-    fn internal_forward(
-        &self,
-        pb: &mut port_buffer::PortBuffer,
-    ) {
+    fn internal_forward(&self, pb: &mut port_buffer::PortBuffer) {
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.input_offset != usize::MAX);
         debug_assert!(self.num_inputs > 0);

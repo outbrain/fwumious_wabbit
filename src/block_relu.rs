@@ -3,15 +3,15 @@ use std::error::Error;
 
 use crate::block_helpers;
 use crate::feature_buffer;
+use crate::feature_buffer::FeatureBuffer;
 use crate::graph;
 use crate::graph::BlockGraph;
 use crate::model_instance;
 use crate::port_buffer;
-use crate::regressor;
-use regressor::BlockTrait;
-use crate::feature_buffer::FeatureBuffer;
 use crate::port_buffer::PortBuffer;
+use crate::regressor;
 use crate::regressor::BlockCache;
+use regressor::BlockTrait;
 
 pub struct BlockRELU {
     pub num_inputs: usize,
@@ -37,12 +37,8 @@ pub fn new_relu_block(
 }
 
 impl BlockRELU {
-
     #[inline(always)]
-    fn internal_forward(
-        &self,
-        pb: &mut port_buffer::PortBuffer,
-    ) {
+    fn internal_forward(&self, pb: &mut port_buffer::PortBuffer) {
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.input_offset != usize::MAX);
         debug_assert!(self.num_inputs > 0);
@@ -60,7 +56,6 @@ impl BlockRELU {
     }
 }
 
-
 impl BlockTrait for BlockRELU {
     fn as_any(&mut self) -> &mut dyn Any {
         self
@@ -68,7 +63,7 @@ impl BlockTrait for BlockRELU {
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert_eq!(output.get_output_index(), 0);
-	    self.num_inputs
+        self.num_inputs
     }
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {

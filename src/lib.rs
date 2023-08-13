@@ -33,11 +33,11 @@ use crate::feature_buffer::FeatureBufferTranslator;
 use crate::multithread_helpers::BoxedRegressorTrait;
 use crate::parser::VowpalParser;
 use crate::port_buffer::PortBuffer;
+use crate::regressor::BlockCache;
 use shellwords;
 use std::ffi::CStr;
 use std::io::Cursor;
 use std::os::raw::c_char;
-use crate::regressor::BlockCache;
 
 const EOF_ERROR_CODE: f32 = -1.0;
 const EXCEPTION_ERROR_CODE: f32 = -1.0;
@@ -55,7 +55,7 @@ pub struct Predictor {
     cache: PredictorCache,
 }
 
-pub struct PredictorCache  {
+pub struct PredictorCache {
     blocks: Vec<BlockCache>,
     input_buffer_size: usize,
 }
@@ -67,12 +67,12 @@ impl Predictor {
         let buffer = match reading_result {
             Ok([]) => {
                 log::error!("Reading result for prediction returns EOF");
-                return EOF_ERROR_CODE
-            }, // EOF
+                return EOF_ERROR_CODE;
+            } // EOF
             Ok(buffer2) => buffer2,
             Err(e) => {
                 log::error!("Reading result for prediction returns error {}", e);
-                return EXCEPTION_ERROR_CODE
+                return EXCEPTION_ERROR_CODE;
             }
         };
         self.feature_buffer_translator.translate(buffer, 0);
@@ -82,23 +82,31 @@ impl Predictor {
 
     unsafe fn predict_with_cache(&mut self, input_buffer: &str) -> f32 {
         let mut buffered_input = Cursor::new(&input_buffer);
-        let reading_result = self.vw_parser
+        let reading_result = self
+            .vw_parser
             .next_vowpal_with_cache(&mut buffered_input, self.cache.input_buffer_size);
 
         let buffer = match reading_result {
             Ok([]) => {
                 log::error!("Reading result for prediction with cache returns EOF");
-                return EOF_ERROR_CODE
-            }, // EOF
+                return EOF_ERROR_CODE;
+            } // EOF
             Ok(buffer2) => buffer2,
             Err(e) => {
-                log::error!("Reading result for prediction with cache returns error {}", e);
-                return EXCEPTION_ERROR_CODE
+                log::error!(
+                    "Reading result for prediction with cache returns error {}",
+                    e
+                );
+                return EXCEPTION_ERROR_CODE;
             }
         };
 
         self.feature_buffer_translator.translate(buffer, 0);
-        self.regressor.predict_with_cache(&self.feature_buffer_translator.feature_buffer, &mut self.pb, self.cache.blocks.as_slice())
+        self.regressor.predict_with_cache(
+            &self.feature_buffer_translator.feature_buffer,
+            &mut self.pb,
+            self.cache.blocks.as_slice(),
+        )
     }
 
     unsafe fn setup_cache(&mut self, input_buffer: &str) -> f32 {
@@ -107,23 +115,28 @@ impl Predictor {
         let (buffer, input_buffer_size) = match reading_result {
             Ok(([], _)) => {
                 log::error!("Reading result for prediction with cache returns EOF");
-                return EOF_ERROR_CODE
-            }, // EOF
+                return EOF_ERROR_CODE;
+            } // EOF
             Ok(buffer2) => buffer2,
             Err(e) => {
-                log::error!("Reading result for prediction with cache returns error {}", e);
-                return EXCEPTION_ERROR_CODE
+                log::error!(
+                    "Reading result for prediction with cache returns error {}",
+                    e
+                );
+                return EXCEPTION_ERROR_CODE;
             }
         };
         // ignore last newline byte
         self.cache.input_buffer_size = input_buffer_size;
         self.feature_buffer_translator.translate(buffer, 0);
         let is_empty = self.cache.blocks.is_empty();
-        self.regressor.setup_cache(&self.feature_buffer_translator.feature_buffer, &mut self.cache.blocks, is_empty);
+        self.regressor.setup_cache(
+            &self.feature_buffer_translator.feature_buffer,
+            &mut self.cache.blocks,
+            is_empty,
+        );
         return 0.0;
     }
-
-
 }
 
 #[no_mangle]
@@ -155,7 +168,7 @@ pub extern "C" fn new_fw_predictor_prototype(command: *const c_char) -> *mut Ffi
         cache: PredictorCache {
             blocks: Vec::default(),
             input_buffer_size: 0,
-        }
+        },
     };
     Box::into_raw(Box::new(predictor)).cast()
 }
@@ -175,7 +188,7 @@ pub unsafe extern "C" fn clone_lite(prototype: *mut FfiPredictor) -> *mut FfiPre
         cache: PredictorCache {
             blocks: Vec::new(),
             input_buffer_size: 0,
-        }
+        },
     };
     Box::into_raw(Box::new(lite_predictor)).cast()
 }
@@ -188,14 +201,20 @@ pub unsafe extern "C" fn fw_predict(ptr: *mut FfiPredictor, input_buffer: *const
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn fw_predict_with_cache(ptr: *mut FfiPredictor, input_buffer: *const c_char) -> f32 {
+pub unsafe extern "C" fn fw_predict_with_cache(
+    ptr: *mut FfiPredictor,
+    input_buffer: *const c_char,
+) -> f32 {
     let str_buffer = c_char_to_str(input_buffer);
     let predictor: &mut Predictor = from_ptr(ptr);
     predictor.predict_with_cache(str_buffer)
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn fw_setup_cache(ptr: *mut FfiPredictor, input_buffer: *const c_char) -> f32 {
+pub unsafe extern "C" fn fw_setup_cache(
+    ptr: *mut FfiPredictor,
+    input_buffer: *const c_char,
+) -> f32 {
     let str_buffer = c_char_to_str(input_buffer);
     let predictor: &mut Predictor = from_ptr(ptr);
     predictor.setup_cache(str_buffer)
@@ -208,7 +227,7 @@ pub unsafe extern "C" fn free_predictor(ptr: *mut FfiPredictor) {
 
 unsafe fn from_ptr<'a>(ptr: *mut FfiPredictor) -> &'a mut Predictor {
     if ptr.is_null() {
-	    log::error!("Fatal error, got NULL `Context` pointer");
+        log::error!("Fatal error, got NULL `Context` pointer");
         std::process::abort();
     }
     &mut *(ptr.cast())

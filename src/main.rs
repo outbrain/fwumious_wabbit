@@ -5,6 +5,8 @@
 #![allow(non_snake_case)]
 #![allow(redundant_semicolons)]
 
+use crate::hogwild::HogwildTrainer;
+use crate::multithread_helpers::BoxedRegressorTrait;
 use flate2::read::MultiGzDecoder;
 use std::collections::VecDeque;
 use std::error::Error;
@@ -16,8 +18,6 @@ use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
 use std::time::Instant;
-use crate::hogwild::HogwildTrainer;
-use crate::multithread_helpers::BoxedRegressorTrait;
 
 extern crate blas;
 extern crate intel_mkl_src;
@@ -40,20 +40,20 @@ mod feature_buffer;
 mod feature_transform_executor;
 mod feature_transform_implementations;
 mod feature_transform_parser;
+mod graph;
+mod hogwild;
 mod logging_layer;
 mod model_instance;
 mod multithread_helpers;
 mod optimizer;
 mod parser;
 mod persistence;
+mod port_buffer;
 mod radix_tree;
 mod regressor;
 mod serving;
 mod version;
 mod vwmap;
-mod port_buffer;
-mod graph;
-mod hogwild;
 
 fn main() {
     logging_layer::initialize_logging_layer();
@@ -76,8 +76,9 @@ fn build_cache_without_training(cl: clap::ArgMatches) -> Result<(), Box<dyn Erro
         .parent()
         .expect("Couldn't access path given by --data")
         .join("vw_namespace_map.csv");
-    
-    let vw: vwmap::VwNamespaceMap = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
+
+    let vw: vwmap::VwNamespaceMap =
+        vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
     let mut cache = cache::RecordCache::new(input_filename, true, &vw);
     let input = File::open(input_filename)?;
     let mut aa;
@@ -191,7 +192,8 @@ fn main2() -> Result<(), Box<dyn Error>> {
 
         if let Some(filename) = cl.value_of("initial_regressor") {
             log::info!("initial_regressor = {}", filename);
-            (mi, vw, re) = persistence::new_regressor_from_filename(filename, testonly, Option::Some(&cl))?;
+            (mi, vw, re) =
+                persistence::new_regressor_from_filename(filename, testonly, Option::Some(&cl))?;
             sharable_regressor = BoxedRegressorTrait::new(Box::new(re));
         } else {
             // We load vw_namespace_map.csv just so we know all the namespaces ahead of time
@@ -220,12 +222,14 @@ fn main2() -> Result<(), Box<dyn Error>> {
 
         let holdout_after_option: Option<u64> =
             cl.value_of("holdout_after").map(|s| s.parse().unwrap());
-        
+
         let hogwild_training = cl.is_present("hogwild_training");
         let mut hogwild_trainer = if hogwild_training {
             let hogwild_threads = match cl.value_of("hogwild_threads") {
-                Some(hogwild_threads) => hogwild_threads.parse().expect("hogwild_threads should be integer"),
-                None => 16
+                Some(hogwild_threads) => hogwild_threads
+                    .parse()
+                    .expect("hogwild_threads should be integer"),
+                None => 16,
             };
             HogwildTrainer::new(sharable_regressor.clone(), &mi, hogwild_threads)
         } else {
@@ -307,11 +311,10 @@ fn main2() -> Result<(), Box<dyn Error>> {
             }
 
             if example_num > predictions_after {
+                if output_pred_sto {
+                    println!("{:.6}", prediction);
+                }
 
-		if output_pred_sto {
-		    println!("{:.6}", prediction);
-		}
-		
                 match predictions_file.as_mut() {
                     Some(file) => writeln!(file, "{:.6}", prediction)?,
                     None => {}
@@ -327,9 +330,13 @@ fn main2() -> Result<(), Box<dyn Error>> {
         log::info!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
 
         match final_regressor_filename {
-            Some(filename) => {
-                persistence::save_sharable_regressor_to_filename(filename, &mi, &vw, sharable_regressor).unwrap()
-            }
+            Some(filename) => persistence::save_sharable_regressor_to_filename(
+                filename,
+                &mi,
+                &vw,
+                sharable_regressor,
+            )
+            .unwrap(),
             None => {}
         }
     }

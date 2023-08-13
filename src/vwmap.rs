@@ -89,11 +89,15 @@ impl VwNamespaceMap {
     }
 
     pub fn new_from_csv_filepath(path: PathBuf) -> Result<VwNamespaceMap, Box<dyn Error>> {
-        let mut input_bufreader = fs::File::open(&path).unwrap_or_else(|_| { panic!("{}", format!(
-                "Could not find vw_namespace_map.csv in input dataset directory of {:?}",
-                path
+        let mut input_bufreader = fs::File::open(&path).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                format!(
+                    "Could not find vw_namespace_map.csv in input dataset directory of {:?}",
+                    path
+                )
             )
-            ) });
+        });
         let mut s = String::new();
         input_bufreader.read_to_string(&mut s)?;
         VwNamespaceMap::new(&s)

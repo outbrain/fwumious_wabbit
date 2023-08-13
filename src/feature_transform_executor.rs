@@ -31,7 +31,7 @@ pub enum SeedNumber {
     Default = 0,
     One = 1,
     Two = 2,
-    Three = 3
+    Three = 3,
 }
 
 #[derive(Clone)]
@@ -210,9 +210,7 @@ impl TransformExecutors {
                 TransformExecutor::from_namespace_transform(transformed_namespace).unwrap();
             executors.push(transformed_namespace_executor);
         }
-        TransformExecutors {
-            executors,
-        }
+        TransformExecutors { executors }
     }
 
     /*

@@ -29,8 +29,7 @@ impl model_instance::ModelInstance {
         input_bufreader: &mut dyn io::Read,
     ) -> Result<model_instance::ModelInstance, Box<dyn Error>> {
         let len = input_bufreader.read_u64::<LittleEndian>()?;
-        let mi: model_instance::ModelInstance =
-            serde_json::from_reader(input_bufreader.take(len))?;
+        let mi: model_instance::ModelInstance = serde_json::from_reader(input_bufreader.take(len))?;
         Ok(mi)
     }
 }
@@ -305,9 +304,7 @@ B,featureB
         }
     }
 
-    fn ffm_vec(
-        v: Vec<feature_buffer::HashAndValueAndSeq>,
-    ) -> feature_buffer::FeatureBuffer {
+    fn ffm_vec(v: Vec<feature_buffer::HashAndValueAndSeq>) -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {
             label: 0.0,
             example_importance: 1.0,
@@ -340,25 +337,23 @@ B,featureB
         let mut p: f32;
 
         ffm_fixed_init(&mut re);
-        let fbuf = &ffm_vec(
-            vec![
-                HashAndValueAndSeq {
-                    hash: 1,
-                    value: 1.0,
-                    contra_field_index: 0,
-                },
-                HashAndValueAndSeq {
-                    hash: 3 * 1000,
-                    value: 1.0,
-                    contra_field_index: 0,
-                },
-                HashAndValueAndSeq {
-                    hash: 100,
-                    value: 2.0,
-                    contra_field_index: 1,
-                },
-            ],
-        );
+        let fbuf = &ffm_vec(vec![
+            HashAndValueAndSeq {
+                hash: 1,
+                value: 1.0,
+                contra_field_index: 0,
+            },
+            HashAndValueAndSeq {
+                hash: 3 * 1000,
+                value: 1.0,
+                contra_field_index: 0,
+            },
+            HashAndValueAndSeq {
+                hash: 100,
+                value: 2.0,
+                contra_field_index: 1,
+            },
+        ]);
         pb.reset();
         p = re.learn(fbuf, &mut pb, true);
         assert_eq!(p, 0.9933072);

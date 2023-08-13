@@ -51,8 +51,14 @@ impl FunctionExampleSqrt {
         // For simplicity of example, we just assert instead of full error reporting
         assert!(function_params.is_empty());
         assert_eq!(from_namespaces.len(), 1);
-        assert_eq!(from_namespaces[0].namespace_descriptor.namespace_type, NamespaceType::Primitive);
-        assert_eq!(from_namespaces[0].namespace_descriptor.namespace_format, NamespaceFormat::F32);
+        assert_eq!(
+            from_namespaces[0].namespace_descriptor.namespace_type,
+            NamespaceType::Primitive
+        );
+        assert_eq!(
+            from_namespaces[0].namespace_descriptor.namespace_format,
+            NamespaceFormat::F32
+        );
         Ok(Box::new(Self {
             from_namespace: ExecutorFromNamespace {
                 namespace_descriptor: from_namespaces[0].namespace_descriptor,
@@ -745,8 +751,7 @@ mod tests {
 
         // Couldn't get mocking to work, so instead of intercepting call to emit_i32, we just repeat it and see if the results match
         let mut to_namespace_comparison = to_namespace_empty.clone();
-        to_namespace_comparison
-            .emit_i32_i32::<{ SeedNumber::One as usize }>(3_i32, 7_i32, 1.0);
+        to_namespace_comparison.emit_i32_i32::<{ SeedNumber::One as usize }>(3_i32, 7_i32, 1.0);
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
 
         // Now let's have 30.0/60.0

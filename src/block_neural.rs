@@ -20,10 +20,10 @@ use block_helpers::OptimizerData;
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 
-use blas::*;
 use crate::feature_buffer::FeatureBuffer;
 use crate::port_buffer::PortBuffer;
 use crate::regressor::BlockCache;
+use blas::*;
 
 const MAX_NUM_INPUTS: usize = 16000;
 
@@ -166,7 +166,8 @@ pub fn new_neuronlayer_block(
                 layer_norm,
             )
         }
-    }.unwrap();
+    }
+    .unwrap();
 
     let mut block_outputs = bg.add_node(block, vec![input]).unwrap();
     assert_eq!(block_outputs.len(), 1);
@@ -191,13 +192,9 @@ pub fn new_neuron_block(
     }
 }
 
-impl<L: OptimizerTrait + 'static>  BlockNeuronLayer<L> {
+impl<L: OptimizerTrait + 'static> BlockNeuronLayer<L> {
     #[inline(always)]
-    fn internal_forward(
-        &self,
-        pb: &mut port_buffer::PortBuffer,
-        alpha: f32
-    ) {
+    fn internal_forward(&self, pb: &mut port_buffer::PortBuffer, alpha: f32) {
         unsafe {
             let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
                 &mut pb.tape,
@@ -213,7 +210,7 @@ impl<L: OptimizerTrait + 'static>  BlockNeuronLayer<L> {
                 b'T',                               //   trans: u8,
                 self.num_inputs as i32,             //   m: i32,
                 self.num_neurons as i32,            //   n: i32,
-                alpha,                                //   alpha: f32,
+                alpha,                              //   alpha: f32,
                 self.weights.get_unchecked(0..),    //  a: &[f32],
                 self.num_inputs as i32,             //lda: i32,
                 &input_tape.get_unchecked(0..),     //   x: &[f32],
@@ -223,7 +220,6 @@ impl<L: OptimizerTrait + 'static>  BlockNeuronLayer<L> {
                 1,                                  //incy: i32
             );
         }
-
     }
 }
 
@@ -541,7 +537,8 @@ mod tests {
             0.0, // dropout
             0.0, // max norm
             false,
-        ).unwrap();
+        )
+        .unwrap();
         let observe_block =
             block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0))
                 .unwrap();
@@ -575,7 +572,8 @@ mod tests {
             0.0,   // dropout
             0.0,   // max norm
             false, // layer norm
-        ).unwrap();
+        )
+        .unwrap();
         let observe_block =
             block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0))
                 .unwrap();

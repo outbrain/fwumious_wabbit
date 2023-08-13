@@ -70,14 +70,12 @@ pub trait BlockTrait {
     fn create_forward_cache(
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
-        caches: &mut Vec<BlockCache>
+        caches: &mut Vec<BlockCache>,
     ) {
         block_helpers::create_forward_cache(further_blocks, caches);
     }
 
-    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
-
-    }
+    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {}
 
     fn get_serialized_len(&self) -> usize {
         0
@@ -378,7 +376,6 @@ impl Regressor {
         block_helpers::forward_backward(further_blocks, fb, pb, update);
 
         assert_eq!(pb.observations.len(), 1);
-        
 
         pb.observations.pop().unwrap()
     }
@@ -395,7 +392,6 @@ impl Regressor {
         block_helpers::forward(further_blocks, fb, pb);
 
         assert_eq!(pb.observations.len(), 1);
-        
 
         pb.observations.pop().unwrap()
     }

@@ -1,6 +1,6 @@
 use std::error::Error;
-use std::sync::{Arc, mpsc, Mutex};
 use std::sync::mpsc::{Receiver, SyncSender};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
 
@@ -20,12 +20,17 @@ pub struct HogwildTrainer {
 pub struct HogwildWorker {
     regressor: BoxedRegressorTrait,
     feature_buffer_translator: FeatureBufferTranslator,
-    port_buffer: PortBuffer
+    port_buffer: PortBuffer,
 }
 
 impl HogwildTrainer {
-    pub fn new(sharable_regressor: BoxedRegressorTrait, model_instance: &ModelInstance, numWorkers: u32) -> HogwildTrainer {
-        let (sender, receiver): (SyncSender<Vec<u32>>, Receiver<Vec<u32>>) = mpsc::sync_channel(CHANNEL_CAPACITY);
+    pub fn new(
+        sharable_regressor: BoxedRegressorTrait,
+        model_instance: &ModelInstance,
+        numWorkers: u32,
+    ) -> HogwildTrainer {
+        let (sender, receiver): (SyncSender<Vec<u32>>, Receiver<Vec<u32>>) =
+            mpsc::sync_channel(CHANNEL_CAPACITY);
         let mut trainer = HogwildTrainer {
             workers: Vec::with_capacity(numWorkers as usize),
             sender,
@@ -37,14 +42,14 @@ impl HogwildTrainer {
             let worker = HogwildWorker::new(
                 sharable_regressor.clone(),
                 feature_buffer_translator.clone(),
-                port_buffer.clone(), 
-                Arc::clone(&receiver)
+                port_buffer.clone(),
+                Arc::clone(&receiver),
             );
             trainer.workers.push(worker);
         }
         trainer
     }
-    
+
     pub fn digest_example(&self, feature_buffer: Vec<u32>) {
         self.sender.send(feature_buffer).unwrap();
     }
@@ -53,7 +58,7 @@ impl HogwildTrainer {
         drop(self.sender);
         for worker in self.workers {
             worker.join().unwrap();
-        } 
+        }
     }
 }
 
@@ -62,7 +67,7 @@ impl Default for HogwildTrainer {
         let (sender, receiver) = mpsc::sync_channel(0);
         HogwildTrainer {
             workers: vec![],
-            sender
+            sender,
         }
     }
 }
@@ -72,17 +77,15 @@ impl HogwildWorker {
         regressor: BoxedRegressorTrait,
         feature_buffer_translator: FeatureBufferTranslator,
         port_buffer: PortBuffer,
-        receiver: Arc<Mutex<Receiver<Vec<u32>>>>
+        receiver: Arc<Mutex<Receiver<Vec<u32>>>>,
     ) -> JoinHandle<()> {
         let mut worker = HogwildWorker {
             regressor,
             feature_buffer_translator,
-            port_buffer
+            port_buffer,
         };
-        
-        thread::spawn(move || {
-            worker.train(receiver)
-        })
+
+        thread::spawn(move || worker.train(receiver))
     }
 
     pub fn train(&mut self, receiver: Arc<Mutex<Receiver<Vec<u32>>>>) {
@@ -90,10 +93,15 @@ impl HogwildWorker {
         loop {
             let buffer = match receiver.lock().unwrap().recv() {
                 Ok(feature_buffer) => feature_buffer,
-                Err(RecvError) => break // channel was closed
+                Err(RecvError) => break, // channel was closed
             };
-            self.feature_buffer_translator.translate(buffer.as_slice(), some_num);
-            self.regressor.learn(&self.feature_buffer_translator.feature_buffer, &mut self.port_buffer, true);
+            self.feature_buffer_translator
+                .translate(buffer.as_slice(), some_num);
+            self.regressor.learn(
+                &self.feature_buffer_translator.feature_buffer,
+                &mut self.port_buffer,
+                true,
+            );
         }
     }
 }

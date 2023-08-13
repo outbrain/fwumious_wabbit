@@ -274,8 +274,9 @@ impl ModelInstance {
                 ),
             )));
         }
-        let layer_number: usize = vsplit[0].parse().unwrap_or_else(|_| panic!("--nn can not parse the layer number: {}",
-            vsplit[0]));
+        let layer_number: usize = vsplit[0]
+            .parse()
+            .unwrap_or_else(|_| panic!("--nn can not parse the layer number: {}", vsplit[0]));
         if layer_number >= self.nn_config.layers.len() {
             return Err(Box::new(IOError::new(
                 ErrorKind::Other,
@@ -369,11 +370,7 @@ impl ModelInstance {
             if mi.ffm_k > FFM_MAX_K as u32 {
                 return Err(Box::new(IOError::new(
                     ErrorKind::Other,
-                    format!(
-                        "Maximum ffm_k is: {}, passed: {}",
-                        FFM_MAX_K,
-                        mi.ffm_k
-                    ),
+                    format!("Maximum ffm_k is: {}, passed: {}", FFM_MAX_K, mi.ffm_k),
                 )));
             }
         }
@@ -425,8 +422,7 @@ impl ModelInstance {
         mi.ffm_power_t = parse_float("ffm_power_t", mi.power_t, cl);
 
         mi.nn_learning_rate = parse_float("nn_learning_rate", mi.ffm_learning_rate, cl);
-        mi.nn_init_acc_gradient =
-            parse_float("nn_init_acc_gradient", mi.ffm_init_acc_gradient, cl);
+        mi.nn_init_acc_gradient = parse_float("nn_init_acc_gradient", mi.ffm_init_acc_gradient, cl);
         mi.nn_power_t = parse_float("nn_power_t", mi.ffm_power_t, cl);
 
         if let Some(val) = cl.value_of("nn_layers") {

@@ -68,7 +68,7 @@ impl BoxedRegressorTrait {
             // Double deref here sounds weird, but you got to know that dyn Trait and Box<dyn Trait> are the same thing, just box owns it.
             // And you can get dyn Trait content, but you can't get box content (directly)
             let r2: Box<Regressor> = mem::transmute(self.content.deref().deref());
-            
+
             BoxedRegressorTrait {
                 content: ManuallyDrop::new(r2),
                 reference_count: self.reference_count.clone(),
