@@ -459,10 +459,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
         self.num_neurons
     }
 
-    fn get_num_output_slots(&self) -> usize {
-        1
-    }
-
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
         assert_eq!(input.get_input_index(), 0);
         self.input_offset = offset;

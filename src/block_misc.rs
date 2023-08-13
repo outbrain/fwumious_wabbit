@@ -54,10 +54,6 @@ impl BlockTrait for BlockObserve {
         graph::BlockType::Observe
     }
 
-    fn get_num_output_slots(&self) -> usize {
-        1
-    } // It is a pass-through
-
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert_eq!(output.get_output_index(), 0);
         self.num_inputs
@@ -318,10 +314,6 @@ impl BlockTrait for BlockConsts {
         self
     }
 
-    fn get_num_output_slots(&self) -> usize {
-        1
-    }
-
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert_eq!(output.get_output_index(), 0);
         self.consts.len()
@@ -575,10 +567,6 @@ impl BlockTrait for BlockJoin {
         graph::BlockType::Join
     }
 
-    fn get_num_output_slots(&self) -> usize {
-        1
-    }
-
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert_eq!(output.get_output_index(), 0);
         self.num_inputs
@@ -684,10 +672,6 @@ pub fn new_sum_block(
 impl BlockTrait for BlockSum {
     fn as_any(&mut self) -> &mut dyn Any {
         self
-    }
-
-    fn get_num_output_slots(&self) -> usize {
-        1
     }
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
@@ -815,10 +799,6 @@ pub fn new_triangle_block(
 impl BlockTrait for BlockTriangle {
     fn as_any(&mut self) -> &mut dyn Any {
         self
-    }
-
-    fn get_num_output_slots(&self) -> usize {
-        1
     }
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {

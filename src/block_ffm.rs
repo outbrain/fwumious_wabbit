@@ -901,10 +901,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         (self.ffm_num_fields * self.ffm_num_fields) as usize
     }
 
-    fn get_num_output_slots(&self) -> usize {
-        1
-    }
-
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
         panic!("You cannot set_input_offset() for BlockFFM");
     }
