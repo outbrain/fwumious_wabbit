@@ -107,17 +107,13 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         ];
     }
 
-    fn get_num_output_slots(&self) -> usize {
-        1
-    }
-
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert_eq!(output.get_output_index(), 0);
         self.num_combos as usize
     }
 
     fn set_input_offset(&mut self, _input: graph::InputSlot, _offset: usize) {
-        panic!("You cannnot set_input_offset() for BlockLR");
+        panic!("You cannot set_input_offset() for BlockLR");
     }
 
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {

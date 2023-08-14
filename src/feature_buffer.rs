@@ -28,7 +28,6 @@ pub struct FeatureBuffer {
     pub example_number: u64,
     pub lr_buffer: Vec<HashAndValue>,
     pub ffm_buffer: Vec<HashAndValueAndSeq>,
-    pub ffm_fields_count: u32,
 }
 
 #[derive(Clone)]
@@ -154,7 +153,6 @@ impl FeatureBufferTranslator {
             example_number: 0,
             lr_buffer: Vec::new(),
             ffm_buffer: Vec::new(),
-            ffm_fields_count: 0,
         };
 
         // avoid doing any allocations in translate
@@ -275,8 +273,7 @@ impl FeatureBufferTranslator {
                 // but in theory we could support also combo features
                 let ffm_buffer = &mut self.feature_buffer.ffm_buffer;
                 ffm_buffer.truncate(0);
-                self.feature_buffer.ffm_fields_count = self.model_instance.ffm_fields.len() as u32;
-                //let feature_len = self.feature_buffer.ffm_fields_count * self.model_instance.ffm_k;
+
                 for (contra_field_index, ffm_field) in
                     self.model_instance.ffm_fields.iter().enumerate()
                 {

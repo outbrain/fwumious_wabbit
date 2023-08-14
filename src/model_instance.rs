@@ -5,13 +5,15 @@ use std::io::ErrorKind;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::consts;
 use crate::feature_transform_parser;
 use crate::vwmap;
 use crate::vwmap::NamespaceDescriptor;
 
 const WEIGHT_DELIM: &str = ":";
 const VERBOSE_FIELD_DELIM: &str = ",";
+
+// Maximum supported FFM embedding size
+const FFM_MAX_K: usize = 128;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct FeatureComboDesc {
@@ -364,12 +366,12 @@ impl ModelInstance {
 
         if let Some(val) = cl.value_of("ffm_k") {
             mi.ffm_k = val.parse()?;
-            if mi.ffm_k > consts::FFM_MAX_K as u32 {
+            if mi.ffm_k > FFM_MAX_K as u32 {
                 return Err(Box::new(IOError::new(
                     ErrorKind::Other,
                     format!(
                         "Maximum ffm_k is: {}, passed: {}",
-                        consts::FFM_MAX_K,
+                        FFM_MAX_K,
                         mi.ffm_k
                     ),
                 )));
