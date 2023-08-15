@@ -164,7 +164,7 @@ pub fn slearn2<'a>(
     pb.reset();
     let (block_run, further_blocks) = bg.blocks_final.split_at_mut(1);
     block_run[0].forward_backward(further_blocks, fb, pb, update);
-    
+
     pb.observations[0]
 }
 
@@ -177,7 +177,11 @@ pub fn ssetup_cache2<'a>(
     create_block_run[0].create_forward_cache(create_further_blocks, caches);
 
     let (prepare_block_run, prepare_further_blocks) = bg.blocks_final.split_at_mut(1);
-    prepare_block_run[0].prepare_forward_cache(prepare_further_blocks, cache_fb, caches.as_mut_slice());
+    prepare_block_run[0].prepare_forward_cache(
+        prepare_further_blocks,
+        cache_fb,
+        caches.as_mut_slice(),
+    );
 }
 
 pub fn spredict2_with_cache<'a>(
@@ -242,12 +246,12 @@ pub fn forward_with_cache(
     caches: &[BlockCache],
 ) {
     match further_blocks.split_first() {
-        Some((next_regressor, further_blocks)) => next_regressor
-            .forward_with_cache(further_blocks, fb, pb, caches),
+        Some((next_regressor, further_blocks)) => {
+            next_regressor.forward_with_cache(further_blocks, fb, pb, caches)
+        }
         None => {}
     }
 }
-
 
 #[inline(always)]
 pub fn prepare_forward_cache(
@@ -256,8 +260,9 @@ pub fn prepare_forward_cache(
     caches: &mut [BlockCache],
 ) {
     match further_blocks.split_first_mut() {
-        Some((next_regressor, further_blocks)) => next_regressor
-            .prepare_forward_cache(further_blocks, fb, caches),
+        Some((next_regressor, further_blocks)) => {
+            next_regressor.prepare_forward_cache(further_blocks, fb, caches)
+        }
         None => {}
     }
 }
@@ -265,13 +270,12 @@ pub fn prepare_forward_cache(
 #[inline(always)]
 pub fn create_forward_cache(
     further_blocks: &mut [Box<dyn BlockTrait>],
-    caches: &mut Vec<BlockCache>
+    caches: &mut Vec<BlockCache>,
 ) {
     match further_blocks.split_first_mut() {
-        Some((next_regressor, further_blocks)) => next_regressor
-            .create_forward_cache(further_blocks, caches),
+        Some((next_regressor, further_blocks)) => {
+            next_regressor.create_forward_cache(further_blocks, caches)
+        }
         None => {}
     }
 }
-
-

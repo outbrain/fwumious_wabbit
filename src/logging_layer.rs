@@ -8,13 +8,13 @@ pub fn initialize_logging_layer() {
         "info" => builder.filter_level(log::LevelFilter::Info),
         "warn" => builder.filter_level(log::LevelFilter::Warn),
         "error" => builder.filter_level(log::LevelFilter::Error),
-	"trace" => builder.filter_level(log::LevelFilter::Trace),
-	"debug" => builder.filter_level(log::LevelFilter::Debug),
-	"off" => builder.filter_level(log::LevelFilter::Off),
+        "trace" => builder.filter_level(log::LevelFilter::Trace),
+        "debug" => builder.filter_level(log::LevelFilter::Debug),
+        "off" => builder.filter_level(log::LevelFilter::Off),
         _ => builder.filter_level(log::LevelFilter::Info),
     };
 
     if builder.try_init().is_ok() {
-	log::info!("Initialized the logger ..")
+        log::info!("Initialized the logger ..")
     }
 }

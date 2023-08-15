@@ -3,13 +3,13 @@ use std::error::Error;
 
 use crate::block_helpers;
 use crate::feature_buffer;
+use crate::feature_buffer::FeatureBuffer;
 use crate::graph;
 use crate::port_buffer;
-use crate::regressor;
-use regressor::BlockTrait;
-use crate::feature_buffer::FeatureBuffer;
 use crate::port_buffer::PortBuffer;
+use crate::regressor;
 use crate::regressor::BlockCache;
+use regressor::BlockTrait;
 
 #[inline(always)]
 pub fn logistic(t: f32) -> f32 {
@@ -41,7 +41,6 @@ pub fn new_logloss_block(
 }
 
 impl BlockSigmoid {
-
     #[inline(always)]
     fn internal_forward(
         &self,
@@ -61,9 +60,9 @@ impl BlockSigmoid {
             let prediction_probability: f32;
             if wsum.is_nan() {
                 log::warn!(
-                        "NAN prediction in example {}, forcing 0.0",
-                        fb.example_number
-                    );
+                    "NAN prediction in example {}, forcing 0.0",
+                    fb.example_number
+                );
                 prediction_probability = logistic(0.0);
             } else if wsum < -50.0 {
                 prediction_probability = logistic(-50.0);
@@ -176,5 +175,4 @@ impl BlockTrait for BlockSigmoid {
         self.internal_forward(fb, pb);
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
     }
-
 }

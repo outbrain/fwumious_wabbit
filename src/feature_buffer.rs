@@ -156,7 +156,7 @@ impl FeatureBufferTranslator {
         };
 
         // avoid doing any allocations in translate
-        
+
         FeatureBufferTranslator {
             model_instance: mi.clone(), // not the nicest option
             hashes_vec_in: Vec::with_capacity(100),

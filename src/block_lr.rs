@@ -1,20 +1,20 @@
 use std::any::Any;
 
-use crate::{feature_buffer, parser};
 use crate::graph;
 use crate::model_instance;
 use crate::optimizer;
 use crate::regressor;
+use crate::{feature_buffer, parser};
 
 use std::error::Error;
 use std::io;
 
 use crate::block_helpers;
 use crate::port_buffer;
+use crate::regressor::BlockCache;
 use block_helpers::WeightAndOptimizerData;
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
-use crate::regressor::BlockCache;
 
 pub struct BlockLR<L: OptimizerTrait> {
     pub weights: Vec<WeightAndOptimizerData<L>>,
@@ -25,7 +25,6 @@ pub struct BlockLR<L: OptimizerTrait> {
 }
 
 impl<L: OptimizerTrait + 'static> BlockLR<L> {
-
     fn internal_forward(
         &self,
         fb: &feature_buffer::FeatureBuffer,
@@ -143,7 +142,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
                 for feature in fb.lr_buffer.iter() {
                     let feature_index = feature.hash as usize;
                     let feature_value = feature.value;
-                    let gradient = myslice.get_unchecked(feature.combo_index as usize) * feature_value;
+                    let gradient =
+                        myslice.get_unchecked(feature.combo_index as usize) * feature_value;
                     let update = self.optimizer_lr.calculate_update(
                         gradient,
                         &mut self.weights.get_unchecked_mut(feature_index).optimizer_data,
@@ -187,14 +187,14 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         };
 
         unsafe {
-            let mut lr_slice = &mut pb.tape
-                [self.output_offset..(self.output_offset + self.num_combos as usize)];
+            let mut lr_slice =
+                &mut pb.tape[self.output_offset..(self.output_offset + self.num_combos as usize)];
             lr_slice.copy_from_slice(lr.as_slice());
 
             for feature in fb.lr_buffer.iter() {
                 let combo_index = feature.combo_index as usize;
                 if *combo_indexes.get_unchecked(combo_index) {
-                    continue
+                    continue;
                 }
                 let feature_index = feature.hash as usize;
                 let feature_value = feature.value;
@@ -212,7 +212,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
     ) {
         caches.push(BlockCache::LR {
             lr: vec![0.0; self.num_combos as usize],
-            combo_indexes: vec![false; self.num_combos as usize]
+            combo_indexes: vec![false; self.num_combos as usize],
         });
         block_helpers::create_forward_cache(further_blocks, caches);
     }

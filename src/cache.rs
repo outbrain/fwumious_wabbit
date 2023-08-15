@@ -1,3 +1,4 @@
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::error::Error;
 use std::fs;
 use std::io;
@@ -5,7 +6,6 @@ use std::io::Read;
 use std::io::Write;
 use std::path;
 use std::{mem, slice};
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use crate::vwmap;
 
@@ -69,8 +69,6 @@ pub struct RecordCache {
 
 impl RecordCache {
     pub fn new(input_filename: &str, enabled: bool, vw_map: &vwmap::VwNamespaceMap) -> RecordCache {
-        
-        
         let gz: bool;
         let temporary_filename: String = format!("{}.fwcache.writing", input_filename);
         let final_filename: String = format!("{}.fwcache", input_filename);

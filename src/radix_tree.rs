@@ -10,7 +10,7 @@ impl NamespaceDescriptorWithHash {
     pub(crate) fn new(descriptor: NamespaceDescriptor, hash_seed: u32) -> Self {
         Self {
             descriptor,
-            hash_seed
+            hash_seed,
         }
     }
 }
@@ -48,7 +48,7 @@ impl RadixTree {
         }
     }
 
-    pub(crate)fn insert(&mut self, key: &[u8], value: NamespaceDescriptorWithHash) {
+    pub(crate) fn insert(&mut self, key: &[u8], value: NamespaceDescriptorWithHash) {
         let mut node = &mut self.root;
 
         for &byte in key {
@@ -77,8 +77,8 @@ impl RadixTree {
 
 #[cfg(test)]
 mod tests {
-    use crate::vwmap::{NamespaceFormat, NamespaceType};
     use super::*;
+    use crate::vwmap::{NamespaceFormat, NamespaceType};
 
     #[test]
     fn test_insert_and_get() {
@@ -88,27 +88,27 @@ mod tests {
             descriptor: NamespaceDescriptor {
                 namespace_index: 0,
                 namespace_type: NamespaceType::Primitive,
-                namespace_format: NamespaceFormat::Categorical
+                namespace_format: NamespaceFormat::Categorical,
             },
-            hash_seed: 1
+            hash_seed: 1,
         };
 
         let namespace_descriptor_with_hash_2 = NamespaceDescriptorWithHash {
             descriptor: NamespaceDescriptor {
                 namespace_index: 10,
                 namespace_type: NamespaceType::Primitive,
-                namespace_format: NamespaceFormat::Categorical
+                namespace_format: NamespaceFormat::Categorical,
             },
-            hash_seed: 2
+            hash_seed: 2,
         };
 
         let namespace_descriptor_with_hash_3 = NamespaceDescriptorWithHash {
             descriptor: NamespaceDescriptor {
                 namespace_index: 20,
                 namespace_type: NamespaceType::Primitive,
-                namespace_format: NamespaceFormat::Categorical
+                namespace_format: NamespaceFormat::Categorical,
             },
-            hash_seed: 3
+            hash_seed: 3,
         };
 
         tree.insert(b"A", namespace_descriptor_with_hash_1);
@@ -129,9 +129,9 @@ mod tests {
             descriptor: NamespaceDescriptor {
                 namespace_index: 0,
                 namespace_type: NamespaceType::Primitive,
-                namespace_format: NamespaceFormat::Categorical
+                namespace_format: NamespaceFormat::Categorical,
             },
-            hash_seed: 1
+            hash_seed: 1,
         };
 
         tree.insert(b"", namespace_descriptor_with_hash);
@@ -148,9 +148,9 @@ mod tests {
             descriptor: NamespaceDescriptor {
                 namespace_index: 0,
                 namespace_type: NamespaceType::Primitive,
-                namespace_format: NamespaceFormat::Categorical
+                namespace_format: NamespaceFormat::Categorical,
             },
-            hash_seed: 1
+            hash_seed: 1,
         };
 
         tree.insert(b"AB", namespace_descriptor_with_hash);
@@ -160,5 +160,4 @@ mod tests {
         assert_eq!(tree.get(b"B"), None);
         assert_eq!(tree.get(b"ABC"), None);
     }
-
 }

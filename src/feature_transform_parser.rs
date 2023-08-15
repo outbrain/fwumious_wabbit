@@ -254,12 +254,10 @@ pub fn get_namespace_descriptor(
         .get(&vec![namespace_char as u8])
     {
         Some(namespace_descriptor) => Ok(*namespace_descriptor),
-        None => {
-            Err(Box::new(IOError::new(
-                ErrorKind::Other,
-                format!("Unknown namespace char in command line: {}", namespace_char),
-            )))
-        }
+        None => Err(Box::new(IOError::new(
+            ErrorKind::Other,
+            format!("Unknown namespace char in command line: {}", namespace_char),
+        ))),
     }
 }
 
@@ -294,7 +292,6 @@ pub fn get_namespace_descriptor_verbose(
         }
     };
 }
-
 
 use nom::bytes::complete::take_while;
 use nom::character;

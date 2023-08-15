@@ -7,10 +7,10 @@ use crate::graph;
 use crate::port_buffer;
 use crate::regressor;
 
-use regressor::BlockTrait;
 use crate::feature_buffer::FeatureBuffer;
 use crate::port_buffer::PortBuffer;
 use crate::regressor::BlockCache;
+use regressor::BlockTrait;
 
 #[derive(PartialEq)]
 pub enum Observe {
@@ -173,7 +173,6 @@ impl BlockTrait for BlockObserve {
             None => {}
         }
     }
-
 }
 
 pub enum SinkType {
@@ -274,7 +273,6 @@ impl BlockTrait for BlockSink {
         debug_assert!(self.input_offset != usize::MAX);
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
     }
-
 }
 
 pub struct BlockConsts {
@@ -296,11 +294,7 @@ pub fn new_const_block(
 }
 
 impl BlockConsts {
-
-    fn internal_forward(
-        &self,
-        pb: &mut port_buffer::PortBuffer,
-    ) {
+    fn internal_forward(&self, pb: &mut port_buffer::PortBuffer) {
         debug_assert!(self.output_offset != usize::MAX);
         pb.tape[self.output_offset..(self.output_offset + self.consts.len())]
             .copy_from_slice(&self.consts);
@@ -324,7 +318,11 @@ impl BlockTrait for BlockConsts {
     }
 
     fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
-        assert_eq!(output.get_output_index(), 0, "Only supports a single output for BlockConsts");
+        assert_eq!(
+            output.get_output_index(),
+            0,
+            "Only supports a single output for BlockConsts"
+        );
         self.output_offset = offset;
     }
 
@@ -360,7 +358,6 @@ impl BlockTrait for BlockConsts {
         self.internal_forward(pb);
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
     }
-
 }
 
 pub struct BlockCopy {
@@ -507,15 +504,11 @@ impl BlockTrait for BlockCopy {
         self.internal_forward(pb);
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
     }
-
 }
 
 impl BlockCopy {
     #[inline(always)]
-    fn internal_forward(
-        &self,
-        pb: &mut port_buffer::PortBuffer,
-    ) {
+    fn internal_forward(&self, pb: &mut port_buffer::PortBuffer) {
         unsafe {
             let output_offset_0 = *self.output_offsets.get_unchecked(0);
             if self.input_offset != output_offset_0 {
@@ -639,7 +632,6 @@ impl BlockTrait for BlockJoin {
     ) {
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
     }
-
 }
 
 pub struct BlockSum {
@@ -707,9 +699,7 @@ impl BlockTrait for BlockSum {
             let general_gradient = pb.tape[self.output_offset];
             if update {
                 pb.tape
-                    .get_unchecked_mut(
-                        self.input_offset..(self.input_offset + self.num_inputs),
-                    )
+                    .get_unchecked_mut(self.input_offset..(self.input_offset + self.num_inputs))
                     .fill(general_gradient);
             }
         }
@@ -736,16 +726,11 @@ impl BlockTrait for BlockSum {
         self.internal_forward(pb);
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
     }
-
 }
-
 
 impl BlockSum {
     #[inline(always)]
-    fn internal_forward(
-        &self,
-        pb: &mut port_buffer::PortBuffer,
-    ) {
+    fn internal_forward(&self, pb: &mut port_buffer::PortBuffer) {
         debug_assert!(self.num_inputs > 0);
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.input_offset != usize::MAX);
@@ -833,7 +818,6 @@ impl BlockTrait for BlockTriangle {
         self.internal_forward(pb);
 
         unsafe {
-
             block_helpers::forward_backward(further_blocks, fb, pb, update);
 
             if update {
@@ -879,15 +863,11 @@ impl BlockTrait for BlockTriangle {
         self.internal_forward(pb);
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
     }
-
 }
 
 impl BlockTriangle {
     #[inline(always)]
-    fn internal_forward(
-        &self,
-        pb: &mut port_buffer::PortBuffer,
-    ) {
+    fn internal_forward(&self, pb: &mut port_buffer::PortBuffer) {
         unsafe {
             let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
                 &mut pb.tape,
@@ -1180,7 +1160,6 @@ mod tests {
 
     #[test]
     fn test_copy_to_join() {
-
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
         let input_block_1 = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
