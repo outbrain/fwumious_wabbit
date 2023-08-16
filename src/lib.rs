@@ -3,6 +3,7 @@ mod block_helpers;
 mod block_loss_functions;
 mod block_lr;
 mod block_misc;
+mod block_monte_carlo;
 mod block_neural;
 mod block_normalize;
 mod block_relu;

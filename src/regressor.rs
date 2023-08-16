@@ -9,6 +9,7 @@ use crate::block_helpers;
 use crate::block_loss_functions;
 use crate::block_lr;
 use crate::block_misc;
+use crate::block_monte_carlo;
 use crate::block_neural;
 use crate::block_neural::InitType;
 use crate::block_normalize;
@@ -175,7 +176,23 @@ impl Regressor {
         if mi.ffm_k > 0 {
             let mut block_ffm = block_ffm::new_ffm_block(&mut bg, mi).unwrap();
             let mut triangle_ffm = block_misc::new_triangle_block(&mut bg, block_ffm).unwrap();
-            output = block_misc::new_join_block(&mut bg, vec![output, triangle_ffm]).unwrap();
+            if true {
+                let num_iterations = 5;
+                let dropout_rate = 0.01875;
+
+                // TODO: make this configurable
+                let mut monte_carlo_ffm = block_monte_carlo::new_monte_carlo_block(
+                    &mut bg,
+                    triangle_ffm,
+                    num_iterations,
+                    dropout_rate,
+                )
+                .unwrap();
+                output =
+                    block_misc::new_join_block(&mut bg, vec![output, monte_carlo_ffm]).unwrap();
+            } else {
+                output = block_misc::new_join_block(&mut bg, vec![output, triangle_ffm]).unwrap();
+            }
         }
 
         if !mi.nn_config.layers.is_empty() {
@@ -391,9 +408,7 @@ impl Regressor {
         let further_blocks = &self.blocks_boxes[..];
         block_helpers::forward(further_blocks, fb, pb);
 
-        assert_eq!(pb.observations.len(), 1);
-
-        pb.observations.pop().unwrap()
+        self.select_prediction(pb)
     }
 
     pub fn predict_with_cache(
@@ -407,10 +422,18 @@ impl Regressor {
         let further_blocks = &self.blocks_boxes[..];
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
 
-        assert_eq!(pb.observations.len(), 1);
-        let prediction_probability = pb.observations.pop().unwrap();
+        self.select_prediction(pb)
+    }
 
-        return prediction_probability;
+    fn select_prediction(&self, pb: &mut port_buffer::PortBuffer) -> f32 {
+        match &pb.monte_carlo_stats {
+            Some(monte_carlo_stats) => monte_carlo_stats.mean,
+            None => {
+                assert_eq!(pb.observations.len(), 1);
+
+                pb.observations.pop().unwrap()
+            }
+        }
     }
 
     pub fn setup_cache(
