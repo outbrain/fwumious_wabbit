@@ -154,7 +154,7 @@ pub fn get_input_output_borrows(
     }
 }
 
-pub fn slearn2<'a>(
+pub fn slearn2(
     bg: &mut graph::BlockGraph,
     fb: &feature_buffer::FeatureBuffer,
     pb: &mut port_buffer::PortBuffer,
@@ -167,7 +167,7 @@ pub fn slearn2<'a>(
     pb.observations[0]
 }
 
-pub fn ssetup_cache2<'a>(
+pub fn ssetup_cache2(
     bg: &mut graph::BlockGraph,
     cache_fb: &feature_buffer::FeatureBuffer,
     caches: &mut Vec<BlockCache>,
@@ -183,7 +183,7 @@ pub fn ssetup_cache2<'a>(
     );
 }
 
-pub fn spredict2_with_cache<'a>(
+pub fn spredict2_with_cache(
     bg: &mut graph::BlockGraph,
     fb: &feature_buffer::FeatureBuffer,
     pb: &mut port_buffer::PortBuffer,
@@ -196,7 +196,7 @@ pub fn spredict2_with_cache<'a>(
     pb.observations[0]
 }
 
-pub fn spredict2<'a>(
+pub fn spredict2(
     bg: &mut graph::BlockGraph,
     fb: &feature_buffer::FeatureBuffer,
     pb: &mut port_buffer::PortBuffer,
