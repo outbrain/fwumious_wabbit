@@ -87,6 +87,11 @@ pub struct ModelInstance {
     #[serde(default = "default_f32_zero")]
     pub nn_power_t: f32,
 
+    #[serde(default = "default_u32_zero")]
+    pub ffm_mc_iteration_count: u32,
+    #[serde(default = "default_f32_zero")]
+    pub ffm_mc_dropout_rate: f32,
+
     pub nn_config: NNConfig,
 
     #[serde(default = "default_optimizer_adagrad")]
@@ -136,6 +141,8 @@ impl ModelInstance {
             ffm_init_width: 0.0,
             ffm_init_zero_band: 0.0,
             ffm_init_acc_gradient: 0.0,
+            ffm_mc_iteration_count: 0,
+            ffm_mc_dropout_rate: 0.0,
             nn_init_acc_gradient: 0.0,
             nn_learning_rate: 0.02,
             nn_power_t: 0.45,

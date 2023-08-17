@@ -176,22 +176,18 @@ impl Regressor {
         if mi.ffm_k > 0 {
             let mut block_ffm = block_ffm::new_ffm_block(&mut bg, mi).unwrap();
             let mut triangle_ffm = block_misc::new_triangle_block(&mut bg, block_ffm).unwrap();
-            if true {
-                let num_iterations = 5;
-                let dropout_rate = 0.01875;
-
-                // TODO: make this configurable
+            if mi.ffm_mc_iteration_count == 0 || mi.ffm_mc_dropout_rate <= 0.0 {
+                output = block_misc::new_join_block(&mut bg, vec![output, triangle_ffm]).unwrap();
+            } else {
                 let mut monte_carlo_ffm = block_monte_carlo::new_monte_carlo_block(
                     &mut bg,
                     triangle_ffm,
-                    num_iterations,
-                    dropout_rate,
+                    mi.ffm_mc_iteration_count as usize,
+                    mi.ffm_mc_dropout_rate,
                 )
                 .unwrap();
                 output =
                     block_misc::new_join_block(&mut bg, vec![output, monte_carlo_ffm]).unwrap();
-            } else {
-                output = block_misc::new_join_block(&mut bg, vec![output, triangle_ffm]).unwrap();
             }
         }
 
