@@ -1,4 +1,3 @@
-use fasthash::Seed;
 use std::any::Any;
 use std::error::Error;
 
@@ -7,10 +6,8 @@ use rand::distributions::{Distribution, Uniform};
 use regressor::BlockTrait;
 
 use crate::block_helpers;
-use crate::feature_buffer;
 use crate::feature_buffer::FeatureBuffer;
 use crate::graph;
-use crate::port_buffer;
 use crate::port_buffer::{MonteCarloStats, PortBuffer};
 use crate::regressor;
 use crate::regressor::BlockCache;
@@ -34,7 +31,6 @@ pub fn new_monte_carlo_block(
         output_offset: usize::MAX,
         input_offset: usize::MAX,
         num_inputs,
-        num_outputs: num_inputs,
     });
     let mut block_outputs = bg.add_node(block, vec![input])?;
     assert_eq!(block_outputs.len(), 1);
@@ -47,7 +43,6 @@ pub struct BlockMonteCarlo {
     skip_index_generator: Uniform<usize>,
 
     pub num_inputs: usize,
-    pub num_outputs: usize,
     pub input_offset: usize,
     pub output_offset: usize,
 }
@@ -59,7 +54,7 @@ impl BlockTrait for BlockMonteCarlo {
 
     fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
         assert_eq!(output.get_output_index(), 0);
-        self.num_outputs
+        self.num_inputs
     }
 
     fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
@@ -81,7 +76,21 @@ impl BlockTrait for BlockMonteCarlo {
         pb: &mut PortBuffer,
         update: bool,
     ) {
+        self.copy_input_tape_to_output_tape(pb);
+
         block_helpers::forward_backward(further_blocks, fb, pb, update);
+
+        if update {
+            let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
+                &mut pb.tape,
+                self.input_offset,
+                self.num_inputs,
+                self.output_offset,
+                self.num_inputs,
+            );
+
+            input_tape.copy_from_slice(output_tape);
+        }
     }
 
     fn forward(
@@ -91,20 +100,28 @@ impl BlockTrait for BlockMonteCarlo {
         pb: &mut PortBuffer,
     ) {
         unsafe {
+            if self.number_of_inputs_to_skip == 0 {
+                self.copy_input_tape_to_output_tape(pb);
+                block_helpers::forward(further_blocks, fb, pb);
+                return;
+            }
+
             let mut rng = rand::thread_rng();
 
+            let input_tape = pb
+                .tape
+                .get_unchecked_mut(self.input_offset..self.input_offset + self.num_inputs)
+                .to_vec();
             for _ in 0..self.num_iterations {
-                let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
+                let (_, output_tape) = block_helpers::get_input_output_borrows(
                     &mut pb.tape,
                     self.input_offset,
                     self.num_inputs,
                     self.output_offset,
-                    self.num_outputs,
+                    self.num_inputs,
                 );
 
-                output_tape
-                    .get_unchecked_mut(..)
-                    .copy_from_slice(input_tape.get_unchecked(..));
+                output_tape.copy_from_slice(&input_tape);
                 for _ in 0..self.number_of_inputs_to_skip {
                     let skip_index = self.skip_index_generator.sample(&mut rng);
                     *output_tape.get_unchecked_mut(skip_index) = 0.0;
@@ -124,28 +141,28 @@ impl BlockTrait for BlockMonteCarlo {
         caches: &[BlockCache],
     ) {
         unsafe {
-            let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
-                &mut pb.tape,
-                self.input_offset,
-                self.num_inputs,
-                self.output_offset,
-                self.num_outputs,
-            );
+            if self.number_of_inputs_to_skip == 0 {
+                self.copy_input_tape_to_output_tape(pb);
+                block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+                return;
+            }
 
             let mut rng = rand::thread_rng();
 
+            let input_tape = pb
+                .tape
+                .get_unchecked_mut(self.input_offset..self.input_offset + self.num_inputs)
+                .to_vec();
             for _ in 0..self.num_iterations {
-                let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
+                let (_, output_tape) = block_helpers::get_input_output_borrows(
                     &mut pb.tape,
                     self.input_offset,
                     self.num_inputs,
                     self.output_offset,
-                    self.num_outputs,
+                    self.num_inputs,
                 );
 
-                output_tape
-                    .get_unchecked_mut(..)
-                    .copy_from_slice(input_tape.get_unchecked(..));
+                output_tape.copy_from_slice(&input_tape);
                 for _ in 0..self.number_of_inputs_to_skip {
                     let skip_index = self.skip_index_generator.sample(&mut rng);
                     *output_tape.get_unchecked_mut(skip_index) = 0.0;
@@ -159,6 +176,18 @@ impl BlockTrait for BlockMonteCarlo {
 }
 
 impl BlockMonteCarlo {
+    fn copy_input_tape_to_output_tape(&self, pb: &mut PortBuffer) {
+        let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
+            &mut pb.tape,
+            self.input_offset,
+            self.num_inputs,
+            self.output_offset,
+            self.num_inputs,
+        );
+
+        output_tape.copy_from_slice(input_tape);
+    }
+
     fn fill_stats(&self, pb: &mut PortBuffer) {
         let mean: f32 = pb.observations.iter().sum::<f32>() / self.num_iterations as f32;
         let variance = pb
