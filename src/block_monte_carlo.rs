@@ -2,6 +2,8 @@ use std::any::Any;
 use std::error::Error;
 
 use rand::distributions::{Distribution, Uniform};
+use rand_xoshiro::rand_core::SeedableRng;
+use rand_xoshiro::Xoshiro256Plus;
 
 use regressor::BlockTrait;
 
@@ -35,6 +37,10 @@ pub fn new_monte_carlo_block(
     let mut block_outputs = bg.add_node(block, vec![input])?;
     assert_eq!(block_outputs.len(), 1);
     Ok(block_outputs.pop().unwrap())
+}
+
+fn create_seed_from_input_tape(input_tape: &[f32]) -> u64 {
+    (input_tape.iter().sum::<f32>() * 1000.0) as u64
 }
 
 pub struct BlockMonteCarlo {
@@ -89,12 +95,14 @@ impl BlockTrait for BlockMonteCarlo {
                 return;
             }
 
-            let mut rng = rand::thread_rng();
-
             let input_tape = pb
                 .tape
                 .get_unchecked_mut(self.input_offset..self.input_offset + self.num_inputs)
                 .to_vec();
+
+            let seed = create_seed_from_input_tape(&input_tape);
+            let mut rng = Xoshiro256Plus::seed_from_u64(seed);
+
             for _ in 0..self.num_iterations {
                 let (_, output_tape) = block_helpers::get_input_output_borrows(
                     &mut pb.tape,
@@ -130,12 +138,14 @@ impl BlockTrait for BlockMonteCarlo {
                 return;
             }
 
-            let mut rng = rand::thread_rng();
-
             let input_tape = pb
                 .tape
                 .get_unchecked_mut(self.input_offset..self.input_offset + self.num_inputs)
                 .to_vec();
+
+            let seed = create_seed_from_input_tape(&input_tape);
+            let mut rng = Xoshiro256Plus::seed_from_u64(seed);
+
             for _ in 0..self.num_iterations {
                 let (_, output_tape) = block_helpers::get_input_output_borrows(
                     &mut pb.tape,
