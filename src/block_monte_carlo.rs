@@ -52,23 +52,6 @@ impl BlockTrait for BlockMonteCarlo {
         self
     }
 
-    fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
-        assert_eq!(output.get_output_index(), 0);
-        self.num_inputs
-    }
-
-    fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
-        assert_eq!(input.get_input_index(), 0);
-        assert_eq!(self.input_offset, usize::MAX); // We only allow a single call
-        self.input_offset = offset;
-    }
-
-    fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
-        assert_eq!(output.get_output_index(), 0);
-        assert_eq!(self.output_offset, usize::MAX); // We only allow a single call
-        self.output_offset = offset;
-    }
-
     fn forward_backward(
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
@@ -172,6 +155,23 @@ impl BlockTrait for BlockMonteCarlo {
 
             self.fill_stats(pb);
         }
+    }
+
+    fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
+        assert_eq!(output.get_output_index(), 0);
+        self.num_inputs
+    }
+
+    fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
+        assert_eq!(input.get_input_index(), 0);
+        assert_eq!(self.input_offset, usize::MAX); // We only allow a single call
+        self.input_offset = offset;
+    }
+
+    fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
+        assert_eq!(output.get_output_index(), 0);
+        assert_eq!(self.output_offset, usize::MAX); // We only allow a single call
+        self.output_offset = offset;
     }
 }
 
