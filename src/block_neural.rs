@@ -368,7 +368,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
     }
 
-    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
+    fn allocate_and_init_weights(&mut self, _mi: &model_instance::ModelInstance) {
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.input_offset != usize::MAX);
 
@@ -470,27 +470,20 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
         input_bufreader: &mut dyn io::Read,
         forward: &mut Box<dyn BlockTrait>,
     ) -> Result<(), Box<dyn Error>> {
-        let mut forward = forward
+        let forward = forward
             .as_any()
             .downcast_mut::<BlockNeuronLayer<optimizer::OptimizerSGD>>()
             .unwrap();
         block_helpers::read_weights_from_buf(&mut forward.weights, input_bufreader)?;
-        block_helpers::skip_weights_from_buf(
+        block_helpers::skip_weights_from_buf::<OptimizerData<L>>(
             self.weights_len as usize,
-            &self.weights_optimizer,
             input_bufreader,
         )?;
         Ok(())
     }
 
     /// Sets internal state of weights based on some completely object-dependent parameters
-    fn testing_set_weights(
-        &mut self,
-        aa: i32,
-        bb: i32,
-        index: usize,
-        w: &[f32],
-    ) -> Result<(), Box<dyn Error>> {
+    fn testing_set_weights(&mut self, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {
         self.weights[index] = w[0];
         self.weights_optimizer[index].optimizer_data = self.optimizer.initial_data();
         Ok(())
@@ -539,7 +532,7 @@ mod tests {
             false,
         )
         .unwrap();
-        let observe_block =
+        let _observe_block =
             block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0))
                 .unwrap();
         bg.finalize();
@@ -559,7 +552,7 @@ mod tests {
         mi.nn_power_t = 0.0;
         mi.optimizer = Optimizer::SGD;
 
-        let NUM_NEURONS = 2;
+        let num_neurons = 2;
         let mut bg = BlockGraph::new();
         let input_block = block_misc::new_const_block(&mut bg, vec![2.0]).unwrap();
         let neuron_block = new_neuronlayer_block(
@@ -567,14 +560,14 @@ mod tests {
             &mi,
             input_block,
             NeuronType::WeightedSum,
-            NUM_NEURONS,
+            num_neurons,
             InitType::One,
             0.0,   // dropout
             0.0,   // max norm
             false, // layer norm
         )
         .unwrap();
-        let observe_block =
+        let _observe_block =
             block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0))
                 .unwrap();
         bg.finalize();
@@ -588,7 +581,7 @@ mod tests {
         // on tape 0 input of 2.0 will be replaced with the gradient of 2.0
         // on tape 1 input has been consumed by returning function
         // on tape 2 the output was consumed by slearn
-        assert_eq!(pb.observations.len(), NUM_NEURONS as usize);
+        assert_eq!(pb.observations.len(), num_neurons as usize);
         assert_eq!(pb.observations[0], 2.0); // since we are using identity loss function, only one was consumed by slearn
         assert_eq!(pb.observations[1], 2.0); // since we are using identity loss function, only one was consumed by slearn
 

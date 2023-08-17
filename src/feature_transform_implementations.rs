@@ -44,7 +44,7 @@ impl FunctionExecutorTrait for FunctionExampleSqrt {
 
 impl FunctionExampleSqrt {
     fn create_function(
-        function_name: &str,
+        _function_name: &str,
         from_namespaces: &Vec<feature_transform_parser::Namespace>,
         function_params: &Vec<f32>,
     ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
@@ -211,7 +211,7 @@ impl FunctionExecutorTrait for TransformerLogRatioBinner {
         &self,
         record_buffer: &[u32],
         to_namespace: &mut ExecutorToNamespace,
-        transform_executors: &TransformExecutors,
+        _transform_executors: &TransformExecutors,
     ) {
         feature_reader_float_namespace!(
             record_buffer,
@@ -591,12 +591,6 @@ mod tests {
     use super::*;
     use crate::feature_transform_executor::default_seeds;
     use crate::parser::{IS_NOT_SINGLE_MASK, MASK31};
-
-    fn add_header(v2: Vec<u32>) -> Vec<u32> {
-        let mut rr: Vec<u32> = vec![100, 1, 1.0f32.to_bits()];
-        rr.extend(v2);
-        rr
-    }
 
     fn nd(start: u32, end: u32) -> u32 {
         (start << 16) + end

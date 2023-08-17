@@ -958,7 +958,6 @@ C,featureC
         assert!(result.is_err());
         assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Namespaces that are f32 can not have weight attached neither to namespace nor to a single feature (basically they can\' use :weight syntax\" })");
 
-        let mut buf = str_to_cursor("-1 |B NONE\n");
         // Now test with skip_prefix = 1
         let vw_map_string = r#"
 A,featureA

@@ -46,7 +46,7 @@ pub fn read_weights_from_buf<L>(
         return Err("Loading weights to unallocated weighs buffer".to_string())?;
     }
     unsafe {
-        let mut buf_view: &mut [u8] = slice::from_raw_parts_mut(
+        let buf_view: &mut [u8] = slice::from_raw_parts_mut(
             weights.as_mut_ptr() as *mut u8,
             weights.len() * mem::size_of::<L>(),
         );
@@ -59,7 +59,6 @@ pub fn read_weights_from_buf<L>(
 // Skip amount of bytes that a weights vector would be
 pub fn skip_weights_from_buf<L>(
     weights_len: usize,
-    weights: &Vec<L>,
     input_bufreader: &mut dyn Read,
 ) -> Result<(), Box<dyn Error>> {
     let bytes_skip = weights_len * mem::size_of::<L>();
@@ -105,7 +104,7 @@ pub fn read_weights_only_from_buf2<L: OptimizerTrait>(
         while remaining_weights > 0 {
             let chunk_size = min(remaining_weights, BUF_LEN);
             in_weights.set_len(chunk_size);
-            let mut in_weights_view: &mut [u8] = slice::from_raw_parts_mut(
+            let in_weights_view: &mut [u8] = slice::from_raw_parts_mut(
                 in_weights.as_mut_ptr() as *mut u8,
                 chunk_size * mem::size_of::<WeightAndOptimizerData<L>>(),
             );
@@ -139,14 +138,14 @@ pub fn get_input_output_borrows(
     unsafe {
         return if start2 > start1 {
             let (rest, second) = i.split_at_mut(start2);
-            let (rest, first) = rest.split_at_mut(start1);
+            let (_, first) = rest.split_at_mut(start1);
             (
                 first.get_unchecked_mut(0..len1),
                 second.get_unchecked_mut(0..len2),
             )
         } else {
             let (rest, first) = i.split_at_mut(start1);
-            let (rest, second) = rest.split_at_mut(start2);
+            let (_, second) = rest.split_at_mut(start2);
             (
                 first.get_unchecked_mut(0..len1),
                 second.get_unchecked_mut(0..len2),
@@ -186,7 +185,6 @@ pub fn ssetup_cache2<'a>(
 
 pub fn spredict2_with_cache<'a>(
     bg: &mut graph::BlockGraph,
-    cache_fb: &feature_buffer::FeatureBuffer,
     fb: &feature_buffer::FeatureBuffer,
     pb: &mut port_buffer::PortBuffer,
     caches: &[BlockCache],
@@ -195,15 +193,13 @@ pub fn spredict2_with_cache<'a>(
     let (block_run, further_blocks) = bg.blocks_final.split_at(1);
     block_run[0].forward_with_cache(further_blocks, fb, pb, caches);
 
-    let prediction_probability = pb.observations[0];
-    return prediction_probability;
+    pb.observations[0]
 }
 
 pub fn spredict2<'a>(
     bg: &mut graph::BlockGraph,
     fb: &feature_buffer::FeatureBuffer,
     pb: &mut port_buffer::PortBuffer,
-    update: bool,
 ) -> f32 {
     pb.reset();
     let (block_run, further_blocks) = bg.blocks_final.split_at(1);

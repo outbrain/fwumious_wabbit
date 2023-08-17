@@ -155,7 +155,7 @@ pub fn new_regressor_from_filename(
 
 pub fn hogwild_load(re: &mut regressor::Regressor, filename: &str) -> Result<(), Box<dyn Error>> {
     let mut input_bufreader = io::BufReader::new(fs::File::open(filename)?);
-    let (mi_hw, vw_hw, mut re_hw) = load_regressor_without_weights(&mut input_bufreader, None)?;
+    let (_, _, mut re_hw) = load_regressor_without_weights(&mut input_bufreader, None)?;
     // TODO: Here we should do safety comparison that the regressor is really the same;
     if !re.immutable {
         re.overwrite_weights_from_buf(&mut input_bufreader)?;
@@ -256,15 +256,15 @@ B,featureB
         assert_eq!(re.learn(fbuf, &mut pb, true), 0.45016602);
         assert_eq!(re.learn(fbuf, &mut pb, false), 0.41731137);
 
-        let CONST_RESULT = 0.41731137;
-        assert_eq!(re.learn(fbuf, &mut pb, false), CONST_RESULT);
+        let expected_result = 0.41731137;
+        assert_eq!(re.learn(fbuf, &mut pb, false), expected_result);
 
         // Now we test conversion to fixed regressor
         {
             mi.optimizer = model_instance::Optimizer::SGD;
             let re_fixed = re.immutable_regressor(&mi).unwrap();
             // predict with the same feature vector
-            assert_eq!(re_fixed.predict(fbuf, &mut pb), CONST_RESULT);
+            assert_eq!(re_fixed.predict(fbuf, &mut pb), expected_result);
             mi.optimizer = model_instance::Optimizer::AdagradFlex;
         }
         // Now we test saving and loading a) regular regressor, b) fixed regressor
@@ -277,30 +277,29 @@ B,featureB
             let (_mi2, _vw2, mut re2) =
                 new_regressor_from_filename(regressor_filepath.to_str().unwrap(), false, None)
                     .unwrap();
-            assert_eq!(re2.learn(fbuf, &mut pb, false), CONST_RESULT);
-            assert_eq!(re2.predict(fbuf, &mut pb), CONST_RESULT);
+            assert_eq!(re2.learn(fbuf, &mut pb, false), expected_result);
+            assert_eq!(re2.predict(fbuf, &mut pb), expected_result);
 
             // a) load as regular regressor, immutable
             let (_mi2, _vw2, mut re2) =
                 new_regressor_from_filename(regressor_filepath.to_str().unwrap(), true, None)
                     .unwrap();
-            assert_eq!(re2.learn(fbuf, &mut pb, false), CONST_RESULT);
-            assert_eq!(re2.predict(fbuf, &mut pb), CONST_RESULT);
+            assert_eq!(re2.learn(fbuf, &mut pb, false), expected_result);
+            assert_eq!(re2.predict(fbuf, &mut pb), expected_result);
         }
     }
 
     fn ffm_fixed_init(rg: &mut Regressor) {
         // This is a bit of black magic - we "know" that FFM is at index 1 and we downcast...
         let block_ffm = &mut rg.blocks_boxes[1];
-        let mut block_ffm = block_ffm
+        let block_ffm = block_ffm
             .as_any()
             .downcast_mut::<block_ffm::BlockFFM<optimizer::OptimizerAdagradFlex>>()
             .unwrap();
 
-        // TODO: this is not future compatible
         for i in 0..block_ffm.get_serialized_len() {
             // it only happens that this matches number of weights
-            block_ffm.testing_set_weights(0, 0, i, &[1.0f32]).unwrap();
+            block_ffm.testing_set_weights(i, &[1.0f32]).unwrap();
         }
     }
 
@@ -357,11 +356,11 @@ B,featureB
         pb.reset();
         p = re.learn(fbuf, &mut pb, true);
         assert_eq!(p, 0.9933072);
-        let CONST_RESULT = 0.9395168;
+        let expected_result = 0.9395168;
         p = re.learn(fbuf, &mut pb, false);
-        assert_epsilon!(p, CONST_RESULT);
+        assert_epsilon!(p, expected_result);
         p = re.predict(fbuf, &mut pb);
-        assert_epsilon!(p, CONST_RESULT);
+        assert_epsilon!(p, expected_result);
 
         // Now we test conversion to fixed regressor
         {
@@ -369,7 +368,7 @@ B,featureB
             let re_fixed = re.immutable_regressor(&mi).unwrap();
             // predict with the same feature vector
             mi.optimizer = Optimizer::AdagradFlex;
-            assert_epsilon!(re_fixed.predict(fbuf, &mut pb), CONST_RESULT);
+            assert_epsilon!(re_fixed.predict(fbuf, &mut pb), expected_result);
         }
         // Now we test saving and loading a) regular regressor, b) fixed regressor
         {
@@ -382,16 +381,16 @@ B,featureB
                 new_regressor_from_filename(regressor_filepath.to_str().unwrap(), false, None)
                     .unwrap();
             assert_eq!(re2.get_name(), "Regressor with optimizer \"AdagradFlex\"");
-            assert_epsilon!(re2.learn(fbuf, &mut pb, false), CONST_RESULT);
-            assert_epsilon!(re2.predict(fbuf, &mut pb), CONST_RESULT);
+            assert_epsilon!(re2.learn(fbuf, &mut pb, false), expected_result);
+            assert_epsilon!(re2.predict(fbuf, &mut pb), expected_result);
 
             // b) load as regular regressor, immutable
             let (_mi2, _vw2, mut re2) =
                 new_regressor_from_filename(regressor_filepath.to_str().unwrap(), true, None)
                     .unwrap();
             assert_eq!(re2.get_name(), "Regressor with optimizer \"SGD\"");
-            assert_epsilon!(re2.learn(fbuf, &mut pb, false), CONST_RESULT);
-            assert_epsilon!(re2.predict(fbuf, &mut pb), CONST_RESULT);
+            assert_epsilon!(re2.learn(fbuf, &mut pb, false), expected_result);
+            assert_epsilon!(re2.predict(fbuf, &mut pb), expected_result);
         }
     }
 
@@ -425,7 +424,6 @@ B,featureB
         mi.ffm_learning_rate = 0.1;
         mi.ffm_fields = vec![vec![], vec![]];
         mi.optimizer = Optimizer::AdagradFlex;
-        let mut re = regressor::Regressor::new(&mi);
 
         let mut re_1 = regressor::Regressor::new(&mi);
         let mut re_2 = regressor::Regressor::new(&mi);
@@ -500,35 +498,35 @@ B,featureB
 
         p = re_1.learn(fbuf_1, &mut pb_1, true);
         assert_eq!(p, 0.97068775);
-        let CONST_RESULT_1_ON_1 = 0.8922257;
+        let expected_result_1_on_1 = 0.8922257;
         p = re_1.learn(fbuf_1, &mut pb_1, false);
-        assert_eq!(p, CONST_RESULT_1_ON_1);
+        assert_eq!(p, expected_result_1_on_1);
         p = re_1.predict(fbuf_1, &mut pb_1);
-        assert_eq!(p, CONST_RESULT_1_ON_1);
+        assert_eq!(p, expected_result_1_on_1);
 
         p = re_2.learn(fbuf_2, &mut pb_2, true);
         assert_eq!(p, 0.9933072);
-        let CONST_RESULT_2_ON_2 = 0.92719215;
+        let expected_result_2_on_2 = 0.92719215;
         p = re_2.learn(fbuf_2, &mut pb_2, false);
-        assert_eq!(p, CONST_RESULT_2_ON_2);
+        assert_eq!(p, expected_result_2_on_2);
         p = re_2.predict(fbuf_2, &mut pb_2);
-        assert_eq!(p, CONST_RESULT_2_ON_2);
+        assert_eq!(p, expected_result_2_on_2);
 
         p = re_2.learn(fbuf_1, &mut pb_2, false);
         assert_eq!(p, 0.93763095);
-        let CONST_RESULT_1_ON_2 = 0.93763095;
+        let expected_result_1_on_2 = 0.93763095;
         p = re_2.learn(fbuf_1, &mut pb_2, false);
-        assert_eq!(p, CONST_RESULT_1_ON_2);
+        assert_eq!(p, expected_result_1_on_2);
         p = re_2.predict(fbuf_1, &mut pb_1);
-        assert_eq!(p, CONST_RESULT_1_ON_2);
+        assert_eq!(p, expected_result_1_on_2);
 
         p = re_1.learn(fbuf_2, &mut pb_1, false);
         assert_eq!(p, 0.98559695);
-        let CONST_RESULT_2_ON_1 = 0.98559695;
+        let expected_result_2_on_1 = 0.98559695;
         p = re_1.learn(fbuf_2, &mut pb_1, false);
-        assert_eq!(p, CONST_RESULT_2_ON_1);
+        assert_eq!(p, expected_result_2_on_1);
         p = re_1.predict(fbuf_2, &mut pb_2);
-        assert_eq!(p, CONST_RESULT_2_ON_1);
+        assert_eq!(p, expected_result_2_on_1);
 
         // Now we test saving and loading a) regular regressor, b) immutable regressor
         // FYI ... this confusing tests have actually caught bugs in the code, they are hard to maintain, but important
@@ -558,31 +556,31 @@ B,featureB
             );
             assert_eq!(
                 new_re_1.learn(fbuf_1, &mut pb_1, false),
-                CONST_RESULT_1_ON_1
+                expected_result_1_on_1
             );
-            assert_eq!(new_re_1.predict(fbuf_1, &mut pb_1), CONST_RESULT_1_ON_1);
+            assert_eq!(new_re_1.predict(fbuf_1, &mut pb_1), expected_result_1_on_1);
             assert_eq!(
                 new_re_1.learn(fbuf_2, &mut pb_1, false),
-                CONST_RESULT_2_ON_1
+                expected_result_2_on_1
             );
-            assert_eq!(new_re_1.predict(fbuf_2, &mut pb_2), CONST_RESULT_2_ON_1);
+            assert_eq!(new_re_1.predict(fbuf_2, &mut pb_2), expected_result_2_on_1);
             hogwild_load(&mut new_re_1, &regressor_filepath_2).unwrap();
             assert_eq!(
                 new_re_1.learn(fbuf_2, &mut pb_1, false),
-                CONST_RESULT_2_ON_2
+                expected_result_2_on_2
             );
-            assert_eq!(new_re_1.predict(fbuf_2, &mut pb_2), CONST_RESULT_2_ON_2);
+            assert_eq!(new_re_1.predict(fbuf_2, &mut pb_2), expected_result_2_on_2);
             hogwild_load(&mut new_re_1, &regressor_filepath_1).unwrap();
             assert_eq!(
                 new_re_1.learn(fbuf_1, &mut pb_1, false),
-                CONST_RESULT_1_ON_1
+                expected_result_1_on_1
             );
-            assert_eq!(new_re_1.predict(fbuf_1, &mut pb_1), CONST_RESULT_1_ON_1);
+            assert_eq!(new_re_1.predict(fbuf_1, &mut pb_1), expected_result_1_on_1);
             assert_eq!(
                 new_re_1.learn(fbuf_2, &mut pb_1, false),
-                CONST_RESULT_2_ON_1
+                expected_result_2_on_1
             );
-            assert_eq!(new_re_1.predict(fbuf_2, &mut pb_2), CONST_RESULT_2_ON_1);
+            assert_eq!(new_re_1.predict(fbuf_2, &mut pb_2), expected_result_2_on_1);
 
             // The immutable path
             let (_mi1, _vw1, mut new_re_1) =
@@ -590,31 +588,31 @@ B,featureB
             assert_eq!(new_re_1.get_name(), "Regressor with optimizer \"SGD\"");
             assert_eq!(
                 new_re_1.learn(fbuf_1, &mut pb_1, false),
-                CONST_RESULT_1_ON_1
+                expected_result_1_on_1
             );
-            assert_eq!(new_re_1.predict(fbuf_1, &mut pb_1), CONST_RESULT_1_ON_1);
+            assert_eq!(new_re_1.predict(fbuf_1, &mut pb_1), expected_result_1_on_1);
             assert_eq!(
                 new_re_1.learn(fbuf_2, &mut pb_1, false),
-                CONST_RESULT_2_ON_1
+                expected_result_2_on_1
             );
-            assert_eq!(new_re_1.predict(fbuf_2, &mut pb_2), CONST_RESULT_2_ON_1);
+            assert_eq!(new_re_1.predict(fbuf_2, &mut pb_2), expected_result_2_on_1);
             hogwild_load(&mut new_re_1, &regressor_filepath_2).unwrap();
             assert_eq!(
                 new_re_1.learn(fbuf_2, &mut pb_1, false),
-                CONST_RESULT_2_ON_2
+                expected_result_2_on_2
             );
-            assert_eq!(new_re_1.predict(fbuf_2, &mut pb_2), CONST_RESULT_2_ON_2);
+            assert_eq!(new_re_1.predict(fbuf_2, &mut pb_2), expected_result_2_on_2);
             hogwild_load(&mut new_re_1, &regressor_filepath_1).unwrap();
             assert_eq!(
                 new_re_1.learn(fbuf_1, &mut pb_1, false),
-                CONST_RESULT_1_ON_1
+                expected_result_1_on_1
             );
-            assert_eq!(new_re_1.predict(fbuf_1, &mut pb_1), CONST_RESULT_1_ON_1);
+            assert_eq!(new_re_1.predict(fbuf_1, &mut pb_1), expected_result_1_on_1);
             assert_eq!(
                 new_re_1.learn(fbuf_2, &mut pb_1, false),
-                CONST_RESULT_2_ON_1
+                expected_result_2_on_1
             );
-            assert_eq!(new_re_1.predict(fbuf_2, &mut pb_2), CONST_RESULT_2_ON_1);
+            assert_eq!(new_re_1.predict(fbuf_2, &mut pb_2), expected_result_2_on_1);
         }
     }
 }

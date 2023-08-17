@@ -26,7 +26,7 @@ pub fn new_relu_block(
 ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
     let num_inputs = bg.get_num_output_values(vec![&input]);
     assert_ne!(num_inputs, 0);
-    let mut block = Box::new(BlockRELU {
+    let block = Box::new(BlockRELU {
         output_offset: usize::MAX,
         input_offset: usize::MAX,
         num_inputs,
@@ -154,11 +154,11 @@ mod tests {
 
     #[test]
     fn test_simple_positive() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
+        let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
         let input_block = block_misc::new_const_block(&mut bg, vec![2.0]).unwrap();
         let relu_block = new_relu_block(&mut bg, &mi, input_block).unwrap();
-        let observe_block =
+        let _observe_block =
             block_misc::new_observe_block(&mut bg, relu_block, Observe::Forward, Some(1.0))
                 .unwrap();
         bg.finalize();
