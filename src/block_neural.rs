@@ -481,13 +481,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
         )?;
         Ok(())
     }
-
-    /// Sets internal state of weights based on some completely object-dependent parameters
-    fn testing_set_weights(&mut self, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {
-        self.weights[index] = w[0];
-        self.weights_optimizer[index].optimizer_data = self.optimizer.initial_data();
-        Ok(())
-    }
 }
 
 mod tests {

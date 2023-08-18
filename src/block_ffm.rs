@@ -968,13 +968,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         )?;
         Ok(())
     }
-
-    /// Sets internal state of weights based on some completely object-dependent parameters
-    fn testing_set_weights(&mut self, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {
-        self.weights[index] = w[0];
-        self.optimizer[index].optimizer_data = self.optimizer_ffm.initial_data();
-        Ok(())
-    }
 }
 
 mod tests {

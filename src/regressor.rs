@@ -118,11 +118,6 @@ pub trait BlockTrait {
     ) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
-
-    /// Sets internal state of weights based on some completely object-dependent parameters
-    fn testing_set_weights(&mut self, _index: usize, _w: &[f32]) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
 }
 
 pub struct Regressor {

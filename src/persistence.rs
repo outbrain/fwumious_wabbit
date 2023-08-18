@@ -195,7 +195,9 @@ mod tests {
     use regressor::BlockTrait;
     use regressor::Regressor;
 
+    use crate::optimizer::OptimizerTrait;
     use tempfile::tempdir;
+
     #[test]
     fn save_empty_model() {
         let vw_map_string = r#"
@@ -299,7 +301,8 @@ B,featureB
 
         for i in 0..block_ffm.get_serialized_len() {
             // it only happens that this matches number of weights
-            block_ffm.testing_set_weights(i, &[1.0f32]).unwrap();
+            block_ffm.weights[i] = 1.0;
+            block_ffm.optimizer[i].optimizer_data = block_ffm.optimizer_ffm.initial_data();
         }
     }
 

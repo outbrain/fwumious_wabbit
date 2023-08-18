@@ -289,11 +289,4 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
             input_bufreader,
         )
     }
-
-    /// Sets internal state of weights based on some completely object-dependent parameters
-    fn testing_set_weights(&mut self, index: usize, w: &[f32]) -> Result<(), Box<dyn Error>> {
-        self.weights[index].weight = w[0];
-        self.weights[index].optimizer_data = self.optimizer_lr.initial_data();
-        Ok(())
-    }
 }
