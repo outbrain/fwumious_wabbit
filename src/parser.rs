@@ -212,7 +212,7 @@ impl VowpalParser {
     }
 
     fn next_vowpal_to_size(&mut self, tmp_read_buf_size: usize) -> Result<&[u32], Box<dyn Error>> {
-        let bufpos: usize = (self.vw_map.num_namespaces + HEADER_LEN as usize) as usize;
+        let bufpos: usize = self.vw_map.num_namespaces + HEADER_LEN as usize;
 
         let mut current_namespace_num_of_features = 0;
 
