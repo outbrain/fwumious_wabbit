@@ -218,3 +218,61 @@ impl BlockMonteCarlo {
         });
     }
 }
+
+mod tests {
+    use crate::assert_epsilon;
+    use crate::block_helpers::{slearn2, spredict2};
+    use crate::block_misc::Observe;
+    use crate::block_monte_carlo::new_monte_carlo_block;
+    use crate::graph::BlockGraph;
+    use crate::model_instance::ModelInstance;
+    use crate::{block_misc, feature_buffer::FeatureBuffer};
+
+    fn fb_vec() -> FeatureBuffer {
+        FeatureBuffer {
+            label: 0.0,
+            example_importance: 1.0,
+            example_number: 0,
+            lr_buffer: Vec::new(),
+            ffm_buffer: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn test_monte_carlo_block() {
+        let mut mi = ModelInstance::new_empty().unwrap();
+        let mut bg = BlockGraph::new();
+        let input_block = block_misc::new_const_block(&mut bg, vec![2.0, 4.0, 4.0, 5.0]).unwrap();
+        let observe_block_backward =
+            block_misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
+        let triangle_block =
+            new_monte_carlo_block(&mut bg, observe_block_backward, 3, 0.3).unwrap();
+        let observe_block_forward =
+            block_misc::new_observe_block(&mut bg, triangle_block, Observe::Forward, None).unwrap();
+        block_misc::new_sink_block(
+            &mut bg,
+            observe_block_forward,
+            block_misc::SinkType::Untouched,
+        )
+        .unwrap();
+        bg.finalize();
+        bg.allocate_and_init_weights(&mi);
+
+        let mut pb = bg.new_port_buffer();
+        let fb = fb_vec();
+        slearn2(&mut bg, &fb, &mut pb, true);
+        assert_eq!(pb.observations, [2.0, 4.0, 4.0, 5.0, 2.0, 4.0, 4.0, 5.0]);
+
+        spredict2(&mut bg, &fb, &mut pb, false);
+        let expected_observations = [2.0, 4.0, 0.0, 5.0, 0.0, 4.0, 4.0, 5.0, 2.0, 4.0, 4.0, 0.0, 2.0, 4.0, 4.0, 5.0];
+        assert_eq!(pb.observations.len(), expected_observations.len());
+        assert_eq!(pb.observations, expected_observations);
+
+        assert_ne!(pb.monte_carlo_stats, None);
+
+        let monte_carlo_stats = pb.monte_carlo_stats.unwrap();
+        assert_epsilon!(monte_carlo_stats.mean, 11.333333);
+        assert_epsilon!(monte_carlo_stats.variance, 302.88885);
+        assert_epsilon!(monte_carlo_stats.standard_deviation, 17.403702);
+    }
+}

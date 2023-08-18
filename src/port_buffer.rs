@@ -6,7 +6,7 @@ pub struct PortBuffer {
     pub monte_carlo_stats: Option<MonteCarloStats>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct MonteCarloStats {
     pub mean: f32,
     pub variance: f32,
