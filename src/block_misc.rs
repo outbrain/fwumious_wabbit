@@ -1005,7 +1005,7 @@ mod tests {
                 2.0, 3.0, // 2nd copy of forward
                 11.0, 11.0,
             ]
-        ); // backward part  (6+11)
+        );
 
         spredict2(&mut bg, &fb, &mut pb);
         assert_eq!(
@@ -1051,7 +1051,7 @@ mod tests {
                 2.0, 3.0, // 2nd copy of forward
                 2.0, 3.0, 18.0, 18.0,
             ]
-        ); // backward part  (5+6+7)
+        );
 
         spredict2(&mut bg, &fb, &mut pb);
         assert_eq!(
@@ -1150,12 +1150,13 @@ mod tests {
 
         let mut pb = bg.new_port_buffer();
         let fb = fb_vec();
+
+        // Order depends on the input parameters order, not on order of adding to graph ( join actually doesn't do anything)
         slearn2(&mut bg, &fb, &mut pb, true);
-        // Order depends on the input parameters order, not on order of adding to graph
-        assert_eq!(pb.observations, vec![6.0, 7.0, 1.0, 2.0, 3.0, 4.0, 5.0]); // join actually doesn't do anything
+        assert_eq!(pb.observations, vec![6.0, 7.0, 1.0, 2.0, 3.0, 4.0, 5.0]);
 
         spredict2(&mut bg, &fb, &mut pb);
-        assert_eq!(pb.observations, vec![6.0, 7.0, 1.0, 2.0, 3.0, 4.0, 5.0]); // join actually doesn't do anything
+        assert_eq!(pb.observations, vec![6.0, 7.0, 1.0, 2.0, 3.0, 4.0, 5.0]);
     }
 
     #[test]

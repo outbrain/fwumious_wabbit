@@ -118,7 +118,6 @@ impl BlockTrait for BlockSigmoid {
                 .get_unchecked(self.input_offset..(self.input_offset + self.num_inputs))
                 .iter()
                 .sum();
-            // vowpal compatibility
 
             let prediction_probability: f32;
             let general_gradient: f32;
