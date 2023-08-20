@@ -10,7 +10,7 @@ use regressor::BlockTrait;
 use crate::block_helpers;
 use crate::feature_buffer::FeatureBuffer;
 use crate::graph;
-use crate::port_buffer::{MonteCarloStats, PortBuffer};
+use crate::port_buffer::{PortBuffer, PredictionStats};
 use crate::regressor;
 use crate::regressor::BlockCache;
 
@@ -211,10 +211,11 @@ impl BlockMonteCarlo {
             / self.num_iterations as f32;
         let standard_deviation = variance.sqrt();
 
-        pb.monte_carlo_stats = Some(MonteCarloStats {
+        pb.stats = Some(PredictionStats {
             mean,
             variance,
             standard_deviation,
+            count: self.num_iterations,
         });
     }
 }
@@ -264,15 +265,17 @@ mod tests {
         assert_eq!(pb.observations, [2.0, 4.0, 4.0, 5.0, 2.0, 4.0, 4.0, 5.0]);
 
         spredict2(&mut bg, &fb, &mut pb, false);
-        let expected_observations = [2.0, 4.0, 0.0, 5.0, 0.0, 4.0, 4.0, 5.0, 2.0, 4.0, 4.0, 0.0, 2.0, 4.0, 4.0, 5.0];
+        let expected_observations = [
+            2.0, 4.0, 0.0, 5.0, 0.0, 4.0, 4.0, 5.0, 2.0, 4.0, 4.0, 0.0, 2.0, 4.0, 4.0, 5.0,
+        ];
         assert_eq!(pb.observations.len(), expected_observations.len());
         assert_eq!(pb.observations, expected_observations);
 
-        assert_ne!(pb.monte_carlo_stats, None);
+        assert_ne!(pb.stats, None);
 
-        let monte_carlo_stats = pb.monte_carlo_stats.unwrap();
-        assert_epsilon!(monte_carlo_stats.mean, 11.333333);
-        assert_epsilon!(monte_carlo_stats.variance, 302.88885);
-        assert_epsilon!(monte_carlo_stats.standard_deviation, 17.403702);
+        let stats = pb.stats.unwrap();
+        assert_epsilon!(stats.mean, 11.333333);
+        assert_epsilon!(stats.variance, 302.88885);
+        assert_epsilon!(stats.standard_deviation, 17.403702);
     }
 }

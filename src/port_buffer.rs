@@ -3,14 +3,15 @@ pub struct PortBuffer {
     pub tape: Vec<f32>,
     pub observations: Vec<f32>,
     pub tape_len: usize,
-    pub monte_carlo_stats: Option<MonteCarloStats>,
+    pub stats: Option<PredictionStats>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct MonteCarloStats {
+pub struct PredictionStats {
     pub mean: f32,
     pub variance: f32,
     pub standard_deviation: f32,
+    pub count: usize,
 }
 
 impl PortBuffer {
@@ -19,13 +20,13 @@ impl PortBuffer {
             tape: Default::default(),
             observations: Default::default(),
             tape_len,
-            monte_carlo_stats: None,
+            stats: None,
         }
     }
 
     pub fn reset(&mut self) {
         self.observations.truncate(0);
         self.tape.resize(self.tape_len, 0.0);
-        self.monte_carlo_stats = None;
+        self.stats = None;
     }
 }
