@@ -411,13 +411,13 @@ impl Regressor {
         self.select_prediction(pb)
     }
 
-    pub fn predict_and_stats(
+    pub fn predict_and_report_stats(
         &self,
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
     ) -> PredictionStats {
         self.predict_internal(fb, pb);
-        self.select_prediction_with_stats(pb)
+        self.select_prediction_and_stats(pb)
     }
 
     fn predict_with_cache_internal(
@@ -443,7 +443,7 @@ impl Regressor {
         self.select_prediction(pb)
     }
 
-    pub fn predict_and_stats_with_cache(
+    pub fn predict_with_cache_and_report_stats(
         &self,
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
@@ -451,7 +451,7 @@ impl Regressor {
     ) -> PredictionStats {
         self.predict_with_cache_internal(fb, pb, caches);
 
-        self.select_prediction_with_stats(pb)
+        self.select_prediction_and_stats(pb)
     }
 
     fn select_prediction(&self, pb: &mut port_buffer::PortBuffer) -> f32 {
@@ -465,7 +465,7 @@ impl Regressor {
         }
     }
 
-    fn select_prediction_with_stats(&self, pb: &mut port_buffer::PortBuffer) -> PredictionStats {
+    fn select_prediction_and_stats(&self, pb: &mut port_buffer::PortBuffer) -> PredictionStats {
         match &pb.stats {
             Some(stats) => stats.clone(),
             None => {
