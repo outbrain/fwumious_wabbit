@@ -75,7 +75,7 @@ pub trait BlockTrait {
         block_helpers::create_forward_cache(further_blocks, caches);
     }
 
-    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {}
+    fn allocate_and_init_weights(&mut self, _mi: &model_instance::ModelInstance) {}
 
     fn get_serialized_len(&self) -> usize {
         0
@@ -83,47 +83,38 @@ pub trait BlockTrait {
 
     fn write_weights_to_buf(
         &self,
-        output_bufwriter: &mut dyn io::Write,
+        _output_bufwriter: &mut dyn io::Write,
     ) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
 
     fn read_weights_from_buf(
         &mut self,
-        input_bufreader: &mut dyn io::Read,
+        _input_bufreader: &mut dyn io::Read,
     ) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
-    fn get_num_output_values(&self, output: graph::OutputSlot) -> usize;
+    fn get_num_output_values(&self, _output: graph::OutputSlot) -> usize;
 
     fn get_num_output_slots(&self) -> usize {
         1
     }
 
-    fn get_input_offset(&mut self, input: graph::InputSlot) -> Result<usize, Box<dyn Error>> {
+    fn get_input_offset(&mut self, _input: graph::InputSlot) -> Result<usize, Box<dyn Error>> {
         Err("get_input_offset() is only supported by CopyBlock".to_string())?
     }
-    fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {}
-    fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {}
+
+    fn set_input_offset(&mut self, _input: graph::InputSlot, _offset: usize) {}
+    fn set_output_offset(&mut self, _output: graph::OutputSlot, _offset: usize) {}
+
     fn get_block_type(&self) -> graph::BlockType {
         graph::BlockType::Regular
     }
 
     fn read_weights_from_buf_into_forward_only(
         &self,
-        input_bufreader: &mut dyn io::Read,
-        forward: &mut Box<dyn BlockTrait>,
-    ) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
-
-    /// Sets internal state of weights based on some completely object-dependent parameters
-    fn testing_set_weights(
-        &mut self,
-        aa: i32,
-        bb: i32,
-        index: usize,
-        w: &[f32],
+        _input_bufreader: &mut dyn io::Read,
+        _forward: &mut Box<dyn BlockTrait>,
     ) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
@@ -173,8 +164,8 @@ impl Regressor {
         let mut output = block_lr::new_lr_block(&mut bg, mi).unwrap();
 
         if mi.ffm_k > 0 {
-            let mut block_ffm = block_ffm::new_ffm_block(&mut bg, mi).unwrap();
-            let mut triangle_ffm = block_misc::new_triangle_block(&mut bg, block_ffm).unwrap();
+            let block_ffm = block_ffm::new_ffm_block(&mut bg, mi).unwrap();
+            let triangle_ffm = block_misc::new_triangle_block(&mut bg, block_ffm).unwrap();
             output = block_misc::new_join_block(&mut bg, vec![output, triangle_ffm]).unwrap();
         }
 
@@ -191,13 +182,6 @@ impl Regressor {
                 output = a1;
                 join_block = Some(a2);
                 output = block_normalize::new_normalize_layer_block(&mut bg, mi, output).unwrap();
-
-                /*let (a1, a2) = block_misc::new_copy_block_2(&mut bg, output).unwrap();
-                output = a1;
-                join_block = Some(a2);
-                let mut lr_block_1 = block_lr::new_lr_block(&mut bg, mi).unwrap();
-                let mut lr_block_2 = block_lr::new_lr_block(&mut bg, mi).unwrap();
-                output = block_misc::new_join_block(&mut bg, vec![output, lr_block_1, lr_block_2]).unwrap();*/
             } else if mi.nn_config.topology == "five" {
                 let (a1, a2) = block_misc::new_copy_block_2(&mut bg, output).unwrap();
                 output = a1;
@@ -236,7 +220,7 @@ impl Regressor {
                     .unwrap_or("0.0".to_string())
                     .parse()
                     .unwrap();
-                //let layernorm: bool = layer.remove("layernorm").unwrap_or("false".to_string()).parse().unwrap();
+
                 let init_type_str: String =
                     layer.remove("init").unwrap_or("hu".to_string()).to_string();
 
@@ -276,8 +260,6 @@ impl Regressor {
                     .unwrap(),
                 };
                 let neuron_type = block_neural::NeuronType::WeightedSum;
-                // println!("Neuron layer: width: {}, neuron type: {:?}, dropout: {}, maxnorm: {}, init_type: {:?}",
-                //                        width, neuron_type, dropout, maxnorm, init_type);
                 output = block_neural::new_neuronlayer_block(
                     &mut bg,
                     mi,
@@ -319,14 +301,11 @@ impl Regressor {
         }
 
         // now sigmoid has a single input
-        let lossf = block_loss_functions::new_logloss_block(&mut bg, output, true).unwrap();
+        let _lossf = block_loss_functions::new_logloss_block(&mut bg, output, true).unwrap();
         bg.finalize();
         rg.tape_len = bg.get_tape_size();
 
         rg.blocks_boxes = bg.take_blocks();
-        /*for (i, block) in bg.blocks.into_iter().enumerate() {
-            rg.blocks_boxes.push(block);
-        }*/
 
         rg
     }
@@ -408,9 +387,7 @@ impl Regressor {
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
 
         assert_eq!(pb.observations.len(), 1);
-        let prediction_probability = pb.observations.pop().unwrap();
-
-        return prediction_probability;
+        pb.observations.pop().unwrap()
     }
 
     pub fn setup_cache(

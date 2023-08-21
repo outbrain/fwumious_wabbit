@@ -53,7 +53,7 @@ impl RadixTree {
 
         for &byte in key {
             let child = &mut node.children[byte as usize];
-            node = child.get_or_insert_with(|| RadixTreeNode::new());
+            node = child.get_or_insert_with(RadixTreeNode::new);
         }
 
         node.value = Some(value);

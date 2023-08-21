@@ -46,7 +46,7 @@ impl<W: Write> Drop for Wrapper<W> {
     fn drop(&mut self) {
         match self.s.take() {
             Some(s) => {
-                let a = s.finish();
+                let _result = s.finish();
             }
             None => {}
         }

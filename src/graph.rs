@@ -101,7 +101,7 @@ impl BlockGraph {
 
     pub fn add_node(
         &mut self,
-        mut block: Box<dyn BlockTrait>,
+        block: Box<dyn BlockTrait>,
         edges_in: Vec<BlockPtrOutput>,
     ) -> Result<Vec<BlockPtrOutput>, Box<dyn Error>> {
         // Due to how CopyBlock works (zero-copy first ouptut), it's first output cannot go to a Join block since join block needs to control its inputs
@@ -151,7 +151,7 @@ impl BlockGraph {
             let bpi = BlockPtrInput(bp, bi);
             self.nodes[e.get_node_id()].edges_out[e.get_output_index()] = bpi;
         }
-        let mut newnode = BlockGraphNode {
+        let newnode = BlockGraphNode {
             edges_in,
             edges_out: Vec::new(),
         };
@@ -331,7 +331,7 @@ mod tests {
         assert_eq!(bg.nodes[0].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);
 
         // Let's add one result block
-        let output_node =
+        let _output_node =
             block_misc::new_observe_block(&mut bg, const_block_output, Observe::Forward, Some(1.0))
                 .unwrap();
 
@@ -364,7 +364,7 @@ mod tests {
         let (c1, c2) = block_misc::new_copy_block_2(&mut bg, const_block_output).unwrap();
 
         // Let's add one result block
-        let output_node =
+        let _output_node =
             block_misc::new_observe_block(&mut bg, c1, Observe::Forward, Some(1.0)).unwrap();
 
         assert_eq!(bg.nodes[0].edges_in.len(), 0);
@@ -375,9 +375,8 @@ mod tests {
 
         // Let's add second result block to see what happens
 
-        let output_node =
+        let _output_node =
             block_misc::new_observe_block(&mut bg, c2, Observe::Forward, Some(1.0)).unwrap();
-        //        assert_eq!(output_node, ());
         assert_eq!(bg.nodes[0].edges_in, vec![]);
         assert_eq!(
             bg.nodes[0].edges_out,
@@ -430,7 +429,7 @@ mod tests {
         assert_eq!(bg.nodes[1].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);
 
         // Using the join block, we merge two outputs into one single output (copy-less implementation)
-        let mut union_output =
+        let union_output =
             block_misc::new_join_block(&mut bg, vec![const_block_output1, const_block_output2])
                 .unwrap();
         assert_eq!(union_output, BlockPtrOutput(BlockPtr(2), OutputSlot(0)));
@@ -461,10 +460,9 @@ mod tests {
         let mut bg = BlockGraph::new();
 
         let const_block_output = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
-        let output_node =
+        let _output_node =
             block_misc::new_observe_block(&mut bg, const_block_output, Observe::Forward, Some(1.0))
                 .unwrap();
-        //        assert_eq!(output_node, ());
         bg.finalize();
         assert_eq!(bg.tape_size, 1);
     }
@@ -487,7 +485,7 @@ mod tests {
         let re_lr = block_lr::new_lr_block(&mut bg, &mi).unwrap();
         let re_ffm = block_ffm::new_ffm_block(&mut bg, &mi).unwrap();
         let joined = block_misc::new_join_block(&mut bg, vec![re_lr, re_ffm]).unwrap();
-        let lossf = block_loss_functions::new_logloss_block(&mut bg, joined, true);
+        let _lossf = block_loss_functions::new_logloss_block(&mut bg, joined, true);
         bg.finalize();
     }
 
@@ -506,13 +504,13 @@ mod tests {
         let const_4 = block_misc::new_const_block(&mut bg, vec![4.0]).unwrap(); // 3
         let (copy_output_1, copy_output_2) =
             block_misc::new_copy_block_2(&mut bg, const_1).unwrap(); // 4
-        let (copy_output_3, copy_output_4) =
+        let (_copy_output_3, _copy_output_4) =
             block_misc::new_copy_block_2(&mut bg, const_2).unwrap(); // 5
 
         // this is not zero copy
-        let join_1 = block_misc::new_join_block(&mut bg, vec![copy_output_1, const_3]).unwrap(); // 6
-                                                                                                 // this is zero copy
-        let join_2 = block_misc::new_join_block(&mut bg, vec![const_4, copy_output_2]); // 7
+        let _join_1 = block_misc::new_join_block(&mut bg, vec![copy_output_1, const_3]).unwrap(); // 6
+                                                                                                  // this is zero copy
+        let _join_2 = block_misc::new_join_block(&mut bg, vec![const_4, copy_output_2]); // 7
         bg.finalize();
         let mut list = bg.take_blocks();
 
@@ -546,9 +544,8 @@ mod tests {
         let const_1 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
         let const_2 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
         let const_3 = block_misc::new_const_block(&mut bg, vec![1.0]).unwrap();
-        let mut join_block1 = block_misc::new_join_block(&mut bg, vec![const_1, const_2]).unwrap();
-        let mut join_block2 =
-            block_misc::new_join_block(&mut bg, vec![join_block1, const_3]).unwrap();
+        let join_block1 = block_misc::new_join_block(&mut bg, vec![const_1, const_2]).unwrap();
+        let _join_block2 = block_misc::new_join_block(&mut bg, vec![join_block1, const_3]).unwrap();
         assert_eq!(bg.nodes.len(), 5);
         assert_eq!(bg.nodes[3].edges_in.len(), 0); // 3 is the first join block which was removed
         assert_eq!(bg.nodes[3].edges_out.len(), 0);

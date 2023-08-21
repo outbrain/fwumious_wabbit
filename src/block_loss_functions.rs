@@ -50,12 +50,11 @@ impl BlockSigmoid {
         unsafe {
             debug_assert!(self.input_offset != usize::MAX);
             debug_assert!(self.output_offset != usize::MAX);
-            let wsum: f32 = {
-                let myslice = pb
-                    .tape
-                    .get_unchecked(self.input_offset..(self.input_offset + self.num_inputs));
-                myslice.iter().sum()
-            };
+            let wsum: f32 = pb
+                .tape
+                .get_unchecked(self.input_offset..(self.input_offset + self.num_inputs))
+                .iter()
+                .sum();
 
             let prediction_probability: f32;
             if wsum.is_nan() {
@@ -114,16 +113,14 @@ impl BlockTrait for BlockSigmoid {
         debug_assert!(self.output_offset != usize::MAX);
 
         unsafe {
-            let wsum: f32 = {
-                let myslice = &pb
-                    .tape
-                    .get_unchecked(self.input_offset..(self.input_offset + self.num_inputs));
-                myslice.iter().sum()
-            };
-            // vowpal compatibility
+            let wsum: f32 = pb
+                .tape
+                .get_unchecked(self.input_offset..(self.input_offset + self.num_inputs))
+                .iter()
+                .sum();
 
-            let mut prediction_probability: f32;
-            let mut general_gradient: f32;
+            let prediction_probability: f32;
+            let general_gradient: f32;
 
             if wsum.is_nan() {
                 log::error!(

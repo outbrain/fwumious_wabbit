@@ -197,7 +197,7 @@ pub fn new_sink_block(
         num_inputs,
         sink_type,
     });
-    let mut block_outputs = bg.add_node(block, vec![input])?;
+    let block_outputs = bg.add_node(block, vec![input])?;
     assert_eq!(block_outputs.len(), 0);
     Ok(())
 }
@@ -217,7 +217,7 @@ impl BlockTrait for BlockSink {
         0
     } // It is a pass-through
 
-    fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
+    fn get_num_output_values(&self, _output: graph::OutputSlot) -> usize {
         assert!(false, "No output values in BlockSink");
         0
     }
@@ -228,7 +228,7 @@ impl BlockTrait for BlockSink {
         self.input_offset = offset;
     }
 
-    fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
+    fn set_output_offset(&mut self, _output: graph::OutputSlot, _offset: usize) {
         assert!(false, "No outputs in BlockSink");
     }
 
@@ -313,7 +313,7 @@ impl BlockTrait for BlockConsts {
         self.consts.len()
     }
 
-    fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
+    fn set_input_offset(&mut self, _input: graph::InputSlot, _offset: usize) {
         panic!("You cannot set input_tape_index for BlockConsts");
     }
 
@@ -374,7 +374,7 @@ pub fn new_copy_block(
     let num_inputs = bg.get_num_output_values(vec![&input]);
     assert_ne!(num_inputs, 0);
 
-    let mut block = Box::new(BlockCopy {
+    let block = Box::new(BlockCopy {
         output_offsets: vec![usize::MAX; num_output_slots],
         input_offset: usize::MAX,
         num_inputs,
@@ -541,7 +541,7 @@ pub fn new_join_block(
     let num_inputs = bg.get_num_output_values(inputs.iter().collect());
     assert_ne!(num_inputs, 0);
 
-    let mut block = Box::new(BlockJoin {
+    let block = Box::new(BlockJoin {
         output_offset: usize::MAX,
         input_offset: usize::MAX,
         num_inputs,
@@ -642,7 +642,7 @@ pub struct BlockSum {
 
 fn new_sum_without_weights(num_inputs: usize) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
     assert!(num_inputs > 0);
-    let mut rg = BlockSum {
+    let rg = BlockSum {
         output_offset: usize::MAX,
         input_offset: usize::MAX,
         num_inputs,
@@ -769,7 +769,7 @@ pub fn new_triangle_block(
     }
     let square_width = num_inputs_sqrt;
     let num_outputs = square_width * (square_width + 1) / 2;
-    let mut block = Box::new(BlockTriangle {
+    let block = Box::new(BlockTriangle {
         output_offset: usize::MAX,
         input_offset: usize::MAX,
         num_inputs: square_width * square_width,
@@ -914,13 +914,13 @@ mod tests {
 
     #[test]
     fn test_sum_block() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
+        let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
         let input_block = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
         let observe_block_backward =
             block_misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
         let sum_block = new_sum_block(&mut bg, observe_block_backward).unwrap();
-        let observe_block_forward =
+        let _observe_block_forward =
             block_misc::new_observe_block(&mut bg, sum_block, Observe::Forward, Some(1.0)).unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
@@ -936,7 +936,7 @@ mod tests {
             ]
         ); // backward part -- 1 is distributed to both inputs
 
-        spredict2(&mut bg, &fb, &mut pb, true);
+        spredict2(&mut bg, &fb, &mut pb);
         assert_eq!(
             pb.observations,
             vec![
@@ -948,7 +948,7 @@ mod tests {
 
     #[test]
     fn test_triangle_block() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
+        let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
         let input_block = block_misc::new_const_block(&mut bg, vec![2.0, 4.0, 4.0, 5.0]).unwrap();
         let observe_block_backward =
@@ -979,17 +979,17 @@ mod tests {
 
     #[test]
     fn test_copy_block() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
+        let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
         let input_block = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
         let observe_block_backward =
             block_misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
         let (copy_block_1, copy_block_2) =
             new_copy_block_2(&mut bg, observe_block_backward).unwrap();
-        let observe_block_1_forward =
+        let _observe_block_1_forward =
             block_misc::new_observe_block(&mut bg, copy_block_1, Observe::Forward, Some(5.0))
                 .unwrap();
-        let observe_block_2_forward =
+        let _observe_block_2_forward =
             block_misc::new_observe_block(&mut bg, copy_block_2, Observe::Forward, Some(6.0))
                 .unwrap();
         bg.finalize();
@@ -1005,9 +1005,9 @@ mod tests {
                 2.0, 3.0, // 2nd copy of forward
                 11.0, 11.0,
             ]
-        ); // backward part  (6+11)
+        );
 
-        spredict2(&mut bg, &fb, &mut pb, false);
+        spredict2(&mut bg, &fb, &mut pb);
         assert_eq!(
             pb.observations,
             vec![
@@ -1020,7 +1020,7 @@ mod tests {
 
     #[test]
     fn test_copy_block_cascade() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
+        let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
         let input_block = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
         let observe_block_backward =
@@ -1029,13 +1029,13 @@ mod tests {
             new_copy_block_2(&mut bg, observe_block_backward).unwrap();
         let (copy_block_3, copy_block_4) = new_copy_block_2(&mut bg, copy_block_1).unwrap();
 
-        let observe_block_1_forward =
+        let _observe_block_1_forward =
             block_misc::new_observe_block(&mut bg, copy_block_2, Observe::Forward, Some(5.0))
                 .unwrap();
-        let observe_block_2_forward =
+        let _observe_block_2_forward =
             block_misc::new_observe_block(&mut bg, copy_block_3, Observe::Forward, Some(6.0))
                 .unwrap();
-        let observe_block_3_forward =
+        let _observe_block_3_forward =
             block_misc::new_observe_block(&mut bg, copy_block_4, Observe::Forward, Some(7.0))
                 .unwrap();
         bg.finalize();
@@ -1051,9 +1051,9 @@ mod tests {
                 2.0, 3.0, // 2nd copy of forward
                 2.0, 3.0, 18.0, 18.0,
             ]
-        ); // backward part  (5+6+7)
+        );
 
-        spredict2(&mut bg, &fb, &mut pb, false);
+        spredict2(&mut bg, &fb, &mut pb);
         assert_eq!(
             pb.observations,
             vec![
@@ -1067,11 +1067,11 @@ mod tests {
 
     #[test]
     fn test_join_1_block() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
+        let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
         let input_block_1 = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
         let join_block = new_join_block(&mut bg, vec![input_block_1]).unwrap();
-        let observe_block =
+        let _observe_block =
             block_misc::new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0))
                 .unwrap();
         bg.finalize();
@@ -1082,18 +1082,18 @@ mod tests {
         slearn2(&mut bg, &fb, &mut pb, true);
         assert_eq!(pb.observations, vec![2.0, 3.0,]); // join actually doesn't do anything
 
-        spredict2(&mut bg, &fb, &mut pb, false);
+        spredict2(&mut bg, &fb, &mut pb);
         assert_eq!(pb.observations, vec![2.0, 3.0,]); // join actually doesn't do anything
     }
 
     #[test]
     fn test_join_2_blocks() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
+        let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
         let input_block_1 = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
         let input_block_2 = block_misc::new_const_block(&mut bg, vec![4.0, 5.0, 6.0]).unwrap();
         let join_block = new_join_block(&mut bg, vec![input_block_1, input_block_2]).unwrap();
-        let observe_block =
+        let _observe_block =
             block_misc::new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0))
                 .unwrap();
         bg.finalize();
@@ -1104,20 +1104,20 @@ mod tests {
         slearn2(&mut bg, &fb, &mut pb, true);
         assert_eq!(pb.observations, vec![2.0, 3.0, 4.0, 5.0, 6.0]); // join actually doesn't do anything
 
-        spredict2(&mut bg, &fb, &mut pb, false);
+        spredict2(&mut bg, &fb, &mut pb);
         assert_eq!(pb.observations, vec![2.0, 3.0, 4.0, 5.0, 6.0]); // join actually doesn't do anything
     }
 
     #[test]
     fn test_join_3_blocks() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
+        let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
         let input_block_3 = block_misc::new_const_block(&mut bg, vec![1.0, 2.0]).unwrap();
         let input_block_2 = block_misc::new_const_block(&mut bg, vec![3.0, 4.0, 5.0]).unwrap();
         let input_block_1 = block_misc::new_const_block(&mut bg, vec![6.0, 7.0]).unwrap();
         let join_block =
             new_join_block(&mut bg, vec![input_block_1, input_block_2, input_block_3]).unwrap();
-        let observe_block =
+        let _observe_block =
             block_misc::new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0))
                 .unwrap();
         bg.finalize();
@@ -1129,20 +1129,20 @@ mod tests {
         // Order depends on the input parameters order, not on order of adding to graph
         assert_eq!(pb.observations, vec![6.0, 7.0, 3.0, 4.0, 5.0, 1.0, 2.0]); // join actually doesn't do anything
 
-        spredict2(&mut bg, &fb, &mut pb, false);
+        spredict2(&mut bg, &fb, &mut pb);
         assert_eq!(pb.observations, vec![6.0, 7.0, 3.0, 4.0, 5.0, 1.0, 2.0]); // join actually doesn't do anything
     }
 
     #[test]
     fn test_join_cascading() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
+        let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
         let input_block_1 = block_misc::new_const_block(&mut bg, vec![1.0, 2.0]).unwrap();
         let input_block_2 = block_misc::new_const_block(&mut bg, vec![3.0, 4.0, 5.0]).unwrap();
         let join_block_1 = new_join_block(&mut bg, vec![input_block_1, input_block_2]).unwrap();
         let input_block_3 = block_misc::new_const_block(&mut bg, vec![6.0, 7.0]).unwrap();
         let join_block_2 = new_join_block(&mut bg, vec![input_block_3, join_block_1]).unwrap();
-        let observe_block =
+        let _observe_block =
             block_misc::new_observe_block(&mut bg, join_block_2, Observe::Forward, Some(6.0))
                 .unwrap();
         bg.finalize();
@@ -1150,17 +1150,18 @@ mod tests {
 
         let mut pb = bg.new_port_buffer();
         let fb = fb_vec();
-        slearn2(&mut bg, &fb, &mut pb, true);
-        // Order depends on the input parameters order, not on order of adding to graph
-        assert_eq!(pb.observations, vec![6.0, 7.0, 1.0, 2.0, 3.0, 4.0, 5.0]); // join actually doesn't do anything
 
-        spredict2(&mut bg, &fb, &mut pb, false);
-        assert_eq!(pb.observations, vec![6.0, 7.0, 1.0, 2.0, 3.0, 4.0, 5.0]); // join actually doesn't do anything
+        // Order depends on the input parameters order, not on order of adding to graph ( join actually doesn't do anything)
+        slearn2(&mut bg, &fb, &mut pb, true);
+        assert_eq!(pb.observations, vec![6.0, 7.0, 1.0, 2.0, 3.0, 4.0, 5.0]);
+
+        spredict2(&mut bg, &fb, &mut pb);
+        assert_eq!(pb.observations, vec![6.0, 7.0, 1.0, 2.0, 3.0, 4.0, 5.0]);
     }
 
     #[test]
     fn test_copy_to_join() {
-        let mut mi = model_instance::ModelInstance::new_empty().unwrap();
+        let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
         let input_block_1 = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
         let observe_block_backward =
@@ -1168,7 +1169,7 @@ mod tests {
         let (copy_1, copy_2) =
             block_misc::new_copy_block_2(&mut bg, observe_block_backward).unwrap();
         let join_block = new_join_block(&mut bg, vec![copy_1, copy_2]).unwrap();
-        let observe_block =
+        let _observe_block =
             block_misc::new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0))
                 .unwrap();
         bg.finalize();
@@ -1179,7 +1180,7 @@ mod tests {
         slearn2(&mut bg, &fb, &mut pb, true);
         assert_eq!(pb.observations, vec![2.0, 3.0, 2.0, 3.0, 12.0, 12.0]); // correct backwards pass
 
-        spredict2(&mut bg, &fb, &mut pb, false);
+        spredict2(&mut bg, &fb, &mut pb);
         assert_eq!(pb.observations, vec![2.0, 3.0, 2.0, 3.0, 2.0, 3.0]); // on backward pass this are leftovers
     }
 }
