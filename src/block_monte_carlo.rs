@@ -22,6 +22,7 @@ pub fn new_monte_carlo_block(
 ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
     let num_inputs = bg.get_num_output_values(vec![&input]);
     assert_ne!(num_inputs, 0);
+    assert_ne!(num_iterations, 0);
 
     let skip_index_generator = Uniform::from(0..num_inputs);
     let number_of_inputs_to_skip = (dropout_rate * num_inputs as f32) as usize;
