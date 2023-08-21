@@ -264,7 +264,7 @@ mod tests {
         slearn2(&mut bg, &fb, &mut pb, true);
         assert_eq!(pb.observations, [2.0, 4.0, 4.0, 5.0, 2.0, 4.0, 4.0, 5.0]);
 
-        spredict2(&mut bg, &fb, &mut pb, false);
+        spredict2(&mut bg, &fb, &mut pb);
         let expected_observations = [
             2.0, 4.0, 0.0, 5.0, 0.0, 4.0, 4.0, 5.0, 2.0, 4.0, 4.0, 0.0, 2.0, 4.0, 4.0, 5.0,
         ];
