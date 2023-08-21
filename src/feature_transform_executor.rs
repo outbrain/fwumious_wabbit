@@ -204,7 +204,6 @@ impl TransformExecutors {
         namespace_transforms: &feature_transform_parser::NamespaceTransforms,
     ) -> TransformExecutors {
         let mut executors: Vec<TransformExecutor> = Vec::new();
-        let mut namespaces_to: Vec<ExecutorToNamespace> = Vec::new();
         for transformed_namespace in &namespace_transforms.v {
             let transformed_namespace_executor =
                 TransformExecutor::from_namespace_transform(transformed_namespace).unwrap();

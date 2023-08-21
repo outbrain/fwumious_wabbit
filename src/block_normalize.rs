@@ -31,7 +31,7 @@ pub fn new_normalize_layer_block(
 ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
     let num_inputs = bg.get_num_output_values(vec![&input]);
     assert_ne!(num_inputs, 0);
-    let mut block = Box::new(BlockNormalize {
+    let block = Box::new(BlockNormalize {
         output_offset: usize::MAX,
         input_offset: usize::MAX,
         num_inputs,

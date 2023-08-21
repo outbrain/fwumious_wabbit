@@ -203,7 +203,7 @@ impl ModelInstance {
             let weight_str = vsplit[1];
             combo_weight = match weight_str.parse() {
                 Ok(x) => x,
-                Err(y) => {
+                Err(_) => {
                     return Err(Box::new(IOError::new(
                         ErrorKind::Other,
                         format!(
@@ -434,7 +434,7 @@ impl ModelInstance {
 
         if let Some(val) = cl.value_of("nn_layers") {
             let nn_layers = val.parse()?;
-            for i in 0..nn_layers {
+            for _ in 0..nn_layers {
                 mi.nn_config.layers.push(HashMap::new());
             }
         }
@@ -680,8 +680,7 @@ C,featureC
     fn test_nn_parsing() {
         let mut mi = ModelInstance::new_empty().unwrap();
 
-        let LAYERS = 4;
-        for i in 0..LAYERS {
+        for _ in 0..4 {
             mi.nn_config.layers.push(HashMap::new());
         }
         assert!(mi.parse_nn("1:foo:bar").is_ok());

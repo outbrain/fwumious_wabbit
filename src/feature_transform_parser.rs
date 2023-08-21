@@ -11,8 +11,6 @@ use std::io::ErrorKind;
 
 use crate::feature_transform_executor;
 
-pub const TRANSFORM_NAMESPACE_MARK: u32 = 1 << 31;
-
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Namespace {
     pub namespace_descriptor: vwmap::NamespaceDescriptor,
@@ -441,7 +439,7 @@ C,featureC,f32
         {
             let mut nstp = NamespaceTransformsParser::new();
             let result = nstp.add_transform_namespace(&vw, "featureA=Combine(featureA,featureB)()"); // unknown function
-            let nst = nstp.resolve(&vw).unwrap();
+            let _nst = nstp.resolve(&vw).unwrap();
             assert!(result.is_err());
             assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"To namespace of featureA=Combine(featureA,featureB)() already exists as primitive namespace: \\\"featureA\\\"\" })");
         }
@@ -449,6 +447,7 @@ C,featureC,f32
         {
             let mut nstp = NamespaceTransformsParser::new();
             let result = nstp.add_transform_namespace(&vw, "new=Combine(featureA,featureA)()"); // unknown function
+            assert!(result.is_ok());
             let result = nstp.resolve(&vw);
             assert!(result.is_err());
             assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Using the same from namespace in multiple arguments to a function is not supported: \\\"featureA\\\"\" })");
@@ -588,21 +587,21 @@ C,featureC,f32
         assert_eq!(r.unwrap().1, fv);
 
         let r = parse_namespace_statement("a=sqrt(B)(3,1,2.0)");
-        let (o, rw) = r.unwrap();
+        let (_, rw) = r.unwrap();
         assert_eq!(rw.0, "a");
         assert_eq!(rw.1, "sqrt");
         assert_eq!(rw.2, vec!["B"]);
         assert_eq!(rw.3, vec![3f32, 1f32, 2.0]);
 
         let r = parse_namespace_statement("abc=sqrt(BDE,CG)(3,1,2.0)");
-        let (o, rw) = r.unwrap();
+        let (_, rw) = r.unwrap();
         assert_eq!(rw.0, "abc");
         assert_eq!(rw.1, "sqrt");
         assert_eq!(rw.2, vec!["BDE", "CG"]);
         assert_eq!(rw.3, vec![3f32, 1f32, 2.0]);
 
         let r = parse_namespace_statement("a_bcw=s_qrt(_BD_E_,C_G)(3,1,2.0)");
-        let (o, rw) = r.unwrap();
+        let (_, rw) = r.unwrap();
         assert_eq!(rw.0, "a_bcw");
         assert_eq!(rw.1, "s_qrt");
         assert_eq!(rw.2, vec!["_BD_E_", "C_G"]);

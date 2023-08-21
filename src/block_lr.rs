@@ -32,18 +32,16 @@ impl<L: OptimizerTrait + 'static> BlockLR<L> {
     ) {
         debug_assert!(self.output_offset != usize::MAX);
 
-        {
-            unsafe {
-                let myslice = &mut pb.tape
-                    [self.output_offset..(self.output_offset + self.num_combos as usize)];
-                myslice.fill(0.0);
-                for feature in fb.lr_buffer.iter() {
-                    let feature_index = feature.hash as usize;
-                    let feature_value = feature.value;
-                    let combo_index = feature.combo_index as usize;
-                    *myslice.get_unchecked_mut(combo_index) +=
-                        self.weights.get_unchecked(feature_index).weight * feature_value;
-                }
+        unsafe {
+            let myslice =
+                &mut pb.tape[self.output_offset..(self.output_offset + self.num_combos as usize)];
+            myslice.fill(0.0);
+            for feature in fb.lr_buffer.iter() {
+                let feature_index = feature.hash as usize;
+                let feature_value = feature.value;
+                let combo_index = feature.combo_index as usize;
+                *myslice.get_unchecked_mut(combo_index) +=
+                    self.weights.get_unchecked(feature_index).weight * feature_value;
             }
         }
     }
@@ -96,7 +94,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         self
     }
 
-    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
+    fn allocate_and_init_weights(&mut self, _mi: &model_instance::ModelInstance) {
         self.weights = vec![
             WeightAndOptimizerData::<L> {
                 weight: 0.0,
@@ -187,7 +185,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         };
 
         unsafe {
-            let mut lr_slice =
+            let lr_slice =
                 &mut pb.tape[self.output_offset..(self.output_offset + self.num_combos as usize)];
             lr_slice.copy_from_slice(lr.as_slice());
 
@@ -240,7 +238,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
             combo_indexes.fill(false);
             lr.fill(0.0);
 
-            let mut lr_slice = lr.as_mut_slice();
+            let lr_slice = lr.as_mut_slice();
 
             for feature in fb.lr_buffer.iter() {
                 if (feature.hash & parser::IS_NOT_SINGLE_MASK) == 0 {
@@ -290,18 +288,5 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
             &mut forward.weights,
             input_bufreader,
         )
-    }
-
-    /// Sets internal state of weights based on some completely object-dependent parameters
-    fn testing_set_weights(
-        &mut self,
-        _aa: i32,
-        _bb: i32,
-        index: usize,
-        w: &[f32],
-    ) -> Result<(), Box<dyn Error>> {
-        self.weights[index].weight = w[0];
-        self.weights[index].optimizer_data = self.optimizer_lr.initial_data();
-        Ok(())
     }
 }

@@ -194,7 +194,7 @@ impl Predictor {
             &mut self.cache.blocks,
             is_empty,
         );
-        return 0.0;
+        0.0
     }
 }
 

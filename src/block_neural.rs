@@ -77,14 +77,14 @@ fn new_neuronlayer_without_weights<L: OptimizerTrait + 'static>(
     layer_norm: bool,
 ) -> Result<Box<dyn BlockTrait>, Box<dyn Error>> {
     assert!(num_neurons > 0);
-    assert!((num_inputs as usize) < MAX_NUM_INPUTS);
+    assert!(num_inputs < MAX_NUM_INPUTS);
     assert_ne!(num_inputs, 0);
 
     if dropout != 0.0 {
         panic!("Dropout in this binary is not supported due to bizzare side effects on inner loop unrolling");
     }
 
-    let weights_len = ((num_inputs + 1) * num_neurons as usize) as u32; // +1 is for bias term
+    let weights_len = ((num_inputs + 1) * num_neurons) as u32; // +1 is for bias term
 
     let bias_offset = num_inputs * num_neurons;
 
@@ -103,7 +103,7 @@ fn new_neuronlayer_without_weights<L: OptimizerTrait + 'static>(
         dropout_inv: 1.0 / (1.0 - dropout),
         max_norm,
         layer_norm,
-        rng: Xoshiro256PlusPlus::seed_from_u64(0 as u64),
+        rng: Xoshiro256PlusPlus::seed_from_u64(0_u64),
         rng_scratchpad: Vec::new(),
         dropout_threshold: ((u32::MAX as f64) * (dropout as f64)) as u32,
         bias_offset,
@@ -132,7 +132,7 @@ pub fn new_neuronlayer_block(
     let block = match mi.optimizer {
         model_instance::Optimizer::AdagradLUT => {
             new_neuronlayer_without_weights::<optimizer::OptimizerAdagradLUT>(
-                &mi,
+                mi,
                 num_inputs,
                 ntype,
                 num_neurons,
@@ -144,7 +144,7 @@ pub fn new_neuronlayer_block(
         }
         model_instance::Optimizer::AdagradFlex => {
             new_neuronlayer_without_weights::<optimizer::OptimizerAdagradFlex>(
-                &mi,
+                mi,
                 num_inputs,
                 ntype,
                 num_neurons,
@@ -156,7 +156,7 @@ pub fn new_neuronlayer_block(
         }
         model_instance::Optimizer::SGD => {
             new_neuronlayer_without_weights::<optimizer::OptimizerSGD>(
-                &mi,
+                mi,
                 num_inputs,
                 ntype,
                 num_neurons,
@@ -213,7 +213,7 @@ impl<L: OptimizerTrait + 'static> BlockNeuronLayer<L> {
                 alpha,                              //   alpha: f32,
                 self.weights.get_unchecked(0..),    //  a: &[f32],
                 self.num_inputs as i32,             //lda: i32,
-                &input_tape.get_unchecked(0..),     //   x: &[f32],
+                input_tape.get_unchecked(0..),      //   x: &[f32],
                 1,                                  //incx: i32,
                 1.0,                                // beta: f32,
                 output_tape.get_unchecked_mut(0..), //y: &mut [f32],
@@ -267,7 +267,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
                     self.num_neurons,
                 );
 
-                for j in 0..self.num_neurons as usize {
+                for j in 0..self.num_neurons {
                     if self.dropout != 0.0
                         && *self.rng_scratchpad.get_unchecked(j) < self.dropout_threshold
                     {
@@ -280,8 +280,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
                         continue;
                     }
 
-                    let j_offset = j * self.num_inputs as usize;
-                    for i in 0..self.num_inputs as usize {
+                    let j_offset = j * self.num_inputs;
+                    for i in 0..self.num_inputs {
                         let feature_value = input_tape.get_unchecked(i);
                         let gradient = general_gradient * feature_value;
                         let update = self.optimizer.calculate_update(
@@ -310,14 +310,14 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
 
                     if self.max_norm != 0.0 && fb.example_number % 10 == 0 {
                         let mut wsquaredsum: f32 = 0.000001; // Epsilon
-                        for i in 0..self.num_inputs as usize {
+                        for i in 0..self.num_inputs {
                             let w = *self.weights.get_unchecked(i + j_offset);
                             wsquaredsum += w * w;
                         }
                         let norm = wsquaredsum.sqrt();
                         if norm > self.max_norm {
                             let scaling = self.max_norm / norm;
-                            for i in 0..self.num_inputs as usize {
+                            for i in 0..self.num_inputs {
                                 *self.weights.get_unchecked_mut(i + j_offset) *= scaling;
                             }
                         }
@@ -368,7 +368,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
         block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
     }
 
-    fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
+    fn allocate_and_init_weights(&mut self, _mi: &model_instance::ModelInstance) {
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.input_offset != usize::MAX);
 
@@ -399,15 +399,14 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
                 let normal = Uniform::new(-bound, bound);
 
                 for i in 0..self.bias_offset {
-                    self.weights[i as usize] = normal.sample(&mut self.rng) as f32;
+                    self.weights[i] = normal.sample(&mut self.rng) as f32;
                 }
             }
             InitType::Hu => {
-                let normal =
-                    Normal::new(0.0, (2.0 / self.num_inputs as f64).sqrt() as f64).unwrap();
+                let normal = Normal::new(0.0, (2.0 / self.num_inputs as f64).sqrt()).unwrap();
 
                 for i in 0..self.bias_offset {
-                    self.weights[i as usize] = normal.sample(&mut self.rng) as f32;
+                    self.weights[i] = normal.sample(&mut self.rng) as f32;
                 }
             }
             InitType::One => {
@@ -424,7 +423,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
 
         // Bias terms are always initialized to zero
         for i in 0..self.num_neurons {
-            self.weights[(self.bias_offset + i) as usize] = 0.0
+            self.weights[self.bias_offset + i] = 0.0
         }
     }
 
@@ -470,29 +469,15 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
         input_bufreader: &mut dyn io::Read,
         forward: &mut Box<dyn BlockTrait>,
     ) -> Result<(), Box<dyn Error>> {
-        let mut forward = forward
+        let forward = forward
             .as_any()
             .downcast_mut::<BlockNeuronLayer<optimizer::OptimizerSGD>>()
             .unwrap();
         block_helpers::read_weights_from_buf(&mut forward.weights, input_bufreader)?;
-        block_helpers::skip_weights_from_buf(
+        block_helpers::skip_weights_from_buf::<OptimizerData<L>>(
             self.weights_len as usize,
-            &self.weights_optimizer,
             input_bufreader,
         )?;
-        Ok(())
-    }
-
-    /// Sets internal state of weights based on some completely object-dependent parameters
-    fn testing_set_weights(
-        &mut self,
-        aa: i32,
-        bb: i32,
-        index: usize,
-        w: &[f32],
-    ) -> Result<(), Box<dyn Error>> {
-        self.weights[index] = w[0];
-        self.weights_optimizer[index].optimizer_data = self.optimizer.initial_data();
         Ok(())
     }
 }
@@ -539,7 +524,7 @@ mod tests {
             false,
         )
         .unwrap();
-        let observe_block =
+        let _observe_block =
             block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0))
                 .unwrap();
         bg.finalize();
@@ -559,7 +544,7 @@ mod tests {
         mi.nn_power_t = 0.0;
         mi.optimizer = Optimizer::SGD;
 
-        let NUM_NEURONS = 2;
+        let num_neurons = 2;
         let mut bg = BlockGraph::new();
         let input_block = block_misc::new_const_block(&mut bg, vec![2.0]).unwrap();
         let neuron_block = new_neuronlayer_block(
@@ -567,14 +552,14 @@ mod tests {
             &mi,
             input_block,
             NeuronType::WeightedSum,
-            NUM_NEURONS,
+            num_neurons,
             InitType::One,
             0.0,   // dropout
             0.0,   // max norm
             false, // layer norm
         )
         .unwrap();
-        let observe_block =
+        let _observe_block =
             block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0))
                 .unwrap();
         bg.finalize();
@@ -588,7 +573,7 @@ mod tests {
         // on tape 0 input of 2.0 will be replaced with the gradient of 2.0
         // on tape 1 input has been consumed by returning function
         // on tape 2 the output was consumed by slearn
-        assert_eq!(pb.observations.len(), NUM_NEURONS as usize);
+        assert_eq!(pb.observations.len(), num_neurons);
         assert_eq!(pb.observations[0], 2.0); // since we are using identity loss function, only one was consumed by slearn
         assert_eq!(pb.observations[1], 2.0); // since we are using identity loss function, only one was consumed by slearn
 

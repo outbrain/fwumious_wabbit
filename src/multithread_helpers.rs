@@ -42,7 +42,7 @@ impl<T: Sized> Drop for UnsafelySharableTrait<T> {
             // we are called before reference is removed, so we need to decide if to drop it or not
             let count = Arc::<Mutex<PhantomData<u32>>>::strong_count(&self.reference_count) - 1;
             if count == 0 {
-                let box_to_be_dropped = ManuallyDrop::take(&mut self.content);
+                let _box_to_be_dropped = ManuallyDrop::take(&mut self.content);
                 // Now this means that the content will be dropped
             }
         }

@@ -193,7 +193,7 @@ mod tests {
             assert_eq!(acc, 0.1 * 0.1);
 
             acc = 0.0;
-            let p = l.calculate_update(0.0, &mut acc);
+            l.calculate_update(0.0, &mut acc);
             // Here we check that we get NaN back - this is not good, but it's correct
             //            assert!(p.is_nan());
             assert_eq!(acc, 0.0);

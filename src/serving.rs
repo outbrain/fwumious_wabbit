@@ -374,10 +374,9 @@ C,featureC
         mi.ffm_learning_rate = 0.1;
         mi.ffm_fields = vec![vec![], vec![]];
         mi.optimizer = model_instance::Optimizer::AdagradLUT;
-        let mut re_1 = regressor::Regressor::new(&mi);
+        let re_1 = regressor::Regressor::new(&mi);
         mi.optimizer = model_instance::Optimizer::SGD;
-        let mut re_2 = regressor::Regressor::new(&mi);
-        let mut p: f32;
+        let re_2 = regressor::Regressor::new(&mi);
 
         let dir = tempdir().unwrap();
         let regressor_filepath_1 = dir

@@ -212,7 +212,7 @@ impl VowpalParser {
     }
 
     fn next_vowpal_to_size(&mut self, tmp_read_buf_size: usize) -> Result<&[u32], Box<dyn Error>> {
-        let bufpos: usize = (self.vw_map.num_namespaces + HEADER_LEN as usize) as usize;
+        let bufpos: usize = self.vw_map.num_namespaces + HEADER_LEN as usize;
 
         let mut current_namespace_num_of_features = 0;
 
@@ -958,7 +958,6 @@ C,featureC
         assert!(result.is_err());
         assert_eq!(format!("{:?}", result), "Err(Custom { kind: Other, error: \"Namespaces that are f32 can not have weight attached neither to namespace nor to a single feature (basically they can\' use :weight syntax\" })");
 
-        let mut buf = str_to_cursor("-1 |B NONE\n");
         // Now test with skip_prefix = 1
         let vw_map_string = r#"
 A,featureA
