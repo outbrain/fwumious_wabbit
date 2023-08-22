@@ -7,10 +7,6 @@ use std::sync::Mutex;
 
 use merand48::*;
 
-docker-client hadoop fs -rm /user/hadoop/outbrain/summary/ctr_models/fw-gg-cache-opt/archive/date=2023-08-21/time=19-20/production_model_instance.json --force-dc=nydc1
-
-VOLUME_PATH=$PWD docker-client hadoop fs -put $PWD/production_model_instance.json /user/hadoop/outbrain/summary/ctr_models/fw-gg-cache-opt/archive/date=2023-08-21/time=19-20/production_model_instance.json --force-dc=chidc2
-
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 
