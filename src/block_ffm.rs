@@ -787,7 +787,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     continue;
                 }
 
-                let ffm_index = (field_index_ffmk * ffm_fields_count_plus_one) as usize;
+                let ffm_index = (field_index * ffm_fields_count_plus_one) as usize;
+
                 let mut has_features = false;
                 let mut is_first_feature = true;
                 while ffm_buffer_index < fb.ffm_buffer.len()
