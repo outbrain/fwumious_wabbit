@@ -7,9 +7,14 @@ use std::sync::Mutex;
 
 use merand48::*;
 
+docker-client hadoop fs -rm /user/hadoop/outbrain/summary/ctr_models/fw-gg-cache-opt/archive/date=2023-08-21/time=19-20/production_model_instance.json --force-dc=nydc1
+
+VOLUME_PATH=$PWD docker-client hadoop fs -put $PWD/production_model_instance.json /user/hadoop/outbrain/summary/ctr_models/fw-gg-cache-opt/archive/date=2023-08-21/time=19-20/production_model_instance.json --force-dc=chidc2
+
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 
+use crate::block_helpers;
 use crate::block_helpers::OptimizerData;
 use crate::feature_buffer;
 use crate::feature_buffer::FeatureBuffer;
@@ -20,7 +25,6 @@ use crate::port_buffer;
 use crate::port_buffer::PortBuffer;
 use crate::regressor;
 use crate::regressor::{BlockCache, FFM_CONTRA_BUF_LEN};
-use crate::{block_helpers, parser};
 
 const FFM_STACK_BUF_LEN: usize = 131072;
 const FFM_CONTRA_CACHE_BUF_LEN: usize = 1024;
@@ -741,7 +745,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             let ffm_slice = ffm.as_mut_slice();
             ffm_slice.fill(0.0);
 
-            let cached_contra_fields = contra_fields;
+            contra_fields_present.fill(false);
 
             let ffm_weights = &self.weights;
             _mm_prefetch(
@@ -767,9 +771,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
             let field_embedding_len_as_usize = self.field_embedding_len as usize;
 
-            let mut contra_fields: [f32; FFM_CONTRA_CACHE_BUF_LEN] =
-                MaybeUninit::uninit().assume_init();
-
             let mut ffm_buffer_index = 0;
 
             for field_index in 0..ffm_fields_count {
@@ -787,7 +788,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     continue;
                 }
 
-                let ffm_index = (field_index_ffmk * ffm_fields_count_plus_one) as usize;
+                let ffm_index = (field_index * ffm_fields_count_plus_one) as usize;
+
                 let mut has_features = false;
                 let mut is_first_feature = true;
                 while ffm_buffer_index < fb.ffm_buffer.len()
@@ -804,65 +806,53 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         _MM_HINT_T0,
                     );
                     let feature = fb.ffm_buffer.get_unchecked(ffm_buffer_index);
+                    let feature_index = feature.hash as usize;
+                    let feature_value = feature.value;
 
-                    if has_features || (feature.hash & parser::IS_NOT_SINGLE_MASK) != 0 {
-                        let feature_index = feature.hash as usize;
-                        let feature_value = feature.value;
-                        has_features = true;
+                    has_features = true;
 
-                        if is_first_feature {
-                            if feature_value == 1.0 {
-                                contra_fields
-                                    .get_unchecked_mut(0..field_embedding_len_as_usize)
-                                    .copy_from_slice(ffm_weights.get_unchecked(
-                                        feature_index..feature_index + field_embedding_len_as_usize,
-                                    ));
-                            } else {
-                                for z in 0..field_embedding_len_as_usize {
-                                    *contra_fields.get_unchecked_mut(z) = ffm_weights
-                                        .get_unchecked(feature_index + z)
-                                        * feature_value;
-                                }
-                            }
-                            is_first_feature = false;
+                    if is_first_feature {
+                        is_first_feature = false;
+                        if feature_value == 1.0 {
+                            contra_fields
+                                .get_unchecked_mut(offset..offset + field_embedding_len_as_usize)
+                                .copy_from_slice(ffm_weights.get_unchecked(
+                                    feature_index..feature_index + field_embedding_len_as_usize,
+                                ));
                         } else {
-                            if feature_value == 1.0 {
-                                for z in 0..field_embedding_len_as_usize {
-                                    *contra_fields.get_unchecked_mut(z) +=
-                                        *ffm_weights.get_unchecked(feature_index + z);
-                                }
-                            } else {
-                                for z in 0..field_embedding_len_as_usize {
-                                    *contra_fields.get_unchecked_mut(z) += ffm_weights
-                                        .get_unchecked(feature_index + z)
-                                        * feature_value;
-                                }
+                            for z in 0..field_embedding_len_as_usize {
+                                *contra_fields.get_unchecked_mut(offset + z) =
+                                    ffm_weights.get_unchecked(feature_index + z) * feature_value;
                             }
                         }
-
-                        let feature_field_index = feature_index + field_index_ffmk_as_usize;
-
-                        let mut correction = 0.0;
-                        for k in feature_field_index..feature_field_index + ffmk_as_usize {
-                            correction +=
-                                ffm_weights.get_unchecked(k) * ffm_weights.get_unchecked(k);
+                    } else {
+                        if feature_value == 1.0 {
+                            for z in 0..field_embedding_len_as_usize {
+                                *contra_fields.get_unchecked_mut(offset + z) +=
+                                    *ffm_weights.get_unchecked(feature_index + z);
+                            }
+                        } else {
+                            for z in 0..field_embedding_len_as_usize {
+                                *contra_fields.get_unchecked_mut(offset + z) +=
+                                    ffm_weights.get_unchecked(feature_index + z) * feature_value;
+                            }
                         }
-
-                        *ffm_slice.get_unchecked_mut(ffm_index) -=
-                            correction * 0.5 * feature_value * feature_value;
                     }
+
+                    let feature_field_index = feature_index + field_index_ffmk_as_usize;
+
+                    let mut correction = 0.0;
+                    for k in feature_field_index..feature_field_index + ffmk_as_usize {
+                        correction += ffm_weights.get_unchecked(k) * ffm_weights.get_unchecked(k);
+                    }
+
+                    *ffm_slice.get_unchecked_mut(ffm_index) -=
+                        correction * 0.5 * feature_value * feature_value;
 
                     ffm_buffer_index += 1;
                 }
 
                 *contra_fields_present.get_unchecked_mut(field_index as usize) = has_features;
-                if has_features {
-                    let contra_fields_slice =
-                        contra_fields.get_unchecked(0..field_embedding_len_as_usize);
-                    cached_contra_fields
-                        .get_unchecked_mut(offset..offset + field_embedding_len_as_usize)
-                        .copy_from_slice(contra_fields_slice);
-                }
             }
         }
 
