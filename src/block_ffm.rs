@@ -493,7 +493,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             for field_index in 0..ffm_fields_count {
                 let field_index_ffmk = field_index * ffmk;
                 let field_index_ffmk_as_usize = field_index_ffmk as usize;
-                let offset = (field_index_ffmk * ffm_fields_count) as usize;
+                let offset = (field_index_ffmk_as_usize * ffm_fields_count_as_usize);
                 // first we handle fields with no features
                 if ffm_buffer_index >= fb.ffm_buffer.len()
                     || fb
@@ -559,7 +559,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     } else {
                         let feature_index = feature.hash as usize;
                         let feature_value = feature.value;
-                        // println!("feature: {:?} offset: {offset} ffm_buffer_index: {ffm_buffer_index} field_index: {field_index}", feature);
+
                         self.prepare_contra_fields(
                             feature,
                             contra_fields.as_mut_slice(),
