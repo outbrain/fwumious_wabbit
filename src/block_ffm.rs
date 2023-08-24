@@ -1,6 +1,6 @@
 use core::arch::x86_64::*;
+use rustc_hash::FxHashSet;
 use std::any::Any;
-use std::collections::HashSet;
 use std::error::Error;
 use std::io;
 use std::mem::{self, MaybeUninit};
@@ -603,7 +603,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         unsafe {
             caches.push(BlockCache::FFM {
                 contra_fields: MaybeUninit::uninit().assume_init(),
-                features_present: HashSet::with_capacity(self.ffm_num_fields as usize),
+                features_present: FxHashSet::default(),
                 ffm: vec![0.0; (self.ffm_num_fields * self.ffm_num_fields) as usize],
             });
         }

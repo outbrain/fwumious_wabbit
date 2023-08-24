@@ -1,6 +1,6 @@
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use rustc_hash::FxHashSet;
 use std::any::Any;
-use std::collections::HashSet;
 use std::error::Error;
 use std::io;
 use std::io::Cursor;
@@ -41,7 +41,7 @@ impl From<&HashAndValueAndSeq> for FFMFeature {
 pub enum BlockCache {
     FFM {
         contra_fields: [f32; FFM_CONTRA_BUF_LEN],
-        features_present: HashSet<FFMFeature>,
+        features_present: FxHashSet<FFMFeature>,
         ffm: Vec<f32>,
     },
     LR {
