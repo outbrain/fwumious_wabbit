@@ -17,37 +17,34 @@ pub(crate) fn hash32_with_seed(key: &[u8], seed: u32) -> u32 {
         let mut hash = seed;
         let mut data = key;
 
-        while data.len() >= STEP {
+        let data_len = data.len();
+        let data_len_remainder = data_len % STEP;
+        let data_len_end = data_len - data_len_remainder;
+        for i in (0..data_len_end).step_by(STEP) {
             let mut k = 0u32;
 
-            for i in 0..STEP {
-                k ^= u32::from(*data.get_unchecked(i)) << (8 * i as u32);
+            for j in 0..STEP {
+                k ^= u32::from(*data.get_unchecked(i + j)) << (8 * j as u32);
             }
-
-            k = k.wrapping_mul(C1);
-            k = k.rotate_left(R1);
-            k = k.wrapping_mul(C2);
+            k = k.wrapping_mul(C1).rotate_left(R1).wrapping_mul(C2);
 
             hash ^= k;
             hash = hash.rotate_left(R2).wrapping_mul(M).wrapping_add(N);
-
-            data = &data.get_unchecked(STEP..);
         }
 
         // Handle the remaining bytes if any
         let mut k = 0u32;
 
-        for i in 0..data.len() {
-            k ^= u32::from(*data.get_unchecked(i)) << (8 * i as u32);
+        for i in 0..data_len_remainder {
+            k ^= u32::from(*data.get_unchecked(data_len_end + i)) << (8 * i as u32);
         }
 
-        k = k.wrapping_mul(C1);
-        k = k.rotate_left(R1);
-        k = k.wrapping_mul(C2);
+        k = k.wrapping_mul(C1).rotate_left(R1).wrapping_mul(C2);
 
         hash ^= k;
         hash ^= key.len() as u32;
 
+        // Finalization mix - force all bits of a hash block to avalanche
         hash ^= hash >> 16;
         hash = hash.wrapping_mul(0x85ebca6b);
         hash ^= hash >> 13;
