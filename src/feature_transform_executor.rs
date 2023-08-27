@@ -1,3 +1,4 @@
+use crate::murmur;
 use crate::parser;
 use crate::vwmap;
 use std::error::Error;
@@ -7,7 +8,6 @@ use std::io::ErrorKind;
 use std::cell::RefCell;
 
 use dyn_clone::{clone_trait_object, DynClone};
-use fasthash::murmur3;
 
 use crate::feature_transform_implementations::{
     TransformerBinner, TransformerCombine, TransformerLogRatioBinner, TransformerWeight,
@@ -18,11 +18,11 @@ pub fn default_seeds(to_namespace_index: u32) -> [u32; 5] {
     let to_namespace_index = to_namespace_index ^ 1u32 << 31; // compatibility with earlier version
     [
         // These are random numbers, i threw a dice!
-        murmur3::hash32_with_seed(vec![214, 231, 1, 55], to_namespace_index),
-        murmur3::hash32_with_seed(vec![255, 6, 14, 69], to_namespace_index),
-        murmur3::hash32_with_seed(vec![50, 6, 71, 123], to_namespace_index),
-        murmur3::hash32_with_seed(vec![10, 3, 0, 43], to_namespace_index),
-        murmur3::hash32_with_seed(vec![0, 53, 10, 201], to_namespace_index),
+        murmur::hash32_with_seed(&vec![214, 231, 1, 55], to_namespace_index),
+        murmur::hash32_with_seed(&vec![255, 6, 14, 69], to_namespace_index),
+        murmur::hash32_with_seed(&vec![50, 6, 71, 123], to_namespace_index),
+        murmur::hash32_with_seed(&vec![10, 3, 0, 43], to_namespace_index),
+        murmur::hash32_with_seed(&vec![0, 53, 10, 201], to_namespace_index),
     ]
 }
 
@@ -50,7 +50,7 @@ impl ExecutorToNamespace {
     // We use const generics here as an experiment to see if they would be useful elsewhere to specialize functions
     #[inline(always)]
     pub fn emit_i32<const SEED_ID: usize>(&mut self, to_data: i32, hash_value: f32) {
-        let hash_index = murmur3::hash32_with_seed(to_data.to_le_bytes(), *unsafe {
+        let hash_index = murmur::hash32_with_seed(&to_data.to_le_bytes(), *unsafe {
             self.namespace_seeds.get_unchecked(SEED_ID)
         }) & parser::MASK31;
         self.tmp_data.push((hash_index, hash_value));
@@ -84,11 +84,11 @@ impl ExecutorToNamespace {
         to_data2: i32,
         hash_value: f32,
     ) {
-        let hash_index = murmur3::hash32_with_seed(to_data1.to_le_bytes(), unsafe {
+        let hash_index = murmur::hash32_with_seed(&to_data1.to_le_bytes(), unsafe {
             *self.namespace_seeds.get_unchecked(SEED_ID)
         });
         let hash_index =
-            murmur3::hash32_with_seed(to_data2.to_le_bytes(), hash_index) & parser::MASK31;
+            murmur::hash32_with_seed(&to_data2.to_le_bytes(), hash_index) & parser::MASK31;
         self.tmp_data.push((hash_index, hash_value));
     }
 }
@@ -266,14 +266,14 @@ mod tests {
         to_namespace.emit_f32::<{ SeedNumber::Default as usize }>(5.4, 20.0, true);
         let to_data_1: i32 = 6;
         let to_data_1_value = 20.0 * (5.4 - 5.0);
-        let hash_index_1 = murmur3::hash32_with_seed(
-            to_data_1.to_le_bytes(),
+        let hash_index_1 = murmur::hash32_with_seed(
+            &to_data_1.to_le_bytes(),
             to_namespace.namespace_seeds[SeedNumber::Default as usize],
         ) & parser::MASK31;
         let to_data_2: i32 = 5;
         let to_data_2_value = 20.0 * (6.0 - 5.4);
-        let hash_index_2 = murmur3::hash32_with_seed(
-            to_data_2.to_le_bytes(),
+        let hash_index_2 = murmur::hash32_with_seed(
+            &to_data_2.to_le_bytes(),
             to_namespace.namespace_seeds[SeedNumber::Default as usize],
         ) & parser::MASK31;
         assert_eq!(

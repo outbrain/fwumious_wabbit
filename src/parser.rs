@@ -1,6 +1,5 @@
 use crate::radix_tree::{NamespaceDescriptorWithHash, RadixTree};
-use crate::vwmap;
-use fasthash::murmur3;
+use crate::{murmur, vwmap};
 use std::error::Error;
 use std::fmt;
 use std::io::BufRead;
@@ -79,8 +78,7 @@ impl VowpalParser {
         for (namespace_vwname_as_bytes, namespace_descriptor) in
             vw.map_vwname_to_namespace_descriptor.iter()
         {
-            let namespace_hash_seed =
-                murmur3::hash32(str::from_utf8(&namespace_vwname_as_bytes).unwrap());
+            let namespace_hash_seed = murmur::hash32(&namespace_vwname_as_bytes);
             map_vwname_to_namespace_descriptor.insert(
                 namespace_vwname_as_bytes,
                 NamespaceDescriptorWithHash::new(namespace_descriptor.clone(), namespace_hash_seed),
@@ -217,10 +215,8 @@ impl VowpalParser {
         let mut current_namespace_num_of_features = 0;
 
         unsafe {
-            self.output_buffer
-                .get_unchecked_mut(0..bufpos)
-                .fill(NO_FEATURES);
             self.output_buffer.truncate(bufpos);
+            self.output_buffer.fill(NO_FEATURES);
 
             let p = self.tmp_read_buf.as_ptr();
             let mut i_start: usize;
@@ -264,7 +260,6 @@ impl VowpalParser {
                             ErrorKind::Other,
                             "Cannot parse an example".to_string(),
                         )));
-                        //                            return Err(Box::new(IOError::new(ErrorKind::Other, format!("Unknown first character of the label: ascii {:?}", *p.add(0)))))
                     }
                 }
             };
@@ -381,7 +376,7 @@ impl VowpalParser {
                     bufpos_namespace_start = self.output_buffer.len(); // this is only used if we will have multiple values
                 } else {
                     // We have a feature! Let's hash it and write it to the buffer
-                    let h = murmur3::hash32_with_seed(
+                    let h = murmur::hash32_with_seed(
                         self.tmp_read_buf.get_unchecked(i_start..i_end_first_part),
                         current_namespace_hash_seed,
                     ) & MASK31;

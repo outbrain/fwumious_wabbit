@@ -16,6 +16,7 @@ mod graph;
 mod logging_layer;
 mod model_instance;
 mod multithread_helpers;
+mod murmur;
 mod optimizer;
 mod parser;
 mod persistence;
