@@ -317,13 +317,10 @@ fn main2() -> Result<(), Box<dyn Error>> {
         let elapsed = now.elapsed();
         log::info!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
 
-        if let Some(filename) = final_regressor_filename { persistence::save_sharable_regressor_to_filename(
-            filename,
-            &mi,
-            &vw,
-            sharable_regressor,
-            )
-            .unwrap() }
+        if let Some(filename) = final_regressor_filename {
+            persistence::save_sharable_regressor_to_filename(filename, &mi, &vw, sharable_regressor)
+                .unwrap()
+        }
     }
 
     Ok(())
