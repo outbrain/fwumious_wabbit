@@ -283,30 +283,7 @@ impl FeatureBufferTranslator {
                 let ffm_buffer = &mut self.feature_buffer.ffm_buffer;
                 ffm_buffer.truncate(0);
 
-                if ffm_filtered_namespace_type.is_none() {
-                    for (contra_field_index, ffm_field) in
-                        self.model_instance.ffm_fields.iter().enumerate()
-                    {
-                        for namespace_descriptor in ffm_field {
-                            feature_reader!(
-                                record_buffer,
-                                self.transform_executors,
-                                *namespace_descriptor,
-                                hash_index,
-                                hash_value,
-                                {
-                                    ffm_buffer.push(HashAndValueAndSeq {
-                                        hash: hash_index & self.ffm_hash_mask,
-                                        value: hash_value,
-                                        contra_field_index: contra_field_index as u32
-                                            * self.model_instance.ffm_k,
-                                    });
-                                }
-                            );
-                        }
-                    }
-                } else {
-                    let ffm_filtered_namespace_type = ffm_filtered_namespace_type.unwrap();
+                if let Some(ffm_filtered_namespace_type) = ffm_filtered_namespace_type {
                     for (contra_field_index, ffm_field) in
                         self.model_instance.ffm_fields.iter().enumerate()
                     {
@@ -323,6 +300,28 @@ impl FeatureBufferTranslator {
                                     {
                                         continue;
                                     }
+                                    ffm_buffer.push(HashAndValueAndSeq {
+                                        hash: hash_index & self.ffm_hash_mask,
+                                        value: hash_value,
+                                        contra_field_index: contra_field_index as u32
+                                            * self.model_instance.ffm_k,
+                                    });
+                                }
+                            );
+                        }
+                    }
+                } else {
+                    for (contra_field_index, ffm_field) in
+                        self.model_instance.ffm_fields.iter().enumerate()
+                    {
+                        for namespace_descriptor in ffm_field {
+                            feature_reader!(
+                                record_buffer,
+                                self.transform_executors,
+                                *namespace_descriptor,
+                                hash_index,
+                                hash_value,
+                                {
                                     ffm_buffer.push(HashAndValueAndSeq {
                                         hash: hash_index & self.ffm_hash_mask,
                                         value: hash_value,

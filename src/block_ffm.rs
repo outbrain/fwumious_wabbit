@@ -383,7 +383,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         == field_index_ffmk
                 {
                     _mm_prefetch(
-                        mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(
+                        mem::transmute::<&f32, &i8>(ffm_weights.get_unchecked(
                             fb.ffm_buffer.get_unchecked(ffm_buffer_index + 1).hash as usize,
                         )),
                         _MM_HINT_T0,
@@ -462,7 +462,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             let ffm_weights = &self.weights;
             _mm_prefetch(
                 mem::transmute::<&f32, &i8>(
-                    &ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(0).hash as usize),
+                    ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(0).hash as usize),
                 ),
                 _MM_HINT_T0,
             );
@@ -529,7 +529,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         == field_index_ffmk
                 {
                     _mm_prefetch(
-                        mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(
+                        mem::transmute::<&f32, &i8>(ffm_weights.get_unchecked(
                             fb.ffm_buffer.get_unchecked(ffm_buffer_index + 1).hash as usize,
                         )),
                         _MM_HINT_T0,
@@ -640,7 +640,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             let ffm_weights = &self.weights;
             _mm_prefetch(
                 mem::transmute::<&f32, &i8>(
-                    &ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(0).hash as usize),
+                    ffm_weights.get_unchecked(fb.ffm_buffer.get_unchecked(0).hash as usize),
                 ),
                 _MM_HINT_T0,
             );
@@ -689,7 +689,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         == field_index_ffmk
                 {
                     _mm_prefetch(
-                        mem::transmute::<&f32, &i8>(&ffm_weights.get_unchecked(
+                        mem::transmute::<&f32, &i8>(ffm_weights.get_unchecked(
                             fb.ffm_buffer.get_unchecked(ffm_buffer_index + 1).hash as usize,
                         )),
                         _MM_HINT_T0,
@@ -857,17 +857,15 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
                         ffm_weights.get_unchecked(feature_index + z) * feature_value;
                 }
             }
+        } else if feature_value == 1.0 {
+            for z in 0..field_embedding_len {
+                *contra_fields.get_unchecked_mut(offset + z) +=
+                    *ffm_weights.get_unchecked(feature_index + z);
+            }
         } else {
-            if feature_value == 1.0 {
-                for z in 0..field_embedding_len {
-                    *contra_fields.get_unchecked_mut(offset + z) +=
-                        *ffm_weights.get_unchecked(feature_index + z);
-                }
-            } else {
-                for z in 0..field_embedding_len {
-                    *contra_fields.get_unchecked_mut(offset + z) +=
-                        ffm_weights.get_unchecked(feature_index + z) * feature_value;
-                }
+            for z in 0..field_embedding_len {
+                *contra_fields.get_unchecked_mut(offset + z) +=
+                    ffm_weights.get_unchecked(feature_index + z) * feature_value;
             }
         }
     }

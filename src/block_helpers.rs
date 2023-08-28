@@ -214,11 +214,8 @@ pub fn forward_backward(
     pb: &mut port_buffer::PortBuffer,
     update: bool,
 ) {
-    match further_blocks.split_first_mut() {
-        Some((next_regressor, further_blocks)) => {
-            next_regressor.forward_backward(further_blocks, fb, pb, update)
-        }
-        None => {}
+    if let Some((next_regressor, further_blocks)) = further_blocks.split_first_mut() {
+        next_regressor.forward_backward(further_blocks, fb, pb, update)
     }
 }
 
@@ -241,11 +238,8 @@ pub fn forward_with_cache(
     pb: &mut port_buffer::PortBuffer,
     caches: &[BlockCache],
 ) {
-    match further_blocks.split_first() {
-        Some((next_regressor, further_blocks)) => {
-            next_regressor.forward_with_cache(further_blocks, fb, pb, caches)
-        }
-        None => {}
+    if let Some((next_regressor, further_blocks)) = further_blocks.split_first() {
+        next_regressor.forward_with_cache(further_blocks, fb, pb, caches)
     }
 }
 
@@ -255,11 +249,8 @@ pub fn prepare_forward_cache(
     fb: &feature_buffer::FeatureBuffer,
     caches: &mut [BlockCache],
 ) {
-    match further_blocks.split_first_mut() {
-        Some((next_regressor, further_blocks)) => {
-            next_regressor.prepare_forward_cache(further_blocks, fb, caches)
-        }
-        None => {}
+    if let Some((next_regressor, further_blocks)) = further_blocks.split_first_mut() {
+        next_regressor.prepare_forward_cache(further_blocks, fb, caches)
     }
 }
 
@@ -268,10 +259,7 @@ pub fn create_forward_cache(
     further_blocks: &mut [Box<dyn BlockTrait>],
     caches: &mut Vec<BlockCache>,
 ) {
-    match further_blocks.split_first_mut() {
-        Some((next_regressor, further_blocks)) => {
-            next_regressor.create_forward_cache(further_blocks, caches)
-        }
-        None => {}
+    if let Some((next_regressor, further_blocks)) = further_blocks.split_first_mut() {
+        next_regressor.create_forward_cache(further_blocks, caches)
     }
 }
