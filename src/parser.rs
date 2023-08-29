@@ -217,10 +217,8 @@ impl VowpalParser {
         let mut current_namespace_num_of_features = 0;
 
         unsafe {
-            self.output_buffer
-                .get_unchecked_mut(0..bufpos)
-                .fill(NO_FEATURES);
             self.output_buffer.truncate(bufpos);
+            self.output_buffer.fill(NO_FEATURES);
 
             let p = self.tmp_read_buf.as_ptr();
             let mut i_start: usize;

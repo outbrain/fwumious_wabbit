@@ -172,6 +172,15 @@ impl FeatureBufferTranslator {
     }
 
     pub fn translate(&mut self, record_buffer: &[u32], example_number: u64) {
+        self.translate_and_filter(record_buffer, example_number, None);
+    }
+
+    pub fn translate_and_filter(
+        &mut self,
+        record_buffer: &[u32],
+        example_number: u64,
+        ffm_filtered_namespace_type: Option<NamespaceType>,
+    ) {
         {
             let lr_buffer = &mut self.feature_buffer.lr_buffer;
             lr_buffer.truncate(0);
@@ -274,25 +283,54 @@ impl FeatureBufferTranslator {
                 let ffm_buffer = &mut self.feature_buffer.ffm_buffer;
                 ffm_buffer.truncate(0);
 
-                for (contra_field_index, ffm_field) in
-                    self.model_instance.ffm_fields.iter().enumerate()
-                {
-                    for namespace_descriptor in ffm_field {
-                        feature_reader!(
-                            record_buffer,
-                            self.transform_executors,
-                            *namespace_descriptor,
-                            hash_index,
-                            hash_value,
-                            {
-                                ffm_buffer.push(HashAndValueAndSeq {
-                                    hash: hash_index & self.ffm_hash_mask,
-                                    value: hash_value,
-                                    contra_field_index: contra_field_index as u32
-                                        * self.model_instance.ffm_k,
-                                });
-                            }
-                        );
+                if let Some(ffm_filtered_namespace_type) = ffm_filtered_namespace_type {
+                    for (contra_field_index, ffm_field) in
+                        self.model_instance.ffm_fields.iter().enumerate()
+                    {
+                        for namespace_descriptor in ffm_field {
+                            feature_reader!(
+                                record_buffer,
+                                self.transform_executors,
+                                *namespace_descriptor,
+                                hash_index,
+                                hash_value,
+                                {
+                                    if ffm_filtered_namespace_type
+                                        != namespace_descriptor.namespace_type
+                                    {
+                                        continue;
+                                    }
+                                    ffm_buffer.push(HashAndValueAndSeq {
+                                        hash: hash_index & self.ffm_hash_mask,
+                                        value: hash_value,
+                                        contra_field_index: contra_field_index as u32
+                                            * self.model_instance.ffm_k,
+                                    });
+                                }
+                            );
+                        }
+                    }
+                } else {
+                    for (contra_field_index, ffm_field) in
+                        self.model_instance.ffm_fields.iter().enumerate()
+                    {
+                        for namespace_descriptor in ffm_field {
+                            feature_reader!(
+                                record_buffer,
+                                self.transform_executors,
+                                *namespace_descriptor,
+                                hash_index,
+                                hash_value,
+                                {
+                                    ffm_buffer.push(HashAndValueAndSeq {
+                                        hash: hash_index & self.ffm_hash_mask,
+                                        value: hash_value,
+                                        contra_field_index: contra_field_index as u32
+                                            * self.model_instance.ffm_k,
+                                    });
+                                }
+                            );
+                        }
                     }
                 }
             }

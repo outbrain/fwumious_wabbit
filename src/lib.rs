@@ -35,6 +35,7 @@ use crate::multithread_helpers::BoxedRegressorTrait;
 use crate::parser::VowpalParser;
 use crate::port_buffer::{PortBuffer, PredictionStats};
 use crate::regressor::BlockCache;
+use crate::vwmap::NamespaceType;
 use shellwords;
 use std::ffi::CStr;
 use std::io::Cursor;
@@ -187,7 +188,11 @@ impl Predictor {
         };
         // ignore last newline byte
         self.cache.input_buffer_size = input_buffer_size;
-        self.feature_buffer_translator.translate(buffer, 0);
+        self.feature_buffer_translator.translate_and_filter(
+            buffer,
+            0,
+            Some(NamespaceType::Primitive),
+        );
         let is_empty = self.cache.blocks.is_empty();
         self.regressor.setup_cache(
             &self.feature_buffer_translator.feature_buffer,

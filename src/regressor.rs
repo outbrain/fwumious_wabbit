@@ -1,4 +1,5 @@
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use rustc_hash::FxHashSet;
 use std::any::Any;
 use std::error::Error;
 use std::io;
@@ -15,6 +16,7 @@ use crate::block_neural::InitType;
 use crate::block_normalize;
 use crate::block_relu;
 use crate::feature_buffer;
+use crate::feature_buffer::HashAndValueAndSeq;
 use crate::graph;
 use crate::model_instance;
 use crate::optimizer;
@@ -23,10 +25,25 @@ use crate::port_buffer::PredictionStats;
 
 pub const FFM_CONTRA_BUF_LEN: usize = 16384;
 
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct FFMFeature {
+    pub index: u32,
+    pub contra_field_index: u32,
+}
+
+impl From<&HashAndValueAndSeq> for FFMFeature {
+    fn from(value: &HashAndValueAndSeq) -> Self {
+        FFMFeature {
+            index: value.hash,
+            contra_field_index: value.contra_field_index,
+        }
+    }
+}
+
 pub enum BlockCache {
     FFM {
         contra_fields: [f32; FFM_CONTRA_BUF_LEN],
-        contra_fields_present: Vec<bool>,
+        features_present: FxHashSet<FFMFeature>,
         ffm: Vec<f32>,
     },
     LR {
