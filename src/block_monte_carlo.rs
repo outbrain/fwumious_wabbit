@@ -90,9 +90,10 @@ impl BlockTrait for BlockMonteCarlo {
         pb: &mut PortBuffer,
     ) {
         unsafe {
+            self.copy_input_tape_to_output_tape(pb);
+            block_helpers::forward(further_blocks, fb, pb);
+
             if self.number_of_inputs_to_skip == 0 {
-                self.copy_input_tape_to_output_tape(pb);
-                block_helpers::forward(further_blocks, fb, pb);
                 return;
             }
 
@@ -104,7 +105,7 @@ impl BlockTrait for BlockMonteCarlo {
             let seed = create_seed_from_input_tape(&input_tape);
             let mut rng = Xoshiro256Plus::seed_from_u64(seed);
 
-            for _ in 0..self.num_iterations {
+            for _ in 1..self.num_iterations {
                 let (_, output_tape) = block_helpers::get_input_output_borrows(
                     &mut pb.tape,
                     self.input_offset,
@@ -133,9 +134,10 @@ impl BlockTrait for BlockMonteCarlo {
         caches: &[BlockCache],
     ) {
         unsafe {
+            self.copy_input_tape_to_output_tape(pb);
+            block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+
             if self.number_of_inputs_to_skip == 0 {
-                self.copy_input_tape_to_output_tape(pb);
-                block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
                 return;
             }
 
@@ -147,7 +149,7 @@ impl BlockTrait for BlockMonteCarlo {
             let seed = create_seed_from_input_tape(&input_tape);
             let mut rng = Xoshiro256Plus::seed_from_u64(seed);
 
-            for _ in 0..self.num_iterations {
+            for _ in 1..self.num_iterations {
                 let (_, output_tape) = block_helpers::get_input_output_borrows(
                     &mut pb.tape,
                     self.input_offset,
@@ -241,7 +243,45 @@ mod tests {
     }
 
     #[test]
-    fn test_monte_carlo_block() {
+    fn test_monte_carlo_block_with_one_run() {
+        let mut mi = ModelInstance::new_empty().unwrap();
+        let mut bg = BlockGraph::new();
+        let input_block = block_misc::new_const_block(&mut bg, vec![2.0, 4.0, 4.0, 5.0]).unwrap();
+        let observe_block_backward =
+            block_misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
+        let triangle_block =
+            new_monte_carlo_block(&mut bg, observe_block_backward, 1, 0.3).unwrap();
+        let observe_block_forward =
+            block_misc::new_observe_block(&mut bg, triangle_block, Observe::Forward, None).unwrap();
+        block_misc::new_sink_block(
+            &mut bg,
+            observe_block_forward,
+            block_misc::SinkType::Untouched,
+        )
+        .unwrap();
+        bg.finalize();
+        bg.allocate_and_init_weights(&mi);
+
+        let mut pb = bg.new_port_buffer();
+        let fb = fb_vec();
+        slearn2(&mut bg, &fb, &mut pb, true);
+        assert_eq!(pb.observations, [2.0, 4.0, 4.0, 5.0, 2.0, 4.0, 4.0, 5.0]);
+
+        spredict2(&mut bg, &fb, &mut pb);
+        let expected_observations = [2.0, 4.0, 4.0, 5.0, 2.0, 4.0, 4.0, 5.0];
+        assert_eq!(pb.observations.len(), expected_observations.len());
+        assert_eq!(pb.observations, expected_observations);
+
+        assert_ne!(pb.stats, None);
+
+        let stats = pb.stats.unwrap();
+        assert_epsilon!(stats.mean, 15.0);
+        assert_epsilon!(stats.variance, 511.0);
+        assert_epsilon!(stats.standard_deviation, 22.605309);
+    }
+
+    #[test]
+    fn test_monte_carlo_block_with_multiple_runs() {
         let mut mi = ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
         let input_block = block_misc::new_const_block(&mut bg, vec![2.0, 4.0, 4.0, 5.0]).unwrap();
@@ -267,7 +307,7 @@ mod tests {
 
         spredict2(&mut bg, &fb, &mut pb);
         let expected_observations = [
-            2.0, 4.0, 0.0, 5.0, 0.0, 4.0, 4.0, 5.0, 2.0, 4.0, 4.0, 0.0, 2.0, 4.0, 4.0, 5.0,
+            2.0, 4.0, 4.0, 5.0, 2.0, 4.0, 0.0, 5.0, 0.0, 4.0, 4.0, 5.0, 2.0, 4.0, 4.0, 5.0,
         ];
         assert_eq!(pb.observations.len(), expected_observations.len());
         assert_eq!(pb.observations, expected_observations);
@@ -275,8 +315,8 @@ mod tests {
         assert_ne!(pb.stats, None);
 
         let stats = pb.stats.unwrap();
-        assert_epsilon!(stats.mean, 11.333333);
-        assert_epsilon!(stats.variance, 302.88885);
-        assert_epsilon!(stats.standard_deviation, 17.403702);
+        assert_epsilon!(stats.mean, 13.0);
+        assert_epsilon!(stats.variance, 392.33334);
+        assert_epsilon!(stats.standard_deviation, 19.807405);
     }
 }
