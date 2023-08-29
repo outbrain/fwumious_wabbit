@@ -113,11 +113,8 @@ fn load_regressor_without_weights(
     let mut mi = model_instance::ModelInstance::new_from_buf(input_bufreader)
         .expect("Loading model instance from regressor failed");
 
-    match cmd_arguments {
-        Some(cmd_args) => {
-            model_instance::ModelInstance::update_hyperparameters_from_cmd(cmd_args, &mut mi)?;
-        }
-        _ => (),
+    if let Some(cmd_args) = cmd_arguments {
+        model_instance::ModelInstance::update_hyperparameters_from_cmd(cmd_args, &mut mi)?;
     }
 
     let mi = mi;

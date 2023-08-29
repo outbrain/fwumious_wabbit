@@ -100,11 +100,8 @@ impl BlockTrait for BlockObserve {
         }
 
         // replace inputs with whatever we wanted
-        match self.replace_backward_with {
-            Some(value) => {
-                pb.tape[self.input_offset..(self.input_offset + self.num_inputs)].fill(value)
-            }
-            None => {}
+        if let Some(value) = self.replace_backward_with {
+            pb.tape[self.input_offset..(self.input_offset + self.num_inputs)].fill(value)
         }
     }
 
@@ -132,11 +129,8 @@ impl BlockTrait for BlockObserve {
         }
 
         // replace inputs with whatever we wanted
-        match self.replace_backward_with {
-            Some(value) => {
-                pb.tape[self.input_offset..(self.input_offset + self.num_inputs)].fill(value)
-            }
-            None => {}
+        if let Some(value) = self.replace_backward_with {
+            pb.tape[self.input_offset..(self.input_offset + self.num_inputs)].fill(value)
         }
     }
 
@@ -166,11 +160,8 @@ impl BlockTrait for BlockObserve {
         }
 
         // replace inputs with whatever we wanted
-        match self.replace_backward_with {
-            Some(value) => {
-                pb.tape[self.input_offset..(self.input_offset + self.num_inputs)].fill(value)
-            }
-            None => {}
+        if let Some(value) = self.replace_backward_with {
+            pb.tape[self.input_offset..(self.input_offset + self.num_inputs)].fill(value)
         }
     }
 }
