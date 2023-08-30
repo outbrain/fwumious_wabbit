@@ -1,3 +1,4 @@
+#![feature(portable_simd)]
 mod block_ffm;
 mod block_helpers;
 mod block_loss_functions;
