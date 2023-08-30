@@ -928,25 +928,6 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
         ffm_fields_count_as_usize: usize,
         field_embedding_len_as_usize: usize,
     ) {
-
-        // let mut transposed_contra_fields: [f32; FFM_CONTRA_BUF_LEN] = MaybeUninit::uninit().assume_init();
-        //
-        // for f1 in 0..ffm_fields_count_as_usize {
-        //     let f1_offset = f1 * field_embedding_len_as_usize;
-        //     let f1_ffmk = f1 * ffmk_as_usize;
-        //
-        //     let mut f1_offset_ffmk = f1_offset + f1_ffmk;
-        //     let mut f2_offset_ffmk = f1_offset + f1_ffmk;
-        //     for f2 in f1 + 1..ffm_fields_count_as_usize {
-        //         f2_offset_ffmk += field_embedding_len_as_usize;
-        //         f1_offset_ffmk += ffmk_as_usize;
-        //
-        //         transposed_contra_fields.get_unchecked_mut(f1_offset_ffmk..f1_offset_ffmk + ffmk_as_usize)
-        //             .copy_from_slice(contra_fields.get_unchecked(f2_offset_ffmk..f2_offset_ffmk + ffmk_as_usize));
-        //     }
-        // }
-        //
-
         // elapsed: 13.247048ms, avg: 13.247µs, fw_predict: 0.5742056
         // elapsed: 12.852153ms, avg: 12.852µs, fw_predict: 0.5742056
 
@@ -997,12 +978,14 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
                         * f32x4::from_slice(contra_fields.get_unchecked(f2_offset_ffmk + f32x4::LANES..f2_offset_ffmk + ffmk_as_usize));
                     contra_field = (contra_field_simd_1 + contra_field_simd_2).reduce_sum();
                 } else {
-                    for _ in (0..ffmk_end_as_usize).step_by(LANES) {
-                        let contra_field_simd_1 = f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk..f1_offset_ffmk + f32x4::LANES))
-                            * f32x4::from_slice(contra_fields.get_unchecked(f2_offset_ffmk..f2_offset_ffmk + f32x4::LANES));
+                    for z in (0..ffmk_end_as_usize).step_by(LANES) {
+                        let f1_offset_ffmk_lane = f1_offset_ffmk + (f32x4::LANES * z);
+                        let f2_offset_ffmk_lane = f2_offset_ffmk + (f32x4::LANES * z);
+                        let contra_field_simd_1 = f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk_lane..f1_offset_ffmk_lane + f32x4::LANES))
+                            * f32x4::from_slice(contra_fields.get_unchecked(f2_offset_ffmk_lane..f2_offset_ffmk_lane + f32x4::LANES));
 
-                        let contra_field_simd_2 = f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk + f32x4::LANES..f1_offset_ffmk + ffmk_as_usize))
-                            * f32x4::from_slice(contra_fields.get_unchecked(f2_offset_ffmk + f32x4::LANES..f2_offset_ffmk + ffmk_as_usize));
+                        let contra_field_simd_2 = f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk_lane + f32x4::LANES..f1_offset_ffmk_lane + ffmk_as_usize))
+                            * f32x4::from_slice(contra_fields.get_unchecked(f2_offset_ffmk_lane + f32x4::LANES..f2_offset_ffmk_lane + ffmk_as_usize));
                         contra_field += (contra_field_simd_1 + contra_field_simd_2).reduce_sum();
                     }
 
