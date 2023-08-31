@@ -124,9 +124,9 @@ impl OptimizerTrait for OptimizerAdagradLUT {
         let minus_power_t = -power_t;
         for x in 0..FASTMATH_LR_LUT_SIZE {
             // accumulated gradients are always positive floating points, sign is guaranteed to be zero
-            // floating point: 1 bit of sign, 7 bits of signed expontent then floating point bits (mantissa)
+            // floating point: 1 bit of sign, 7 bits of signed exponent then floating point bits (mantissa)
             // we will take 7 bits of exponent + whatever most significant bits of mantissa remain
-            // we take two consequtive such values, so we act as if had rounding
+            // we take two consequtive such values, so we act as if it had rounding
             let float_x =
                 (f32::from_bits((x as u32) << (31 - FASTMATH_LR_LUT_BITS))) + initial_acc_gradient;
             let float_x_plus_one =
