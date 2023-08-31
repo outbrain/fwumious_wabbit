@@ -113,7 +113,6 @@ unsafe fn hadd_ps(r4: __m128) -> f32 {
     _mm_cvtss_f32(r1)
 }
 
-
 impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
     fn as_any(&mut self) -> &mut dyn Any {
         self
@@ -503,8 +502,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
             let mut ffm_buffer_index = 0;
 
-            // println!("{:?}", fb.ffm_buffer);
-            let start = Instant::now();
             for field_index in 0..ffm_fields_count {
                 let field_index_ffmk = field_index * ffmk;
                 let field_index_ffmk_as_usize = field_index_ffmk as usize;
@@ -557,7 +554,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                             is_first_feature = false;
                             contra_fields_copied = true;
                             // Copy only once, skip other copying as the data for all features of that contra_index is already calculated
-                            let small_start = Instant::now();
                             contra_fields
                                 .get_unchecked_mut(offset..offset + field_embedding_len_as_usize)
                                 .copy_from_slice(
@@ -565,23 +561,17 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                         offset..offset + field_embedding_len_as_usize,
                                     ),
                                 );
-                            // println!("CP: {:?}", small_start.elapsed());
-
                         } else if !contra_fields_copied {
-                            let small_start = Instant::now();
                             contra_fields_copied = true;
                             for z in 0..field_embedding_len_as_usize {
                                 *contra_fields.get_unchecked_mut(offset + z) +=
                                     cached_contra_fields.get_unchecked(offset + z);
                             }
-                            // println!("AD: {:?}", small_start.elapsed());
                         }
                     } else {
                         let feature_index = feature.hash as usize;
                         let feature_value = feature.value;
 
-
-                        let small_start = Instant::now();
                         self.prepare_contra_fields(
                             feature,
                             contra_fields.as_mut_slice(),
@@ -601,13 +591,10 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
                         *ffm_slice.get_unchecked_mut(ffm_index) -=
                             correction * 0.5 * feature_value * feature_value;
-                        // println!("CC: {:?}", small_start.elapsed());
-
                     }
                     ffm_buffer_index += 1;
                 }
             }
-            // println!("TT: {:?}", start.elapsed());
 
             self.calculate_interactions(
                 ffm_slice,
@@ -852,12 +839,36 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
     }
 }
 
-unsafe fn prepare_first_contra_field(contra_fields_ptr: *mut f32, ffm_weights_ptr: *f32, feature_value_mm_128: _mm_128) {
-    let acc = _mm_mul_ps(
-        _mm_loadu_ps(ffm_weights_ptr),
-        feature_value_mm_128
-    );
-    _mm_storeu_ps(contra_fields_ptr, acc_0);
+#[inline(always)]
+unsafe fn prepare_first_contra_field(
+    contra_fields_ptr: *mut f32,
+    ffm_weights_ptr: *const f32,
+    feature_value: __m128,
+) {
+    let acc = _mm_mul_ps(_mm_loadu_ps(ffm_weights_ptr), feature_value);
+    _mm_storeu_ps(contra_fields_ptr, acc);
+}
+
+#[inline(always)]
+unsafe fn prepare_contra_field_without_feature_value(
+    contra_fields_ptr: *mut f32,
+    ffm_weights_ptr: *const f32,
+) {
+    let contra_fields = _mm_loadu_ps(contra_fields_ptr);
+    let ffm_weights = _mm_loadu_ps(ffm_weights_ptr);
+    _mm_storeu_ps(contra_fields_ptr, _mm_add_ps(ffm_weights, contra_fields));
+}
+
+#[inline(always)]
+unsafe fn prepare_contra_field_with_feature_value(
+    contra_fields_ptr: *mut f32,
+    ffm_weights_ptr: *const f32,
+    feature_value: __m128,
+) {
+    let contra_fields = _mm_loadu_ps(contra_fields_ptr);
+    let ffm_weights = _mm_loadu_ps(ffm_weights_ptr);
+    let acc = _mm_fmadd_ps(ffm_weights, feature_value, contra_fields);
+    _mm_storeu_ps(contra_fields_ptr, acc);
 }
 
 impl<L: OptimizerTrait + 'static> BlockFFM<L> {
@@ -886,61 +897,33 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
             } else {
                 let feature_value_mm_128 = _mm_set1_ps(feature_value);
 
-                let field_embedding_len_end =
-                    field_embedding_len - (field_embedding_len % LANES);
+                let field_embedding_len_end = field_embedding_len - (field_embedding_len % LANES);
 
                 let contra_fields_ptr = contra_fields.as_mut_ptr();
                 let ffm_weights_ptr = ffm_weights.as_ptr();
                 for z in (0..field_embedding_len_end).step_by(LANES) {
                     let lane_offset = (offset + z);
                     let lane_feature_index = (feature_index + z);
-                    
-                    let ffm_weights_0 = _mm_loadu_ps(
-                        ffm_weights_ptr.add(lane_feature_index),
-                    );
-                    let acc_0 = _mm_mul_ps(
-                        ffm_weights_0,
-                        feature_value_mm_128
-                    );
-                    _mm_storeu_ps(
+
+                    prepare_first_contra_field(
                         contra_fields_ptr.add(lane_offset),
-                        acc_0,
+                        ffm_weights_ptr.add(lane_feature_index),
+                        feature_value_mm_128,
                     );
-
-                    let ffm_weights_1 = _mm_loadu_ps(
-                        ffm_weights_ptr.add(lane_feature_index + STEP),
-                    );
-                    let acc_1 = _mm_mul_ps(
-                        ffm_weights_1,
-                        feature_value_mm_128
-                    );
-                    _mm_storeu_ps(
+                    prepare_first_contra_field(
                         contra_fields_ptr.add(lane_offset + STEP),
-                        acc_1,
+                        ffm_weights_ptr.add(lane_feature_index + STEP),
+                        feature_value_mm_128,
                     );
-
-                    let ffm_weights_2 = _mm_loadu_ps(
-                        ffm_weights_ptr.add(lane_feature_index + (STEP * 2)),
-                    );
-                    let acc_2 = _mm_mul_ps(
-                        ffm_weights_2,
-                        feature_value_mm_128
-                    );
-                    _mm_storeu_ps(
+                    prepare_first_contra_field(
                         contra_fields_ptr.add(lane_offset + (STEP * 2)),
-                        acc_2,
+                        ffm_weights_ptr.add(lane_feature_index + (STEP * 2)),
+                        feature_value_mm_128,
                     );
-
-                    let ffm_weights_3 = _mm_loadu_ps(
-                        ffm_weights_ptr.add(lane_feature_index + (STEP * 3)),
-                    );
-                    let acc_3 = _mm_mul_ps(
-                        ffm_weights_3,
-                        feature_value_mm_128
-                    );
-                    _mm_storeu_ps(
+                    prepare_first_contra_field(
                         contra_fields_ptr.add(lane_offset + (STEP * 3)),
-                        acc_3,
+                        ffm_weights_ptr.add(lane_feature_index + (STEP * 3)),
+                        feature_value_mm_128,
                     );
                 }
 
@@ -950,8 +933,7 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
                 }
             }
         } else if feature_value == 1.0 {
-            let field_embedding_len_end =
-                field_embedding_len - (field_embedding_len % LANES);
+            let field_embedding_len_end = field_embedding_len - (field_embedding_len % LANES);
 
             let contra_fields_ptr = contra_fields.as_mut_ptr();
             let ffm_weights_ptr = ffm_weights.as_ptr();
@@ -959,68 +941,21 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
                 let lane_offset = (offset + z);
                 let lane_feature_index = (feature_index + z);
 
-                let contra_fields_ptr_0 = contra_fields_ptr.add(lane_offset);
-                let contra_fields_0 = _mm_loadu_ps(
-                    contra_fields_ptr_0,
-                );
-                let ffm_weights_0 = _mm_loadu_ps(
+                prepare_contra_field_without_feature_value(
+                    contra_fields_ptr.add(lane_offset),
                     ffm_weights_ptr.add(lane_feature_index),
                 );
-                let acc_0 = _mm_add_ps(
-                    ffm_weights_0,
-                    contra_fields_0
-                );
-                _mm_storeu_ps(
-                    contra_fields_ptr_0,
-                    acc_0,
-                );
-
-                let contra_fields_ptr_1 = contra_fields_ptr.add(lane_offset + STEP);
-                let contra_fields_1 = _mm_loadu_ps(
-                    contra_fields_ptr_1,
-                );
-                let ffm_weights_1 = _mm_loadu_ps(
+                prepare_contra_field_without_feature_value(
+                    contra_fields_ptr.add(lane_offset + STEP),
                     ffm_weights_ptr.add(lane_feature_index + STEP),
                 );
-                let acc_1 = _mm_add_ps(
-                    ffm_weights_1,
-                    contra_fields_1
-                );
-                _mm_storeu_ps(
-                    contra_fields_ptr_1,
-                    acc_1,
-                );
-
-                let contra_fields_ptr_2 = contra_fields_ptr.add(lane_offset + (STEP * 2));
-                let contra_fields_2 = _mm_loadu_ps(
-                    contra_fields_ptr_2,
-                );
-                let ffm_weights_2 = _mm_loadu_ps(
+                prepare_contra_field_without_feature_value(
+                    contra_fields_ptr.add(lane_offset + (STEP * 2)),
                     ffm_weights_ptr.add(lane_feature_index + (STEP * 2)),
                 );
-                let acc_2 = _mm_add_ps(
-                    ffm_weights_2,
-                    contra_fields_2
-                );
-                _mm_storeu_ps(
-                    contra_fields_ptr_2,
-                    acc_2,
-                );
-
-                let contra_fields_ptr_3 = contra_fields_ptr.add(lane_offset + (STEP * 3));
-                let contra_fields_3 = _mm_loadu_ps(
-                    contra_fields_ptr_3,
-                );
-                let ffm_weights_3 = _mm_loadu_ps(
+                prepare_contra_field_without_feature_value(
+                    contra_fields_ptr.add(lane_offset + (STEP * 3)),
                     ffm_weights_ptr.add(lane_feature_index + (STEP * 3)),
-                );
-                let acc_3 = _mm_add_ps(
-                    ffm_weights_3,
-                    contra_fields_3
-                );
-                _mm_storeu_ps(
-                    contra_fields_ptr_3,
-                    acc_3,
                 );
             }
 
@@ -1028,12 +963,10 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
                 *contra_fields.get_unchecked_mut(offset + z) +=
                     *ffm_weights.get_unchecked(feature_index + z);
             }
-
         } else {
             let feature_value_mm_128 = _mm_set1_ps(feature_value);
 
-            let field_embedding_len_end =
-                field_embedding_len - (field_embedding_len % LANES);
+            let field_embedding_len_end = field_embedding_len - (field_embedding_len % LANES);
             let contra_fields_ptr = contra_fields.as_mut_ptr();
 
             let ffm_weights_ptr = ffm_weights.as_ptr();
@@ -1041,72 +974,25 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
                 let lane_offset = offset + z;
                 let lane_feature_index = feature_index + z;
 
-                let contra_fields_ptr_0 = contra_fields_ptr.add(lane_offset);
-                let contra_fields_0 = _mm_loadu_ps(
-                    contra_fields_ptr_0,
-                );
-                let ffm_weights_0 = _mm_loadu_ps(
+                prepare_contra_field_with_feature_value(
+                    contra_fields_ptr.add(lane_offset),
                     ffm_weights_ptr.add(lane_feature_index),
-                );
-                let acc_0 = _mm_fmadd_ps(
-                    ffm_weights_0,
                     feature_value_mm_128,
-                    contra_fields_0
                 );
-                _mm_storeu_ps(
-                    contra_fields_ptr_0,
-                    acc_0,
-                );
-
-                let contra_fields_ptr_1 = contra_fields_ptr.add(lane_offset + STEP);
-                let contra_fields_1 = _mm_loadu_ps(
-                    contra_fields_ptr_1,
-                );
-                let ffm_weights_1 = _mm_loadu_ps(
+                prepare_contra_field_with_feature_value(
+                    contra_fields_ptr.add(lane_offset + STEP),
                     ffm_weights_ptr.add(lane_feature_index + STEP),
-                );
-                let acc_1 = _mm_fmadd_ps(
-                    ffm_weights_1,
                     feature_value_mm_128,
-                    contra_fields_1,
                 );
-                _mm_storeu_ps(
-                    contra_fields_ptr_1,
-                    acc_1,
-                );
-
-                let contra_fields_ptr_2 = contra_fields_ptr.add(lane_offset + (STEP * 2));
-                let contra_fields_2 = _mm_loadu_ps(
-                    contra_fields_ptr_2,
-                );
-                let ffm_weights_2 = _mm_loadu_ps(
+                prepare_contra_field_with_feature_value(
+                    contra_fields_ptr.add(lane_offset + (STEP * 2)),
                     ffm_weights_ptr.add(lane_feature_index + (STEP * 2)),
-                );
-                let acc_2 = _mm_fmadd_ps(
-                    ffm_weights_2,
                     feature_value_mm_128,
-                    contra_fields_2
                 );
-                _mm_storeu_ps(
-                    contra_fields_ptr_2,
-                    acc_2,
-                );
-
-                let contra_fields_ptr_3 = contra_fields_ptr.add(lane_offset + (STEP * 3));
-                let contra_fields_3 = _mm_loadu_ps(
-                    contra_fields_ptr_3,
-                );
-                let ffm_weights_3 = _mm_loadu_ps(
+                prepare_contra_field_with_feature_value(
+                    contra_fields_ptr.add(lane_offset + (STEP * 3)),
                     ffm_weights_ptr.add(lane_feature_index + (STEP * 3)),
-                );
-                let acc_3 = _mm_fmadd_ps(
-                    ffm_weights_3,
                     feature_value_mm_128,
-                    contra_fields_3
-                );
-                _mm_storeu_ps(
-                    contra_fields_ptr_3,
-                    acc_3,
                 );
             }
 
@@ -1152,7 +1038,8 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
                     let f1_offset_ffmk_lane = f1_offset_ffmk + z;
 
                     let contra_field_0 = _mm_loadu_ps(contra_fields_ptr.add(f1_offset_ffmk_lane));
-                    let contra_field_1 = _mm_loadu_ps(contra_fields_ptr.add((f1_offset_ffmk_lane + STEP)));
+                    let contra_field_1 =
+                        _mm_loadu_ps(contra_fields_ptr.add((f1_offset_ffmk_lane + STEP)));
 
                     let acc_0 = _mm_mul_ps(contra_field_0, contra_field_0);
                     let acc_1 = _mm_mul_ps(contra_field_1, contra_field_1);
@@ -1161,7 +1048,8 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
                 }
 
                 for k in ffmk_end_as_usize..ffmk_as_usize {
-                    contra_field += contra_fields.get_unchecked(f1_offset_ffmk + k) * contra_fields.get_unchecked(f1_offset_ffmk + k);
+                    contra_field += contra_fields.get_unchecked(f1_offset_ffmk + k)
+                        * contra_fields.get_unchecked(f1_offset_ffmk + k);
                 }
             }
 
@@ -1180,8 +1068,10 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
                     let contra_field_1 = _mm_loadu_ps(contra_fields_ptr.add(f2_offset_ffmk));
                     let acc_0 = _mm_mul_ps(contra_field_0, contra_field_1);
 
-                    let contra_field_2 = _mm_loadu_ps(contra_fields_ptr.add((f1_offset_ffmk + STEP)));
-                    let contra_field_3 = _mm_loadu_ps(contra_fields_ptr.add((f2_offset_ffmk + STEP)));
+                    let contra_field_2 =
+                        _mm_loadu_ps(contra_fields_ptr.add((f1_offset_ffmk + STEP)));
+                    let contra_field_3 =
+                        _mm_loadu_ps(contra_fields_ptr.add((f2_offset_ffmk + STEP)));
                     let acc_1 = _mm_mul_ps(contra_field_2, contra_field_3);
 
                     contra_field = hadd_ps(_mm_add_ps(acc_0, acc_1));
@@ -1190,19 +1080,24 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
                         let f1_offset_ffmk_lane = f1_offset_ffmk + z;
                         let f2_offset_ffmk_lane = f2_offset_ffmk + z;
 
-                        let contra_field_0 = _mm_loadu_ps(contra_fields_ptr.add(f1_offset_ffmk_lane));
-                        let contra_field_1 = _mm_loadu_ps(contra_fields_ptr.add(f2_offset_ffmk_lane));
+                        let contra_field_0 =
+                            _mm_loadu_ps(contra_fields_ptr.add(f1_offset_ffmk_lane));
+                        let contra_field_1 =
+                            _mm_loadu_ps(contra_fields_ptr.add(f2_offset_ffmk_lane));
                         let acc_0 = _mm_mul_ps(contra_field_0, contra_field_1);
 
-                        let contra_field_2 = _mm_loadu_ps(contra_fields_ptr.add((f1_offset_ffmk_lane + STEP)));
-                        let contra_field_3 = _mm_loadu_ps(contra_fields_ptr.add((f2_offset_ffmk_lane + STEP)));
+                        let contra_field_2 =
+                            _mm_loadu_ps(contra_fields_ptr.add((f1_offset_ffmk_lane + STEP)));
+                        let contra_field_3 =
+                            _mm_loadu_ps(contra_fields_ptr.add((f2_offset_ffmk_lane + STEP)));
                         let acc_1 = _mm_mul_ps(contra_field_2, contra_field_3);
 
                         contra_field = hadd_ps(_mm_add_ps(acc_0, acc_1));
                     }
 
                     for k in ffmk_end_as_usize..ffmk_as_usize {
-                        contra_field += contra_fields.get_unchecked(f1_offset_ffmk + k) * contra_fields.get_unchecked(f2_offset_ffmk + k);
+                        contra_field += contra_fields.get_unchecked(f1_offset_ffmk + k)
+                            * contra_fields.get_unchecked(f2_offset_ffmk + k);
                     }
                 }
 
