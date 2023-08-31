@@ -1,3 +1,5 @@
+#![allow(dead_code,unused_imports)]
+
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::error::Error;
 use std::fs;

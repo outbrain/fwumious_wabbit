@@ -1,3 +1,5 @@
+#![allow(dead_code,unused_imports)]
+
 use crate::parser;
 use crate::vwmap;
 use std::error::Error;

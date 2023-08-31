@@ -1,3 +1,4 @@
+#![allow(dead_code,unused_imports)]
 use std::marker::PhantomData;
 
 pub trait OptimizerTrait: std::clone::Clone {

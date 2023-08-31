@@ -1,3 +1,5 @@
+#![allow(dead_code,unused_imports)]
+
 use rand_distr::{Distribution, Normal, Uniform};
 use rand_xoshiro::rand_core::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
@@ -253,11 +255,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
         unsafe {
             if update && self.neuron_type == NeuronType::WeightedSum {
                 // first we need to initialize inputs to zero
-                // TODO - what to think about this buffer
-                let mut output_errors: [f32; MAX_NUM_INPUTS] = MaybeUninit::uninit().assume_init();
-                output_errors
-                    .get_unchecked_mut(0..self.num_inputs)
-                    .fill(0.0);
+
+                let mut output_errors: [f32; MAX_NUM_INPUTS] = [0.0; MAX_NUM_INPUTS];
 
                 let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
                     &mut pb.tape,
