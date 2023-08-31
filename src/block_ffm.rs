@@ -876,17 +876,16 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
         } else if feature_value == 1.0 {
             // let field_embedding_len_end =
             //     field_embedding_len - field_embedding_len % LANES;
+            // let mut lane_offset = offset;
             // for z in (0..field_embedding_len_end).step_by(LANES) {
-            //     let lane_offset = offset + (f32x4::LANES * z);
-            //
             //     let contra_field_simd_1 = f32x4::from_slice(contra_fields.get_unchecked(lane_offset..lane_offset + f32x4::LANES))
             //         + f32x4::from_slice(ffm_weights.get_unchecked(feature_index..feature_index + f32x4::LANES));
+            //     contra_fields.get_unchecked_mut(lane_offset..lane_offset + f32x4::LANES).copy_from_slice(contra_field_simd_1.as_ref());
             //
             //     let contra_field_simd_2 = f32x4::from_slice(contra_fields.get_unchecked(lane_offset + f32x4::LANES..lane_offset + LANES))
             //         + f32x4::from_slice(ffm_weights.get_unchecked(feature_index + f32x4::LANES..feature_index + LANES));
-            //
-            //     contra_fields.get_unchecked_mut(lane_offset..lane_offset + f32x4::LANES).copy_from_slice(contra_field_simd_1.as_ref());
             //     contra_fields.get_unchecked_mut(lane_offset + f32x4::LANES..lane_offset + LANES).copy_from_slice(contra_field_simd_2.as_ref());
+            //     lane_offset += LANES;
             // }
 
             for z in 0..field_embedding_len {
@@ -940,20 +939,48 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
             // This is self-interaction
             let mut contra_field = 0.0;
             if ffmk_as_usize == LANES {
-                let contra_field_simd_1 = f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk..f1_offset_ffmk + f32x4::LANES))
-                    * f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk..f1_offset_ffmk + f32x4::LANES));
+                let contra_field_0 = _mm_loadu_ps(contra_fields.get_unchecked(f1_offset_ffmk..f1_offset_ffmk + f32x4::LANES).as_ptr());
+                let mut acc = _mm_mul_ps(contra_field_0, contra_field_0);
 
-                let contra_field_simd_2 = f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk + f32x4::LANES..f1_offset_ffmk + LANES))
-                    * f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk + f32x4::LANES..f1_offset_ffmk + LANES));
-                contra_field = (contra_field_simd_1 + contra_field_simd_2).reduce_sum();
+                let contra_field_1 = _mm_loadu_ps(contra_fields.get_unchecked(f1_offset_ffmk + f32x4::LANES..f1_offset_ffmk + LANES).as_ptr());
+                acc = _mm_fmadd_ps(contra_field_1, contra_field_1, acc);
+
+                let r2 = _mm_add_ps(acc, _mm_movehl_ps(acc, acc));
+                // Add 2 lower values into the final result
+                let r1 = _mm_add_ss(r2, _mm_movehdup_ps( r2 ));
+                // Return the lowest lane of the result vector.
+                // The intrinsic below compiles into noop, modern compilers return floats in the lowest lane of xmm0 register.
+                contra_field = _mm_cvtss_f32(r1);
+
+                // let contra_field_simd_1 = f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk..f1_offset_ffmk + f32x4::LANES))
+                //     * f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk..f1_offset_ffmk + f32x4::LANES));
+                //
+                // let contra_field_simd_2 = f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk + f32x4::LANES..f1_offset_ffmk + LANES))
+                //     * f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk + f32x4::LANES..f1_offset_ffmk + LANES));
+                // contra_field = (contra_field_simd_1 + contra_field_simd_2).reduce_sum();
             } else {
-                for _ in (0..ffmk_end_as_usize).step_by(LANES) {
-                    let contra_field_simd_1 = f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk..f1_offset_ffmk + f32x4::LANES))
-                        * f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk..f1_offset_ffmk + f32x4::LANES));
+                for z in (0..ffmk_end_as_usize).step_by(LANES) {
+                    let f1_offset_ffmk_lane = f1_offset_ffmk + (f32x4::LANES * z);
 
-                    let contra_field_simd_2 = f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk + f32x4::LANES..f1_offset_ffmk + LANES))
-                        * f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk + f32x4::LANES..f1_offset_ffmk + LANES));
-                    contra_field += (contra_field_simd_1 + contra_field_simd_2).reduce_sum();
+                    let contra_field_0 = _mm_loadu_ps(contra_fields.get_unchecked(f1_offset_ffmk_lane..f1_offset_ffmk_lane + f32x4::LANES).as_ptr());
+                    let mut acc = _mm_mul_ps(contra_field_0, contra_field_0);
+
+                    let contra_field_1 = _mm_loadu_ps(contra_fields.get_unchecked(f1_offset_ffmk_lane + f32x4::LANES..f1_offset_ffmk_lane + LANES).as_ptr());
+                    acc = _mm_fmadd_ps(contra_field_1, contra_field_1, acc);
+
+                    let r2 = _mm_add_ps(acc, _mm_movehl_ps(acc, acc));
+                    // Add 2 lower values into the final result
+                    let r1 = _mm_add_ss(r2, _mm_movehdup_ps( r2 ));
+                    // Return the lowest lane of the result vector.
+                    // The intrinsic below compiles into noop, modern compilers return floats in the lowest lane of xmm0 register.
+                    contra_field = _mm_cvtss_f32(r1);
+
+                    // let contra_field_simd_1 = f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk_lane..f1_offset_ffmk_lane + f32x4::LANES))
+                    //     * f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk_lane..f1_offset_ffmk_lane + f32x4::LANES));
+                    //
+                    // let contra_field_simd_2 = f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk_lane + f32x4::LANES..f1_offset_ffmk_lane + LANES))
+                    //     * f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk_lane + f32x4::LANES..f1_offset_ffmk_lane + LANES));
+                    // contra_field += (contra_field_simd_1 + contra_field_simd_2).reduce_sum();
                 }
 
                 for k in ffmk_end_as_usize..ffmk_as_usize {
@@ -971,22 +998,52 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
 
                 let mut contra_field = 0.0;
                 if ffmk_as_usize == LANES {
-                    let contra_field_simd_1 = f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk..f1_offset_ffmk + f32x4::LANES))
-                        * f32x4::from_slice(contra_fields.get_unchecked(f2_offset_ffmk..f2_offset_ffmk + f32x4::LANES));
+                    let contra_field_0 = _mm_loadu_ps(contra_fields.get_unchecked(f1_offset_ffmk..f1_offset_ffmk + f32x4::LANES).as_ptr());
+                    let contra_field_1 = _mm_loadu_ps(contra_fields.get_unchecked(f2_offset_ffmk..f2_offset_ffmk + f32x4::LANES).as_ptr());
+                    let mut acc = _mm_mul_ps(contra_field_0, contra_field_1);
 
-                    let contra_field_simd_2 = f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk + f32x4::LANES..f1_offset_ffmk + ffmk_as_usize))
-                        * f32x4::from_slice(contra_fields.get_unchecked(f2_offset_ffmk + f32x4::LANES..f2_offset_ffmk + ffmk_as_usize));
-                    contra_field = (contra_field_simd_1 + contra_field_simd_2).reduce_sum();
+                    let contra_field_2 = _mm_loadu_ps(contra_fields.get_unchecked(f1_offset_ffmk + f32x4::LANES..f1_offset_ffmk + LANES).as_ptr());
+                    let contra_field_3 = _mm_loadu_ps(contra_fields.get_unchecked(f2_offset_ffmk + f32x4::LANES..f2_offset_ffmk + LANES).as_ptr());
+                    acc = _mm_fmadd_ps(contra_field_2, contra_field_3, acc);
+
+                    let r2 = _mm_add_ps(acc, _mm_movehl_ps(acc, acc));
+                    // Add 2 lower values into the final result
+                    let r1 = _mm_add_ss( r2, _mm_movehdup_ps( r2 ));
+                    // Return the lowest lane of the result vector.
+                    // The intrinsic below compiles into noop, modern compilers return floats in the lowest lane of xmm0 register.
+                    contra_field = _mm_cvtss_f32(r1);
+                    //
+                    // let contra_field_simd_1 = f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk..f1_offset_ffmk + f32x4::LANES))
+                    //     * f32x4::from_slice(contra_fields.get_unchecked(f2_offset_ffmk..f2_offset_ffmk + f32x4::LANES));
+                    //
+                    // let contra_field_simd_2 = f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk + f32x4::LANES..f1_offset_ffmk + ffmk_as_usize))
+                    //     * f32x4::from_slice(contra_fields.get_unchecked(f2_offset_ffmk + f32x4::LANES..f2_offset_ffmk + ffmk_as_usize));
+                    // contra_field = (contra_field_simd_1 + contra_field_simd_2).reduce_sum();
                 } else {
                     for z in (0..ffmk_end_as_usize).step_by(LANES) {
-                        let f1_offset_ffmk_lane = f1_offset_ffmk + (f32x4::LANES * z);
-                        let f2_offset_ffmk_lane = f2_offset_ffmk + (f32x4::LANES * z);
-                        let contra_field_simd_1 = f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk_lane..f1_offset_ffmk_lane + f32x4::LANES))
-                            * f32x4::from_slice(contra_fields.get_unchecked(f2_offset_ffmk_lane..f2_offset_ffmk_lane + f32x4::LANES));
+                        let f1_offset_ffmk_lane = f1_offset_ffmk + (LANES * z);
+                        let f2_offset_ffmk_lane = f2_offset_ffmk + (LANES * z);
+                        let contra_field_0 = _mm_loadu_ps(contra_fields.get_unchecked(f1_offset_ffmk_lane..f1_offset_ffmk_lane + f32x4::LANES).as_ptr());
+                        let contra_field_1 = _mm_loadu_ps(contra_fields.get_unchecked(f2_offset_ffmk_lane..f2_offset_ffmk_lane + f32x4::LANES).as_ptr());
+                        let mut acc = _mm_mul_ps(contra_field_0, contra_field_1);
 
-                        let contra_field_simd_2 = f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk_lane + f32x4::LANES..f1_offset_ffmk_lane + ffmk_as_usize))
-                            * f32x4::from_slice(contra_fields.get_unchecked(f2_offset_ffmk_lane + f32x4::LANES..f2_offset_ffmk_lane + ffmk_as_usize));
-                        contra_field += (contra_field_simd_1 + contra_field_simd_2).reduce_sum();
+                        let contra_field_2 = _mm_loadu_ps(contra_fields.get_unchecked(f1_offset_ffmk_lane + f32x4::LANES..f1_offset_ffmk_lane + LANES).as_ptr());
+                        let contra_field_3 = _mm_loadu_ps(contra_fields.get_unchecked(f2_offset_ffmk_lane + f32x4::LANES..f2_offset_ffmk_lane + LANES).as_ptr());
+                        acc = _mm_fmadd_ps(contra_field_2, contra_field_3, acc);
+
+                        let r2 = _mm_add_ps(acc, _mm_movehl_ps(acc, acc));
+                        // Add 2 lower values into the final result
+                        let r1 = _mm_add_ss( r2, _mm_movehdup_ps( r2 ));
+                        // Return the lowest lane of the result vector.
+                        // The intrinsic below compiles into noop, modern compilers return floats in the lowest lane of xmm0 register.
+                        contra_field = _mm_cvtss_f32(r1);
+                        //
+                        // let contra_field_simd_1 = f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk_lane..f1_offset_ffmk_lane + f32x4::LANES))
+                        //     * f32x4::from_slice(contra_fields.get_unchecked(f2_offset_ffmk_lane..f2_offset_ffmk_lane + f32x4::LANES));
+                        //
+                        // let contra_field_simd_2 = f32x4::from_slice(contra_fields.get_unchecked(f1_offset_ffmk_lane + f32x4::LANES..f1_offset_ffmk_lane + ffmk_as_usize))
+                        //     * f32x4::from_slice(contra_fields.get_unchecked(f2_offset_ffmk_lane + f32x4::LANES..f2_offset_ffmk_lane + ffmk_as_usize));
+                        // contra_field += (contra_field_simd_1 + contra_field_simd_2).reduce_sum();
                     }
 
                     for k in ffmk_end_as_usize..ffmk_as_usize {
