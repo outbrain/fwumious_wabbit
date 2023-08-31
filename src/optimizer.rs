@@ -94,6 +94,62 @@ impl OptimizerTrait for OptimizerAdagradFlex {
     }
 }
 
+
+/***************** SGD with Nesterov ******************/
+#[derive(Clone)]
+pub struct OptimizerAdagradNesterov {
+    learning_rate: f32,
+    minus_power_t: f32,
+    initial_acc_gradient: f32,
+}
+
+impl OptimizerTrait for OptimizerAdagradNesterov {
+    fn get_name() -> &'static str {
+        "AdagradNesterov"
+    }
+    type PerWeightStore = f32;
+
+    fn new() -> Self {
+        OptimizerAdagradNesterov {
+            learning_rate: 0.0,
+            minus_power_t: 0.0,
+            initial_acc_gradient: 0.0,
+        }
+    }
+
+    fn init(&mut self, learning_rate: f32, power_t: f32, initial_acc_gradient: f32) {
+        log::info!("Nesterov init! {}", learning_rate);
+        self.learning_rate = learning_rate;
+        self.minus_power_t = -power_t;
+        self.initial_acc_gradient = initial_acc_gradient;
+    }
+
+    #[inline(always)]
+    unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32 {
+//        let accumulated_gradient_squared = *data;
+        //let gradient_squared = gradient * gradient;
+        //let new_accumulated_gradient_squared = accumulated_gradient_squared + gradient_squared;
+        //*data = new_accumulated_gradient_squared;
+	
+	//change[i] = (momentum * change[i]) - step_size * gradient[i]
+	let update = -((0.001 * *data) - gradient * self.learning_rate);
+	*data = update;
+        // let update = gradient
+        //     * self.learning_rate;
+	//            * (new_accumulated_gradient_squared).powf(self.minus_power_t);
+	    
+        if update.is_nan() || update.is_infinite() {
+            return 0.0;
+        }
+        update
+    }
+
+    fn initial_data(&self) -> Self::PerWeightStore {
+        self.initial_acc_gradient
+    }
+}
+
+
 /***************** Adagrad using Look Up Table ******************/
 // The intuition about low precision is : sqrt/powf is changing less and less as the parameter
 // grows. This means as parameter grows we can use lesser precision while keeping the error small.

@@ -82,6 +82,9 @@ pub fn new_lr_block(
         model_instance::Optimizer::SGD => {
             new_lr_block_without_weights::<optimizer::OptimizerSGD>(mi)
         }
+	model_instance::Optimizer::AdagradNesterov => {
+            new_lr_block_without_weights::<optimizer::OptimizerAdagradNesterov>(mi)
+        }
     }
     .unwrap();
     let mut block_outputs = bg.add_node(block, vec![])?;

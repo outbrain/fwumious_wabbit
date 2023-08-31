@@ -28,6 +28,7 @@ pub enum Optimizer {
     SGD = 100,
     AdagradFlex = 200,
     AdagradLUT = 300,
+    AdagradNesterov = 400,
 }
 
 pub type FieldDesc = Vec<vwmap::NamespaceDescriptor>;
@@ -482,14 +483,14 @@ impl ModelInstance {
         if cl.is_present("sgd") {
             mi.optimizer = Optimizer::SGD;
         }
-
+	
         if cl.is_present("adaptive") {
-            mi.optimizer = Optimizer::AdagradFlex;
+            mi.optimizer = Optimizer::AdagradNesterov;
         }
 
-        if mi.optimizer == Optimizer::AdagradFlex && mi.fastmath {
-            mi.optimizer = Optimizer::AdagradLUT;
-        }
+        // if mi.optimizer == Optimizer::AdagradFlex && mi.fastmath {
+        //     mi.optimizer = Optimizer::AdagradLUT;
+        // }
 
         Ok(mi)
     }

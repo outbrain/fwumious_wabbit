@@ -168,6 +168,19 @@ pub fn new_neuronlayer_block(
                 layer_norm,
             )
         }
+        model_instance::Optimizer::AdagradNesterov => {
+            new_neuronlayer_without_weights::<optimizer::OptimizerAdagradNesterov>(
+                mi,
+                num_inputs,
+                ntype,
+                num_neurons,
+                init_type,
+                dropout,
+                max_norm,
+                layer_norm,
+            )
+        }
+	
     }
     .unwrap();
 
