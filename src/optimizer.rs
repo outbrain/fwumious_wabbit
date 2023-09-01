@@ -147,7 +147,7 @@ impl OptimizerTrait for OptimizerAdagradNesterov {
 	let beta1 = 0.91;
 	let beta2 = 0.999;
 	let alpha = 0.005;
-
+	// todo -> comments about why this is the way it is
 	if gradient == 0.0 {return 0.0}; // this is a game changer
 	data.grad_store = beta1 * data.grad_store + (1.0 - beta1) * gradient;
 	data.var_store = beta2 * data.var_store + (1.0 - beta2) * gradient.powf(2.0);
