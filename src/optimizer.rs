@@ -5,7 +5,6 @@ use std::marker::PhantomData;
 pub struct OptStore {
     grad_store: f32,
     var_store: f32,
-    updates: u32,
 }
 
 pub trait OptimizerTrait: std::clone::Clone {
@@ -135,7 +134,6 @@ impl OptimizerTrait for OptimizerAdagradNesterov {
     #[inline(always)]
     unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32 {
 	
-	data.updates += data.updates + 1;
 	let beta1 = 0.91 as f32;
 	let beta2 = 0.999 as f32;
 	let alpha = 0.005;
@@ -158,7 +156,7 @@ impl OptimizerTrait for OptimizerAdagradNesterov {
     }
 
     fn initial_data(&self) -> Self::PerWeightStore {
-        OptStore{grad_store: 0.0, var_store: 0.0, updates: 0}
+        OptStore{grad_store: 0.0, var_store: 0.0}
     }
 }
 
