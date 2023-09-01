@@ -1,10 +1,26 @@
 #![allow(dead_code,unused_imports)]
 use std::marker::PhantomData;
+use std::mem;
 
 #[derive(Clone)]
 pub struct OptStore {
     grad_store: f32,
-    var_store: f32,
+    var_store: f32
+}
+
+fn inv_sqrt32_plus_eps(inp_num: f32) -> f32 {
+    // Heavily inspired by .. Quake3 :)
+
+    let x2: f32 = inp_num * 0.5f32;
+    let mut i: u32 = unsafe {
+	mem::transmute(inp_num)
+    };
+    i = 0x5f375a86 - (i >> 1);
+    let y: f32 = unsafe {
+	mem::transmute(i)
+    };
+
+    return y * ( 1.5f32 - ( x2 * y * y ) ) + 1e-8;
 }
 
 pub trait OptimizerTrait: std::clone::Clone {
@@ -105,8 +121,6 @@ impl OptimizerTrait for OptimizerAdagradFlex {
 #[derive(Clone)]
 pub struct OptimizerAdagradNesterov {
     learning_rate: f32,
-    minus_power_t: f32,
-    initial_acc_gradient: f32,
 }
 
 impl OptimizerTrait for OptimizerAdagradNesterov {
@@ -119,16 +133,12 @@ impl OptimizerTrait for OptimizerAdagradNesterov {
     fn new() -> Self {
         OptimizerAdagradNesterov {
             learning_rate: 0.0,
-            minus_power_t: 0.0,
-            initial_acc_gradient: 0.0,
         }
     }
 
     fn init(&mut self, learning_rate: f32, power_t: f32, initial_acc_gradient: f32) {
-        log::info!("Nesterov init! {}", learning_rate);
+        log::info!("Adam init! {}", learning_rate);
         self.learning_rate = learning_rate;
-        self.minus_power_t = -power_t;
-        self.initial_acc_gradient = initial_acc_gradient;
     }
 
     #[inline(always)]
@@ -138,21 +148,13 @@ impl OptimizerTrait for OptimizerAdagradNesterov {
 	let beta2 = 0.999 as f32;
 	let alpha = 0.005;
 
-	if gradient == 0.0 {return 0.0};
-	let m_t = beta1 * data.grad_store + (1.0 - beta1) * gradient;
-	let v_t = beta2 * data.var_store + (1.0 - beta2) * gradient * gradient;
+	if gradient == 0.0 {return 0.0}; // this is a game changer
 
-	data.grad_store = m_t;
-	data.var_store = v_t;
+	data.grad_store = beta1 * data.grad_store + (1.0 - beta1) * gradient;
+	data.var_store = beta2 * data.var_store + (1.0 - beta2) * gradient.powf(2.0);
 
-	let mhat_t = m_t / (1.0 - beta1);
-	let vhat_t = v_t / (1.0 - beta2);
-	let update = alpha * mhat_t / (vhat_t.sqrt() + 10e-8);
-	    
-        if update.is_nan() || update.is_infinite() {
-            return 0.0;
-        }
-	return update;
+	return alpha * (data.grad_store * inv_sqrt32_plus_eps(data.var_store));
+
     }
 
     fn initial_data(&self) -> Self::PerWeightStore {
