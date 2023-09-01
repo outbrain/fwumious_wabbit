@@ -2,11 +2,11 @@ use core::arch::x86_64::*;
 use rustc_hash::FxHashSet;
 use std::any::Any;
 use std::error::Error;
-use std::{io, ptr};
 use std::mem::{self, MaybeUninit};
 use std::ops::Bound::Included;
 use std::sync::Mutex;
 use std::time::Instant;
+use std::{io, ptr};
 
 use merand48::*;
 
@@ -467,9 +467,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         unsafe {
             let num_outputs = (self.ffm_num_fields * self.ffm_num_fields) as usize;
             let ffm_slice = &mut pb.tape[self.output_offset..(self.output_offset + num_outputs)];
-            ptr::copy_nonoverlapping(ffm.as_ptr(),
-                                     ffm_slice.as_mut_ptr(),
-                                     num_outputs);
+            ptr::copy_nonoverlapping(ffm.as_ptr(), ffm_slice.as_mut_ptr(), num_outputs);
 
             let cached_contra_fields = contra_fields;
 
@@ -556,9 +554,11 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                             is_first_feature = false;
                             contra_fields_copied = true;
                             // Copy only once, skip other copying as the data for all features of that contra_index is already calculated
-                            ptr::copy_nonoverlapping(cached_contra_fields.as_ptr().add(offset),
-                                                     contra_fields.as_mut_ptr().add(offset),
-                                                     field_embedding_len_as_usize);
+                            ptr::copy_nonoverlapping(
+                                cached_contra_fields.as_ptr().add(offset),
+                                contra_fields.as_mut_ptr().add(offset),
+                                field_embedding_len_as_usize,
+                            );
                         } else if !contra_fields_copied {
                             contra_fields_copied = true;
                             for z in 0..field_embedding_len_as_usize {
@@ -886,9 +886,11 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
         if *is_first_feature {
             *is_first_feature = false;
             if feature_value == 1.0 {
-                ptr::copy_nonoverlapping(ffm_weights.as_ptr().add(feature_index),
-                                         contra_fields.as_mut_ptr().add(offset),
-                                         field_embedding_len);
+                ptr::copy_nonoverlapping(
+                    ffm_weights.as_ptr().add(feature_index),
+                    contra_fields.as_mut_ptr().add(offset),
+                    field_embedding_len,
+                );
             } else {
                 let feature_value_mm_128 = _mm_set1_ps(feature_value);
 
@@ -896,7 +898,7 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
 
                 let mut contra_fields_ptr = contra_fields.as_mut_ptr().add(offset);
                 let mut ffm_weights_ptr = ffm_weights.as_ptr().add(feature_index);
-                for z in (0..field_embedding_len_end).step_by(LANES) {
+                for _ in (0..field_embedding_len_end).step_by(LANES) {
                     prepare_first_contra_field(
                         contra_fields_ptr,
                         ffm_weights_ptr,
@@ -941,32 +943,20 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
             let mut contra_fields_ptr = contra_fields.as_mut_ptr().add(offset);
             let mut ffm_weights_ptr = ffm_weights.as_ptr().add(feature_index);
 
-            for z in (0..field_embedding_len_end).step_by(LANES) {
-                prepare_contra_field_without_feature_value(
-                    contra_fields_ptr,
-                    ffm_weights_ptr,
-                );
+            for _ in (0..field_embedding_len_end).step_by(LANES) {
+                prepare_contra_field_without_feature_value(contra_fields_ptr, ffm_weights_ptr);
                 contra_fields_ptr = contra_fields_ptr.add(STEP);
                 ffm_weights_ptr = ffm_weights_ptr.add(STEP);
 
-                prepare_contra_field_without_feature_value(
-                    contra_fields_ptr,
-                    ffm_weights_ptr,
-                );
+                prepare_contra_field_without_feature_value(contra_fields_ptr, ffm_weights_ptr);
                 contra_fields_ptr = contra_fields_ptr.add(STEP);
                 ffm_weights_ptr = ffm_weights_ptr.add(STEP);
 
-                prepare_contra_field_without_feature_value(
-                    contra_fields_ptr,
-                    ffm_weights_ptr,
-                );
+                prepare_contra_field_without_feature_value(contra_fields_ptr, ffm_weights_ptr);
                 contra_fields_ptr = contra_fields_ptr.add(STEP);
                 ffm_weights_ptr = ffm_weights_ptr.add(STEP);
 
-                prepare_contra_field_without_feature_value(
-                    contra_fields_ptr,
-                    ffm_weights_ptr,
-                );
+                prepare_contra_field_without_feature_value(contra_fields_ptr, ffm_weights_ptr);
                 contra_fields_ptr = contra_fields_ptr.add(STEP);
                 ffm_weights_ptr = ffm_weights_ptr.add(STEP);
             }
@@ -982,7 +972,7 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
 
             let mut contra_fields_ptr = contra_fields.as_mut_ptr().add(offset);
             let mut ffm_weights_ptr = ffm_weights.as_ptr().add(feature_index);
-            for z in (0..field_embedding_len_end).step_by(LANES) {
+            for _ in (0..field_embedding_len_end).step_by(LANES) {
                 prepare_contra_field_with_feature_value(
                     contra_fields_ptr,
                     ffm_weights_ptr,
@@ -1037,6 +1027,7 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
         const LANES: usize = STEP * 2;
 
         let ffmk_end_as_usize = ffmk_as_usize - ffmk_as_usize % LANES;
+
         for f1 in 0..ffm_fields_count_as_usize {
             let f1_offset = f1 * field_embedding_len_as_usize;
             let f1_ffmk = f1 * ffmk_as_usize;
@@ -1047,7 +1038,7 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
             let mut contra_fields_ptr = contra_fields.as_ptr().add(f1_offset_ffmk);
             if ffmk_as_usize == LANES {
                 let contra_field_0 = _mm_loadu_ps(contra_fields_ptr);
-                let contra_field_1 = _mm_loadu_ps(contra_fields_ptr.add((STEP)));
+                let contra_field_1 = _mm_loadu_ps(contra_fields_ptr.add(STEP));
 
                 let acc_0 = _mm_mul_ps(contra_field_0, contra_field_0);
                 let acc_1 = _mm_mul_ps(contra_field_1, contra_field_1);
@@ -1071,14 +1062,12 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
                         * contra_fields.get_unchecked(f1_offset_ffmk + k);
                 }
             }
-
-            contra_field *= 0.5;
-            *ffm_slice.get_unchecked_mut(f1 * ffm_fields_count_as_usize + f1) += contra_field;
+            *ffm_slice.get_unchecked_mut(f1 * ffm_fields_count_as_usize + f1) += contra_field * 0.5;
 
             let mut f2_offset_ffmk = f1_offset + f1_ffmk;
             for f2 in f1 + 1..ffm_fields_count_as_usize {
-                f1_offset_ffmk += ffmk_as_usize;
                 f2_offset_ffmk += field_embedding_len_as_usize;
+                f1_offset_ffmk += ffmk_as_usize;
 
                 let mut contra_field = 0.0;
                 let mut contra_fields_ptr_1 = contra_fields.as_ptr().add(f1_offset_ffmk);
@@ -1088,27 +1077,21 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
                     let contra_field_1 = _mm_loadu_ps(contra_fields_ptr_2);
                     let acc_0 = _mm_mul_ps(contra_field_0, contra_field_1);
 
-                    let contra_field_2 =
-                        _mm_loadu_ps(contra_fields_ptr_1.add(STEP));
-                    let contra_field_3 =
-                        _mm_loadu_ps(contra_fields_ptr_2.add(STEP));
+                    let contra_field_2 = _mm_loadu_ps(contra_fields_ptr_1.add(STEP));
+                    let contra_field_3 = _mm_loadu_ps(contra_fields_ptr_2.add(STEP));
                     let acc_1 = _mm_mul_ps(contra_field_2, contra_field_3);
 
                     contra_field = hadd_ps(_mm_add_ps(acc_0, acc_1));
                 } else {
                     for _ in (0..ffmk_end_as_usize).step_by(LANES) {
-                        let contra_field_0 =
-                            _mm_loadu_ps(contra_fields_ptr_1);
-                        let contra_field_1 =
-                            _mm_loadu_ps(contra_fields_ptr_2);
+                        let contra_field_0 = _mm_loadu_ps(contra_fields_ptr_1);
+                        let contra_field_1 = _mm_loadu_ps(contra_fields_ptr_2);
                         let acc_0 = _mm_mul_ps(contra_field_0, contra_field_1);
                         contra_fields_ptr_1 = contra_fields_ptr_1.add(STEP);
                         contra_fields_ptr_2 = contra_fields_ptr_2.add(STEP);
 
-                        let contra_field_2 =
-                            _mm_loadu_ps(contra_fields_ptr_1);
-                        let contra_field_3 =
-                            _mm_loadu_ps(contra_fields_ptr_2);
+                        let contra_field_2 = _mm_loadu_ps(contra_fields_ptr_1);
+                        let contra_field_3 = _mm_loadu_ps(contra_fields_ptr_2);
                         let acc_1 = _mm_mul_ps(contra_field_2, contra_field_3);
                         contra_fields_ptr_1 = contra_fields_ptr_1.add(STEP);
                         contra_fields_ptr_2 = contra_fields_ptr_2.add(STEP);
@@ -1121,8 +1104,8 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
                             * contra_fields.get_unchecked(f2_offset_ffmk + k);
                     }
                 }
-
                 contra_field *= 0.5;
+
                 *ffm_slice.get_unchecked_mut(f1 * ffm_fields_count_as_usize + f2) += contra_field;
                 *ffm_slice.get_unchecked_mut(f2 * ffm_fields_count_as_usize + f1) += contra_field;
             }
