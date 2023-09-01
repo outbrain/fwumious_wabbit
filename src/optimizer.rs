@@ -3,8 +3,9 @@ use std::marker::PhantomData;
 
 #[derive(Clone)]
 pub struct OptStore {
-    acc_grad: f32,
-    acc_pre_grad: f32
+    grad_store: f32,
+    var_store: f32,
+    updates: u32,
 }
 
 pub trait OptimizerTrait: std::clone::Clone {
@@ -133,21 +134,63 @@ impl OptimizerTrait for OptimizerAdagradNesterov {
 
     #[inline(always)]
     unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32 {
-	let accumulated_gradient_squared = data.acc_grad;
-        let gradient_squared = gradient * gradient;
-        let new_accumulated_gradient_squared = accumulated_gradient_squared + gradient_squared;
-        data.acc_grad = new_accumulated_gradient_squared;
 
-	let ustep = 0.0001 * data.acc_pre_grad;
-	let update_nest = -(ustep - gradient * self.learning_rate);
-	data.acc_pre_grad = update_nest;
 
-	let grad_squared = (new_accumulated_gradient_squared).powf(-0.5);
 
-	let mut update = 0.0;
-	if grad_squared < 1.0 {
-	    update += update_nest * grad_squared;
-	}
+	// # m(t) = beta1 * m(t-1) + (1 - beta1) * g(t)
+	// m[i] = beta1 * m[i] + (1.0 - beta1) * g[i]
+	// # v(t) = beta2 * v(t-1) + (1 - beta2) * g(t)^2
+	// v[i] = beta2 * v[i] + (1.0 - beta2) * g[i]**2
+	// # mhat(t) = m(t) / (1 - beta1(t))
+	// mhat = m[i] / (1.0 - beta1**(t+1))
+	// # vhat(t) = v(t) / (1 - beta2(t))
+	// vhat = v[i] / (1.0 - beta2**(t+1))
+	// # x(t) = x(t-1) - alpha * mhat(t) / (sqrt(vhat(t)) + eps)
+	// x[i] = x[i] - alpha * mhat / (sqrt(vhat) + eps)
+	
+	data.updates += data.updates + 1;
+	let beta1 = 0.9 as f32;
+	let beta2 = 0.999 as f32;
+	let alpha = 0.01;
+
+	let m_t = beta1 * data.grad_store + (1.0 - beta1) * gradient;
+	let v_t = beta2 * data.var_store + (1.0 - beta2) * gradient * gradient;
+
+	data.grad_store = m_t;
+	data.var_store = v_t;
+
+	let mhat_t = m_t / (1.0 - beta1);
+	let vhat_t = v_t / (1.0 - beta2);
+	let update = alpha * mhat_t / (vhat_t.sqrt() + 10e-8);
+
+	//x(t) = x(t-1) – alpha * mhat(t) / (sqrt(vhat(t)) + eps)
+	// m(t) = beta1 * m(t-1) + (1 – beta1) * g(t)
+	// v(t) = beta2 * v(t-1) + (1 – beta2) * g(t)^2
+	// mhat(t) = m(t) / (1 – beta1(t))
+	// vhat(t) = v(t) / (1 – beta2(t))	
+	//    beta1(t) = beta1^t
+	//    beta2(t) = beta2^t
+
+	// let num_updates = data.update_counts;
+	// let update;
+	// update = gradient * self.learning_rate;
+	
+	//x(t) = x(t-1) – alpha * mhat(t) / (sqrt(vhat(t)) + eps)
+	// let accumulated_gradient_squared = data.acc_grad;
+        // let gradient_squared = gradient * gradient;
+        // let new_accumulated_gradient_squared = accumulated_gradient_squared + gradient_squared;
+        // data.acc_grad = new_accumulated_gradient_squared;
+
+	// let ustep = 0.0001 * data.acc_pre_grad;
+	// let update_nest = -(ustep - gradient * self.learning_rate);
+	// data.acc_pre_grad = update_nest;
+
+	// let grad_squared = (new_accumulated_gradient_squared).powf(-0.5);
+
+	// let mut update = 0.0;
+	// if grad_squared < 1.0 {
+	//     update += update_nest * grad_squared;
+	// }
 	    
         if update.is_nan() || update.is_infinite() {
             return 0.0;
@@ -156,7 +199,7 @@ impl OptimizerTrait for OptimizerAdagradNesterov {
     }
 
     fn initial_data(&self) -> Self::PerWeightStore {
-        OptStore{acc_grad: self.initial_acc_gradient, acc_pre_grad: 0.0}
+        OptStore{grad_store: 0.0, var_store: 0.0, updates: 0}
     }
 }
 
