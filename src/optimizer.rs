@@ -117,7 +117,7 @@ impl OptimizerTrait for OptimizerAdagradFlex {
 }
 
 
-/***************** SGD with Nesterov ******************/
+/***************** Adam - todo - names are deprecated atm ..  ******************/
 #[derive(Clone)]
 pub struct OptimizerAdagradNesterov {
     learning_rate: f32,
