@@ -1,6 +1,12 @@
 #![allow(dead_code,unused_imports)]
 use std::marker::PhantomData;
 
+#[derive(Clone)]
+pub struct OptStore {
+    acc_grad: f32,
+    acc_pre_grad: f32
+}
+
 pub trait OptimizerTrait: std::clone::Clone {
     type PerWeightStore: std::clone::Clone;
     fn new() -> Self;
@@ -107,7 +113,8 @@ impl OptimizerTrait for OptimizerAdagradNesterov {
     fn get_name() -> &'static str {
         "AdagradNesterov"
     }
-    type PerWeightStore = f32;
+    type PerWeightStore = OptStore;
+    
 
     fn new() -> Self {
         OptimizerAdagradNesterov {
@@ -126,26 +133,30 @@ impl OptimizerTrait for OptimizerAdagradNesterov {
 
     #[inline(always)]
     unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32 {
-//        let accumulated_gradient_squared = *data;
-        //let gradient_squared = gradient * gradient;
-        //let new_accumulated_gradient_squared = accumulated_gradient_squared + gradient_squared;
-        //*data = new_accumulated_gradient_squared;
-	
-	//change[i] = (momentum * change[i]) - step_size * gradient[i]
-	let update = -((0.001 * *data) - gradient * self.learning_rate);
-	*data = update;
-        // let update = gradient
-        //     * self.learning_rate;
-	//            * (new_accumulated_gradient_squared).powf(self.minus_power_t);
+	let accumulated_gradient_squared = data.acc_grad;
+        let gradient_squared = gradient * gradient;
+        let new_accumulated_gradient_squared = accumulated_gradient_squared + gradient_squared;
+        data.acc_grad = new_accumulated_gradient_squared;
+
+	let ustep = 0.0001 * data.acc_pre_grad;
+	let update_nest = -(ustep - gradient * self.learning_rate);
+	data.acc_pre_grad = update_nest;
+
+	let grad_squared = (new_accumulated_gradient_squared).powf(-0.5);
+
+	let mut update = 0.0;
+	if grad_squared < 1.0 {
+	    update += update_nest * grad_squared;
+	}
 	    
         if update.is_nan() || update.is_infinite() {
             return 0.0;
         }
-        update
+	return update;
     }
 
     fn initial_data(&self) -> Self::PerWeightStore {
-        self.initial_acc_gradient
+        OptStore{acc_grad: self.initial_acc_gradient, acc_pre_grad: 0.0}
     }
 }
 
