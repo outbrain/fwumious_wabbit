@@ -144,15 +144,13 @@ impl OptimizerTrait for OptimizerAdagradNesterov {
     #[inline(always)]
     unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32 {
 	
-	let beta1 = 0.91 as f32;
-	let beta2 = 0.999 as f32;
+	let beta1 = 0.91;
+	let beta2 = 0.999;
 	let alpha = 0.005;
 
 	if gradient == 0.0 {return 0.0}; // this is a game changer
-
 	data.grad_store = beta1 * data.grad_store + (1.0 - beta1) * gradient;
 	data.var_store = beta2 * data.var_store + (1.0 - beta2) * gradient.powf(2.0);
-
 	return alpha * (data.grad_store * inv_sqrt32_plus_eps(data.var_store));
 
     }
