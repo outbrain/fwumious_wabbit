@@ -561,7 +561,46 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                             );
                         } else if !contra_fields_copied {
                             contra_fields_copied = true;
-                            for z in 0..field_embedding_len_as_usize {
+
+                            const LANES: usize = STEP * 4;
+                            let field_embedding_len_end = field_embedding_len_as_usize
+                                - (field_embedding_len_as_usize % LANES);
+
+                            let mut contra_fields_ptr = contra_fields.as_mut_ptr().add(offset);
+                            let mut cached_contra_fields_ptr =
+                                cached_contra_fields.as_ptr().add(offset);
+
+                            for _ in (0..field_embedding_len_end).step_by(LANES) {
+                                add_cached_contra_field(
+                                    contra_fields_ptr,
+                                    cached_contra_fields_ptr,
+                                );
+                                contra_fields_ptr = contra_fields_ptr.add(STEP);
+                                cached_contra_fields_ptr = cached_contra_fields_ptr.add(STEP);
+
+                                add_cached_contra_field(
+                                    contra_fields_ptr,
+                                    cached_contra_fields_ptr,
+                                );
+                                contra_fields_ptr = contra_fields_ptr.add(STEP);
+                                cached_contra_fields_ptr = cached_contra_fields_ptr.add(STEP);
+
+                                add_cached_contra_field(
+                                    contra_fields_ptr,
+                                    cached_contra_fields_ptr,
+                                );
+                                contra_fields_ptr = contra_fields_ptr.add(STEP);
+                                cached_contra_fields_ptr = cached_contra_fields_ptr.add(STEP);
+
+                                add_cached_contra_field(
+                                    contra_fields_ptr,
+                                    cached_contra_fields_ptr,
+                                );
+                                contra_fields_ptr = contra_fields_ptr.add(STEP);
+                                cached_contra_fields_ptr = cached_contra_fields_ptr.add(STEP);
+                            }
+
+                            for z in field_embedding_len_end..field_embedding_len_as_usize {
                                 *contra_fields.get_unchecked_mut(offset + z) +=
                                     cached_contra_fields.get_unchecked(offset + z);
                             }
@@ -838,6 +877,19 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 }
 
 #[inline(always)]
+unsafe fn add_cached_contra_field(
+    contra_fields_ptr: *mut f32,
+    cached_contra_fields_ptr: *const f32,
+) {
+    let contra_fields = _mm_loadu_ps(contra_fields_ptr);
+    let cached_contra_fields = _mm_loadu_ps(cached_contra_fields_ptr);
+    _mm_storeu_ps(
+        contra_fields_ptr,
+        _mm_add_ps(cached_contra_fields, contra_fields),
+    );
+}
+
+#[inline(always)]
 unsafe fn prepare_first_contra_field(
     contra_fields_ptr: *mut f32,
     ffm_weights_ptr: *const f32,
@@ -1022,8 +1074,6 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
         ffm_fields_count_as_usize: usize,
         field_embedding_len_as_usize: usize,
     ) {
-        // elapsed: 13.247048ms, avg: 13.247µs, fw_predict: 0.5742056
-        // elapsed: 12.852153ms, avg: 12.852µs, fw_predict: 0.5742056
         const LANES: usize = STEP * 2;
 
         let ffmk_end_as_usize = ffmk_as_usize - ffmk_as_usize % LANES;
