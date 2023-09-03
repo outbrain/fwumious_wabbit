@@ -1104,7 +1104,7 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
                     let acc_0 = _mm_mul_ps(contra_field_0, contra_field_0);
                     let acc_1 = _mm_mul_ps(contra_field_1, contra_field_1);
 
-                    contra_field = hadd_ps(_mm_add_ps(acc_0, acc_1));
+                    contra_field += hadd_ps(_mm_add_ps(acc_0, acc_1));
                 }
 
                 for k in ffmk_end_as_usize..ffmk_as_usize {
@@ -1146,7 +1146,7 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
                         contra_fields_ptr_1 = contra_fields_ptr_1.add(STEP);
                         contra_fields_ptr_2 = contra_fields_ptr_2.add(STEP);
 
-                        contra_field = hadd_ps(_mm_add_ps(acc_0, acc_1));
+                        contra_field += hadd_ps(_mm_add_ps(acc_0, acc_1));
                     }
 
                     for k in ffmk_end_as_usize..ffmk_as_usize {
