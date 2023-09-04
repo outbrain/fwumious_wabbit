@@ -57,8 +57,8 @@ pub fn new_ffm_block(
         model_instance::Optimizer::SGD => {
             new_ffm_block_without_weights::<optimizer::OptimizerSGD>(mi)
         }
-        model_instance::Optimizer::AdagradNesterov => {
-            new_ffm_block_without_weights::<optimizer::OptimizerAdagradNesterov>(mi)
+        model_instance::Optimizer::AdamDS => {
+            new_ffm_block_without_weights::<optimizer::OptimizerAdamDS>(mi)
         }
 	
     }
@@ -90,8 +90,8 @@ fn new_ffm_block_without_weights<L: OptimizerTrait + 'static>(
     if mi.ffm_k > 0 {
         reg_ffm.optimizer_ffm.init(
             mi.ffm_learning_rate,
-            mi.ffm_power_t,
-            mi.ffm_init_acc_gradient,
+            mi.ffm_beta1,
+            mi.ffm_beta2,
         );
         // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
         reg_ffm.ffm_weights_len =

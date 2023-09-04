@@ -119,43 +119,46 @@ impl OptimizerTrait for OptimizerAdagradFlex {
 
 /***************** Adam - todo - names are deprecated atm ..  ******************/
 #[derive(Clone)]
-pub struct OptimizerAdagradNesterov {
+pub struct OptimizerAdamDS {
     learning_rate: f32,
+    beta1: f32,
+    beta2: f32	
 }
 
-impl OptimizerTrait for OptimizerAdagradNesterov {
+impl OptimizerTrait for OptimizerAdamDS {
     fn get_name() -> &'static str {
-        "AdagradNesterov"
+        "AdamDS"
     }
     type PerWeightStore = OptStore;
     
 
     fn new() -> Self {
-        OptimizerAdagradNesterov {
-            learning_rate: 0.0,
+        OptimizerAdamDS {
+            learning_rate: 0.005,
+	    beta1: 0.91,
+	    beta2: 0.999
         }
     }
 
-    fn init(&mut self, learning_rate: f32, power_t: f32, initial_acc_gradient: f32) {
-        log::info!("Adam init! {}", learning_rate);
+    fn init(&mut self, learning_rate: f32, beta1: f32, beta2: f32) {
+        log::info!("AdamDS init! lr: {} b1: {} b2: {}", learning_rate, beta1, beta2);
         self.learning_rate = learning_rate;
+	self.beta1 = beta1;
+	self.beta2 = beta2;
     }
 
     #[inline(always)]
     unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32 {
 	
-	let beta1 = 0.91;
-	let beta2 = 0.999;
-	let alpha = 0.005;
-	// todo -> comments about why this is the way it is
 	if gradient == 0.0 {return 0.0}; // this is a game changer
-	data.grad_store = beta1 * data.grad_store + (1.0 - beta1) * gradient;
-	data.var_store = beta2 * data.var_store + (1.0 - beta2) * gradient.powf(2.0);
-	return alpha * (data.grad_store * inv_sqrt32_plus_eps(data.var_store));
+	data.grad_store = self.beta1 * data.grad_store + (1.0 - self.beta1) * gradient;
+	data.var_store = self.beta2 * data.var_store + (1.0 - self.beta2) * gradient.powf(2.0);
+	return self.learning_rate * (data.grad_store * inv_sqrt32_plus_eps(data.var_store));
 
     }
 
     fn initial_data(&self) -> Self::PerWeightStore {
+	// todo -> no need for f32 imo
         OptStore{grad_store: 0.0, var_store: 0.0}
     }
 }

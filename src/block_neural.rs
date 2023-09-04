@@ -112,7 +112,7 @@ fn new_neuronlayer_without_weights<L: OptimizerTrait + 'static>(
     };
 
     rg.optimizer
-        .init(mi.nn_learning_rate, mi.nn_power_t, mi.nn_init_acc_gradient);
+        .init(mi.nn_learning_rate, mi.nn_beta1, mi.nn_beta2);
     Ok(Box::new(rg))
 }
 
@@ -168,8 +168,8 @@ pub fn new_neuronlayer_block(
                 layer_norm,
             )
         }
-        model_instance::Optimizer::AdagradNesterov => {
-            new_neuronlayer_without_weights::<optimizer::OptimizerAdagradNesterov>(
+        model_instance::Optimizer::AdamDS => {
+            new_neuronlayer_without_weights::<optimizer::OptimizerAdamDS>(
                 mi,
                 num_inputs,
                 ntype,

@@ -63,7 +63,7 @@ fn new_lr_block_without_weights<L: OptimizerTrait + 'static>(
     };
     reg_lr
         .optimizer_lr
-        .init(mi.learning_rate, mi.power_t, mi.init_acc_gradient);
+        .init(mi.learning_rate, mi.beta1, mi. beta2);
     reg_lr.weights_len = 1 << mi.bit_precision;
     Ok(Box::new(reg_lr))
 }
@@ -82,8 +82,8 @@ pub fn new_lr_block(
         model_instance::Optimizer::SGD => {
             new_lr_block_without_weights::<optimizer::OptimizerSGD>(mi)
         }
-	model_instance::Optimizer::AdagradNesterov => {
-            new_lr_block_without_weights::<optimizer::OptimizerAdagradNesterov>(mi)
+	model_instance::Optimizer::AdamDS => {
+            new_lr_block_without_weights::<optimizer::OptimizerAdamDS>(mi)
         }
     }
     .unwrap();

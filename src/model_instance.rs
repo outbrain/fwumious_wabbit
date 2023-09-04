@@ -28,7 +28,7 @@ pub enum Optimizer {
     SGD = 100,
     AdagradFlex = 200,
     AdagradLUT = 300,
-    AdagradNesterov = 400,
+    AdamDS = 400,
 }
 
 pub type FieldDesc = Vec<vwmap::NamespaceDescriptor>;
@@ -83,6 +83,24 @@ pub struct ModelInstance {
     #[serde(default = "default_f32_zero")]
     pub ffm_power_t: f32,
 
+    #[serde(default = "default_f32_zero")]
+    pub nn_beta1: f32,
+
+    #[serde(default = "default_f32_zero")]
+    pub nn_beta2: f32,
+
+    #[serde(default = "default_f32_zero")]
+    pub ffm_beta1: f32,
+
+    #[serde(default = "default_f32_zero")]
+    pub ffm_beta2: f32,
+
+    #[serde(default = "default_f32_zero")]
+    pub beta1: f32,
+
+    #[serde(default = "default_f32_zero")]
+    pub beta2: f32,
+    
     #[serde(default = "default_f32_zero")]
     pub nn_init_acc_gradient: f32,
     #[serde(default = "default_f32_zero")]
@@ -142,6 +160,12 @@ impl ModelInstance {
             nn_init_acc_gradient: 0.0,
             nn_learning_rate: 0.02,
             nn_power_t: 0.45,
+	    nn_beta1: 0.91,
+	    nn_beta2: 0.99,
+	    ffm_beta1: 0.91,
+	    ffm_beta2: 0.99,
+	    beta1: 0.91,
+	    beta2: 0.99,
             init_acc_gradient: 1.0,
             optimizer: Optimizer::SGD,
             transform_namespaces: feature_transform_parser::NamespaceTransforms::new(),
@@ -485,7 +509,7 @@ impl ModelInstance {
         }
 	
         if cl.is_present("adaptive") {
-            mi.optimizer = Optimizer::AdagradNesterov;
+            mi.optimizer = Optimizer::AdamDS;
         }
 
         // if mi.optimizer == Optimizer::AdagradFlex && mi.fastmath {
