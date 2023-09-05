@@ -1,3 +1,5 @@
+#![allow(dead_code,unused_imports, unused_mut, invalid_value)]
+
 use core::arch::x86_64::*;
 use rustc_hash::FxHashSet;
 use std::any::Any;
@@ -283,7 +285,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 fb.ffm_buffer.len() * (self.ffm_k * self.ffm_num_fields) as usize;
             if local_data_ffm_len < FFM_STACK_BUF_LEN {
                 // Fast-path - using on-stack data structures
-                let mut local_data_ffm_values: [f32; FFM_STACK_BUF_LEN as usize] =
+                let local_data_ffm_values: [f32; FFM_STACK_BUF_LEN as usize] =
                     MaybeUninit::uninit().assume_init();
                 core_macro!(local_data_ffm_values);
             } else {

@@ -1,5 +1,6 @@
 //#[macro_use]
 //extern crate nom;
+#![allow(dead_code,unused_imports)]
 
 use crate::vwmap;
 use serde::{Deserialize, Serialize};
@@ -68,7 +69,7 @@ impl NamespaceTransformsParser {
         }
         let (
             _,
-            (to_namespace_verbose, function_name, from_namespaces_verbose, function_parameters),
+            (to_namespace_verbose, _function_name, from_namespaces_verbose, _function_parameters),
         ) = rr.unwrap();
 
         // Here we just check for clashes with namespaces from input file
@@ -242,7 +243,7 @@ impl NamespaceTransforms {
 }
 
 pub fn get_namespace_descriptor(
-    transform_namespaces: &NamespaceTransforms,
+    _transform_namespaces: &NamespaceTransforms,
     vw: &vwmap::VwNamespaceMap,
     namespace_char: char,
 ) -> Result<vwmap::NamespaceDescriptor, Box<dyn Error>> {

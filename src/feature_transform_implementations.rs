@@ -1,3 +1,5 @@
+#![allow(dead_code,unused_imports)]
+
 use std::error::Error;
 use std::io::Error as IOError;
 use std::io::ErrorKind;
@@ -216,14 +218,14 @@ impl FunctionExecutorTrait for TransformerLogRatioBinner {
         feature_reader_float_namespace!(
             record_buffer,
             self.from_namespace1.namespace_descriptor,
-            hash_index1,
+            _hash_index1,
             hash_value1,
             float_value1,
             {
                 feature_reader_float_namespace!(
                     record_buffer,
                     self.from_namespace2.namespace_descriptor,
-                    hash_index2,
+                    _hash_index2,
                     hash_value2,
                     float_value2,
                     {
