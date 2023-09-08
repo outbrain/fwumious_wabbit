@@ -49,6 +49,8 @@ pub struct ModelInstance {
     #[serde(default = "default_f32_zero")]
     pub minimum_learning_rate: f32,
     pub power_t: f32,
+    #[serde(default = "default_f32_one")]
+    pub field_factor: f32,
     pub bit_precision: u8,
     pub add_constant_feature: bool,
     pub feature_combo_descs: Vec<FeatureComboDesc>,
@@ -99,6 +101,9 @@ fn default_u32_zero() -> u32 {
 fn default_f32_zero() -> f32 {
     0.0
 }
+fn default_f32_one() -> f32 {
+    1.0
+}
 fn default_bool_false() -> bool {
     false
 }
@@ -122,6 +127,7 @@ impl ModelInstance {
             bit_precision: 18, // vw default
             power_t: 0.5,
             ffm_power_t: 0.5,
+            field_factor: 1.0,
             add_constant_feature: true,
             feature_combo_descs: Vec::new(),
             ffm_fields: Vec::new(),
@@ -418,9 +424,12 @@ impl ModelInstance {
         mi.init_acc_gradient = parse_float("init_acc_gradient", mi.init_acc_gradient, cl);
         mi.power_t = parse_float("power_t", mi.power_t, cl);
 
+
         mi.ffm_learning_rate = parse_float("ffm_learning_rate", mi.learning_rate, cl);
         mi.ffm_init_acc_gradient = parse_float("ffm_init_acc_gradient", mi.init_acc_gradient, cl);
         mi.ffm_power_t = parse_float("ffm_power_t", mi.power_t, cl);
+        mi.field_factor = parse_float("field_factor", mi.field_factor, cl);
+
 
         mi.nn_learning_rate = parse_float("nn_learning_rate", mi.ffm_learning_rate, cl);
         mi.nn_init_acc_gradient =
@@ -494,12 +503,13 @@ impl ModelInstance {
         Ok(mi)
     }
 
-    pub fn update_hyperparameters_from_cmd(
+pub fn update_hyperparameters_from_cmd(
         cmd_arguments: &clap::ArgMatches<'_>,
         mi: &mut ModelInstance,
     ) -> Result<(), Box<dyn Error>> {
         /*! A method that enables updating hyperparameters of an existing (pre-loaded) model.
-        Currently limited to the most commonly used hyperparameters: ffm_learning_rate, ffm_power_t, power_t, learning_rate. */
+        Currently limited to the most commonly used hyperparameters: ffm_learning_rate, ffm_power_t, power_t, learning_rate, 
+        Branch-specific: field_factor */
 
         let mut replacement_hyperparam_ids: Vec<(String, String)> = vec![];
 
@@ -529,6 +539,14 @@ impl ModelInstance {
                 replacement_hyperparam_ids.push(("power_t".to_string(), hvalue.to_string()));
             }
         }
+        // Handle power of t
+        if cmd_arguments.is_present("field_factor") {
+            if let Some(val) = cmd_arguments.value_of("field_factor") {
+                let hvalue = val.parse::<f32>()?;
+                mi.field_factor = hvalue;
+                replacement_hyperparam_ids.push(("field_factor".to_string(), hvalue.to_string()));
+            }
+        }
 
         if cmd_arguments.is_present("ffm_power_t") {
             if let Some(val) = cmd_arguments.value_of("ffm_power_t") {
@@ -537,7 +555,7 @@ impl ModelInstance {
                 replacement_hyperparam_ids.push(("ffm_power_t".to_string(), hvalue.to_string()));
             }
         }
-
+        
         for (hyper_name, hyper_value) in replacement_hyperparam_ids.into_iter() {
             log::warn!(
                 "Warning! Updated hyperparameter {} to value {}",

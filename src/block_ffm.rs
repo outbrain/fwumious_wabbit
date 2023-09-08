@@ -37,6 +37,7 @@ pub struct BlockFFM<L: OptimizerTrait> {
     pub weights: Vec<f32>,
     pub optimizer: Vec<OptimizerData<L>>,
     pub output_offset: usize,
+    pub field_factor: f32,
     mutex: Mutex<()>,
 }
 
@@ -86,6 +87,7 @@ fn new_ffm_block_without_weights<L: OptimizerTrait + 'static>(
         field_embedding_len,
         optimizer_ffm: L::new(),
         output_offset: usize::MAX,
+        field_factor: mi.field_factor,
         mutex: Mutex::new(()),
     };
 
@@ -271,7 +273,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
                                 for k in 0.. ffmk_as_usize {
                                     let feature_value = *local_data_ffm_values.get_unchecked(local_index);
-                                    let gradient = general_gradient * feature_value;
+                                    let gradient = general_gradient * feature_value * self.field_factor;
                                     let update = self.optimizer_ffm.calculate_update(gradient,
                                         &mut self.optimizer.get_unchecked_mut(feature_index).optimizer_data);
 
