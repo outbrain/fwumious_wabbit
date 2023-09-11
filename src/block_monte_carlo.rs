@@ -90,10 +90,9 @@ impl BlockTrait for BlockMonteCarlo {
         pb: &mut PortBuffer,
     ) {
         unsafe {
-            self.copy_input_tape_to_output_tape(pb);
-            block_helpers::forward(further_blocks, fb, pb);
-
             if self.number_of_inputs_to_skip == 0 {
+                self.copy_input_tape_to_output_tape(pb);
+                block_helpers::forward(further_blocks, fb, pb);
                 return;
             }
 
@@ -105,7 +104,7 @@ impl BlockTrait for BlockMonteCarlo {
             let seed = create_seed_from_input_tape(&input_tape);
             let mut rng = Xoshiro256Plus::seed_from_u64(seed);
 
-            for _ in 1..self.num_iterations {
+            for i in 0..self.num_iterations {
                 let (_, output_tape) = block_helpers::get_input_output_borrows(
                     &mut pb.tape,
                     self.input_offset,
@@ -115,9 +114,11 @@ impl BlockTrait for BlockMonteCarlo {
                 );
 
                 output_tape.copy_from_slice(&input_tape);
-                for _ in 0..self.number_of_inputs_to_skip {
-                    let skip_index = self.skip_index_generator.sample(&mut rng);
-                    *output_tape.get_unchecked_mut(skip_index) = 0.0;
+                if i != 0 {
+                    for _ in 0..self.number_of_inputs_to_skip {
+                        let skip_index = self.skip_index_generator.sample(&mut rng);
+                        *output_tape.get_unchecked_mut(skip_index) = 0.0;
+                    }
                 }
                 block_helpers::forward(further_blocks, fb, pb);
             }
@@ -134,10 +135,9 @@ impl BlockTrait for BlockMonteCarlo {
         caches: &[BlockCache],
     ) {
         unsafe {
-            self.copy_input_tape_to_output_tape(pb);
-            block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
-
             if self.number_of_inputs_to_skip == 0 {
+                self.copy_input_tape_to_output_tape(pb);
+                block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
                 return;
             }
 
@@ -149,7 +149,7 @@ impl BlockTrait for BlockMonteCarlo {
             let seed = create_seed_from_input_tape(&input_tape);
             let mut rng = Xoshiro256Plus::seed_from_u64(seed);
 
-            for _ in 1..self.num_iterations {
+            for i in 0..self.num_iterations {
                 let (_, output_tape) = block_helpers::get_input_output_borrows(
                     &mut pb.tape,
                     self.input_offset,
@@ -159,9 +159,11 @@ impl BlockTrait for BlockMonteCarlo {
                 );
 
                 output_tape.copy_from_slice(&input_tape);
-                for _ in 0..self.number_of_inputs_to_skip {
-                    let skip_index = self.skip_index_generator.sample(&mut rng);
-                    *output_tape.get_unchecked_mut(skip_index) = 0.0;
+                if i != 0 {
+                    for _ in 0..self.number_of_inputs_to_skip {
+                        let skip_index = self.skip_index_generator.sample(&mut rng);
+                        *output_tape.get_unchecked_mut(skip_index) = 0.0;
+                    }
                 }
                 block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
             }
