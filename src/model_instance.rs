@@ -382,6 +382,12 @@ impl ModelInstance {
             }
         }
 
+        if let Some(val) = cl.value_of("ffm_mc_iteration_count") {
+            mi.ffm_mc_iteration_count = val.parse()?;
+        }
+
+        mi.ffm_mc_dropout_rate = parse_float("ffm_mc_dropout_rate", mi.ffm_mc_dropout_rate, cl);
+
         if let Some(val) = cl.value_of("ffm_initialization_type") {
             mi.ffm_initialization_type = val.parse()?;
         }
@@ -540,6 +546,22 @@ impl ModelInstance {
                 let hvalue = val.parse::<f32>()?;
                 mi.ffm_power_t = hvalue;
                 replacement_hyperparam_ids.push(("ffm_power_t".to_string(), hvalue.to_string()));
+            }
+        }
+
+        if cmd_arguments.is_present("ffm_mc_iteration_count") {
+            if let Some(val) = cmd_arguments.value_of("ffm_mc_iteration_count") {
+                let hvalue = val.parse::<>()?;
+                mi.ffm_mc_iteration_count = hvalue;
+                replacement_hyperparam_ids.push(("ffm_mc_iteration_count".to_string(), hvalue.to_string()));
+            }
+        }
+
+        if cmd_arguments.is_present("ffm_mc_dropout_rate") {
+            if let Some(val) = cmd_arguments.value_of("ffm_mc_dropout_rate") {
+                let hvalue = val.parse::<f32>()?;
+                mi.ffm_mc_dropout_rate = hvalue;
+                replacement_hyperparam_ids.push(("ffm_mc_dropout_rate".to_string(), hvalue.to_string()));
             }
         }
 
