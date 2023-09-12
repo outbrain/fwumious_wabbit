@@ -153,7 +153,13 @@ impl OptimizerTrait for OptimizerAdamDS {
 	if gradient == 0.0 {return 0.0}; // this is a game changer
 	data.grad_store = self.beta1 * data.grad_store + (1.0 - self.beta1) * gradient;
 	data.var_store = self.beta2 * data.var_store + (1.0 - self.beta2) * gradient.powf(2.0);
-	return self.learning_rate * (data.grad_store * inv_sqrt32_plus_eps(data.var_store));
+
+	let update = self.learning_rate * (data.grad_store * inv_sqrt32_plus_eps(data.var_store));
+        if update.is_nan() || update.is_infinite() {
+            return self.learning_rate;
+        }
+	
+	return update;
 
     }
 
