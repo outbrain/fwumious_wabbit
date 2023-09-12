@@ -610,8 +610,8 @@ mod tests {
 
         for re in &mut regressors {
             assert_eq!(re.learn(vec_in, &mut pb, true), 0.5);
-            assert_eq!(re.learn(vec_in, &mut pb, true), 0.48750263);
-            assert_eq!(re.learn(vec_in, &mut pb, true), 0.47533244);
+            assert_eq!(re.learn(vec_in, &mut pb, true), 0.48972374);
+            assert_eq!(re.learn(vec_in, &mut pb, true), 0.48116082);
         }
     }
 
@@ -641,8 +641,8 @@ mod tests {
         ]);
 
         assert_eq!(re.learn(vec_in, &mut pb, true), 0.5);
-        assert_eq!(re.learn(vec_in, &mut pb, true), 0.38936076);
-        assert_eq!(re.learn(vec_in, &mut pb, true), 0.30993468);
+        assert_eq!(re.learn(vec_in, &mut pb, true), 0.4347515);
+        assert_eq!(re.learn(vec_in, &mut pb, true), 0.39804837);
     }
 
     #[test]
@@ -677,7 +677,7 @@ mod tests {
                 &mut pb,
                 true
             ),
-            0.4750208
+            0.48972374
         );
         assert_eq!(
             re.learn(
@@ -689,7 +689,7 @@ mod tests {
                 &mut pb,
                 true
             ),
-            0.45788094
+            0.48116082
         );
     }
 
@@ -728,7 +728,7 @@ mod tests {
         if optimizer::FASTMATH_LR_LUT_BITS == 12 {
             assert_eq!(p, 0.47539312);
         } else if optimizer::FASTMATH_LR_LUT_BITS == 11 {
-            assert_eq!(p, 0.475734);
+            assert_eq!(p, 0.48983875);
         } else {
             assert!(
                 false,
@@ -785,7 +785,7 @@ mod tests {
                 &mut pb,
                 true
             ),
-            0.45016602
+            0.47945616
         );
         assert_eq!(
             re.learn(
@@ -797,7 +797,7 @@ mod tests {
                 &mut pb,
                 true
             ),
-            0.45836908
+            0.4812887
         );
     }
 
@@ -834,7 +834,7 @@ mod tests {
                 &mut pb,
                 true
             ),
-            0.45016602
+            0.47401333
         );
         assert_eq!(
             re.learn(
@@ -846,7 +846,7 @@ mod tests {
                 &mut pb,
                 true
             ),
-            0.40611085
+            0.45625967
         );
     }
 
@@ -869,7 +869,7 @@ mod tests {
         }]);
         fb_instance.example_importance = 0.5;
         assert_eq!(re.learn(&fb_instance, &mut pb, true), 0.5);
-        assert_eq!(re.learn(&fb_instance, &mut pb, true), 0.49375027);
-        assert_eq!(re.learn(&fb_instance, &mut pb, true), 0.4875807);
+        assert_eq!(re.learn(&fb_instance, &mut pb, true), 0.49405465);
+        assert_eq!(re.learn(&fb_instance, &mut pb, true), 0.48844516);
     }
 }

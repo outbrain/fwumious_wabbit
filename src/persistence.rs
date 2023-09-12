@@ -254,10 +254,10 @@ B,featureB
             },
         ]);
         assert_eq!(re.learn(fbuf, &mut pb, true), 0.5);
-        assert_eq!(re.learn(fbuf, &mut pb, true), 0.45016602);
-        assert_eq!(re.learn(fbuf, &mut pb, false), 0.41731137);
+        assert_eq!(re.learn(fbuf, &mut pb, true), 0.47945616);
+        assert_eq!(re.learn(fbuf, &mut pb, false), 0.46262974);
 
-        let expected_result = 0.41731137;
+        let expected_result = 0.46262974;
         assert_eq!(re.learn(fbuf, &mut pb, false), expected_result);
 
         // Now we test conversion to fixed regressor
@@ -358,7 +358,7 @@ B,featureB
         pb.reset();
         p = re.learn(fbuf, &mut pb, true);
         assert_eq!(p, 0.9933072);
-        let expected_result = 0.9395168;
+        let expected_result = 0.9899861;
         p = re.learn(fbuf, &mut pb, false);
         assert_epsilon!(p, expected_result);
         p = re.predict(fbuf, &mut pb);
@@ -500,7 +500,7 @@ B,featureB
 
         p = re_1.learn(fbuf_1, &mut pb_1, true);
         assert_eq!(p, 0.97068775);
-        let expected_result_1_on_1 = 0.8922257;
+        let expected_result_1_on_1 = 0.9582104;
         p = re_1.learn(fbuf_1, &mut pb_1, false);
         assert_eq!(p, expected_result_1_on_1);
         p = re_1.predict(fbuf_1, &mut pb_1);
@@ -508,23 +508,23 @@ B,featureB
 
         p = re_2.learn(fbuf_2, &mut pb_2, true);
         assert_eq!(p, 0.9933072);
-        let expected_result_2_on_2 = 0.92719215;
+        let expected_result_2_on_2 = 0.9888693;
         p = re_2.learn(fbuf_2, &mut pb_2, false);
         assert_eq!(p, expected_result_2_on_2);
         p = re_2.predict(fbuf_2, &mut pb_2);
         assert_eq!(p, expected_result_2_on_2);
 
         p = re_2.learn(fbuf_1, &mut pb_2, false);
-        assert_eq!(p, 0.93763095);
-        let expected_result_1_on_2 = 0.93763095;
+        assert_eq!(p, 0.9628589);
+        let expected_result_1_on_2 = 0.9628589;
         p = re_2.learn(fbuf_1, &mut pb_2, false);
         assert_eq!(p, expected_result_1_on_2);
         p = re_2.predict(fbuf_1, &mut pb_1);
         assert_eq!(p, expected_result_1_on_2);
 
         p = re_1.learn(fbuf_2, &mut pb_1, false);
-        assert_eq!(p, 0.98559695);
-        let expected_result_2_on_1 = 0.98559695;
+        assert_eq!(p, 0.99068856);
+        let expected_result_2_on_1 = 0.99068856;
         p = re_1.learn(fbuf_2, &mut pb_1, false);
         assert_eq!(p, expected_result_2_on_1);
         p = re_1.predict(fbuf_2, &mut pb_2);

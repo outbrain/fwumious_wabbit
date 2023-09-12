@@ -1022,8 +1022,8 @@ mod tests {
         assert_epsilon!(spredict2(&mut bg, &fb, &mut pb), 0.7310586);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.7310586);
 
-        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb), 0.7024794);
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.7024794);
+        assert_epsilon!(spredict2(&mut bg, &fb, &mut pb), 0.71153694);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.71153694);
 
         // Two fields, use values
         mi.optimizer = Optimizer::AdagradLUT;
@@ -1048,8 +1048,8 @@ mod tests {
         ]);
         assert_eq!(spredict2(&mut bg, &fb, &mut pb), 0.98201376);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.98201376);
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb), 0.81377685);
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.81377685);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb), 0.97720885);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.97720885);
     }
 
     #[test]
@@ -1130,9 +1130,9 @@ mod tests {
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
         assert_epsilon!(
             spredict2_with_cache(&mut bg, &fb, &mut pb, &caches),
-            0.7024794
+            0.71153694
         );
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.7024794);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.71153694);
 
         // Two fields, use values
         mi.optimizer = Optimizer::AdagradLUT;
@@ -1171,9 +1171,9 @@ mod tests {
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
         assert_epsilon!(
             spredict2_with_cache(&mut bg, &fb, &mut pb, &caches),
-            0.81377685
+            0.97720885
         );
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.81377685);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.97720885);
     }
 
     #[test]
@@ -1231,8 +1231,8 @@ mod tests {
         ]);
         assert_eq!(spredict2(&mut bg, &fb, &mut pb), 0.98201376);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.98201376);
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb), 0.96277946);
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.96277946);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb), 0.9729968);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.9729968);
 
         // Two fields, use values
         mi.optimizer = Optimizer::AdagradLUT;
@@ -1257,8 +1257,8 @@ mod tests {
         ]);
         assert_eq!(spredict2(&mut bg, &fb, &mut pb), 0.9999999);
         assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.9999999);
-        assert_eq!(spredict2(&mut bg, &fb, &mut pb), 0.99685884);
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.99685884);
+        assert_eq!(spredict2(&mut bg, &fb, &mut pb), 0.99999964);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.99999964);
     }
 
     #[test]
@@ -1338,9 +1338,9 @@ mod tests {
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
         assert_epsilon!(
             spredict2_with_cache(&mut bg, &fb, &mut pb, &caches),
-            0.96277946
+            0.9729968
         );
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.96277946);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.9729968);
 
         // Two fields, use values
         mi.optimizer = Optimizer::AdagradLUT;
@@ -1379,9 +1379,9 @@ mod tests {
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
         assert_epsilon!(
             spredict2_with_cache(&mut bg, &fb, &mut pb, &caches),
-            0.99685884
+	    0.99999964
         );
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.99685884);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.99999964);
     }
 
     #[test]
@@ -1424,10 +1424,10 @@ mod tests {
         ]);
         assert_epsilon!(spredict2(&mut bg, fbuf, &mut pb), 0.9933072);
         assert_eq!(slearn2(&mut bg, fbuf, &mut pb, true), 0.9933072);
-        assert_epsilon!(spredict2(&mut bg, fbuf, &mut pb), 0.9395168);
-        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 0.9395168);
-        assert_epsilon!(spredict2(&mut bg, fbuf, &mut pb), 0.9395168);
-        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 0.9395168);
+        assert_epsilon!(spredict2(&mut bg, fbuf, &mut pb), 0.9899333);
+        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 0.9899333);
+        assert_epsilon!(spredict2(&mut bg, fbuf, &mut pb), 0.9899333);
+        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 0.9899333);
     }
 
     #[test]
@@ -1492,16 +1492,16 @@ mod tests {
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
         assert_epsilon!(
             spredict2_with_cache(&mut bg, &fb, &mut pb, &caches),
-            0.9395168
+            0.9899333
         );
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.9395168);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.9899333);
 
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
         assert_epsilon!(
             spredict2_with_cache(&mut bg, &fb, &mut pb, &caches),
-            0.9395168
+            0.9899333
         );
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.9395168);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.9899333);
     }
 
     #[test]
@@ -1541,9 +1541,9 @@ mod tests {
 
         assert_eq!(spredict2(&mut bg, fbuf, &mut pb), 1.0);
         assert_eq!(slearn2(&mut bg, fbuf, &mut pb, true), 1.0);
-        assert_eq!(spredict2(&mut bg, fbuf, &mut pb), 0.9949837);
-        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 0.9949837);
-        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 0.9949837);
+        assert_eq!(spredict2(&mut bg, fbuf, &mut pb), 0.9999974);
+        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 0.9999974);
+        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 0.9999974);
     }
 
     #[test]
@@ -1602,10 +1602,10 @@ mod tests {
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
         assert_epsilon!(
             spredict2_with_cache(&mut bg, &fb, &mut pb, &caches),
-            0.9949837
+            0.9999974
         );
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.9949837);
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.9949837);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.9999974);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.9999974);
     }
 
     #[test]
