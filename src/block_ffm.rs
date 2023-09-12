@@ -47,6 +47,7 @@ pub fn new_ffm_block(
     bg: &mut graph::BlockGraph,
     mi: &model_instance::ModelInstance,
 ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
+
     let block = match mi.optimizer {
         model_instance::Optimizer::AdagradLUT => {
             new_ffm_block_without_weights::<optimizer::OptimizerAdagradLUT>(mi)

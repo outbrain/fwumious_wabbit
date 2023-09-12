@@ -110,7 +110,7 @@ pub struct ModelInstance {
 
     pub nn_config: NNConfig,
 
-    #[serde(default = "default_optimizer_adagrad")]
+    #[serde(default = "default_optimizer_adam")]
     pub optimizer: Optimizer,
 
     pub transform_namespaces: feature_transform_parser::NamespaceTransforms,
@@ -125,8 +125,8 @@ fn default_f32_zero() -> f32 {
 fn default_bool_false() -> bool {
     false
 }
-fn default_optimizer_adagrad() -> Optimizer {
-    Optimizer::AdagradFlex
+fn default_optimizer_adam() -> Optimizer {
+    Optimizer::AdamDS
 }
 
 fn parse_float(s: &str, default: f32, cl: &clap::ArgMatches) -> f32 {
@@ -167,7 +167,7 @@ impl ModelInstance {
 	    beta1: 0.91,
 	    beta2: 0.99,
             init_acc_gradient: 1.0,
-            optimizer: Optimizer::SGD,
+            optimizer: Optimizer::AdamDS,
             transform_namespaces: feature_transform_parser::NamespaceTransforms::new(),
             nn_config: NNConfig::new(),
         };
