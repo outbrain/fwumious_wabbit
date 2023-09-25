@@ -15,17 +15,28 @@ pub(crate) fn hash32(key: &[u8]) -> u32 {
 pub(crate) fn hash32_with_seed(key: &[u8], seed: u32) -> u32 {
     unsafe {
         let mut hash = seed;
-        let mut data = key;
 
-        let data_len = data.len();
+        let data_len = key.len();
         let data_len_remainder = data_len % STEP;
         let data_len_end = data_len - data_len_remainder;
-        for i in (0..data_len_end).step_by(STEP) {
+
+        let mut data = key.as_ptr();
+
+        for _ in (0..data_len_end).step_by(STEP) {
             let mut k = 0u32;
 
-            for j in 0..STEP {
-                k ^= u32::from(*data.get_unchecked(i + j)) << (8 * j as u32);
-            }
+            k ^= u32::from(*data);
+            data = data.add(1);
+
+            k ^= u32::from(*data) << (8u32);
+            data = data.add(1);
+
+            k ^= u32::from(*data) << (16u32);
+            data = data.add(1);
+
+            k ^= u32::from(*data) << (24u32);
+            data = data.add(1);
+
             k = k.wrapping_mul(C1).rotate_left(R1).wrapping_mul(C2);
 
             hash ^= k;
@@ -36,7 +47,8 @@ pub(crate) fn hash32_with_seed(key: &[u8], seed: u32) -> u32 {
         let mut k = 0u32;
 
         for i in 0..data_len_remainder {
-            k ^= u32::from(*data.get_unchecked(data_len_end + i)) << (8 * i as u32);
+            k ^= u32::from(*data) << (8 * i as u32);
+            data = data.add(1);
         }
 
         k = k.wrapping_mul(C1).rotate_left(R1).wrapping_mul(C2);
