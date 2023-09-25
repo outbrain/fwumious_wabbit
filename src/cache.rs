@@ -1,3 +1,5 @@
+#![allow(dead_code,unused_imports)]
+
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::error::Error;
 use std::fs;
@@ -44,11 +46,8 @@ impl<W: io::Write> Write for Wrapper<W> {
 }
 impl<W: Write> Drop for Wrapper<W> {
     fn drop(&mut self) {
-        match self.s.take() {
-            Some(s) => {
-                let _result = s.finish();
-            }
-            None => {}
+        if let Some(s) = self.s.take() {
+            let _result = s.finish();
         }
     }
 }
@@ -69,14 +68,9 @@ pub struct RecordCache {
 
 impl RecordCache {
     pub fn new(input_filename: &str, enabled: bool, vw_map: &vwmap::VwNamespaceMap) -> RecordCache {
-        let gz: bool;
         let temporary_filename: String = format!("{}.fwcache.writing", input_filename);
         let final_filename: String = format!("{}.fwcache", input_filename);
-        if !input_filename.ends_with("gz") {
-            gz = false;
-        } else {
-            gz = true;
-        }
+        let gz = input_filename.ends_with("gz");
 
         let mut rc = RecordCache {
             output_bufwriter: Box::new(io::BufWriter::new(io::sink())),

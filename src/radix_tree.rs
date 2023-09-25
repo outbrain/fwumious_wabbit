@@ -1,3 +1,5 @@
+#![allow(dead_code,unused_imports)]
+
 use crate::vwmap::NamespaceDescriptor;
 
 #[derive(Clone, Copy, Debug, PartialEq)]

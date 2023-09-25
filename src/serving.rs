@@ -1,3 +1,5 @@
+#![allow(dead_code,unused_imports)]
+
 use daemonize::Daemonize;
 use std::error::Error;
 use std::io;

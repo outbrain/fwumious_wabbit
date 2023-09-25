@@ -1,3 +1,5 @@
+#![allow(dead_code,unused_imports)]
+
 use crate::radix_tree::{NamespaceDescriptorWithHash, RadixTree};
 use crate::{murmur, vwmap};
 use std::error::Error;

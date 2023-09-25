@@ -1,3 +1,5 @@
+#![allow(dead_code,unused_imports)]
+
 use crate::block_misc;
 use crate::model_instance;
 use crate::port_buffer;

@@ -1,3 +1,5 @@
+#![allow(dead_code,unused_imports)]
+
 use std::any::Any;
 use std::error::Error;
 

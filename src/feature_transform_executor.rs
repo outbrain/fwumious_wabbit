@@ -1,3 +1,5 @@
+#![allow(dead_code,unused_imports)]
+
 use crate::murmur;
 use crate::parser;
 use crate::vwmap;

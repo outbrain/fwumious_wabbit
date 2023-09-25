@@ -1,9 +1,8 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(unused_mut)]
 #![allow(non_snake_case)]
 #![allow(redundant_semicolons)]
+#![allow(dead_code,unused_imports)]
 
 use crate::hogwild::HogwildTrainer;
 use crate::multithread_helpers::BoxedRegressorTrait;
@@ -59,12 +58,9 @@ mod vwmap;
 fn main() {
     logging_layer::initialize_logging_layer();
 
-    match main2() {
-        Err(e) => {
-            log::error!("Global error: {:?}", e);
-            std::process::exit(1)
-        }
-        Ok(()) => {}
+    if let Err(e) = main2() {
+        log::error!("Global error: {:?}", e);
+        std::process::exit(1)
     }
 }
 
@@ -111,7 +107,7 @@ fn build_cache_without_training(cl: clap::ArgMatches) -> Result<(), Box<dyn Erro
             }
         } else {
             reading_result = cache.get_next_record();
-            buffer = match reading_result {
+	    match reading_result {
                 Ok([]) => break, // EOF
                 Ok(buffer) => buffer,
                 Err(_e) => return Err(_e),
@@ -141,22 +137,16 @@ fn main2() -> Result<(), Box<dyn Error>> {
 
     let final_regressor_filename = cl.value_of("final_regressor");
     let output_pred_sto: bool = cl.is_present("predictions_stdout");
-    match final_regressor_filename {
-        Some(filename) => {
-            if !cl.is_present("save_resume") {
-                return Err("You need to use --save_resume with --final_regressor, for vowpal wabbit compatibility")?;
-            }
-            log::info!("final_regressor = {}", filename);
+    if let Some(filename) = final_regressor_filename {
+        if !cl.is_present("save_resume") {
+            return Err("You need to use --save_resume with --final_regressor, for vowpal wabbit compatibility")?;
         }
-        None => {}
+        log::info!("final_regressor = {}", filename);
     };
 
     let inference_regressor_filename = cl.value_of("convert_inference_regressor");
-    match inference_regressor_filename {
-        Some(filename1) => {
-            log::info!("inference_regressor = {}", filename1);
-        }
-        None => {}
+    if let Some(filename) = inference_regressor_filename {
+        log::info!("inference_regressor = {}", filename);
     };
 
     /* setting up the pipeline, either from command line or from existing regressor */
@@ -179,11 +169,8 @@ fn main2() -> Result<(), Box<dyn Error>> {
         let (mut mi2, vw2, re_fixed) =
             persistence::new_regressor_from_filename(filename, true, Option::Some(&cl))?;
         mi2.optimizer = model_instance::Optimizer::SGD;
-        match inference_regressor_filename {
-            Some(filename1) => {
-                persistence::save_regressor_to_filename(filename1, &mi2, &vw2, re_fixed).unwrap()
-            }
-            None => {}
+        if let Some(filename1) = inference_regressor_filename {
+            persistence::save_regressor_to_filename(filename1, &mi2, &vw2, re_fixed).unwrap()
         }
     } else {
         let vw: vwmap::VwNamespaceMap;
@@ -330,15 +317,9 @@ fn main2() -> Result<(), Box<dyn Error>> {
         let elapsed = now.elapsed();
         log::info!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
 
-        match final_regressor_filename {
-            Some(filename) => persistence::save_sharable_regressor_to_filename(
-                filename,
-                &mi,
-                &vw,
-                sharable_regressor,
-            )
-            .unwrap(),
-            None => {}
+        if let Some(filename) = final_regressor_filename {
+            persistence::save_sharable_regressor_to_filename(filename, &mi, &vw, sharable_regressor)
+                .unwrap()
         }
     }
 
