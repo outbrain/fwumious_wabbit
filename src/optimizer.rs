@@ -150,7 +150,7 @@ impl OptimizerTrait for OptimizerAdamDS {
     #[inline(always)]
     unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32 {
 	
-	if gradient == 0.0 {return 0.0}; // this is a game changer
+	if gradient == 0.0 {return 0.0};
 	data.grad_store = self.beta1 * data.grad_store + (1.0 - self.beta1) * gradient;
 	data.var_store = self.beta2 * data.var_store + (1.0 - self.beta2) * gradient.powf(2.0);
 

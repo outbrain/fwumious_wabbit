@@ -440,17 +440,20 @@ impl ModelInstance {
             mi.bit_precision = val.parse()?;
         }
 
+	// Adam-specific HPOs
+	mi.ffm_beta1 = parse_float("ffm_beta1", mi.ffm_beta1, cl);
+	mi.ffm_beta2 = parse_float("ffm_beta2", mi.ffm_beta2, cl);
+	
+	mi.nn_beta1 = parse_float("nn_beta1", mi.nn_beta1, cl);
+	mi.nn_beta2 = parse_float("nn_beta2", mi.nn_beta2, cl);
+
+	mi.beta1 = parse_float("beta1", mi.beta1, cl);
+	mi.beta2 = parse_float("beta2", mi.beta2, cl);
+
+	// Learning rates
         mi.learning_rate = parse_float("learning_rate", mi.learning_rate, cl);
-        mi.init_acc_gradient = parse_float("init_acc_gradient", mi.init_acc_gradient, cl);
-        mi.power_t = parse_float("power_t", mi.power_t, cl);
-
-        mi.ffm_learning_rate = parse_float("ffm_learning_rate", mi.learning_rate, cl);
-        mi.ffm_init_acc_gradient = parse_float("ffm_init_acc_gradient", mi.init_acc_gradient, cl);
-        mi.ffm_power_t = parse_float("ffm_power_t", mi.power_t, cl);
-
-        mi.nn_learning_rate = parse_float("nn_learning_rate", mi.ffm_learning_rate, cl);
-        mi.nn_init_acc_gradient = parse_float("nn_init_acc_gradient", mi.ffm_init_acc_gradient, cl);
-        mi.nn_power_t = parse_float("nn_power_t", mi.ffm_power_t, cl);
+        mi.ffm_learning_rate = parse_float("ffm_learning_rate", mi.ffm_learning_rate, cl);
+        mi.nn_learning_rate = parse_float("nn_learning_rate", mi.nn_learning_rate, cl);
 
         if let Some(val) = cl.value_of("nn_layers") {
             let nn_layers = val.parse()?;
@@ -503,18 +506,13 @@ impl ModelInstance {
             mi.add_constant_feature = false;
         }
 
-        // We currently only support SGD + adaptive, which means both options have to be specified
         if cl.is_present("sgd") {
             mi.optimizer = Optimizer::SGD;
         }
 	
-        if cl.is_present("adaptive") {
+        if cl.is_present("adam") {
             mi.optimizer = Optimizer::AdamDS;
         }
-
-        // if mi.optimizer == Optimizer::AdagradFlex && mi.fastmath {
-        //     mi.optimizer = Optimizer::AdagradLUT;
-        // }
 
         Ok(mi)
     }
