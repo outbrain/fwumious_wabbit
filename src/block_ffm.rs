@@ -272,7 +272,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                                     let feature_value = *local_data_ffm_values.get_unchecked(local_index);
                                     let gradient = general_gradient * feature_value;
                                     let update = self.optimizer_ffm.calculate_update(gradient,
-                                        &mut self.optimizer.get_unchecked_mut(feature_index).optimizer_data);
+										     &mut self.optimizer.get_unchecked_mut(feature_index).optimizer_data);
 
                                     *ffm_weights.get_unchecked_mut(feature_index) -= update;
                                     local_index += 1;
