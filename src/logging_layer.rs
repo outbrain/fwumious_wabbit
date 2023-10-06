@@ -31,6 +31,10 @@ fn log_detected_x86_features() {
         features.push("AVX2".to_string());
     }
 
+    if is_x86_feature_detected!("avx512f") {
+        features.push("AVX512F".to_string());
+    }
+
     if is_x86_feature_detected!("fma") {
         features.push("FMA".to_string());
     }
