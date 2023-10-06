@@ -18,10 +18,10 @@ pub fn initialize_logging_layer() {
         log::info!("Initialized the logger ..")
     }
 
-    log_x86_detected_features();
+    log_detected_x86_features();
 }
 
-fn log_x86_detected_features() {
+fn log_detected_x86_features() {
     let mut features: Vec<String> = Vec::new();
     if is_x86_feature_detected!("avx") {
         features.push("AVX".to_string());
