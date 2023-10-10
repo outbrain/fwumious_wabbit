@@ -6,7 +6,7 @@
 # no flags are used (generic release build)													   #
 ################################################################################################
 
-RUSTFLAGS="-O -C target-cpu=skylake-avx512 -C target-feature=+avx2,+avx,+fma" cargo build --release;
+cargo build --release;
 
 # Using specific flags examples
 #RUSTFLAGS="-Ctarget-cpu=skylake" cargo build --release;
