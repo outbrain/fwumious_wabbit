@@ -185,30 +185,25 @@ impl OptimizerTrait for OptimizerAdamDS {
 
 
 	// RMSProp
-
-	data.grad_store = data.grad_store * self.beta1 + gradient * (1.0 - self.beta1);
-	return self.learning_rate * gradient / data.grad_store.sqrt();
-// 	sum_of_gradient_squared = previous_sum_of_gradient_squared * decay_rate+ gradient² * (1- decay_rate)
-
-// delta = -learning_rate * gradient / sqrt(sum_of_gradient_squared)
-
-// theta += delta
-
-	// Adam
 	if gradient == 0.0 {return 0.0};
-	data.grad_store = self.beta1 * data.grad_store + (1.0 - self.beta1) * gradient;
-	data.var_store = self.beta2 * data.var_store + (1.0 - self.beta2) * gradient.powf(2.0);
+	data.grad_store = data.grad_store * self.beta1 + gradient.powf(2.0) * (1.0 - self.beta1);
+	return (self.learning_rate / (data.grad_store + 1e-11).sqrt()) * gradient;
 
-	////	data.grad_store = data.grad_store / (1.0 - self.beta1.powf(data.step as f32));
-	////	data.var_store = data.var_store / (1.0 - self.beta2.powf(data.step as f32));
+	// // Adam
+	// if gradient == 0.0 {return 0.0};
+	// data.grad_store = self.beta1 * data.grad_store + (1.0 - self.beta1) * gradient;
+	// data.var_store = self.beta2 * data.var_store + (1.0 - self.beta2) * gradient.powf(2.0);
 
-	let inv_sq = inv_sqrt32_plus_eps(data.var_store);
-	let update = self.learning_rate * (data.grad_store * inv_sq);
+	// ////	data.grad_store = data.grad_store / (1.0 - self.beta1.powf(data.step as f32));
+	// ////	data.var_store = data.var_store / (1.0 - self.beta2.powf(data.step as f32));
 
-        if update.is_nan() || update.is_infinite() {
-	    return 0.0;
-        }
-	return update;
+	// let inv_sq = inv_sqrt32_plus_eps(data.var_store);
+	// let update = self.learning_rate * (data.grad_store * inv_sq);
+
+        // if update.is_nan() || update.is_infinite() {
+	//     return 0.0;
+        // }
+	// return update;
 
     }
 
