@@ -5,8 +5,10 @@ use std::mem;
 #[derive(Clone)]
 pub struct OptStore {
     grad_store: f32,
-    var_store: f32
+    var_store: f32,
+    step: i32
 }
+
 
 fn inv_sqrt32_plus_eps(inp_num: f32) -> f32 {
     // Heavily inspired by .. Quake3 :)
@@ -20,7 +22,7 @@ fn inv_sqrt32_plus_eps(inp_num: f32) -> f32 {
 	mem::transmute(i)
     };
 
-    return y * ( 1.5f32 - ( x2 * y * y ) ) + 1e-8;
+    return y * ( 1.5f32 - ( x2 * y * y ) ) + 1e-2;
 }
 
 pub trait OptimizerTrait: std::clone::Clone {
@@ -130,7 +132,6 @@ impl OptimizerTrait for OptimizerAdamDS {
         "AdamDS"
     }
     type PerWeightStore = OptStore;
-    
 
     fn new() -> Self {
         OptimizerAdamDS {
@@ -149,13 +150,62 @@ impl OptimizerTrait for OptimizerAdamDS {
 
     #[inline(always)]
     unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32 {
+
+	// Original Adam goes as follows. This is not what we're doing though ..
+	// m(t) = beta1 * m(t-1) + (1 - beta1) * g(t)
+	// m[i] = beta1 * m[i] + (1.0 - beta1) * g[i]
+	// v(t) = beta2 * v(t-1) + (1 - beta2) * g(t)^2
+	// v[i] = beta2 * v[i] + (1.0 - beta2) * g[i]**2
+	// mhat(t) = m(t) / (1 - beta1(t))
+	// mhat = m[i] / (1.0 - beta1**(t+1))
+	// vhat(t) = v(t) / (1 - beta2(t))
+	// vhat = v[i] / (1.0 - beta2**(t+1))
+	// x(t) = x(t-1) - alpha * mhat(t) / (sqrt(vhat(t)) + eps)
+	// x[i] = x[i] - alpha * mhat / (sqrt(vhat) + eps)
 	
+	data.step += 1;
+
+	// momentum
+//	data.grad_store = self.beta1 * data.grad_store - self.learning_rate * gradient;
+//	return -data.grad_store;
+
+	// adagrad
+	// let accumulated_grad_sq = data.grad_store;
+	// let squared_grad = gradient.powf(2.0);
+	// let new_acc_sq_grad = squared_grad + accumulated_grad_sq;
+	// data.grad_store = new_acc_sq_grad;
+	// let update = gradient
+        //     * self.learning_rate
+        //     * (new_acc_sq_grad).powf(-0.45);
+        // if update.is_nan() || update.is_infinite() {
+        //     return 0.0;
+        // }
+	// data.var_store = update;
+        // update
+
+
+	// RMSProp
+
+	data.grad_store = data.grad_store * self.beta1 + gradient * (1.0 - self.beta1);
+	return self.learning_rate * gradient / data.grad_store.sqrt();
+// 	sum_of_gradient_squared = previous_sum_of_gradient_squared * decay_rate+ gradient² * (1- decay_rate)
+
+// delta = -learning_rate * gradient / sqrt(sum_of_gradient_squared)
+
+// theta += delta
+
+	// Adam
 	if gradient == 0.0 {return 0.0};
 	data.grad_store = self.beta1 * data.grad_store + (1.0 - self.beta1) * gradient;
 	data.var_store = self.beta2 * data.var_store + (1.0 - self.beta2) * gradient.powf(2.0);
-	let update = self.learning_rate * (data.grad_store * inv_sqrt32_plus_eps(data.var_store));
 
-        if update.is_nan() || update.is_infinite() || update.abs() < 1e-5 {
+	////	data.grad_store = data.grad_store / (1.0 - self.beta1.powf(data.step as f32));
+	////	data.var_store = data.var_store / (1.0 - self.beta2.powf(data.step as f32));
+
+	let inv_sq = inv_sqrt32_plus_eps(data.var_store);
+	let update = self.learning_rate * (data.grad_store * inv_sq);
+
+        if update.is_nan() || update.is_infinite() {
 	    return 0.0;
         }
 	return update;
@@ -164,7 +214,7 @@ impl OptimizerTrait for OptimizerAdamDS {
 
     fn initial_data(&self) -> Self::PerWeightStore {
 	// todo -> no need for f32 imo
-        OptStore{grad_store: 0.0, var_store: 0.0}
+        OptStore{grad_store: 0.0, var_store: 0.0, step: 0}
     }
 }
 
