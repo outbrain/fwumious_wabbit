@@ -9,5 +9,8 @@
 cargo build --release;
 
 # Using specific flags examples
+#Due to the addition of SIMD instructions and loop unrolling provides a 10 ~ 20 % speed up on machines that support avx512 instructions
+#RUSTFLAGS="-O -C target-cpu=skylake-avx512 -C target-feature=+avx2,+avx,+fma" cargo build --release;
+
 #RUSTFLAGS="-Ctarget-cpu=skylake" cargo build --release;
 #RUSTFLAGS="-Ctarget-cpu=cascadelake" cargo build --release;
