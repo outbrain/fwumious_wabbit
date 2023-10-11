@@ -219,7 +219,6 @@ impl BlockMonteCarlo {
     }
 
     fn fill_stats(&self, pb: &mut PortBuffer) {
-        println!("{:?}", pb.observations);
         let mean: f32 = pb.observations.iter().sum::<f32>() / self.num_iterations as f32;
         let variance = pb
             .observations
