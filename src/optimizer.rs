@@ -150,24 +150,13 @@ impl OptimizerTrait for OptimizerAdamDS {
 
     #[inline(always)]
     unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32 {
-
-	// Original Adam goes as follows. This is not what we're doing though ..
-	// m(t) = beta1 * m(t-1) + (1 - beta1) * g(t)
-	// m[i] = beta1 * m[i] + (1.0 - beta1) * g[i]
-	// v(t) = beta2 * v(t-1) + (1 - beta2) * g(t)^2
-	// v[i] = beta2 * v[i] + (1.0 - beta2) * g[i]**2
-	// mhat(t) = m(t) / (1 - beta1(t))
-	// mhat = m[i] / (1.0 - beta1**(t+1))
-	// vhat(t) = v(t) / (1 - beta2(t))
-	// vhat = v[i] / (1.0 - beta2**(t+1))
-	// x(t) = x(t-1) - alpha * mhat(t) / (sqrt(vhat(t)) + eps)
-	// x[i] = x[i] - alpha * mhat / (sqrt(vhat) + eps)
 	
 	data.step += 1;
-
+	return gradient * self.learning_rate;
+	
 	// momentum
-//	data.grad_store = self.beta1 * data.grad_store - self.learning_rate * gradient;
-//	return -data.grad_store;
+	// data.grad_store = self.beta1 * data.grad_store - self.learning_rate * gradient;
+	// return -data.grad_store;
 
 	// adagrad
 	// let accumulated_grad_sq = data.grad_store;
@@ -184,11 +173,20 @@ impl OptimizerTrait for OptimizerAdamDS {
         // update
 
 
-	// RMSProp
-	if gradient == 0.0 {return 0.0};
-	data.grad_store = data.grad_store * self.beta1 + gradient.powf(2.0) * (1.0 - self.beta1);
-	return (self.learning_rate / (data.grad_store + 1e-11).sqrt()) * gradient;
+	// LION
+	// let ct = self.beta1 * data.grad_store + (1.0 - self.beta1) * gradient;
+	// data.grad_store = self.beta2 * data.grad_store + (1.0 - self.beta2) * gradient;
+	// let update = self.learning_rate * (ct.signum() + self.beta1 * data.var_store);
+	// data.var_store = update;
+	// return update;
 
+	
+	// RMSProp
+//	if gradient == 0.0 {return 0.0};
+//	data.grad_store = data.grad_store * self.beta1 + gradient.powf(2.0) * (1.0 - self.beta1);
+//	return (self.learning_rate / (data.grad_store + 1e-11).sqrt()) * gradient;
+
+	
 	// // Adam
 	// if gradient == 0.0 {return 0.0};
 	// data.grad_store = self.beta1 * data.grad_store + (1.0 - self.beta1) * gradient;
