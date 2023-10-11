@@ -622,7 +622,7 @@ mod tests {
             namespace_descriptor: ns_desc(0),
         };
 
-        let to_namespace_empty = ExecutorToNamespace {
+        let _to_namespace_empty = ExecutorToNamespace {
             namespace_descriptor: ns_desc(1),
             namespace_seeds: default_seeds(1), // These are precomputed namespace seeds
             tmp_data: Vec::new(),

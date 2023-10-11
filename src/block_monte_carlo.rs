@@ -24,10 +24,10 @@ pub fn new_monte_carlo_block(
     assert_ne!(num_inputs, 0);
     assert_ne!(num_iterations, 0);
 
-    let skip_index_generator = Uniform::from(0..num_inputs);
     let number_of_inputs_to_skip = (dropout_rate * num_inputs as f32) as usize;
+    let skip_index_generator = Uniform::from(0..num_inputs);
 
-    let mut block = Box::new(BlockMonteCarlo {
+    let block = Box::new(BlockMonteCarlo {
         num_iterations,
         number_of_inputs_to_skip,
         skip_index_generator,
@@ -41,7 +41,7 @@ pub fn new_monte_carlo_block(
 }
 
 fn create_seed_from_input_tape(input_tape: &[f32]) -> u64 {
-    (input_tape.iter().sum::<f32>() * 1000.0) as u64
+    (input_tape.iter().sum::<f32>() * 100_000.0).round() as u64
 }
 
 pub struct BlockMonteCarlo {
@@ -225,6 +225,7 @@ impl BlockMonteCarlo {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use crate::assert_epsilon;
     use crate::block_helpers::{slearn2, spredict2};
@@ -246,7 +247,7 @@ mod tests {
 
     #[test]
     fn test_monte_carlo_block_with_one_run() {
-        let mut mi = ModelInstance::new_empty().unwrap();
+        let mi = ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
         let input_block = block_misc::new_const_block(&mut bg, vec![2.0, 4.0, 4.0, 5.0]).unwrap();
         let observe_block_backward =
@@ -284,7 +285,7 @@ mod tests {
 
     #[test]
     fn test_monte_carlo_block_with_multiple_runs() {
-        let mut mi = ModelInstance::new_empty().unwrap();
+        let mi = ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
         let input_block = block_misc::new_const_block(&mut bg, vec![2.0, 4.0, 4.0, 5.0]).unwrap();
         let observe_block_backward =
@@ -309,7 +310,7 @@ mod tests {
 
         spredict2(&mut bg, &fb, &mut pb);
         let expected_observations = [
-            2.0, 4.0, 4.0, 5.0, 2.0, 4.0, 0.0, 5.0, 0.0, 4.0, 4.0, 5.0, 2.0, 4.0, 4.0, 5.0,
+            2.0, 4.0, 4.0, 5.0, 2.0, 4.0, 0.0, 5.0, 0.0, 4.0, 4.0, 5.0, 2.0, 4.0, 4.0, 5.0
         ];
         assert_eq!(pb.observations.len(), expected_observations.len());
         assert_eq!(pb.observations, expected_observations);
