@@ -1,4 +1,4 @@
-#![allow(dead_code,unused_imports)]
+#![allow(dead_code, unused_imports)]
 
 use crate::version;
 use clap::{App, AppSettings, Arg};

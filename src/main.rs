@@ -2,7 +2,7 @@
 #![allow(unused_mut)]
 #![allow(non_snake_case)]
 #![allow(redundant_semicolons)]
-#![allow(dead_code,unused_imports)]
+#![allow(dead_code, unused_imports)]
 
 use crate::hogwild::HogwildTrainer;
 use crate::multithread_helpers::BoxedRegressorTrait;
@@ -106,7 +106,7 @@ fn build_cache_without_training(cl: clap::ArgMatches) -> Result<(), Box<dyn Erro
             }
         } else {
             reading_result = cache.get_next_record();
-	    match reading_result {
+            match reading_result {
                 Ok([]) => break, // EOF
                 Ok(buffer) => buffer,
                 Err(_e) => return Err(_e),

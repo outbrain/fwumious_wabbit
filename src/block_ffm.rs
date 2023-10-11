@@ -1,4 +1,4 @@
-#![allow(dead_code,unused_imports, unused_mut, invalid_value)]
+#![allow(dead_code, unused_imports, unused_mut, invalid_value)]
 
 use core::arch::x86_64::*;
 use rustc_hash::FxHashSet;

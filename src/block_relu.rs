@@ -1,13 +1,10 @@
-#![allow(dead_code,unused_imports)]
-
 use std::any::Any;
 use std::error::Error;
 
 use crate::block_helpers;
 use crate::feature_buffer;
 use crate::feature_buffer::FeatureBuffer;
-use crate::graph;
-use crate::graph::BlockGraph;
+use crate::graph::{BlockGraph, BlockPtrOutput, InputSlot, OutputSlot};
 use crate::model_instance;
 use crate::port_buffer;
 use crate::port_buffer::PortBuffer;
@@ -22,10 +19,10 @@ pub struct BlockRELU {
 }
 
 pub fn new_relu_block(
-    bg: &mut graph::BlockGraph,
+    bg: &mut BlockGraph,
     _mi: &model_instance::ModelInstance,
-    input: graph::BlockPtrOutput,
-) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
+    input: BlockPtrOutput,
+) -> Result<BlockPtrOutput, Box<dyn Error>> {
     let num_inputs = bg.get_num_output_values(vec![&input]);
     assert_ne!(num_inputs, 0);
     let block = Box::new(BlockRELU {
@@ -63,17 +60,17 @@ impl BlockTrait for BlockRELU {
         self
     }
 
-    fn get_num_output_values(&self, output: graph::OutputSlot) -> usize {
+    fn get_num_output_values(&self, output: OutputSlot) -> usize {
         assert_eq!(output.get_output_index(), 0);
         self.num_inputs
     }
 
-    fn set_input_offset(&mut self, input: graph::InputSlot, offset: usize) {
+    fn set_input_offset(&mut self, input: InputSlot, offset: usize) {
         assert_eq!(input.get_input_index(), 0);
         self.input_offset = offset;
     }
 
-    fn set_output_offset(&mut self, output: graph::OutputSlot, offset: usize) {
+    fn set_output_offset(&mut self, output: OutputSlot, offset: usize) {
         assert_eq!(output.get_output_index(), 0);
         self.output_offset = offset;
     }

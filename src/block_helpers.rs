@@ -1,5 +1,3 @@
-#![allow(dead_code,unused_imports)]
-
 use crate::optimizer::OptimizerTrait;
 use std::error::Error;
 use std::io;

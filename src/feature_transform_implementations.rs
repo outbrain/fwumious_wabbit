@@ -1,5 +1,3 @@
-#![allow(dead_code,unused_imports)]
-
 use std::error::Error;
 use std::io::Error as IOError;
 use std::io::ErrorKind;

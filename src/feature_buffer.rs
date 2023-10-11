@@ -1,5 +1,3 @@
-#![allow(dead_code,unused_imports)]
-
 use crate::feature_transform_executor;
 use crate::model_instance;
 use crate::parser;
