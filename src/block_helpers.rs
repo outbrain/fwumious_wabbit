@@ -4,13 +4,15 @@ use std::io;
 use std::io::Read;
 
 use crate::feature_buffer;
-use crate::graph;
 use crate::optimizer::OptimizerSGD;
 use crate::port_buffer;
 use crate::regressor::{BlockCache, BlockTrait};
 use std::cmp::min;
 use std::mem;
 use std::slice;
+
+#[cfg(test)]
+use crate::graph;
 
 #[derive(Clone, Debug)]
 #[repr(C)]
@@ -154,6 +156,7 @@ pub fn get_input_output_borrows(
     }
 }
 
+#[cfg(test)]
 pub fn slearn2(
     bg: &mut graph::BlockGraph,
     fb: &feature_buffer::FeatureBuffer,
@@ -167,6 +170,7 @@ pub fn slearn2(
     pb.observations[0]
 }
 
+#[cfg(test)]
 pub fn ssetup_cache2(
     bg: &mut graph::BlockGraph,
     cache_fb: &feature_buffer::FeatureBuffer,
@@ -183,6 +187,7 @@ pub fn ssetup_cache2(
     );
 }
 
+#[cfg(test)]
 pub fn spredict2_with_cache(
     bg: &mut graph::BlockGraph,
     fb: &feature_buffer::FeatureBuffer,
@@ -196,6 +201,7 @@ pub fn spredict2_with_cache(
     pb.observations[0]
 }
 
+#[cfg(test)]
 pub fn spredict2(
     bg: &mut graph::BlockGraph,
     fb: &feature_buffer::FeatureBuffer,
