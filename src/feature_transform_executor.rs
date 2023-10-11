@@ -243,6 +243,7 @@ pub trait FunctionExecutorTrait: DynClone + Send {
 }
 clone_trait_object!(FunctionExecutorTrait);
 
+#[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;

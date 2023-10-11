@@ -1165,6 +1165,7 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use block_helpers::{slearn2, spredict2, spredict2_with_cache};
 
