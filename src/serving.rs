@@ -1,5 +1,3 @@
-#![allow(dead_code, unused_imports)]
-
 use daemonize::Daemonize;
 use std::error::Error;
 use std::io;
@@ -28,6 +26,7 @@ pub struct Serving {
 }
 
 pub struct WorkerThread {
+    #[allow(dead_code)]
     id: u32,
     re_fixed: BoxedRegressorTrait,
     fbt: feature_buffer::FeatureBufferTranslator,

@@ -30,30 +30,19 @@ impl Default for RadixTreeNode {
     }
 }
 
-impl RadixTreeNode {
-    fn new() -> Self {
-        Self::default()
-    }
-}
-
 #[derive(Clone, Default, Debug)]
 pub struct RadixTree {
     root: RadixTreeNode,
 }
 
 impl RadixTree {
-    fn new() -> Self {
-        RadixTree {
-            root: RadixTreeNode::new(),
-        }
-    }
 
     pub(crate) fn insert(&mut self, key: &[u8], value: NamespaceDescriptorWithHash) {
         let mut node = &mut self.root;
 
         for &byte in key {
             let child = &mut node.children[byte as usize];
-            node = child.get_or_insert_with(RadixTreeNode::new);
+            node = child.get_or_insert_with(RadixTreeNode::default);
         }
 
         node.value = Some(value);
@@ -82,7 +71,7 @@ mod tests {
 
     #[test]
     fn test_insert_and_get() {
-        let mut tree = RadixTree::new();
+        let mut tree = RadixTree::default();
 
         let namespace_descriptor_with_hash_1 = NamespaceDescriptorWithHash {
             descriptor: NamespaceDescriptor {
@@ -123,7 +112,7 @@ mod tests {
 
     #[test]
     fn test_insert_and_get_empty_key() {
-        let mut tree = RadixTree::new();
+        let mut tree = RadixTree::default();
 
         let namespace_descriptor_with_hash = NamespaceDescriptorWithHash {
             descriptor: NamespaceDescriptor {
@@ -142,7 +131,7 @@ mod tests {
 
     #[test]
     fn test_insert_and_get_long_key() {
-        let mut tree = RadixTree::new();
+        let mut tree = RadixTree::default();
 
         let namespace_descriptor_with_hash = NamespaceDescriptorWithHash {
             descriptor: NamespaceDescriptor {

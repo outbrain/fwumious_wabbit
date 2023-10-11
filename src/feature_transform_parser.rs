@@ -28,6 +28,7 @@ pub struct NamespaceTransforms {
 }
 
 struct NSStage1Parse {
+    #[allow(dead_code)]
     name: String,
     definition: String,
     from_namespaces: Vec<std::string::String>,

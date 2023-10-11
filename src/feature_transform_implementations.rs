@@ -13,59 +13,63 @@ use crate::feature_transform_executor::{
 use crate::feature_transform_parser;
 use crate::vwmap::{NamespaceDescriptor, NamespaceFormat, NamespaceType};
 
-// Basic example of a "full blown" simple FunctionExecutorTrait
-#[derive(Clone)]
-struct FunctionExampleSqrt {
-    from_namespace: ExecutorFromNamespace,
-}
-
-impl FunctionExecutorTrait for FunctionExampleSqrt {
-    fn execute_function(
-        &self,
-        record_buffer: &[u32],
-        to_namespace: &mut ExecutorToNamespace,
-        _transform_executors: &TransformExecutors,
-    ) {
-        feature_reader_float_namespace!(
-            record_buffer,
-            self.from_namespace.namespace_descriptor,
-            _hash_index,
-            hash_value,
-            float_value,
-            {
-                let transformed_float = float_value.sqrt();
-                let transformed_int = transformed_float as i32;
-                to_namespace
-                    .emit_i32::<{ SeedNumber::Default as usize }>(transformed_int, hash_value);
-            }
-        );
-    }
-}
-
-impl FunctionExampleSqrt {
-    fn create_function(
-        _function_name: &str,
-        from_namespaces: &Vec<feature_transform_parser::Namespace>,
-        function_params: &Vec<f32>,
-    ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
-        // For simplicity of example, we just assert instead of full error reporting
-        assert!(function_params.is_empty());
-        assert_eq!(from_namespaces.len(), 1);
-        assert_eq!(
-            from_namespaces[0].namespace_descriptor.namespace_type,
-            NamespaceType::Primitive
-        );
-        assert_eq!(
-            from_namespaces[0].namespace_descriptor.namespace_format,
-            NamespaceFormat::F32
-        );
-        Ok(Box::new(Self {
-            from_namespace: ExecutorFromNamespace {
-                namespace_descriptor: from_namespaces[0].namespace_descriptor,
-            },
-        }))
-    }
-}
+/// # Basic example of a "full blown" simple FunctionExecutorTrait
+///
+/// ```
+/// #[derive(Clone)]
+/// struct FunctionExampleSqrt {
+///     from_namespace: ExecutorFromNamespace,
+/// }
+///
+/// impl FunctionExecutorTrait for FunctionExampleSqrt {
+///     fn execute_function(
+///         &self,
+///         record_buffer: &[u32],
+///         to_namespace: &mut ExecutorToNamespace,
+///         _transform_executors: &TransformExecutors,
+///     ) {
+///         feature_reader_float_namespace!(
+///             record_buffer,
+///             self.from_namespace.namespace_descriptor,
+///             _hash_index,
+///             hash_value,
+///             float_value,
+///             {
+///                 let transformed_float = float_value.sqrt();
+///                 let transformed_int = transformed_float as i32;
+///                 to_namespace
+///                     .emit_i32::<{ SeedNumber::Default as usize }>(transformed_int, hash_value);
+///             }
+///         );
+///     }
+/// }
+///
+/// impl FunctionExampleSqrt {
+///     fn create_function(
+///         _function_name: &str,
+///         from_namespaces: &Vec<feature_transform_parser::Namespace>,
+///         function_params: &Vec<f32>,
+///     ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
+///         /// For simplicity of example, we just assert instead of full error reporting
+///         assert!(function_params.is_empty());
+///         assert_eq!(from_namespaces.len(), 1);
+///         assert_eq!(
+///             from_namespaces[0].namespace_descriptor.namespace_type,
+///             NamespaceType::Primitive
+///         );
+///         assert_eq!(
+///             from_namespaces[0].namespace_descriptor.namespace_format,
+///             NamespaceFormat::F32
+///         );
+///         Ok(Box::new(Self {
+///             from_namespace: ExecutorFromNamespace {
+///                 namespace_descriptor: from_namespaces[0].namespace_descriptor,
+///             },
+///         }))
+///     }
+/// }
+/// ```
+///
 
 // -------------------------------------------------------------------
 // TransformerBinner - A basic binner
@@ -621,7 +625,7 @@ mod tests {
             namespace_descriptor: ns_desc(0),
         };
 
-        let to_namespace_empty = ExecutorToNamespace {
+        let _to_namespace_empty = ExecutorToNamespace {
             namespace_descriptor: ns_desc(1),
             namespace_seeds: default_seeds(1), // These are precomputed namespace seeds
             tmp_data: Vec::new(),
