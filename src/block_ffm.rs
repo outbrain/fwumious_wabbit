@@ -912,6 +912,20 @@ unsafe fn prepare_contra_field_without_feature_value(
 }
 
 #[inline(always)]
+#[cfg(not(target_feature = "fma"))]
+unsafe fn prepare_contra_field_with_feature_value(
+    contra_fields_ptr: *mut f32,
+    ffm_weights_ptr: *const f32,
+    feature_value: __m128,
+) {
+    let contra_fields = _mm_loadu_ps(contra_fields_ptr);
+    let ffm_weights = _mm_loadu_ps(ffm_weights_ptr);
+    let acc = _mm_add_ps(_mm_mul_ps(ffm_weights, feature_value), contra_fields);
+    _mm_storeu_ps(contra_fields_ptr, acc);
+}
+
+#[inline(always)]
+#[cfg(target_feature = "fma")]
 unsafe fn prepare_contra_field_with_feature_value(
     contra_fields_ptr: *mut f32,
     ffm_weights_ptr: *const f32,
