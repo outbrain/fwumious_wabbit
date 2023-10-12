@@ -40,7 +40,7 @@ fn log_detected_x86_features() {
     }
 
     if features.is_empty() {
-        log::info!("No CPU features detected ..");
+        log::info!("No selected CPU features detected ..");
     } else {
         log::info!("Detected CPU features: {:?}", features.join(", "));
     }
