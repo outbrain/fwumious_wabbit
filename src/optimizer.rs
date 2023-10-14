@@ -151,8 +151,8 @@ impl OptimizerTrait for OptimizerAdamDS {
     #[inline(always)]
     unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32 {
 	
-	data.step += 1;
-	return gradient * self.learning_rate;
+	// data.step += 1;
+	// return gradient * self.learning_rate;
 	
 	// momentum
 	// data.grad_store = self.beta1 * data.grad_store - self.learning_rate * gradient;
@@ -174,11 +174,12 @@ impl OptimizerTrait for OptimizerAdamDS {
 
 
 	// LION
-	// let ct = self.beta1 * data.grad_store + (1.0 - self.beta1) * gradient;
-	// data.grad_store = self.beta2 * data.grad_store + (1.0 - self.beta2) * gradient;
-	// let update = self.learning_rate * (ct.signum() + self.beta1 * data.var_store);
-	// data.var_store = update;
-	// return update;
+	if gradient == 0.0 {return 0.0};
+	let ct = self.beta1 * data.grad_store + (1.0 - self.beta1) * gradient;
+	data.grad_store = self.beta2 * data.grad_store + (1.0 - self.beta2) * gradient;
+	let update = self.learning_rate * (ct.signum() + self.beta1 * data.var_store);
+	data.var_store = update;
+	return update;
 
 	
 	// RMSProp
