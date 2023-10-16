@@ -99,7 +99,7 @@ impl OptimizerTrait for OptimizerAdagradFlex {
 // grows. This means as parameter grows we can use lesser precision while keeping the error small.
 // Floating point encoding with separated exponent and mantissa is ideal for such optimization.
 
-pub const FASTMATH_LR_LUT_BITS: u8 = 13;
+pub const FASTMATH_LR_LUT_BITS: u8 = 12;
 pub const FASTMATH_LR_LUT_SIZE: usize = 1 << FASTMATH_LR_LUT_BITS;
 
 #[derive(Clone, Copy)]
