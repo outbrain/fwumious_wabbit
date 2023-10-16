@@ -729,6 +729,8 @@ mod tests {
             assert_eq!(p, 0.47539312);
         } else if optimizer::FASTMATH_LR_LUT_BITS == 11 {
             assert_eq!(p, 0.475734);
+	} else if optimizer::FASTMATH_LR_LUT_BITS == 13 {
+            assert_eq!(p, 0.47521117);        	    
         } else {
             assert!(
                 false,

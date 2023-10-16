@@ -209,12 +209,12 @@ mod tests {
             let mut acc: f32;
             acc = 0.9;
             let p = l.calculate_update(0.1, &mut acc);
-            assert_eq!(p, 0.015607622);
+            assert_eq!(p, 0.015549264);
             assert_eq!(acc, 0.9 + 0.1 * 0.1);
 
             acc = 0.0;
             let p = l.calculate_update(0.1, &mut acc);
-            assert_eq!(p, 0.09375872);
+            assert_eq!(p, 0.095076196);
             assert_eq!(acc, 0.1 * 0.1);
 
             acc = 0.0;

@@ -1788,9 +1788,9 @@ mod tests {
 
         assert_eq!(spredict2(&mut bg, fbuf, &mut pb), 1.0);
         assert_eq!(slearn2(&mut bg, fbuf, &mut pb, true), 1.0);
-        assert_eq!(spredict2(&mut bg, fbuf, &mut pb), 0.9949837);
-        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 0.9949837);
-        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 0.9949837);
+        assert_eq!(spredict2(&mut bg, fbuf, &mut pb), 0.99379784);
+        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 0.99379784);
+        assert_eq!(slearn2(&mut bg, fbuf, &mut pb, false), 0.99379784);
     }
 
     #[test]
@@ -1849,10 +1849,10 @@ mod tests {
         ssetup_cache2(&mut bg, &cache_fb, &mut caches);
         assert_epsilon!(
             spredict2_with_cache(&mut bg, &fb, &mut pb, &caches),
-            0.9949837
+            0.99379784
         );
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.9949837);
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.9949837);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.99379784);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, false), 0.99379784);
     }
 
     #[test]
