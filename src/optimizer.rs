@@ -154,8 +154,7 @@ impl OptimizerTrait for OptimizerAdamDS {
     #[inline(always)]
     unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32 {
 	
-	// data.step += 1;
-
+	data.step += 1;
 	match self.algo_type.as_str() {
 	    "sgd" => gradient * self.learning_rate,
 	    "sgd-momentum" => {
@@ -196,6 +195,22 @@ impl OptimizerTrait for OptimizerAdamDS {
 
 		////	data.grad_store = data.grad_store / (1.0 - self.beta1.powf(data.step as f32));
 		////	data.var_store = data.var_store / (1.0 - self.beta2.powf(data.step as f32));
+
+		let inv_sq = inv_sqrt32_plus_eps(data.var_store);
+		let update = self.learning_rate * (data.grad_store * inv_sq);
+
+		if update.is_nan() || update.is_infinite() {
+		    return 0.0;
+		}
+		return update;
+	    },
+	    "adam-decay" => {
+		if gradient == 0.0 {return 0.0};
+		data.grad_store = self.beta1 * data.grad_store + (1.0 - self.beta1) * gradient;
+		data.var_store = self.beta2 * data.var_store + (1.0 - self.beta2) * gradient.powf(2.0);
+
+		data.grad_store = data.grad_store / (1.0 - self.beta1.powf(data.step as f32));
+		data.var_store = data.var_store / (1.0 - self.beta2.powf(data.step as f32));
 
 		let inv_sq = inv_sqrt32_plus_eps(data.var_store);
 		let update = self.learning_rate * (data.grad_store * inv_sq);
