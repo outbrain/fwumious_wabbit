@@ -28,7 +28,7 @@ fn inv_sqrt32_plus_eps(inp_num: f32) -> f32 {
 pub trait OptimizerTrait: std::clone::Clone {
     type PerWeightStore: std::clone::Clone;
     fn new() -> Self;
-    fn init(&mut self, learning_rate: f32, power_t: f32, initial_acc_gradient: f32);
+    fn init(&mut self, learning_rate: f32, power_t: f32, initial_acc_gradient: f32, algo_type: String);
     unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32;
     fn initial_data(&self) -> Self::PerWeightStore;
     fn get_name() -> &'static str;
@@ -52,7 +52,7 @@ impl OptimizerTrait for OptimizerSGD {
         OptimizerSGD { learning_rate: 0.0 }
     }
 
-    fn init(&mut self, learning_rate: f32, _power_t: f32, _initial_acc_gradient: f32) {
+    fn init(&mut self, learning_rate: f32, _power_t: f32, _initial_acc_gradient: f32, _algo_type: String) {
         self.learning_rate = learning_rate;
     }
 
@@ -92,7 +92,7 @@ impl OptimizerTrait for OptimizerAdagradFlex {
         }
     }
 
-    fn init(&mut self, learning_rate: f32, power_t: f32, initial_acc_gradient: f32) {
+    fn init(&mut self, learning_rate: f32, power_t: f32, initial_acc_gradient: f32, _algo_type: String) {
         self.learning_rate = learning_rate;
         self.minus_power_t = -power_t;
         self.initial_acc_gradient = initial_acc_gradient;
@@ -124,7 +124,8 @@ impl OptimizerTrait for OptimizerAdagradFlex {
 pub struct OptimizerAdamDS {
     learning_rate: f32,
     beta1: f32,
-    beta2: f32	
+    beta2: f32,
+    algo_type: String
 }
 
 impl OptimizerTrait for OptimizerAdamDS {
@@ -137,73 +138,76 @@ impl OptimizerTrait for OptimizerAdamDS {
         OptimizerAdamDS {
             learning_rate: 0.005,
 	    beta1: 0.91,
-	    beta2: 0.999
+	    beta2: 0.999,
+	    algo_type: "adam".to_string()
         }
     }
 
-    fn init(&mut self, learning_rate: f32, beta1: f32, beta2: f32) {
-        log::info!("AdamDS init! lr: {} b1: {} b2: {}", learning_rate, beta1, beta2);
+    fn init(&mut self, learning_rate: f32, beta1: f32, beta2: f32, algo_type: String) {
+        log::info!("AdamDS init! lr: {} b1: {} b2: {} algo: {}", learning_rate, beta1, beta2, algo_type);
         self.learning_rate = learning_rate;
 	self.beta1 = beta1;
 	self.beta2 = beta2;
+	self.algo_type = algo_type;
     }
 
     #[inline(always)]
     unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32 {
 	
 	// data.step += 1;
-	// return gradient * self.learning_rate;
-	
-	// momentum
-	// data.grad_store = self.beta1 * data.grad_store - self.learning_rate * gradient;
-	// return -data.grad_store;
 
-	// adagrad
-	// let accumulated_grad_sq = data.grad_store;
-	// let squared_grad = gradient.powf(2.0);
-	// let new_acc_sq_grad = squared_grad + accumulated_grad_sq;
-	// data.grad_store = new_acc_sq_grad;
-	// let update = gradient
-        //     * self.learning_rate
-        //     * (new_acc_sq_grad).powf(-0.45);
-        // if update.is_nan() || update.is_infinite() {
-        //     return 0.0;
-        // }
-	// data.var_store = update;
-        // update
+	match self.algo_type.as_str() {
+	    "sgd" => gradient * self.learning_rate,
+	    "sgd-momentum" => {
+		data.grad_store = self.beta1 * data.grad_store - self.learning_rate * gradient;
+		return -data.grad_store
+	    },
+	    "adagrad" => {
+		let accumulated_grad_sq = data.grad_store;
+		let squared_grad = gradient.powf(2.0);
+		let new_acc_sq_grad = squared_grad + accumulated_grad_sq;
+		data.grad_store = new_acc_sq_grad;
+		let update = gradient
+		    * self.learning_rate
+		    * (new_acc_sq_grad).powf(-0.45);
+		if update.is_nan() || update.is_infinite() {
+		    return 0.0;
+		}
+		data.var_store = update;
+		return update
+	    },
+	    "lion" => {
+		if gradient == 0.0 {return 0.0};
+		let ct = self.beta1 * data.grad_store + (1.0 - self.beta1) * gradient;
+		data.grad_store = self.beta2 * data.grad_store + (1.0 - self.beta2) * gradient;
+		let update = self.learning_rate * (ct.signum() + self.beta1 * data.var_store);
+		data.var_store = update;
+		return update;
+	    },
+	    "rmsprop" => {
+		if gradient == 0.0 {return 0.0};
+		data.grad_store = data.grad_store * self.beta1 + gradient.powf(2.0) * (1.0 - self.beta1);
+		return (self.learning_rate / (data.grad_store + 1e-11).sqrt()) * gradient;
+	    },
+	    "adam" => {
+		if gradient == 0.0 {return 0.0};
+		data.grad_store = self.beta1 * data.grad_store + (1.0 - self.beta1) * gradient;
+		data.var_store = self.beta2 * data.var_store + (1.0 - self.beta2) * gradient.powf(2.0);
 
+		////	data.grad_store = data.grad_store / (1.0 - self.beta1.powf(data.step as f32));
+		////	data.var_store = data.var_store / (1.0 - self.beta2.powf(data.step as f32));
 
-	// LION
-	// if gradient == 0.0 {return 0.0};
-	// let ct = self.beta1 * data.grad_store + (1.0 - self.beta1) * gradient;
-	// data.grad_store = self.beta2 * data.grad_store + (1.0 - self.beta2) * gradient;
-	// let update = self.learning_rate * (ct.signum() + self.beta1 * data.var_store);
-	// data.var_store = update;
-	// return update;
+		let inv_sq = inv_sqrt32_plus_eps(data.var_store);
+		let update = self.learning_rate * (data.grad_store * inv_sq);
 
-	
-	// RMSProp
-//	if gradient == 0.0 {return 0.0};
-//	data.grad_store = data.grad_store * self.beta1 + gradient.powf(2.0) * (1.0 - self.beta1);
-//	return (self.learning_rate / (data.grad_store + 1e-11).sqrt()) * gradient;
-
-	
-	// // Adam
-	if gradient == 0.0 {return 0.0};
-	data.grad_store = self.beta1 * data.grad_store + (1.0 - self.beta1) * gradient;
-	data.var_store = self.beta2 * data.var_store + (1.0 - self.beta2) * gradient.powf(2.0);
-
-	////	data.grad_store = data.grad_store / (1.0 - self.beta1.powf(data.step as f32));
-	////	data.var_store = data.var_store / (1.0 - self.beta2.powf(data.step as f32));
-
-	let inv_sq = inv_sqrt32_plus_eps(data.var_store);
-	let update = self.learning_rate * (data.grad_store * inv_sq);
-
-        if update.is_nan() || update.is_infinite() {
-	    return 0.0;
-        }
-	return update;
-
+		if update.is_nan() || update.is_infinite() {
+		    return 0.0;
+		}
+		return update;
+	    },
+	    _ => panic!("No valid algo defined!"),
+	}
+    
     }
 
     fn initial_data(&self) -> Self::PerWeightStore {
@@ -238,7 +242,7 @@ impl OptimizerTrait for OptimizerAdagradLUT {
         }
     }
 
-    fn init(&mut self, learning_rate: f32, power_t: f32, initial_acc_gradient: f32) {
+    fn init(&mut self, learning_rate: f32, power_t: f32, initial_acc_gradient: f32, _algo_type: String) {
         log::info!("Calculating look-up tables for Adagrad learning rate calculation");
         let minus_power_t = -power_t;
         for x in 0..FASTMATH_LR_LUT_SIZE {
@@ -288,7 +292,7 @@ mod tests {
     #[test]
     fn test_sgd() {
         let mut l = OptimizerSGD::new();
-        l.init(0.15, 0.4, 0.0);
+        l.init(0.15, 0.4, 0.0, "adam".to_string());
         unsafe {
             let mut acc: PhantomData<()> = std::marker::PhantomData {};
             let p = l.calculate_update(0.1, &mut acc);
@@ -299,7 +303,7 @@ mod tests {
     #[test]
     fn test_adagradflex() {
         let mut l = OptimizerAdagradFlex::new();
-        l.init(0.15, 0.4, 0.0);
+        l.init(0.15, 0.4, 0.0, "adam".to_string());
         unsafe {
             let mut acc: f32;
             acc = 0.9;
@@ -323,7 +327,7 @@ mod tests {
     #[test]
     fn test_adagradlut() {
         let mut l = OptimizerAdagradLUT::new();
-        l.init(0.15, 0.4, 0.0);
+        l.init(0.15, 0.4, 0.0, "adam".to_string());
         unsafe {
             let mut acc: f32;
             acc = 0.9;
@@ -349,8 +353,8 @@ mod tests {
         // Here we test that our implementation of LUT has small enough relative error
         let mut l_lut = OptimizerAdagradFlex::new();
         let mut l_flex = OptimizerAdagradLUT::new();
-        l_lut.init(0.15, 0.4, 0.0);
-        l_flex.init(0.15, 0.4, 0.0);
+        l_lut.init(0.15, 0.4, 0.0, "adam".to_string());
+        l_flex.init(0.15, 0.4, 0.0, "adam".to_string());
         let test_gradients = [-1.0, -0.9, -0.1, -0.00001, 0.0, 0.00001, 0.1, 0.5, 0.9, 1.0];
         let test_accumulations = [
             0.0000000001,

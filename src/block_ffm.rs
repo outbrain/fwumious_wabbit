@@ -93,6 +93,7 @@ fn new_ffm_block_without_weights<L: OptimizerTrait + 'static>(
             mi.ffm_learning_rate,
             mi.ffm_beta1,
             mi.ffm_beta2,
+	    mi.algo_type.clone()
         );
         // At the end we add "spillover buffer", so we can do modulo only on the base address and add offset
         reg_ffm.ffm_weights_len =

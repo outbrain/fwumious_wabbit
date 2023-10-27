@@ -112,7 +112,7 @@ fn new_neuronlayer_without_weights<L: OptimizerTrait + 'static>(
     };
 
     rg.optimizer
-        .init(mi.nn_learning_rate, mi.nn_beta1, mi.nn_beta2);
+        .init(mi.nn_learning_rate, mi.nn_beta1, mi.nn_beta2, mi.algo_type.clone());
     Ok(Box::new(rg))
 }
 

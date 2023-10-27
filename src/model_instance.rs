@@ -82,7 +82,9 @@ pub struct ModelInstance {
     pub ffm_learning_rate: f32,
     #[serde(default = "default_f32_zero")]
     pub ffm_power_t: f32,
-
+    
+    pub algo_type: String,
+    
     #[serde(default = "default_f32_zero")]
     pub nn_beta1: f32,
 
@@ -155,6 +157,7 @@ impl ModelInstance {
             ffm_k_threshold: 0.0,
             ffm_init_center: 0.0,
             ffm_init_width: 0.0,
+	    algo_type: "adam".to_string(),
             ffm_init_zero_band: 0.0,
             ffm_init_acc_gradient: 0.0,
             nn_init_acc_gradient: 0.0,
@@ -449,6 +452,10 @@ impl ModelInstance {
 
 	mi.beta1 = parse_float("beta1", mi.beta1, cl);
 	mi.beta2 = parse_float("beta2", mi.beta2, cl);
+	mi.algo_type = match cl.value_of("algo_type") {
+            Some(val) => val.parse().unwrap(),
+            None => "adam".to_string(),
+	};
 
 	// Learning rates
         mi.learning_rate = parse_float("learning_rate", mi.learning_rate, cl);

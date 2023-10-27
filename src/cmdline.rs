@@ -132,7 +132,11 @@ pub fn create_expected_args<'a>() -> App<'a, 'a> {
              .value_name("0.0")
              .help("Regularization is not supported (only 0.0 will work)")
              .takes_value(true))
-
+        .arg(Arg::with_name("algo_type")
+             .long("algo_type")
+             .value_name("adam")
+             .help("Optimization algorithm of choice")
+             .takes_value(true))
         .arg(Arg::with_name("sgd")
              .long("sgd")
              .value_name("")

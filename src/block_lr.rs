@@ -63,7 +63,7 @@ fn new_lr_block_without_weights<L: OptimizerTrait + 'static>(
     };
     reg_lr
         .optimizer_lr
-        .init(mi.learning_rate, mi.beta1, mi. beta2);
+        .init(mi.learning_rate, mi.beta1, mi. beta2, mi.algo_type.clone());
     reg_lr.weights_len = 1 << mi.bit_precision;
     Ok(Box::new(reg_lr))
 }
