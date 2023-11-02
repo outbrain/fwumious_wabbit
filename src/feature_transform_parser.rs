@@ -1,8 +1,3 @@
-//#[macro_use]
-//extern crate nom;
-#![allow(dead_code,unused_imports)]
-
-use crate::vwmap;
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -11,10 +6,11 @@ use std::io::Error as IOError;
 use std::io::ErrorKind;
 
 use crate::feature_transform_executor;
+use crate::vwmap::{NamespaceDescriptor, NamespaceFormat, NamespaceType, VwNamespaceMap};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Namespace {
-    pub namespace_descriptor: vwmap::NamespaceDescriptor,
+    pub namespace_descriptor: NamespaceDescriptor,
     pub namespace_verbose: String,
 }
 
@@ -32,6 +28,7 @@ pub struct NamespaceTransforms {
 }
 
 struct NSStage1Parse {
+    #[allow(dead_code)]
     name: String,
     definition: String,
     from_namespaces: Vec<std::string::String>,
@@ -57,7 +54,7 @@ impl NamespaceTransformsParser {
 
     pub fn add_transform_namespace(
         &mut self,
-        vw: &vwmap::VwNamespaceMap,
+        vw: &VwNamespaceMap,
         s: &str,
     ) -> Result<(), Box<dyn Error>> {
         let rr = parse_namespace_statement(s);
@@ -99,10 +96,7 @@ impl NamespaceTransformsParser {
         Ok(())
     }
 
-    pub fn resolve(
-        &mut self,
-        vw: &vwmap::VwNamespaceMap,
-    ) -> Result<NamespaceTransforms, Box<dyn Error>> {
+    pub fn resolve(&mut self, vw: &VwNamespaceMap) -> Result<NamespaceTransforms, Box<dyn Error>> {
         let mut nst = NamespaceTransforms::new();
         let mut namespaces: Vec<&String> = self.denormalized.keys().collect();
         namespaces.sort(); // ensure determinism
@@ -114,7 +108,7 @@ impl NamespaceTransformsParser {
 
     pub fn depth_first_search(
         &self,
-        vw: &vwmap::VwNamespaceMap,
+        vw: &VwNamespaceMap,
         nst: &mut NamespaceTransforms,
         verbose_name: &str,
     ) -> Result<(), Box<dyn Error>> {
@@ -173,7 +167,7 @@ impl NamespaceTransforms {
         NamespaceTransforms { v: Vec::new() }
     }
 
-    fn add_transform(&mut self, vw: &vwmap::VwNamespaceMap, s: &str) -> Result<(), Box<dyn Error>> {
+    fn add_transform(&mut self, vw: &VwNamespaceMap, s: &str) -> Result<(), Box<dyn Error>> {
         let rr = parse_namespace_statement(s);
         if rr.is_err() {
             return Err(Box::new(IOError::new(
@@ -197,10 +191,10 @@ impl NamespaceTransforms {
             )));
         }
 
-        let to_namespace_descriptor = vwmap::NamespaceDescriptor {
+        let to_namespace_descriptor = NamespaceDescriptor {
             namespace_index: self.v.len() as u16,
-            namespace_type: vwmap::NamespaceType::Transformed,
-            namespace_format: vwmap::NamespaceFormat::Categorical, // For now all to-namespaces are categorical
+            namespace_type: NamespaceType::Transformed,
+            namespace_format: NamespaceFormat::Categorical, // For now all to-namespaces are categorical
         };
 
         let to_namespace = Namespace {
@@ -244,9 +238,9 @@ impl NamespaceTransforms {
 
 pub fn get_namespace_descriptor(
     _transform_namespaces: &NamespaceTransforms,
-    vw: &vwmap::VwNamespaceMap,
+    vw: &VwNamespaceMap,
     namespace_char: char,
-) -> Result<vwmap::NamespaceDescriptor, Box<dyn Error>> {
+) -> Result<NamespaceDescriptor, Box<dyn Error>> {
     // Does not support transformed names
     match vw
         .map_vwname_to_namespace_descriptor
@@ -262,9 +256,9 @@ pub fn get_namespace_descriptor(
 
 pub fn get_namespace_descriptor_verbose(
     transform_namespaces: &NamespaceTransforms,
-    vw: &vwmap::VwNamespaceMap,
+    vw: &VwNamespaceMap,
     namespace_verbose: &str,
-) -> Result<vwmap::NamespaceDescriptor, Box<dyn Error>> {
+) -> Result<NamespaceDescriptor, Box<dyn Error>> {
     match vw
         .map_verbose_to_namespace_descriptor
         .get(namespace_verbose)
@@ -374,6 +368,7 @@ pub fn parse_namespace_statement(
     ))
 }
 
+#[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;

@@ -1,5 +1,3 @@
-#![allow(dead_code,unused_imports)]
-
 use crate::feature_transform_executor;
 use crate::model_instance;
 use crate::parser;
@@ -340,6 +338,7 @@ impl FeatureBufferTranslator {
     }
 }
 
+#[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;

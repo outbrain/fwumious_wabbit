@@ -1,5 +1,3 @@
-#![allow(dead_code,unused_imports)]
-
 use std::error::Error;
 use std::str;
 
@@ -10,7 +8,6 @@ use std::io;
 use std::io::Read;
 
 use crate::model_instance;
-use crate::optimizer;
 use crate::regressor;
 use crate::vwmap;
 
@@ -188,13 +185,13 @@ mod tests {
     use crate::assert_epsilon;
     use crate::block_ffm;
     use crate::feature_buffer;
-    use crate::feature_buffer::HashAndValue;
-    use crate::feature_buffer::HashAndValueAndSeq;
+    use crate::feature_buffer::{HashAndValue, HashAndValueAndSeq};
     use crate::model_instance::Optimizer;
+    use crate::optimizer;
+    use crate::optimizer::OptimizerTrait;
     use regressor::BlockTrait;
     use regressor::Regressor;
 
-    use crate::optimizer::OptimizerTrait;
     use tempfile::tempdir;
 
     #[test]

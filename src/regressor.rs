@@ -1,5 +1,3 @@
-#![allow(dead_code,unused_imports)]
-
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use rustc_hash::FxHashSet;
 use std::any::Any;
@@ -20,7 +18,6 @@ use crate::feature_buffer;
 use crate::feature_buffer::HashAndValueAndSeq;
 use crate::graph;
 use crate::model_instance;
-use crate::optimizer;
 use crate::port_buffer;
 
 pub const FFM_CONTRA_BUF_LEN: usize = 16384;
@@ -526,10 +523,12 @@ impl Regressor {
     }
 }
 
+#[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use crate::feature_buffer::HashAndValue;
+    use crate::optimizer;
 
     /* LR TESTS */
     fn lr_vec(v: Vec<feature_buffer::HashAndValue>) -> feature_buffer::FeatureBuffer {

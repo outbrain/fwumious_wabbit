@@ -1,13 +1,11 @@
-#![allow(dead_code,unused_imports, unused_mut, invalid_value)]
+#![allow(invalid_value, unused_mut)]
 
 use core::arch::x86_64::*;
 use rustc_hash::FxHashSet;
 use std::any::Any;
 use std::error::Error;
 use std::mem::{self, MaybeUninit};
-use std::ops::Bound::Included;
 use std::sync::Mutex;
-use std::time::Instant;
 use std::{io, ptr};
 
 use merand48::*;
@@ -28,7 +26,6 @@ use crate::regressor;
 use crate::regressor::{BlockCache, FFM_CONTRA_BUF_LEN};
 
 const FFM_STACK_BUF_LEN: usize = 131072;
-const FFM_CONTRA_CACHE_BUF_LEN: usize = 1024;
 const STEP: usize = 4;
 const ZEROES: [f32; STEP] = [0.0; STEP];
 
@@ -1179,6 +1176,7 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use block_helpers::{slearn2, spredict2, spredict2_with_cache};
 

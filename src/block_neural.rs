@@ -1,5 +1,3 @@
-#![allow(dead_code,unused_imports)]
-
 use rand_distr::{Distribution, Normal, Uniform};
 use rand_xoshiro::rand_core::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
@@ -8,7 +6,6 @@ use std::error::Error;
 use std::io;
 use std::io::Error as IOError;
 use std::io::ErrorKind;
-use std::mem::MaybeUninit;
 
 use crate::block_helpers;
 use crate::block_misc;
@@ -481,6 +478,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
     }
 }
 
+#[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;

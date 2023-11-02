@@ -1,4 +1,3 @@
-#![allow(dead_code,unused_imports)]
 use std::marker::PhantomData;
 
 pub trait OptimizerTrait: std::clone::Clone {
@@ -162,6 +161,7 @@ impl OptimizerTrait for OptimizerAdagradLUT {
     }
 }
 
+#[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;

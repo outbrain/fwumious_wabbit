@@ -1,5 +1,3 @@
-#![allow(dead_code,unused_imports)]
-
 use crate::parser;
 use crate::vwmap;
 use std::error::Error;
@@ -243,6 +241,7 @@ pub trait FunctionExecutorTrait: DynClone + Send {
 }
 clone_trait_object!(FunctionExecutorTrait);
 
+#[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;

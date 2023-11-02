@@ -1,5 +1,3 @@
-#![allow(dead_code,unused_imports)]
-
 use std::error::Error;
 use std::io::Error as IOError;
 use std::io::ErrorKind;
@@ -8,8 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use crate::feature_transform_parser;
-use crate::vwmap;
-use crate::vwmap::NamespaceDescriptor;
+use crate::vwmap::{NamespaceDescriptor, VwNamespaceMap};
 
 const WEIGHT_DELIM: &str = ":";
 const VERBOSE_FIELD_DELIM: &str = ",";
@@ -19,7 +16,7 @@ const FFM_MAX_K: usize = 128;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct FeatureComboDesc {
-    pub namespace_descriptors: Vec<vwmap::NamespaceDescriptor>,
+    pub namespace_descriptors: Vec<NamespaceDescriptor>,
     pub weight: f32,
 }
 
@@ -30,7 +27,7 @@ pub enum Optimizer {
     AdagradLUT = 300,
 }
 
-pub type FieldDesc = Vec<vwmap::NamespaceDescriptor>;
+pub type FieldDesc = Vec<NamespaceDescriptor>;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct NNConfig {
@@ -151,7 +148,7 @@ impl ModelInstance {
 
     pub fn create_feature_combo_desc(
         &self,
-        vw: &vwmap::VwNamespaceMap,
+        vw: &VwNamespaceMap,
         s: &str,
     ) -> Result<FeatureComboDesc, Box<dyn Error>> {
         let vsplit: Vec<&str> = s.split(WEIGHT_DELIM).collect(); // We use : as a delimiter for weight
@@ -171,7 +168,7 @@ impl ModelInstance {
         }
 
         let namespaces_str = vsplit[0];
-        let mut namespace_descriptors: Vec<vwmap::NamespaceDescriptor> = Vec::new();
+        let mut namespace_descriptors: Vec<NamespaceDescriptor> = Vec::new();
         for char in namespaces_str.chars() {
             let namespace_descriptor = feature_transform_parser::get_namespace_descriptor(
                 &self.transform_namespaces,
@@ -188,7 +185,7 @@ impl ModelInstance {
 
     fn create_feature_combo_desc_from_verbose(
         &self,
-        vw: &vwmap::VwNamespaceMap,
+        vw: &VwNamespaceMap,
         s: &str,
     ) -> Result<FeatureComboDesc, Box<dyn Error>> {
         let vsplit: Vec<&str> = s.split(WEIGHT_DELIM).collect(); // We use : as a delimiter for weight
@@ -219,7 +216,7 @@ impl ModelInstance {
         }
 
         let namespaces_verbose: Vec<&str> = vsplit[0].split(VERBOSE_FIELD_DELIM).collect(); // verbose names are separated by comma
-        let mut namespace_descriptors: Vec<vwmap::NamespaceDescriptor> = Vec::new();
+        let mut namespace_descriptors: Vec<NamespaceDescriptor> = Vec::new();
         for namespace_verbose in namespaces_verbose {
             let namespace_descriptor = feature_transform_parser::get_namespace_descriptor_verbose(
                 &self.transform_namespaces,
@@ -236,7 +233,7 @@ impl ModelInstance {
 
     fn create_field_desc_from_verbose(
         &self,
-        vw: &vwmap::VwNamespaceMap,
+        vw: &VwNamespaceMap,
         s: &str,
     ) -> Result<FieldDesc, Box<dyn Error>> {
         let vsplit: Vec<&str> = s.split(WEIGHT_DELIM).collect(); // We use : as a delimiter for weight
@@ -295,7 +292,7 @@ impl ModelInstance {
 
     pub fn new_from_cmdline(
         cl: &clap::ArgMatches<'_>,
-        vw: &vwmap::VwNamespaceMap,
+        vw: &VwNamespaceMap,
     ) -> Result<ModelInstance, Box<dyn Error>> {
         let mut mi = ModelInstance::new_empty()?;
 
@@ -387,7 +384,7 @@ impl ModelInstance {
 
         if let Some(in_v) = cl.values_of("ffm_field") {
             for namespaces_str in in_v {
-                let mut field: Vec<vwmap::NamespaceDescriptor> = Vec::new();
+                let mut field: Vec<NamespaceDescriptor> = Vec::new();
                 for char in namespaces_str.chars() {
                     let namespace_descriptor = feature_transform_parser::get_namespace_descriptor(
                         &mi.transform_namespaces,
@@ -554,12 +551,13 @@ impl ModelInstance {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
+    use crate::vwmap::{NamespaceDescriptor, NamespaceFormat, NamespaceType, VwNamespaceMap};
 
     fn ns_desc(i: u16) -> NamespaceDescriptor {
         NamespaceDescriptor {
             namespace_index: i,
-            namespace_type: vwmap::NamespaceType::Primitive,
-            namespace_format: vwmap::NamespaceFormat::Categorical,
+            namespace_type: NamespaceType::Primitive,
+            namespace_format: NamespaceFormat::Categorical,
         }
     }
 
@@ -570,7 +568,7 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+        let vw = VwNamespaceMap::new(vw_map_string).unwrap();
         let mi = ModelInstance::new_empty().unwrap();
 
         let result = mi.create_feature_combo_desc(&vw, "A").unwrap();
@@ -599,7 +597,7 @@ A,featureA:2
 B,featureB:3
 "#;
         // The main point is that weight in feature names from vw_map_str is ignored
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+        let vw = VwNamespaceMap::new(vw_map_string).unwrap();
         let mi = ModelInstance::new_empty().unwrap();
         let result = mi.create_feature_combo_desc(&vw, "BA:1.5").unwrap();
         assert_eq!(
@@ -618,7 +616,7 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+        let vw = VwNamespaceMap::new(vw_map_string).unwrap();
         let mi = ModelInstance::new_empty().unwrap();
         let result = mi
             .create_feature_combo_desc_from_verbose(&vw, "featureA")
@@ -655,7 +653,7 @@ A,featureA
 B,featureB
 C,featureC
 "#;
-        let vw = vwmap::VwNamespaceMap::new(vw_map_string).unwrap();
+        let vw = VwNamespaceMap::new(vw_map_string).unwrap();
         let mi = ModelInstance::new_empty().unwrap();
 
         let result = mi.create_field_desc_from_verbose(&vw, "featureA").unwrap();
