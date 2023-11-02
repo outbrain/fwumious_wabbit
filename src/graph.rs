@@ -1,5 +1,3 @@
-#![allow(dead_code,unused_imports)]
-
 use crate::block_misc;
 use crate::model_instance;
 use crate::port_buffer;
@@ -296,6 +294,7 @@ impl BlockGraph {
     }
 }
 
+#[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;

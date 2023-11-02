@@ -2,10 +2,8 @@
 #![allow(unused_mut)]
 #![allow(non_snake_case)]
 #![allow(redundant_semicolons)]
-#![allow(dead_code,unused_imports)]
+#![allow(dead_code, unused_imports)]
 
-use crate::hogwild::HogwildTrainer;
-use crate::multithread_helpers::BoxedRegressorTrait;
 use flate2::read::MultiGzDecoder;
 use std::collections::VecDeque;
 use std::error::Error;
@@ -25,35 +23,17 @@ extern crate intel_mkl_src;
 extern crate nom;
 extern crate core;
 
-mod block_ffm;
-mod block_helpers;
-mod block_loss_functions;
-mod block_lr;
-mod block_misc;
-mod block_monte_carlo;
-mod block_neural;
-mod block_normalize;
-mod block_relu;
-mod cache;
-mod cmdline;
-mod feature_buffer;
-mod feature_transform_executor;
-mod feature_transform_implementations;
-mod feature_transform_parser;
-mod graph;
-mod hogwild;
-mod logging_layer;
-mod model_instance;
-mod multithread_helpers;
-mod optimizer;
-mod parser;
-mod persistence;
-mod port_buffer;
-mod radix_tree;
-mod regressor;
-mod serving;
-mod version;
-mod vwmap;
+use fw::{cmdline, feature_buffer, logging_layer, regressor};
+use fw::cache::RecordCache;
+use fw::feature_buffer::FeatureBufferTranslator;
+use fw::hogwild::HogwildTrainer;
+use fw::model_instance::{ModelInstance, Optimizer};
+use fw::multithread_helpers::BoxedRegressorTrait;
+use fw::parser::VowpalParser;
+use fw::persistence::{new_regressor_from_filename, save_regressor_to_filename, save_sharable_regressor_to_filename};
+use fw::regressor::{get_regressor_with_weights, Regressor};
+use fw::serving::Serving;
+use fw::vwmap::VwNamespaceMap;
 
 fn main() {
     logging_layer::initialize_logging_layer();
@@ -74,9 +54,9 @@ fn build_cache_without_training(cl: clap::ArgMatches) -> Result<(), Box<dyn Erro
         .expect("Couldn't access path given by --data")
         .join("vw_namespace_map.csv");
 
-    let vw: vwmap::VwNamespaceMap =
-        vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
-    let mut cache = cache::RecordCache::new(input_filename, true, &vw);
+    let vw: VwNamespaceMap =
+        VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
+    let mut cache = RecordCache::new(input_filename, true, &vw);
     let input = File::open(input_filename)?;
     let mut aa;
     let mut bb;
@@ -90,7 +70,7 @@ fn build_cache_without_training(cl: clap::ArgMatches) -> Result<(), Box<dyn Erro
             &mut bb
         }
     };
-    let mut pa = parser::VowpalParser::new(&vw);
+    let mut pa = VowpalParser::new(&vw);
     let mut example_num = 0;
     loop {
         let reading_result;
@@ -107,7 +87,7 @@ fn build_cache_without_training(cl: clap::ArgMatches) -> Result<(), Box<dyn Erro
             }
         } else {
             reading_result = cache.get_next_record();
-	    match reading_result {
+            match reading_result {
                 Ok([]) => break, // EOF
                 Ok(buffer) => buffer,
                 Err(_e) => return Err(_e),
@@ -157,31 +137,29 @@ fn main2() -> Result<(), Box<dyn Error>> {
             .value_of("initial_regressor")
             .expect("Daemon mode only supports serving from --initial regressor");
         log::info!("initial_regressor = {}", filename);
-        let (mi2, vw2, re_fixed) =
-            persistence::new_regressor_from_filename(filename, true, Option::Some(&cl))?;
+        let (mi2, vw2, re_fixed) = new_regressor_from_filename(filename, true, Option::Some(&cl))?;
 
-        let mut se = serving::Serving::new(&cl, &vw2, Box::new(re_fixed), &mi2)?;
+        let mut se = Serving::new(&cl, &vw2, Box::new(re_fixed), &mi2)?;
         se.serve()?;
     } else if cl.is_present("convert_inference_regressor") {
         let filename = cl
             .value_of("initial_regressor")
             .expect("Convert mode requires --initial regressor");
         let (mut mi2, vw2, re_fixed) =
-            persistence::new_regressor_from_filename(filename, true, Option::Some(&cl))?;
-        mi2.optimizer = model_instance::Optimizer::SGD;
+            new_regressor_from_filename(filename, true, Option::Some(&cl))?;
+        mi2.optimizer = Optimizer::SGD;
         if let Some(filename1) = inference_regressor_filename {
-            persistence::save_regressor_to_filename(filename1, &mi2, &vw2, re_fixed).unwrap()
+            save_regressor_to_filename(filename1, &mi2, &vw2, re_fixed).unwrap()
         }
     } else {
-        let vw: vwmap::VwNamespaceMap;
-        let mut re: regressor::Regressor;
+        let vw: VwNamespaceMap;
+        let mut re: Regressor;
         let mut sharable_regressor: BoxedRegressorTrait;
-        let mi: model_instance::ModelInstance;
+        let mi: ModelInstance;
 
         if let Some(filename) = cl.value_of("initial_regressor") {
             log::info!("initial_regressor = {}", filename);
-            (mi, vw, re) =
-                persistence::new_regressor_from_filename(filename, testonly, Option::Some(&cl))?;
+            (mi, vw, re) = new_regressor_from_filename(filename, testonly, Option::Some(&cl))?;
             sharable_regressor = BoxedRegressorTrait::new(Box::new(re));
         } else {
             // We load vw_namespace_map.csv just so we know all the namespaces ahead of time
@@ -192,15 +170,15 @@ fn main2() -> Result<(), Box<dyn Error>> {
                 .parent()
                 .expect("Couldn't access path given by --data")
                 .join("vw_namespace_map.csv");
-            vw = vwmap::VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
-            mi = model_instance::ModelInstance::new_from_cmdline(&cl, &vw)?;
-            re = regressor::get_regressor_with_weights(&mi);
+            vw = VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
+            mi = ModelInstance::new_from_cmdline(&cl, &vw)?;
+            re = get_regressor_with_weights(&mi);
             sharable_regressor = BoxedRegressorTrait::new(Box::new(re));
         };
 
         let input_filename = cl.value_of("data").expect("--data expected");
-        let mut cache = cache::RecordCache::new(input_filename, cl.is_present("cache"), &vw);
-        let mut fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
+        let mut cache = RecordCache::new(input_filename, cl.is_present("cache"), &vw);
+        let mut fbt = FeatureBufferTranslator::new(&mi);
         let mut pb = sharable_regressor.new_portbuffer();
 
         let predictions_after: u64 = match cl.value_of("predictions_after") {
@@ -247,7 +225,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
             }
         };
 
-        let mut pa = parser::VowpalParser::new(&vw);
+        let mut pa = VowpalParser::new(&vw);
 
         let now = Instant::now();
         let mut example_num = 0;
@@ -318,7 +296,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
         log::info!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
 
         if let Some(filename) = final_regressor_filename {
-            persistence::save_sharable_regressor_to_filename(filename, &mi, &vw, sharable_regressor)
+            save_sharable_regressor_to_filename(filename, &mi, &vw, sharable_regressor)
                 .unwrap()
         }
     }

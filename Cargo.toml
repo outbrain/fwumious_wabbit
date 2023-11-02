@@ -35,8 +35,14 @@ rustc-hash = "1.1.0"
 cbindgen = "0.23.0"
 
 [lib]
-crate_type = ["cdylib"]
+name = "fw"
+path="src/lib.rs"
+crate_type = ["lib", "cdylib"]
 doctest = false
+
+[[bin]]
+name="fw"
+path="src/main.rs"
 
 [dev-dependencies]
 tempfile = "3.1.0"
