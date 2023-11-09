@@ -43,8 +43,11 @@ pub fn new_monte_carlo_block(
     Ok(block_outputs.pop().unwrap())
 }
 
+// Used to generate a larger number when creating a seed from the input tape
+const SEED_MULTIPLIER: f32 = 100_000.0;
+
 fn create_seed_from_input_tape(input_tape: &[f32]) -> u64 {
-    (input_tape.iter().sum::<f32>() * 100_000.0).round() as u64
+    (input_tape.iter().sum::<f32>() * SEED_MULTIPLIER).round() as u64
 }
 
 pub struct BlockMonteCarlo {
@@ -119,7 +122,7 @@ impl BlockTrait for BlockMonteCarlo {
                 );
 
                 output_tape.copy_from_slice(&input_tape);
-                if i != 0 {
+                if i > 0 {
                     let mut number_of_inputs_to_skip = self.number_of_inputs_to_skip;
                     let sample = self.increment_generator.sample(&mut rng);
                     if self.dropout_rate >= sample {
@@ -169,7 +172,7 @@ impl BlockTrait for BlockMonteCarlo {
                 );
 
                 output_tape.copy_from_slice(&input_tape);
-                if i != 0 {
+                if i > 0 {
                     let mut number_of_inputs_to_skip = self.number_of_inputs_to_skip;
                     let sample = self.increment_generator.sample(&mut rng);
                     if self.dropout_rate >= sample {
