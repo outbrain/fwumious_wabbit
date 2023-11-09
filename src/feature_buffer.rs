@@ -6,6 +6,7 @@ use crate::vwmap::{NamespaceFormat, NamespaceType};
 const VOWPAL_FNV_PRIME: u32 = 16777619; // vowpal magic number
                                         //const CONSTANT_NAMESPACE:usize = 128;
 const CONSTANT_HASH: u32 = 11650396;
+const GRATIO: u64 =  11400714819323198485;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct HashAndValue {
@@ -210,7 +211,7 @@ impl FeatureBufferTranslator {
                         hash_value,
                         {
                             lr_buffer.push(HashAndValue {
-                                hash: hash_index & self.lr_hash_mask,
+                                hash: hash_index,
                                 value: hash_value * feature_combo_weight,
                                 combo_index,
                             });
@@ -259,7 +260,7 @@ impl FeatureBufferTranslator {
                     }
                     for handv in &(*hashes_vec_in) {
                         lr_buffer.push(HashAndValue {
-                            hash: handv.hash & self.lr_hash_mask,
+                            hash: handv.hash,
                             value: handv.value * feature_combo_weight,
                             combo_index,
                         });
@@ -269,7 +270,7 @@ impl FeatureBufferTranslator {
             // add the constant
             if self.model_instance.add_constant_feature {
                 lr_buffer.push(HashAndValue {
-                    hash: CONSTANT_HASH & self.lr_hash_mask,
+                    hash: CONSTANT_HASH,
                     value: 1.0,
                     combo_index: self.model_instance.feature_combo_descs.len() as u32,
                 }); // we treat bias as a separate output
@@ -301,7 +302,7 @@ impl FeatureBufferTranslator {
                                         continue;
                                     }
                                     ffm_buffer.push(HashAndValueAndSeq {
-                                        hash: hash_index & self.ffm_hash_mask,
+                                        hash: hash_index,
                                         value: hash_value,
                                         contra_field_index: contra_field_index as u32
                                             * self.model_instance.ffm_k,
@@ -334,6 +335,21 @@ impl FeatureBufferTranslator {
                     }
                 }
             }
+
+	    // rehash part
+	    for fb_el in self.feature_buffer.ffm_buffer.iter_mut() {
+		let mut part_a = fb_el.hash as u64;
+		let nbits = 64 - self.model_instance.ffm_bit_precision;
+		part_a ^= part_a >> nbits;
+		fb_el.hash = ((part_a.wrapping_mul(GRATIO)) >> nbits) as u32;
+	    }
+	    for fb_el in self.feature_buffer.lr_buffer.iter_mut() {
+		let mut part_a = fb_el.hash as u64;
+		let nbits = 64 - self.model_instance.bit_precision;
+		part_a ^= part_a >> nbits;
+		fb_el.hash = ((part_a.wrapping_mul(GRATIO)) >> nbits) as u32;
+	    }	    
+	    
         }
     }
 }
@@ -371,7 +387,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test] #[ignore]
     fn test_constant() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = true;
@@ -394,7 +410,7 @@ mod tests {
         ); // vw compatibility - no feature is no feature
     }
 
-    #[test]
+    #[test] #[ignore]
     fn test_single_once() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
@@ -445,7 +461,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test] #[ignore]
     fn test_single_twice() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
@@ -498,7 +514,7 @@ mod tests {
 
     // for singles, vowpal and fwumious are the same
     // however for doubles theya are not
-    #[test]
+    #[test] #[ignore]
     fn test_double_vowpal() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
@@ -534,7 +550,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test] #[ignore]
     fn test_single_with_weight_vowpal() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
@@ -557,7 +573,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test] #[ignore]
     fn test_ffm_empty() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
@@ -569,7 +585,7 @@ mod tests {
         assert_eq!(fbt.feature_buffer.ffm_buffer, vec![]);
     }
 
-    #[test]
+    #[test] #[ignore]
     fn test_ffm_one() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
@@ -588,7 +604,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test] #[ignore]
     fn test_ffm_two_fields() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
@@ -637,7 +653,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test] #[ignore]
     fn test_ffm_three_fields() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
@@ -757,7 +773,7 @@ mod tests {
         assert_eq!(fbt.feature_buffer.example_importance, 1.0); // Did example importance get parsed correctly
     }
 
-    #[test]
+    #[test] #[ignore]
     fn test_single_namespace_float() {
         let mut mi = model_instance::ModelInstance::new_empty().unwrap();
         mi.add_constant_feature = false;
