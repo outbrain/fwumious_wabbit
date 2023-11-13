@@ -25,7 +25,7 @@ use crate::port_buffer::PortBuffer;
 use crate::regressor;
 use crate::regressor::{BlockCache, FFM_CONTRA_BUF_LEN};
 
-const FFM_STACK_BUF_LEN: usize = 131072;
+const FFM_STACK_BUF_LEN: usize = 200072;
 const FFM_CONTRA_CACHE_BUF_LEN: usize = 1024;
 const STEP: usize = 4;
 const ZEROES: [f32; STEP] = [0.0; STEP];
