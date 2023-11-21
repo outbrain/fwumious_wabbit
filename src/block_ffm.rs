@@ -7,6 +7,7 @@ use std::error::Error;
 use std::mem::{self, MaybeUninit};
 use std::sync::Mutex;
 use std::{io, ptr};
+use std::slice;
 
 use merand48::*;
 
@@ -829,7 +830,19 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         &self,
         output_bufwriter: &mut dyn io::Write,
     ) -> Result<(), Box<dyn Error>> {
-        block_helpers::write_weights_to_buf(&self.weights, output_bufwriter)?;
+
+	let mut v = Vec::<[u8; 3]>::with_capacity(self.weights.len());
+	for weight in self.weights.iter() {
+	    let tmp_bytes = weight.to_be_bytes();
+	    let mut tmp_vec = [0, 0, 0];
+	    tmp_vec[0] = tmp_bytes[0];
+	    tmp_vec[1] = tmp_bytes[1];
+	    tmp_vec[2] = tmp_bytes[2];
+	    v.push(tmp_vec);	    
+	}
+	
+//        block_helpers::write_weights_to_buf(&self.weights, output_bufwriter)?;
+	block_helpers::write_weights_to_buf(&v, output_bufwriter)?;
         block_helpers::write_weights_to_buf(&self.optimizer, output_bufwriter)?;
         Ok(())
     }
@@ -838,7 +851,38 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         &mut self,
         input_bufreader: &mut dyn io::Read,
     ) -> Result<(), Box<dyn Error>> {
-        block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader)?;
+	
+	unsafe {
+            let buf_view: &mut [u8] = slice::from_raw_parts_mut(
+		self.weights.as_mut_ptr() as *mut u8,
+		self.weights.len() * 3,
+            );
+	    
+	    let mut tmp_weights: Vec<u8> = Vec::new();
+	    input_bufreader.read_exact(buf_view)?;
+	    for (wb_index, weight_byte) in buf_view.iter().enumerate(){
+		if wb_index > 0 && wb_index % 4 == 0 {
+		    tmp_weights.push(0 as u8);
+		} else {
+		    tmp_weights.push(*weight_byte);
+		}
+	    }
+
+	    for (index, byte_array) in tmp_weights.chunks(4).enumerate() {
+
+		let mut out_ary: [u8; 4] = [0; 4];
+
+		out_ary[0] = byte_array[0];
+		out_ary[1] = byte_array[1];
+		out_ary[2] = byte_array[2];
+//		out_ary[3] = byte_array[3];
+
+		let float: f32 = f32::from_be_bytes(out_ary);
+		self.weights[index] = float;
+	    }	    
+	}
+
+        //block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader)?;
         block_helpers::read_weights_from_buf(&mut self.optimizer, input_bufreader)?;
         Ok(())
     }
