@@ -57,6 +57,7 @@ pub fn save_sharable_regressor_to_filename(
     mi: &model_instance::ModelInstance,
     vwmap: &vwmap::VwNamespaceMap,
     re: BoxedRegressorTrait,
+    quantize_weights: bool
 ) -> Result<(), Box<dyn Error>> {
     let output_bufwriter = &mut io::BufWriter::new(
         fs::File::create(filename)
@@ -65,7 +66,7 @@ pub fn save_sharable_regressor_to_filename(
     write_regressor_header(output_bufwriter)?;
     vwmap.save_to_buf(output_bufwriter)?;
     mi.save_to_buf(output_bufwriter)?;
-    re.write_weights_to_buf(output_bufwriter)?;
+    re.write_weights_to_buf(output_bufwriter, quantize_weights)?;
     Ok(())
 }
 
@@ -74,6 +75,7 @@ pub fn save_regressor_to_filename(
     mi: &model_instance::ModelInstance,
     vwmap: &vwmap::VwNamespaceMap,
     re: Regressor,
+    quantize_weights: bool,
 ) -> Result<(), Box<dyn Error>> {
     let output_bufwriter = &mut io::BufWriter::new(
         fs::File::create(filename)
@@ -82,7 +84,7 @@ pub fn save_regressor_to_filename(
     write_regressor_header(output_bufwriter)?;
     vwmap.save_to_buf(output_bufwriter)?;
     mi.save_to_buf(output_bufwriter)?;
-    re.write_weights_to_buf(output_bufwriter)?;
+    re.write_weights_to_buf(output_bufwriter, quantize_weights)?;
     Ok(())
 }
 
@@ -136,9 +138,15 @@ pub fn new_regressor_from_filename(
 > {
     let mut input_bufreader = io::BufReader::new(fs::File::open(filename).unwrap());
     let (mut mi, vw, mut re) = load_regressor_without_weights(&mut input_bufreader, cmd_arguments)?;
+
+    // reading logic is for some reason different, so doing this again here ..
+    let quantization_flag = cmd_arguments.unwrap().is_present("weight_quantization");
+    let conversion_flag = cmd_arguments.unwrap().is_present("convert_inference_regressor");
+    let weight_quantization = quantization_flag && !conversion_flag;
+    log::info!("Reading weights, dequantization enabled: {}", weight_quantization);
     if !immutable {
         re.allocate_and_init_weights(&mi);
-        re.overwrite_weights_from_buf(&mut input_bufreader)?;
+        re.overwrite_weights_from_buf(&mut input_bufreader, weight_quantization)?;
         Ok((mi, vw, re))
     } else {
         mi.optimizer = model_instance::Optimizer::SGD;
@@ -154,7 +162,7 @@ pub fn hogwild_load(re: &mut regressor::Regressor, filename: &str) -> Result<(),
     let (_, _, mut re_hw) = load_regressor_without_weights(&mut input_bufreader, None)?;
     // TODO: Here we should do safety comparison that the regressor is really the same;
     if !re.immutable {
-        re.overwrite_weights_from_buf(&mut input_bufreader)?;
+        re.overwrite_weights_from_buf(&mut input_bufreader, false)?;
     } else {
         re_hw.into_immutable_regressor_from_buf(re, &mut input_bufreader)?;
     }

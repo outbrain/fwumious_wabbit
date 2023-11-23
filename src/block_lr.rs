@@ -263,15 +263,17 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
     fn read_weights_from_buf(
         &mut self,
         input_bufreader: &mut dyn io::Read,
+	_use_quantization: bool
     ) -> Result<(), Box<dyn Error>> {
-        block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader)
+        block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader, false)
     }
 
     fn write_weights_to_buf(
         &self,
         output_bufwriter: &mut dyn io::Write,
+	_use_quantization: bool
     ) -> Result<(), Box<dyn Error>> {
-        block_helpers::write_weights_to_buf(&self.weights, output_bufwriter)
+        block_helpers::write_weights_to_buf(&self.weights, output_bufwriter, false)
     }
 
     fn read_weights_from_buf_into_forward_only(

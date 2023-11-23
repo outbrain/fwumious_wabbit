@@ -114,7 +114,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
     };
 
     let testonly = cl.is_present("testonly");
-
+    let quantize_weights = cl.is_present("weight_quantization");
     let final_regressor_filename = cl.value_of("final_regressor");
     let output_pred_sto: bool = cl.is_present("predictions_stdout");
     if let Some(filename) = final_regressor_filename {
@@ -149,7 +149,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
             new_regressor_from_filename(filename, true, Option::Some(&cl))?;
         mi2.optimizer = Optimizer::SGD;
         if let Some(filename1) = inference_regressor_filename {
-            save_regressor_to_filename(filename1, &mi2, &vw2, re_fixed).unwrap()
+            save_regressor_to_filename(filename1, &mi2, &vw2, re_fixed, quantize_weights).unwrap()
         }
     } else {
         let vw: VwNamespaceMap;
@@ -296,7 +296,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
         log::info!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
 
         if let Some(filename) = final_regressor_filename {
-            save_sharable_regressor_to_filename(filename, &mi, &vw, sharable_regressor)
+            save_sharable_regressor_to_filename(filename, &mi, &vw, sharable_regressor, quantize_weights)
                 .unwrap()
         }
     }

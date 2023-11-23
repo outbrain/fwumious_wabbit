@@ -1,3 +1,4 @@
+pub mod quantization;
 pub mod block_ffm;
 pub mod block_helpers;
 pub mod block_loss_functions;

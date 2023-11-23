@@ -43,6 +43,7 @@ macro_rules! assert_epsilon {
 pub fn read_weights_from_buf<L>(
     weights: &mut Vec<L>,
     input_bufreader: &mut dyn io::Read,
+    _use_quantization: bool
 ) -> Result<(), Box<dyn Error>> {
     if weights.is_empty() {
         return Err("Loading weights to unallocated weighs buffer".to_string())?;
@@ -74,6 +75,7 @@ pub fn skip_weights_from_buf<L>(
 pub fn write_weights_to_buf<L>(
     weights: &Vec<L>,
     output_bufwriter: &mut dyn io::Write,
+    _use_quantization: bool
 ) -> Result<(), Box<dyn Error>> {
     if weights.is_empty() {
         assert!(false);
