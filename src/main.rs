@@ -18,6 +18,7 @@ use std::time::Instant;
 
 extern crate blas;
 extern crate intel_mkl_src;
+extern crate half;
 
 #[macro_use]
 extern crate nom;
