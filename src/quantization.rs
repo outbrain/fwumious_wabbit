@@ -1,8 +1,8 @@
 use std::io;
 use std::slice;
-use half::bf16;
+//use half::bf16;
 
-const BY_X: usize = 2;
+const BY_X: usize = 1;
 
 
 pub fn quantize_ffm_weights_3by(weights: &[f32]) -> Vec<[u8; BY_X]> {
@@ -10,7 +10,7 @@ pub fn quantize_ffm_weights_3by(weights: &[f32]) -> Vec<[u8; BY_X]> {
 
     let mut v = Vec::<[u8; BY_X]>::with_capacity(weights.len());
     for &weight in weights {
-        let tmp_bytes = (bf16::from_f32(weight)).to_be_bytes();
+        let tmp_bytes = (weight).to_le_bytes();
         let mut out_ary: [u8; BY_X] = [0; BY_X];
         for k in 0..BY_X {
             out_ary[k] = tmp_bytes[k];
@@ -34,12 +34,13 @@ pub fn dequantize_ffm_weights_3by(
         );
         let _ = input_bufreader.read_exact(buf_view);
 
-        let mut out_ary: [u8; 2] = [0; 2];
+        let mut out_ary: [u8; 4] = [0; 4];
         for (chunk, float_ref) in buf_view.chunks(BY_X).zip(reference_weights.iter_mut()) {
             for k in 0..BY_X {
                 out_ary[k] = chunk[k];
             }
-	    let weight = bf16::to_f32(bf16::from_be_bytes(out_ary));
+	    let weight = f32::from_le_bytes(out_ary);
+//	    let weight = bf16::to_f32(bf16::from_be_bytes(out_ary));
             *float_ref = weight;
         }
     }
