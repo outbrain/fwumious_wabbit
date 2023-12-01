@@ -40,6 +40,7 @@ pub fn dequantize_ffm_weights_3by(
                 out_ary[k] = chunk[k];
             }
 	    let weight = f32::from_le_bytes(out_ary);
+	    // uncomment for 16b
 //	    let weight = bf16::to_f32(bf16::from_be_bytes(out_ary));
             *float_ref = weight;
         }
