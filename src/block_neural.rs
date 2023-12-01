@@ -36,8 +36,6 @@ pub enum NeuronType {
 pub enum InitType {
     Xavier,
     Hu,
-    //    RandomFirst1,
-    //    RandomFirst10,
     One,
     Zero,
 }
