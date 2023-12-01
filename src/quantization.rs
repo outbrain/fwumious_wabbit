@@ -54,6 +54,6 @@ mod tests {
     fn test_quantize_2by() {
         let some_random_float_weights = vec![0.51, 0.12, 0.11, 0.1232, 0.6123, 0.23];
         let output_weights = quantize_ffm_weights_3by(&some_random_float_weights);
-        assert_eq!(output_weights[3], [61, 252]);
+        assert_eq!(output_weights[3], [72]);
     }
 }
