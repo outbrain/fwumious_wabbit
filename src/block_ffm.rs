@@ -834,7 +834,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
 	if use_quantization {
 
-	    let quantized_weights = quantization::quantize_ffm_weights_3by(&self.weights);
+	    let quantized_weights = quantization::quantize_ffm_weights(&self.weights);
 	    block_helpers::write_weights_to_buf(&quantized_weights, output_bufwriter, false)?;
 	} else {
             block_helpers::write_weights_to_buf(&self.weights, output_bufwriter, false)?;
@@ -851,7 +851,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 
 	if use_quantization {
 	    // in-place expand weights via dequantization (for inference)
-	    quantization::dequantize_ffm_weights_3by(input_bufreader, &mut self.weights);
+	    quantization::dequantize_ffm_weights(input_bufreader, &mut self.weights);
 	} else {
             block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader, false)?;
 	}
