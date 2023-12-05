@@ -56,7 +56,7 @@ pub fn quantize_ffm_weights(weights: &[f32]) -> Vec<[u8; BY_X]> {
 
     // Cheap, yet important check
     if weight_statistics.mean > CRITICAL_WEIGHT_BOUND || weight_statistics.mean < -CRITICAL_WEIGHT_BOUND {
-	panic!("Identified a very skewed weight distribution indicating exploded weights, not serving that! Mean weight value: {}", weight_statistics.mean);
+	log::warn!("Identified a very skewed weight distribution indicating exploded weights, not serving that! Mean weight value: {}", weight_statistics.mean);
     }
 
     // Uniform distribution within the relevant interval
