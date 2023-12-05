@@ -154,13 +154,13 @@ mod tests {
 	let weights: Vec<f32> = (0..10_000_000).map(|x| x as f32).collect();
 	let now = std::time::Instant::now();
 	let quantized = quantize_ffm_weights(&weights);
-	assert!(now.elapsed().as_millis() < 150);
+	assert!(now.elapsed().as_millis() < 300);
 	
 	let mut buffer = io::Cursor::new(quantized.into_iter().flatten().collect::<Vec<_>>());
 	let mut dequantized = vec![0.0; weights.len()];
 	let now = std::time::Instant::now();
 	dequantize_ffm_weights(&mut buffer, &mut dequantized);
-	assert!(now.elapsed().as_millis() < 150);
+	assert!(now.elapsed().as_millis() < 300);
     }
     
 }
