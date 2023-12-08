@@ -466,7 +466,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
         &self,
         input_bufreader: &mut dyn io::Read,
         forward: &mut Box<dyn BlockTrait>,
-	use_quantization: bool
+	_use_quantization: bool
     ) -> Result<(), Box<dyn Error>> {
         let forward = forward
             .as_any()

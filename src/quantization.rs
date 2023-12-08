@@ -5,6 +5,8 @@ const BY_X: usize = 2;
 const NUM_BUCKETS: f32 = 65025.0;
 const CRITICAL_WEIGHT_BOUND: f32 = 10.0; // naive detection of really bad weights, this should never get to prod.
 const MEAN_SAMPLING_RATIO: usize = 10;
+const MIN_PREC: f32 = 10_000.0;
+const MAX_PREC: f32 = 10_000.0;
 
 
 #[derive(Debug)]
@@ -32,8 +34,8 @@ fn emit_weight_statistics(weights: &[f32]) -> WeightStat {
     }
 
     WeightStat {
-	min: min_weight,
-	max: max_weight,
+	min: (min_weight * MIN_PREC).round() / MIN_PREC,
+	max: (max_weight * MAX_PREC).round() / MAX_PREC,
 	mean: mean_weight / weight_counter as f32,
     }
 }

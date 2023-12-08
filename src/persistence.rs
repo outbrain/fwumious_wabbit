@@ -156,7 +156,6 @@ pub fn new_regressor_from_filename(
         re.overwrite_weights_from_buf(&mut input_bufreader, weight_quantization)?;
         Ok((mi, vw, re))
     } else {
-	log::info!("IMMUTABLE READ here");
         mi.optimizer = model_instance::Optimizer::SGD;
         let mut immutable_re = re.immutable_regressor_without_weights(&mi)?;
         immutable_re.allocate_and_init_weights(&mi);
