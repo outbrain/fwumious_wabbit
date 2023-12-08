@@ -850,7 +850,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
     ) -> Result<(), Box<dyn Error>> {
 
 	if use_quantization {
-	    // in-place expand weights via dequantization (for inference)
 	    quantization::dequantize_ffm_weights(input_bufreader, &mut self.weights);
 	} else {
             block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader, false)?;
@@ -886,7 +885,6 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             .unwrap();
 
 	if use_quantization {
-	    // in-place expand weights via dequantization (for inference)
 	    quantization::dequantize_ffm_weights(input_bufreader, &mut forward.weights);
 	} else {
             block_helpers::read_weights_from_buf(&mut forward.weights, input_bufreader, false)?;
