@@ -133,6 +133,7 @@ pub trait BlockTrait {
         &self,
         _input_bufreader: &mut dyn io::Read,
         _forward: &mut Box<dyn BlockTrait>,
+	_use_quantization: bool
     ) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
@@ -483,6 +484,7 @@ impl Regressor {
         &mut self,
         rg: &mut Regressor,
         input_bufreader: &mut dyn io::Read,
+	use_quantization: bool
     ) -> Result<(), Box<dyn Error>> {
         // TODO Ideally we would make a copy, not based on model_instance. but this is easier at the moment
 
@@ -499,7 +501,7 @@ impl Regressor {
             ))?;
         }
         for (i, v) in &mut self.blocks_boxes.iter().enumerate() {
-            v.read_weights_from_buf_into_forward_only(input_bufreader, &mut rg.blocks_boxes[i])?;
+            v.read_weights_from_buf_into_forward_only(input_bufreader, &mut rg.blocks_boxes[i], use_quantization)?;
         }
 
         Ok(())
@@ -522,7 +524,7 @@ impl Regressor {
             let mut cursor = Cursor::new(&mut tmp_vec);
             v.write_weights_to_buf(&mut cursor, use_quantization)?;
             cursor.set_position(0);
-            v.read_weights_from_buf_into_forward_only(&mut cursor, &mut rg.blocks_boxes[i])?;
+            v.read_weights_from_buf_into_forward_only(&mut cursor, &mut rg.blocks_boxes[i], false)?;
         }
         Ok(rg)
     }

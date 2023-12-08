@@ -878,12 +878,19 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         &self,
         input_bufreader: &mut dyn io::Read,
         forward: &mut Box<dyn BlockTrait>,
+	use_quantization: bool
     ) -> Result<(), Box<dyn Error>> {
         let forward = forward
             .as_any()
             .downcast_mut::<BlockFFM<optimizer::OptimizerSGD>>()
             .unwrap();
-        block_helpers::read_weights_from_buf(&mut forward.weights, input_bufreader, false)?;
+
+	if use_quantization {
+	    // in-place expand weights via dequantization (for inference)
+	    quantization::dequantize_ffm_weights(input_bufreader, &mut forward.weights);
+	} else {
+            block_helpers::read_weights_from_buf(&mut forward.weights, input_bufreader, false)?;
+	}
         block_helpers::skip_weights_from_buf::<OptimizerData<L>>(
             self.ffm_weights_len as usize,
             input_bufreader,
