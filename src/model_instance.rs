@@ -93,7 +93,7 @@ pub struct ModelInstance {
 
     pub transform_namespaces: feature_transform_parser::NamespaceTransforms,
 
-    pub dequantize_weights: bool,
+    pub dequantize_weights: Option<bool>,
 
 }
 
@@ -145,7 +145,7 @@ impl ModelInstance {
             optimizer: Optimizer::SGD,
             transform_namespaces: feature_transform_parser::NamespaceTransforms::new(),
             nn_config: NNConfig::new(),
-	    dequantize_weights: false,
+	    dequantize_weights: Option<false>,
         };
         Ok(mi)
     }
