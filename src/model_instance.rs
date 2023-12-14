@@ -145,7 +145,7 @@ impl ModelInstance {
             optimizer: Optimizer::SGD,
             transform_namespaces: feature_transform_parser::NamespaceTransforms::new(),
             nn_config: NNConfig::new(),
-	    dequantize_weights: Option<false>,
+	    dequantize_weights: Some(false),
         };
         Ok(mi)
     }

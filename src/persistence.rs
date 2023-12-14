@@ -145,7 +145,7 @@ pub fn new_regressor_from_filename(
     let mut conversion_flag = false;
     
     if cmd_arguments.is_some(){
-	quantization_flag = mi.dequantize_weights;
+	quantization_flag = mi.dequantize_weights.unwrap_or(false);
 	conversion_flag = cmd_arguments.unwrap().is_present("convert_inference_regressor");
     }
     

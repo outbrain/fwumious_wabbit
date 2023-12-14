@@ -150,7 +150,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
             new_regressor_from_filename(filename, true, Option::Some(&cl))?;
         mi2.optimizer = Optimizer::SGD;
 	if cl.is_present("weight_quantization") {
-	    mi2.dequantize_weights = true;
+	    mi2.dequantize_weights = Some(true);
 	}
         if let Some(filename1) = inference_regressor_filename {
             save_regressor_to_filename(filename1, &mi2, &vw2, re_fixed, quantize_weights).unwrap()
