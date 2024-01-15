@@ -1,3 +1,4 @@
+pub mod quantization;
 pub mod block_ffm;
 pub mod block_helpers;
 pub mod block_loss_functions;
@@ -29,6 +30,7 @@ pub mod vwmap;
 
 extern crate blas;
 extern crate intel_mkl_src;
+extern crate half;
 
 use crate::feature_buffer::FeatureBufferTranslator;
 use crate::multithread_helpers::BoxedRegressorTrait;

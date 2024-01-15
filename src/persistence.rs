@@ -57,6 +57,7 @@ pub fn save_sharable_regressor_to_filename(
     mi: &model_instance::ModelInstance,
     vwmap: &vwmap::VwNamespaceMap,
     re: BoxedRegressorTrait,
+    quantize_weights: bool
 ) -> Result<(), Box<dyn Error>> {
     let output_bufwriter = &mut io::BufWriter::new(
         fs::File::create(filename)
@@ -65,7 +66,7 @@ pub fn save_sharable_regressor_to_filename(
     write_regressor_header(output_bufwriter)?;
     vwmap.save_to_buf(output_bufwriter)?;
     mi.save_to_buf(output_bufwriter)?;
-    re.write_weights_to_buf(output_bufwriter)?;
+    re.write_weights_to_buf(output_bufwriter, quantize_weights)?;
     Ok(())
 }
 
@@ -74,6 +75,7 @@ pub fn save_regressor_to_filename(
     mi: &model_instance::ModelInstance,
     vwmap: &vwmap::VwNamespaceMap,
     re: Regressor,
+    quantize_weights: bool,
 ) -> Result<(), Box<dyn Error>> {
     let output_bufwriter = &mut io::BufWriter::new(
         fs::File::create(filename)
@@ -82,7 +84,7 @@ pub fn save_regressor_to_filename(
     write_regressor_header(output_bufwriter)?;
     vwmap.save_to_buf(output_bufwriter)?;
     mi.save_to_buf(output_bufwriter)?;
-    re.write_weights_to_buf(output_bufwriter)?;
+    re.write_weights_to_buf(output_bufwriter, quantize_weights)?;
     Ok(())
 }
 
@@ -136,15 +138,28 @@ pub fn new_regressor_from_filename(
 > {
     let mut input_bufreader = io::BufReader::new(fs::File::open(filename).unwrap());
     let (mut mi, vw, mut re) = load_regressor_without_weights(&mut input_bufreader, cmd_arguments)?;
+
+    // reading logic is for some reason different, so doing this again here ..
+
+    let mut quantization_flag = false;
+    let mut conversion_flag = false;
+    
+    if cmd_arguments.is_some(){
+	quantization_flag = mi.dequantize_weights.unwrap_or(false);
+	conversion_flag = cmd_arguments.unwrap().is_present("convert_inference_regressor");
+    }
+    
+    let weight_quantization = quantization_flag && !conversion_flag;
+    log::info!("Reading weights, dequantization enabled: {}", weight_quantization);
     if !immutable {
         re.allocate_and_init_weights(&mi);
-        re.overwrite_weights_from_buf(&mut input_bufreader)?;
+        re.overwrite_weights_from_buf(&mut input_bufreader, weight_quantization)?;
         Ok((mi, vw, re))
     } else {
         mi.optimizer = model_instance::Optimizer::SGD;
         let mut immutable_re = re.immutable_regressor_without_weights(&mi)?;
         immutable_re.allocate_and_init_weights(&mi);
-        re.into_immutable_regressor_from_buf(&mut immutable_re, &mut input_bufreader)?;
+        re.into_immutable_regressor_from_buf(&mut immutable_re, &mut input_bufreader, weight_quantization)?;
         Ok((mi, vw, immutable_re))
     }
 }
@@ -154,9 +169,9 @@ pub fn hogwild_load(re: &mut regressor::Regressor, filename: &str) -> Result<(),
     let (_, _, mut re_hw) = load_regressor_without_weights(&mut input_bufreader, None)?;
     // TODO: Here we should do safety comparison that the regressor is really the same;
     if !re.immutable {
-        re.overwrite_weights_from_buf(&mut input_bufreader)?;
+        re.overwrite_weights_from_buf(&mut input_bufreader, false)?;
     } else {
-        re_hw.into_immutable_regressor_from_buf(re, &mut input_bufreader)?;
+        re_hw.into_immutable_regressor_from_buf(re, &mut input_bufreader, false)?;
     }
     Ok(())
 }
@@ -209,7 +224,7 @@ B,featureB
         let rr = regressor::get_regressor_with_weights(&mi);
         let dir = tempfile::tempdir().unwrap();
         let regressor_filepath = dir.path().join("test_regressor.fw");
-        save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, rr).unwrap();
+        save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, rr, false).unwrap();
     }
 
     fn lr_vec(v: Vec<feature_buffer::HashAndValue>) -> feature_buffer::FeatureBuffer {
@@ -260,7 +275,7 @@ B,featureB
         // Now we test conversion to fixed regressor
         {
             mi.optimizer = model_instance::Optimizer::SGD;
-            let re_fixed = re.immutable_regressor(&mi).unwrap();
+            let re_fixed = re.immutable_regressor(&mi, false).unwrap();
             // predict with the same feature vector
             assert_eq!(re_fixed.predict(fbuf, &mut pb), expected_result);
             mi.optimizer = model_instance::Optimizer::AdagradFlex;
@@ -269,7 +284,7 @@ B,featureB
         {
             let dir = tempdir().unwrap();
             let regressor_filepath = dir.path().join("test_regressor2.fw");
-            save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, re).unwrap();
+            save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, re, false).unwrap();
 
             // a) load as regular regressor
             let (_mi2, _vw2, mut re2) =
@@ -364,7 +379,7 @@ B,featureB
         // Now we test conversion to fixed regressor
         {
             mi.optimizer = Optimizer::SGD;
-            let re_fixed = re.immutable_regressor(&mi).unwrap();
+            let re_fixed = re.immutable_regressor(&mi, false).unwrap();
             // predict with the same feature vector
             mi.optimizer = Optimizer::AdagradFlex;
             assert_epsilon!(re_fixed.predict(fbuf, &mut pb), expected_result);
@@ -373,7 +388,7 @@ B,featureB
         {
             let dir = tempdir().unwrap();
             let regressor_filepath = dir.path().join("test_regressor2.fw");
-            save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, re).unwrap();
+            save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, re, false).unwrap();
 
             // a) load as regular regressor
             let (_mi2, _vw2, mut re2) =
@@ -537,14 +552,14 @@ B,featureB
                 .to_str()
                 .unwrap()
                 .to_owned();
-            save_regressor_to_filename(&regressor_filepath_1, &mi, &vw, re_1).unwrap();
+            save_regressor_to_filename(&regressor_filepath_1, &mi, &vw, re_1, false).unwrap();
             let regressor_filepath_2 = dir
                 .path()
                 .join("test_regressor2.fw")
                 .to_str()
                 .unwrap()
                 .to_owned();
-            save_regressor_to_filename(&regressor_filepath_2, &mi, &vw, re_2).unwrap();
+            save_regressor_to_filename(&regressor_filepath_2, &mi, &vw, re_2, false).unwrap();
 
             // The mutable path
             let (_mi1, _vw1, mut new_re_1) =
