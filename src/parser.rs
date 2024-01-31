@@ -228,7 +228,7 @@ impl VowpalParser {
 
             // first token is a label or "flush" command
             match *p.add(0) {
-                0x30 | 0x31 => {
+                0x30 | 0x31 | 0x32 | 0x33 | 0x34 | 0x35 | 0x36 | 0x37 | 0x38 | 0x39  => {
                     i_start = i_end;
                     while *p.add(i_end) != 0x20 && i_end < rowlen {
                         i_end += 1;
@@ -245,7 +245,7 @@ impl VowpalParser {
                         )));
                     }
                     *self.output_buffer.get_unchecked_mut(LABEL_OFFSET) = label.to_bits();
-                } // first character is 0 or 1
+                } // first character is digit
                 0x2d => *self.output_buffer.get_unchecked_mut(LABEL_OFFSET) = FLOAT32_ZERO, // -1
                 0x7c => *self.output_buffer.get_unchecked_mut(LABEL_OFFSET) = NO_LABEL, // when first character is |, this means there is no label
                 _ => {
