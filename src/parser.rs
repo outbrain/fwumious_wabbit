@@ -286,7 +286,6 @@ impl VowpalParser {
                 }
             };
 
-            let rowlen = tmp_read_buf_size - 1; // ignore last newline byte
             if *self.output_buffer.get_unchecked(LABEL_OFFSET) == NO_LABEL {
                 *self
                     .output_buffer
