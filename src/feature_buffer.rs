@@ -184,7 +184,7 @@ impl FeatureBufferTranslator {
         {
             let lr_buffer = &mut self.feature_buffer.lr_buffer;
             lr_buffer.truncate(0);
-            self.feature_buffer.label = record_buffer[parser::LABEL_OFFSET] as f32; // copy label
+            self.feature_buffer.label = f32::from_bits(record_buffer[parser::LABEL_OFFSET]); // copy label
             self.feature_buffer.example_importance =
                 f32::from_bits(record_buffer[parser::EXAMPLE_IMPORTANCE_OFFSET]);
             self.feature_buffer.example_number = example_number;

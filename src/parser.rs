@@ -19,6 +19,7 @@ pub const MASK31: u32 = !IS_NOT_SINGLE_MASK;
 pub const NO_FEATURES: u32 = IS_NOT_SINGLE_MASK; // null is just an exact IS_NOT_SINGLE_MASK
 pub const NO_LABEL: u32 = 0xff;
 pub const FLOAT32_ONE: u32 = 1065353216; // 1.0f32.to_bits()
+pub const FLOAT32_ZERO: u32 = 0; // 0.0f32.to_bits()
 
 #[derive(Clone)]
 pub struct VowpalParser {
@@ -223,11 +224,29 @@ impl VowpalParser {
             let p = self.tmp_read_buf.as_ptr();
             let mut i_start: usize;
             let mut i_end: usize = 0;
+            let rowlen = tmp_read_buf_size - 1; // ignore last newline byte
 
             // first token is a label or "flush" command
             match *p.add(0) {
-                0x31 => *self.output_buffer.get_unchecked_mut(LABEL_OFFSET) = 1, // 1
-                0x2d => *self.output_buffer.get_unchecked_mut(LABEL_OFFSET) = 0, // -1
+                0x30 | 0x31 => {
+                    i_start = i_end;
+                    while *p.add(i_end) != 0x20 && i_end < rowlen {
+                        i_end += 1;
+                    } // find end of token (space)
+                    let label = self.parse_float_or_error(
+                        i_start,
+                        i_end,
+                        "Failed parsing example label",
+                    )?;
+                    if label < 0.0 || label > 1.0 {
+                        return Err(Box::new(IOError::new(
+                            ErrorKind::Other,
+                            format!("Example label cannot be outside [0, 1] interval: {:?}! ", label),
+                        )));
+                    }
+                    *self.output_buffer.get_unchecked_mut(LABEL_OFFSET) = label.to_bits();
+                } // first character is 0 or 1
+                0x2d => *self.output_buffer.get_unchecked_mut(LABEL_OFFSET) = FLOAT32_ZERO, // -1
                 0x7c => *self.output_buffer.get_unchecked_mut(LABEL_OFFSET) = NO_LABEL, // when first character is |, this means there is no label
                 _ => {
                     // "flush" ascii 66, 6C, 75, 73, 68
