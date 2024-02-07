@@ -261,31 +261,31 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                     }
 
                     block_helpers::forward_backward(further_blocks, fb, pb, update);
+		    
+                    // if update {
+                    //     let mut local_index: usize = 0;
+                    //     let myslice = &mut pb.tape[self.output_offset..(self.output_offset + num_outputs)];
 
-                    if update {
-                        let mut local_index: usize = 0;
-                        let myslice = &mut pb.tape[self.output_offset..(self.output_offset + num_outputs)];
+                    //     for feature in &fb.ffm_buffer {
+                    //         let mut feature_index = feature.hash as usize;
+                    //         let contra_offset = (feature.contra_field_index * ffm_fields_count) as usize / ffmk_as_usize;
 
-                        for feature in &fb.ffm_buffer {
-                            let mut feature_index = feature.hash as usize;
-                            let contra_offset = (feature.contra_field_index * ffm_fields_count) as usize / ffmk_as_usize;
+                    //         for z in 0..ffm_fields_count_as_usize {
+                    //             let general_gradient = myslice.get_unchecked(contra_offset + z);
 
-                            for z in 0..ffm_fields_count_as_usize {
-                                let general_gradient = myslice.get_unchecked(contra_offset + z);
+                    //             for _ in 0.. ffmk_as_usize {
+                    //                 let feature_value = *local_data_ffm_values.get_unchecked(local_index);
+                    //                 let gradient = general_gradient * feature_value;
+                    //                 let update = self.optimizer_ffm.calculate_update(gradient,
+                    //                     &mut self.optimizer.get_unchecked_mut(feature_index).optimizer_data);
 
-                                for _ in 0.. ffmk_as_usize {
-                                    let feature_value = *local_data_ffm_values.get_unchecked(local_index);
-                                    let gradient = general_gradient * feature_value;
-                                    let update = self.optimizer_ffm.calculate_update(gradient,
-                                        &mut self.optimizer.get_unchecked_mut(feature_index).optimizer_data);
-
-                                    *ffm_weights.get_unchecked_mut(feature_index) -= update;
-                                    local_index += 1;
-                                    feature_index += 1;
-                                }
-                            }
-                        }
-                    }
+                    //                 *ffm_weights.get_unchecked_mut(feature_index) -= update;
+                    //                 local_index += 1;
+                    //                 feature_index += 1;
+                    //             }
+                    //         }
+                    //     }
+                    // }
                     // The only exit point
                     return
                 }
