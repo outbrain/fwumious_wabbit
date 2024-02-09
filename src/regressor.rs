@@ -20,7 +20,7 @@ use crate::graph;
 use crate::model_instance;
 use crate::port_buffer;
 
-pub const FFM_CONTRA_BUF_LEN: usize = 20736;
+pub const FFM_CONTRA_BUF_LEN: usize = 41472;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct FFMFeature {
