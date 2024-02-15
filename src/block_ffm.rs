@@ -26,7 +26,7 @@ use crate::regressor;
 use crate::quantization;
 use crate::regressor::{BlockCache, FFM_CONTRA_BUF_LEN};
 
-const FFM_STACK_BUF_LEN: usize = 170393;
+const FFM_STACK_BUF_LEN: usize = 320000;
 const STEP: usize = 4;
 const ZEROES: [f32; STEP] = [0.0; STEP];
 
@@ -300,7 +300,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 core_macro!(local_data_ffm_values);
             } else {
                 // Slow-path - using heap data structures
-                log::warn!("FFM data too large, allocating on the heap (slow path)!");
+                log::warn!("FFM data too large, allocating on the heap (slow path)! Allowed: {}, observed: {}", FFM_STACK_BUF_LEN, local_data_ffm_len);
                 let _guard = self.mutex.lock().unwrap(); // following operations are not thread safe
                 if local_data_ffm_len > self.local_data_ffm_values.len() {
                     self.local_data_ffm_values
