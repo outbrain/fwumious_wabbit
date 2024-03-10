@@ -533,6 +533,68 @@ impl TransformerCombine {
     }
 }
 
+// fcap coverage transformer
+// -------------------------------------------------------------------
+// TransformerFcapCoverage - A basic transformer that inserts 0 instead of empty value
+
+#[derive(Clone)]
+pub struct TransformerFcapCoverage {
+    from_namespace: ExecutorFromNamespace,
+}
+
+impl FunctionExecutorTrait for TransformerFcapCoverage {
+    fn execute_function(
+        &self,
+        record_buffer: &[u32],
+        to_namespace: &mut ExecutorToNamespace,
+        transform_executors: &TransformExecutors,
+    ) {
+        feature_reader!(
+            record_buffer,
+            transform_executors,
+            self.from_namespace.namespace_descriptor,
+            hash_index,
+            hash_value,
+            {
+                if hash_value == 0.0 {
+                    to_namespace.emit_i32::<{ SeedNumber::Default as usize }>(
+                    hash_index as f32,
+                    0.0,
+                )}
+                else {
+                    to_namespace.emit_i32::<{ SeedNumber::Default as usize }>(
+                        hash_index as i32,
+                        hash_value,
+                    )};
+            }
+        );
+    }
+}
+
+impl TransformerFcapCoverage {
+    pub fn create_function(
+        function_name: &str,
+        from_namespaces: &Vec<feature_transform_parser::Namespace>,
+        function_params: &Vec<f32>,
+    ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
+        if function_params.len() != 0 {
+        //if function_params.len() < 1 || function_params.len() > 2 {
+            return Err(Box::new(IOError::new(
+                ErrorKind::Other,
+                format!(
+                    "Function {} takes eithar one or two, example {}(A)(1)",
+                    function_name, function_name
+                ),
+            )));
+        }
+        Ok(Box::new(Self {
+            from_namespace: ExecutorFromNamespace {
+                namespace_descriptor: from_namespaces[0].namespace_descriptor,
+            },
+        }))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.

@@ -10,7 +10,7 @@ use dyn_clone::{clone_trait_object, DynClone};
 use fasthash::murmur3;
 
 use crate::feature_transform_implementations::{
-    TransformerBinner, TransformerCombine, TransformerLogRatioBinner, TransformerWeight,
+    TransformerBinner, TransformerCombine, TransformerLogRatioBinner, TransformerWeight, TransformerFcapCoverage
 };
 use crate::feature_transform_parser;
 
@@ -185,6 +185,8 @@ impl TransformExecutor {
             TransformerCombine::create_function(function_name, namespaces_from, function_params)
         } else if function_name == "Weight" {
             TransformerWeight::create_function(function_name, namespaces_from, function_params)
+        } else if function_name == "Fcap" {
+            TransformerFcapCoverage::create_function(function_name, namespaces_from, function_params)
         } else {
             return Err(Box::new(IOError::new(
                 ErrorKind::Other,
