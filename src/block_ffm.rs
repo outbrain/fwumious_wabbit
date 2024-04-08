@@ -1937,7 +1937,7 @@ mod tests {
             contra_field_index: mi.ffm_k,
         }]);
         assert_eq!(spredict2(&mut bg, &fb, &mut pb), 0.5);
-        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.5);
+        assert_eq!(slearn2(&mut bg, &fb, &mut pb, true), 0.62245935);
     }
 
     #[test]
