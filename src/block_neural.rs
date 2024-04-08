@@ -430,7 +430,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
     fn write_weights_to_buf(
         &self,
         output_bufwriter: &mut dyn io::Write,
-	_use_quantization: bool
+        _use_quantization: bool,
     ) -> Result<(), Box<dyn Error>> {
         block_helpers::write_weights_to_buf(&self.weights, output_bufwriter, false)?;
         block_helpers::write_weights_to_buf(&self.weights_optimizer, output_bufwriter, false)?;
@@ -440,7 +440,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
     fn read_weights_from_buf(
         &mut self,
         input_bufreader: &mut dyn io::Read,
-	_use_quantization: bool
+        _use_quantization: bool,
     ) -> Result<(), Box<dyn Error>> {
         block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader, false)?;
         block_helpers::read_weights_from_buf(&mut self.weights_optimizer, input_bufreader, false)?;
@@ -466,7 +466,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
         &self,
         input_bufreader: &mut dyn io::Read,
         forward: &mut Box<dyn BlockTrait>,
-	_use_quantization: bool
+        _use_quantization: bool,
     ) -> Result<(), Box<dyn Error>> {
         let forward = forward
             .as_any()

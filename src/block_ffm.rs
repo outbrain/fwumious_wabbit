@@ -22,8 +22,8 @@ use crate::model_instance;
 use crate::optimizer;
 use crate::port_buffer;
 use crate::port_buffer::PortBuffer;
-use crate::regressor;
 use crate::quantization;
+use crate::regressor;
 use crate::regressor::{BlockCache, FFM_CONTRA_BUF_LEN};
 
 const FFM_STACK_BUF_LEN: usize = 170393;
@@ -458,8 +458,11 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             contra_fields,
             features_present,
             ffm,
-        } = next_cache else {
-            log::warn!("Unable to downcast cache to BlockFFMCache, executing forward pass without cache");
+        } = next_cache
+        else {
+            log::warn!(
+                "Unable to downcast cache to BlockFFMCache, executing forward pass without cache"
+            );
             self.forward(further_blocks, fb, pb);
             return;
         };
@@ -667,7 +670,9 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         caches: &mut [BlockCache],
     ) {
         let Some((next_cache, further_caches)) = caches.split_first_mut() else {
-            log::warn!("Expected BlockFFMCache caches, but non available, skipping cache preparation");
+            log::warn!(
+                "Expected BlockFFMCache caches, but non available, skipping cache preparation"
+            );
             return;
         };
 
@@ -675,7 +680,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             contra_fields,
             features_present,
             ffm,
-        } = next_cache else {
+        } = next_cache
+        else {
             log::warn!("Unable to downcast cache to BlockFFMCache, skipping cache preparation");
             return;
         };
@@ -829,16 +835,14 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
     fn write_weights_to_buf(
         &self,
         output_bufwriter: &mut dyn io::Write,
-	use_quantization: bool
+        use_quantization: bool,
     ) -> Result<(), Box<dyn Error>> {
-
-	if use_quantization {
-
-	    let quantized_weights = quantization::quantize_ffm_weights(&self.weights);
-	    block_helpers::write_weights_to_buf(&quantized_weights, output_bufwriter, false)?;
-	} else {
+        if use_quantization {
+            let quantized_weights = quantization::quantize_ffm_weights(&self.weights);
+            block_helpers::write_weights_to_buf(&quantized_weights, output_bufwriter, false)?;
+        } else {
             block_helpers::write_weights_to_buf(&self.weights, output_bufwriter, false)?;
-	}
+        }
         block_helpers::write_weights_to_buf(&self.optimizer, output_bufwriter, false)?;
         Ok(())
     }
@@ -846,15 +850,14 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
     fn read_weights_from_buf(
         &mut self,
         input_bufreader: &mut dyn io::Read,
-	use_quantization: bool
+        use_quantization: bool,
     ) -> Result<(), Box<dyn Error>> {
-
-	if use_quantization {
-	    quantization::dequantize_ffm_weights(input_bufreader, &mut self.weights);
-	} else {
+        if use_quantization {
+            quantization::dequantize_ffm_weights(input_bufreader, &mut self.weights);
+        } else {
             block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader, false)?;
-	}
-	
+        }
+
         block_helpers::read_weights_from_buf(&mut self.optimizer, input_bufreader, false)?;
         Ok(())
     }
@@ -877,18 +880,18 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         &self,
         input_bufreader: &mut dyn io::Read,
         forward: &mut Box<dyn BlockTrait>,
-	use_quantization: bool
+        use_quantization: bool,
     ) -> Result<(), Box<dyn Error>> {
         let forward = forward
             .as_any()
             .downcast_mut::<BlockFFM<optimizer::OptimizerSGD>>()
             .unwrap();
 
-	if use_quantization {
-	    quantization::dequantize_ffm_weights(input_bufreader, &mut forward.weights);
-	} else {
+        if use_quantization {
+            quantization::dequantize_ffm_weights(input_bufreader, &mut forward.weights);
+        } else {
             block_helpers::read_weights_from_buf(&mut forward.weights, input_bufreader, false)?;
-	}
+        }
         block_helpers::skip_weights_from_buf::<OptimizerData<L>>(
             self.ffm_weights_len as usize,
             input_bufreader,

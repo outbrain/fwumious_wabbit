@@ -57,7 +57,7 @@ pub fn save_sharable_regressor_to_filename(
     mi: &model_instance::ModelInstance,
     vwmap: &vwmap::VwNamespaceMap,
     re: BoxedRegressorTrait,
-    quantize_weights: bool
+    quantize_weights: bool,
 ) -> Result<(), Box<dyn Error>> {
     let output_bufwriter = &mut io::BufWriter::new(
         fs::File::create(filename)
@@ -143,14 +143,19 @@ pub fn new_regressor_from_filename(
 
     let mut quantization_flag = false;
     let mut conversion_flag = false;
-    
-    if cmd_arguments.is_some(){
-	quantization_flag = mi.dequantize_weights.unwrap_or(false);
-	conversion_flag = cmd_arguments.unwrap().is_present("convert_inference_regressor");
+
+    if cmd_arguments.is_some() {
+        quantization_flag = mi.dequantize_weights.unwrap_or(false);
+        conversion_flag = cmd_arguments
+            .unwrap()
+            .is_present("convert_inference_regressor");
     }
-    
+
     let weight_quantization = quantization_flag && !conversion_flag;
-    log::info!("Reading weights, dequantization enabled: {}", weight_quantization);
+    log::info!(
+        "Reading weights, dequantization enabled: {}",
+        weight_quantization
+    );
     if !immutable {
         re.allocate_and_init_weights(&mi);
         re.overwrite_weights_from_buf(&mut input_bufreader, weight_quantization)?;
@@ -159,7 +164,11 @@ pub fn new_regressor_from_filename(
         mi.optimizer = model_instance::Optimizer::SGD;
         let mut immutable_re = re.immutable_regressor_without_weights(&mi)?;
         immutable_re.allocate_and_init_weights(&mi);
-        re.into_immutable_regressor_from_buf(&mut immutable_re, &mut input_bufreader, weight_quantization)?;
+        re.into_immutable_regressor_from_buf(
+            &mut immutable_re,
+            &mut input_bufreader,
+            weight_quantization,
+        )?;
         Ok((mi, vw, immutable_re))
     }
 }
@@ -224,7 +233,8 @@ B,featureB
         let rr = regressor::get_regressor_with_weights(&mi);
         let dir = tempfile::tempdir().unwrap();
         let regressor_filepath = dir.path().join("test_regressor.fw");
-        save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, rr, false).unwrap();
+        save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, rr, false)
+            .unwrap();
     }
 
     fn lr_vec(v: Vec<feature_buffer::HashAndValue>) -> feature_buffer::FeatureBuffer {
@@ -284,7 +294,8 @@ B,featureB
         {
             let dir = tempdir().unwrap();
             let regressor_filepath = dir.path().join("test_regressor2.fw");
-            save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, re, false).unwrap();
+            save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, re, false)
+                .unwrap();
 
             // a) load as regular regressor
             let (_mi2, _vw2, mut re2) =
@@ -388,7 +399,8 @@ B,featureB
         {
             let dir = tempdir().unwrap();
             let regressor_filepath = dir.path().join("test_regressor2.fw");
-            save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, re, false).unwrap();
+            save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, re, false)
+                .unwrap();
 
             // a) load as regular regressor
             let (_mi2, _vw2, mut re2) =
