@@ -4,7 +4,6 @@
 #![allow(redundant_semicolons)]
 #![allow(dead_code, unused_imports)]
 
-use flate2::read::MultiGzDecoder;
 use std::collections::VecDeque;
 use std::error::Error;
 use std::f32;
@@ -17,29 +16,32 @@ use std::path::Path;
 use std::time::Instant;
 
 extern crate blas;
-extern crate intel_mkl_src;
 extern crate half;
+extern crate intel_mkl_src;
 
 #[macro_use]
 extern crate nom;
 extern crate core;
 
-use fw::{cmdline, feature_buffer, logging_layer, regressor};
 use fw::cache::RecordCache;
 use fw::feature_buffer::FeatureBufferTranslator;
 use fw::hogwild::HogwildTrainer;
 use fw::model_instance::{ModelInstance, Optimizer};
 use fw::multithread_helpers::BoxedRegressorTrait;
 use fw::parser::VowpalParser;
-use fw::persistence::{new_regressor_from_filename, save_regressor_to_filename, save_sharable_regressor_to_filename};
+use fw::buffer_handler::create_buffered_input;
+use fw::persistence::{
+    new_regressor_from_filename, save_regressor_to_filename, save_sharable_regressor_to_filename,
+};
 use fw::regressor::{get_regressor_with_weights, Regressor};
 use fw::serving::Serving;
 use fw::vwmap::VwNamespaceMap;
+use fw::{cmdline, feature_buffer, logging_layer, regressor};
 
 fn main() {
     logging_layer::initialize_logging_layer();
 
-    if let Err(e) = main2() {
+    if let Err(e) = main_fw_loop() {
         log::error!("Global error: {:?}", e);
         std::process::exit(1)
     }
@@ -55,22 +57,11 @@ fn build_cache_without_training(cl: clap::ArgMatches) -> Result<(), Box<dyn Erro
         .expect("Couldn't access path given by --data")
         .join("vw_namespace_map.csv");
 
-    let vw: VwNamespaceMap =
-        VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
+    let vw: VwNamespaceMap = VwNamespaceMap::new_from_csv_filepath(vw_namespace_map_filepath)?;
     let mut cache = RecordCache::new(input_filename, true, &vw);
     let input = File::open(input_filename)?;
-    let mut aa;
-    let mut bb;
-    let mut bufferred_input: &mut dyn BufRead = match input_filename.ends_with(".gz") {
-        true => {
-            aa = io::BufReader::new(MultiGzDecoder::new(input));
-            &mut aa
-        }
-        false => {
-            bb = io::BufReader::new(input);
-            &mut bb
-        }
-    };
+
+    let mut bufferred_input = create_buffered_input(input_filename);
     let mut pa = VowpalParser::new(&vw);
     let mut example_num = 0;
     loop {
@@ -102,7 +93,7 @@ fn build_cache_without_training(cl: clap::ArgMatches) -> Result<(), Box<dyn Erro
     Ok(())
 }
 
-fn main2() -> Result<(), Box<dyn Error>> {
+fn main_fw_loop() -> Result<(), Box<dyn Error>> {
     // We'll parse once the command line into cl and then different objects will examine it
     let cl = cmdline::parse();
     if cl.is_present("build_cache_without_training") {
@@ -149,9 +140,9 @@ fn main2() -> Result<(), Box<dyn Error>> {
         let (mut mi2, vw2, re_fixed) =
             new_regressor_from_filename(filename, true, Option::Some(&cl))?;
         mi2.optimizer = Optimizer::SGD;
-	if cl.is_present("weight_quantization") {
-	    mi2.dequantize_weights = Some(true);
-	}
+        if cl.is_present("weight_quantization") {
+            mi2.dequantize_weights = Some(true);
+        }
         if let Some(filename1) = inference_regressor_filename {
             save_regressor_to_filename(filename1, &mi2, &vw2, re_fixed, quantize_weights).unwrap()
         }
@@ -214,21 +205,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
         let mut delayed_learning_fbs: VecDeque<feature_buffer::FeatureBuffer> =
             VecDeque::with_capacity(prediction_model_delay as usize);
 
-        // Setup Parser, is rust forcing this disguisting way to do it, or I just don't know the pattern?
-        let input = File::open(input_filename)?;
-        let mut aa;
-        let mut bb;
-        let mut bufferred_input: &mut dyn BufRead = match input_filename.ends_with(".gz") {
-            true => {
-                aa = io::BufReader::new(MultiGzDecoder::new(input));
-                &mut aa
-            }
-            false => {
-                bb = io::BufReader::new(input);
-                &mut bb
-            }
-        };
-
+        let mut bufferred_input = create_buffered_input(input_filename);
         let mut pa = VowpalParser::new(&vw);
 
         let now = Instant::now();
@@ -300,8 +277,14 @@ fn main2() -> Result<(), Box<dyn Error>> {
         log::info!("Elapsed: {:.2?} rows: {}", elapsed, example_num);
 
         if let Some(filename) = final_regressor_filename {
-            save_sharable_regressor_to_filename(filename, &mi, &vw, sharable_regressor, quantize_weights)
-                .unwrap()
+            save_sharable_regressor_to_filename(
+                filename,
+                &mi,
+                &vw,
+                sharable_regressor,
+                quantize_weights,
+            )
+            .unwrap()
         }
     }
 

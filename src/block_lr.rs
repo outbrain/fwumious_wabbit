@@ -175,11 +175,10 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
             return;
         };
 
-        let BlockCache::LR {
-            lr,
-            combo_indexes,
-        } = next_cache else {
-            log::warn!("Unable to downcast cache to BlockLRCache, executing forward pass without cache");
+        let BlockCache::LR { lr, combo_indexes } = next_cache else {
+            log::warn!(
+                "Unable to downcast cache to BlockLRCache, executing forward pass without cache"
+            );
             self.forward(further_blocks, fb, pb);
             return;
         };
@@ -222,14 +221,13 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         caches: &mut [BlockCache],
     ) {
         let Some((next_cache, further_caches)) = caches.split_first_mut() else {
-            log::warn!("Expected BlockLRCache caches, but non available, skipping cache preparation");
+            log::warn!(
+                "Expected BlockLRCache caches, but non available, skipping cache preparation"
+            );
             return;
         };
 
-        let BlockCache::LR {
-            lr,
-            combo_indexes
-        } = next_cache else {
+        let BlockCache::LR { lr, combo_indexes } = next_cache else {
             log::warn!("Unable to downcast cache to BlockLRCache, skipping cache preparation");
             return;
         };
@@ -263,7 +261,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
     fn read_weights_from_buf(
         &mut self,
         input_bufreader: &mut dyn io::Read,
-	_use_quantization: bool
+        _use_quantization: bool,
     ) -> Result<(), Box<dyn Error>> {
         block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader, false)
     }
@@ -271,7 +269,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
     fn write_weights_to_buf(
         &self,
         output_bufwriter: &mut dyn io::Write,
-	_use_quantization: bool
+        _use_quantization: bool,
     ) -> Result<(), Box<dyn Error>> {
         block_helpers::write_weights_to_buf(&self.weights, output_bufwriter, false)
     }
@@ -280,7 +278,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         &self,
         input_bufreader: &mut dyn io::Read,
         forward: &mut Box<dyn BlockTrait>,
-	_use_quantization: bool
+        _use_quantization: bool,
     ) -> Result<(), Box<dyn Error>> {
         let forward = forward
             .as_any()

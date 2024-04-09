@@ -36,7 +36,6 @@ pub struct RadixTree {
 }
 
 impl RadixTree {
-
     pub(crate) fn insert(&mut self, key: &[u8], value: NamespaceDescriptorWithHash) {
         let mut node = &mut self.root;
 

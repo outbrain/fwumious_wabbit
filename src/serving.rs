@@ -287,7 +287,8 @@ C,featureC
         mi.optimizer = model_instance::Optimizer::AdagradLUT;
         let mut re = regressor::Regressor::new(&mi);
         mi.optimizer = model_instance::Optimizer::SGD;
-        let re_fixed = BoxedRegressorTrait::new(Box::new(re.immutable_regressor(&mi, false).unwrap()));
+        let re_fixed =
+            BoxedRegressorTrait::new(Box::new(re.immutable_regressor(&mi, false).unwrap()));
         let fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
         let pa = parser::VowpalParser::new(&vw);
         let pb = re_fixed.new_portbuffer();
@@ -386,7 +387,8 @@ C,featureC
             .to_str()
             .unwrap()
             .to_owned();
-        persistence::save_regressor_to_filename(&regressor_filepath_1, &mi, &vw, re_1, false).unwrap();
+        persistence::save_regressor_to_filename(&regressor_filepath_1, &mi, &vw, re_1, false)
+            .unwrap();
 
         let regressor_filepath_2 = dir
             .path()
@@ -394,13 +396,15 @@ C,featureC
             .to_str()
             .unwrap()
             .to_owned();
-        persistence::save_regressor_to_filename(&regressor_filepath_2, &mi, &vw, re_2, false).unwrap();
+        persistence::save_regressor_to_filename(&regressor_filepath_2, &mi, &vw, re_2, false)
+            .unwrap();
 
         // OK NOW EVERYTHING IS READY... Let's start
         mi.optimizer = model_instance::Optimizer::AdagradLUT;
         let mut re = regressor::Regressor::new(&mi);
         mi.optimizer = model_instance::Optimizer::SGD;
-        let re_fixed = BoxedRegressorTrait::new(Box::new(re.immutable_regressor(&mi, false).unwrap()));
+        let re_fixed =
+            BoxedRegressorTrait::new(Box::new(re.immutable_regressor(&mi, false).unwrap()));
         let fbt = feature_buffer::FeatureBufferTranslator::new(&mi);
         let pa = parser::VowpalParser::new(&vw);
         let pb = re_fixed.new_portbuffer();

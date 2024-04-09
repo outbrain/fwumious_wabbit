@@ -13,7 +13,6 @@ use crate::feature_transform_executor::{
 use crate::feature_transform_parser;
 use crate::vwmap::{NamespaceDescriptor, NamespaceFormat, NamespaceType};
 
-
 // -------------------------------------------------------------------
 // TransformerBinner - A basic binner
 // It can take any function as a binning function f32 -> f32. Then output is rounded to integer
