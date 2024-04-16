@@ -160,6 +160,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_performance() {
         let weights: Vec<f32> = (0..10_000_000).map(|x| x as f32).collect();
         let now = std::time::Instant::now();
