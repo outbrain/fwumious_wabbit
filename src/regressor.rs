@@ -5,9 +5,9 @@ use std::error::Error;
 use std::io;
 use std::io::Cursor;
 
-use crate::block_ffm;
-use crate::block_helpers;
-use crate::block_loss_functions;
+use crate::ffm;
+use crate::iterators;
+use crate::loss_functions;
 use crate::block_lr;
 use crate::block_misc;
 use crate::block_neural;
@@ -80,7 +80,7 @@ pub trait BlockTrait {
         fb: &feature_buffer::FeatureBuffer,
         caches: &mut [BlockCache],
     ) {
-        block_helpers::prepare_forward_cache(further_blocks, fb, caches);
+        iterators::prepare_forward_cache(further_blocks, fb, caches);
     }
 
     fn create_forward_cache(
@@ -88,7 +88,7 @@ pub trait BlockTrait {
         further_blocks: &mut [Box<dyn BlockTrait>],
         caches: &mut Vec<BlockCache>,
     ) {
-        block_helpers::create_forward_cache(further_blocks, caches);
+        iterators::create_forward_cache(further_blocks, caches);
     }
 
     fn allocate_and_init_weights(&mut self, _mi: &model_instance::ModelInstance) {}
@@ -183,7 +183,7 @@ impl Regressor {
         let mut output = block_lr::new_lr_block(&mut bg, mi).unwrap();
 
         if mi.ffm_k > 0 {
-            let block_ffm = block_ffm::new_ffm_block(&mut bg, mi).unwrap();
+            let block_ffm = ffm::new_ffm_block(&mut bg, mi).unwrap();
             let triangle_ffm = block_misc::new_triangle_block(&mut bg, block_ffm).unwrap();
             output = block_misc::new_join_block(&mut bg, vec![output, triangle_ffm]).unwrap();
         }
@@ -320,7 +320,7 @@ impl Regressor {
         }
 
         // now sigmoid has a single input
-        let _lossf = block_loss_functions::new_logloss_block(&mut bg, output, true).unwrap();
+        let _lossf = loss_functions::new_logloss_block(&mut bg, output, true).unwrap();
         bg.finalize();
         rg.tape_len = bg.get_tape_size();
 
@@ -371,7 +371,7 @@ impl Regressor {
 
         pb.reset(); // empty the tape
         let further_blocks = &mut self.blocks_boxes[..];
-        block_helpers::forward_backward(further_blocks, fb, pb, update);
+        iterators::forward_backward(further_blocks, fb, pb, update);
 
         assert_eq!(pb.observations.len(), 1);
 
@@ -387,7 +387,7 @@ impl Regressor {
         pb.reset(); // empty the tape
 
         let further_blocks = &self.blocks_boxes[..];
-        block_helpers::forward(further_blocks, fb, pb);
+        iterators::forward(further_blocks, fb, pb);
 
         assert_eq!(pb.observations.len(), 1);
 
@@ -403,7 +403,7 @@ impl Regressor {
         pb.reset(); // empty the tape
 
         let further_blocks = &self.blocks_boxes[..];
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        iterators::forward_with_cache(further_blocks, fb, pb, caches);
 
         assert_eq!(pb.observations.len(), 1);
         pb.observations.pop().unwrap()
@@ -417,9 +417,9 @@ impl Regressor {
     ) {
         let further_blocks = self.blocks_boxes.as_mut_slice();
         if should_create {
-            block_helpers::create_forward_cache(further_blocks, caches);
+            iterators::create_forward_cache(further_blocks, caches);
         }
-        block_helpers::prepare_forward_cache(further_blocks, fb, caches.as_mut_slice());
+        iterators::prepare_forward_cache(further_blocks, fb, caches.as_mut_slice());
     }
 
     // Yeah, this is weird. I just didn't want to break the format compatibility at this point

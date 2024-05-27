@@ -1,4 +1,3 @@
-use crate::version;
 use clap::{App, AppSettings, Arg};
 
 pub fn parse<'a>() -> clap::ArgMatches<'a> {
@@ -8,7 +7,7 @@ pub fn parse<'a>() -> clap::ArgMatches<'a> {
 
 pub fn create_expected_args<'a>() -> App<'a, 'a> {
     App::new("fwumious wabbit")
-        .version(version::LATEST)
+        .version("1.0")
         .author("Andraz Tori <atori@outbrain.com>")
         .about("Superfast Logistic Regression & Field Aware Factorization Machines")
         .setting(AppSettings::DeriveDisplayOrder)

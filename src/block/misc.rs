@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::error::Error;
 
-use crate::block_helpers;
+use crate::block::iterators;
 use crate::feature_buffer;
 use crate::graph;
 use crate::port_buffer;
@@ -91,7 +91,7 @@ impl BlockTrait for BlockObserve {
             );
         }
 
-        block_helpers::forward_backward(further_blocks, fb, pb, update);
+        iterators::forward_backward(further_blocks, fb, pb, update);
 
         if self.observe == Observe::Backward {
             pb.observations.extend_from_slice(
@@ -120,7 +120,7 @@ impl BlockTrait for BlockObserve {
             );
         }
 
-        block_helpers::forward(further_blocks, fb, pb);
+        iterators::forward(further_blocks, fb, pb);
 
         if self.observe == Observe::Backward {
             pb.observations.extend_from_slice(
@@ -151,7 +151,7 @@ impl BlockTrait for BlockObserve {
             );
         }
 
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        iterators::forward_with_cache(further_blocks, fb, pb, caches);
 
         if self.observe == Observe::Backward {
             pb.observations.extend_from_slice(
@@ -233,7 +233,7 @@ impl BlockTrait for BlockSink {
     ) {
         debug_assert!(self.input_offset != usize::MAX);
 
-        block_helpers::forward_backward(further_blocks, fb, pb, update);
+        iterators::forward_backward(further_blocks, fb, pb, update);
         match self.sink_type {
             SinkType::Zero => {
                 pb.tape[self.input_offset..(self.input_offset + self.num_inputs)].fill(0.0);
@@ -250,7 +250,7 @@ impl BlockTrait for BlockSink {
         pb: &mut port_buffer::PortBuffer,
     ) {
         debug_assert!(self.input_offset != usize::MAX);
-        block_helpers::forward(further_blocks, fb, pb);
+        iterators::forward(further_blocks, fb, pb);
     }
 
     #[inline(always)]
@@ -262,7 +262,7 @@ impl BlockTrait for BlockSink {
         caches: &[BlockCache],
     ) {
         debug_assert!(self.input_offset != usize::MAX);
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        iterators::forward_with_cache(further_blocks, fb, pb, caches);
     }
 }
 
@@ -326,7 +326,7 @@ impl BlockTrait for BlockConsts {
         update: bool,
     ) {
         self.internal_forward(pb);
-        block_helpers::forward_backward(further_blocks, fb, pb, update);
+        iterators::forward_backward(further_blocks, fb, pb, update);
     }
 
     fn forward(
@@ -336,7 +336,7 @@ impl BlockTrait for BlockConsts {
         pb: &mut port_buffer::PortBuffer,
     ) {
         self.internal_forward(pb);
-        block_helpers::forward(further_blocks, fb, pb);
+        iterators::forward(further_blocks, fb, pb);
     }
 
     fn forward_with_cache(
@@ -347,7 +347,7 @@ impl BlockTrait for BlockConsts {
         caches: &[BlockCache],
     ) {
         self.internal_forward(pb);
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        iterators::forward_with_cache(further_blocks, fb, pb, caches);
     }
 }
 
@@ -447,7 +447,7 @@ impl BlockTrait for BlockCopy {
             // If input is the same as the first output offset, there is just one copy to be done.
             //
             self.internal_forward(pb);
-            block_helpers::forward_backward(further_blocks, fb, pb, update);
+            iterators::forward_backward(further_blocks, fb, pb, update);
 
             if update {
                 let output_offset_0 = *self.output_offsets.get_unchecked(0);
@@ -460,7 +460,7 @@ impl BlockTrait for BlockCopy {
 
                 // Sum up the gradients from output to input
                 for &output_offset in self.output_offsets.get_unchecked(1..) {
-                    let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
+                    let (input_tape, output_tape) = iterators::get_input_output_borrows(
                         &mut pb.tape,
                         self.input_offset,
                         self.num_inputs,
@@ -482,7 +482,7 @@ impl BlockTrait for BlockCopy {
         pb: &mut port_buffer::PortBuffer,
     ) {
         self.internal_forward(pb);
-        block_helpers::forward(further_blocks, fb, pb);
+        iterators::forward(further_blocks, fb, pb);
     }
 
     fn forward_with_cache(
@@ -493,7 +493,7 @@ impl BlockTrait for BlockCopy {
         caches: &[BlockCache],
     ) {
         self.internal_forward(pb);
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        iterators::forward_with_cache(further_blocks, fb, pb, caches);
     }
 }
 
@@ -602,7 +602,7 @@ impl BlockTrait for BlockJoin {
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.num_inputs > 0);
 
-        block_helpers::forward_backward(further_blocks, fb, pb, update);
+        iterators::forward_backward(further_blocks, fb, pb, update);
     }
 
     fn forward(
@@ -611,7 +611,7 @@ impl BlockTrait for BlockJoin {
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
     ) {
-        block_helpers::forward(further_blocks, fb, pb);
+        iterators::forward(further_blocks, fb, pb);
     }
 
     fn forward_with_cache(
@@ -621,7 +621,7 @@ impl BlockTrait for BlockJoin {
         pb: &mut PortBuffer,
         caches: &[BlockCache],
     ) {
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        iterators::forward_with_cache(further_blocks, fb, pb, caches);
     }
 }
 
@@ -684,7 +684,7 @@ impl BlockTrait for BlockSum {
     ) {
         self.internal_forward(pb);
 
-        block_helpers::forward_backward(further_blocks, fb, pb, update);
+        iterators::forward_backward(further_blocks, fb, pb, update);
 
         unsafe {
             let general_gradient = pb.tape[self.output_offset];
@@ -704,7 +704,7 @@ impl BlockTrait for BlockSum {
     ) {
         self.internal_forward(pb);
 
-        block_helpers::forward(further_blocks, fb, pb);
+        iterators::forward(further_blocks, fb, pb);
     }
 
     fn forward_with_cache(
@@ -715,7 +715,7 @@ impl BlockTrait for BlockSum {
         caches: &[BlockCache],
     ) {
         self.internal_forward(pb);
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        iterators::forward_with_cache(further_blocks, fb, pb, caches);
     }
 }
 
@@ -809,10 +809,10 @@ impl BlockTrait for BlockTriangle {
         self.internal_forward(pb);
 
         unsafe {
-            block_helpers::forward_backward(further_blocks, fb, pb, update);
+            iterators::forward_backward(further_blocks, fb, pb, update);
 
             if update {
-                let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
+                let (input_tape, output_tape) = iterators::get_input_output_borrows(
                     &mut pb.tape,
                     self.input_offset,
                     self.num_inputs,
@@ -841,7 +841,7 @@ impl BlockTrait for BlockTriangle {
         pb: &mut port_buffer::PortBuffer,
     ) {
         self.internal_forward(pb);
-        block_helpers::forward(further_blocks, fb, pb);
+        iterators::forward(further_blocks, fb, pb);
     }
 
     fn forward_with_cache(
@@ -852,7 +852,7 @@ impl BlockTrait for BlockTriangle {
         caches: &[BlockCache],
     ) {
         self.internal_forward(pb);
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        iterators::forward_with_cache(further_blocks, fb, pb, caches);
     }
 }
 
@@ -860,7 +860,7 @@ impl BlockTriangle {
     #[inline(always)]
     fn internal_forward(&self, pb: &mut port_buffer::PortBuffer) {
         unsafe {
-            let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
+            let (input_tape, output_tape) = iterators::get_input_output_borrows(
                 &mut pb.tape,
                 self.input_offset,
                 self.num_inputs,
@@ -885,11 +885,12 @@ impl BlockTriangle {
 
 #[cfg(test)]
 mod tests {
+    use crate::block::misc;
+    use crate::block::test::{slearn2, spredict2};
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::block_helpers::{slearn2, spredict2};
-    use crate::block_misc;
-    use crate::block_misc::Observe;
+    use crate::block::misc;
+    use crate::block::misc::Observe;
     use crate::feature_buffer;
     use crate::graph::BlockGraph;
     use crate::model_instance;
@@ -908,12 +909,12 @@ mod tests {
     fn test_sum_block() {
         let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
-        let input_block = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
+        let input_block = misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
         let observe_block_backward =
-            block_misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
+            misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
         let sum_block = new_sum_block(&mut bg, observe_block_backward).unwrap();
         let _observe_block_forward =
-            block_misc::new_observe_block(&mut bg, sum_block, Observe::Forward, Some(1.0)).unwrap();
+            misc::new_observe_block(&mut bg, sum_block, Observe::Forward, Some(1.0)).unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -942,16 +943,16 @@ mod tests {
     fn test_triangle_block() {
         let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
-        let input_block = block_misc::new_const_block(&mut bg, vec![2.0, 4.0, 4.0, 5.0]).unwrap();
+        let input_block = misc::new_const_block(&mut bg, vec![2.0, 4.0, 4.0, 5.0]).unwrap();
         let observe_block_backward =
-            block_misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
+            misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
         let triangle_block = new_triangle_block(&mut bg, observe_block_backward).unwrap();
         let observe_block_forward =
-            block_misc::new_observe_block(&mut bg, triangle_block, Observe::Forward, None).unwrap();
-        block_misc::new_sink_block(
+            misc::new_observe_block(&mut bg, triangle_block, Observe::Forward, None).unwrap();
+        misc::new_sink_block(
             &mut bg,
             observe_block_forward,
-            block_misc::SinkType::Untouched,
+            misc::SinkType::Untouched,
         )
         .unwrap();
         bg.finalize();
@@ -973,16 +974,16 @@ mod tests {
     fn test_copy_block() {
         let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
-        let input_block = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
+        let input_block = misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
         let observe_block_backward =
-            block_misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
+            misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
         let (copy_block_1, copy_block_2) =
             new_copy_block_2(&mut bg, observe_block_backward).unwrap();
         let _observe_block_1_forward =
-            block_misc::new_observe_block(&mut bg, copy_block_1, Observe::Forward, Some(5.0))
+            misc::new_observe_block(&mut bg, copy_block_1, Observe::Forward, Some(5.0))
                 .unwrap();
         let _observe_block_2_forward =
-            block_misc::new_observe_block(&mut bg, copy_block_2, Observe::Forward, Some(6.0))
+            misc::new_observe_block(&mut bg, copy_block_2, Observe::Forward, Some(6.0))
                 .unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
@@ -1014,21 +1015,21 @@ mod tests {
     fn test_copy_block_cascade() {
         let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
-        let input_block = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
+        let input_block = misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
         let observe_block_backward =
-            block_misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
+            misc::new_observe_block(&mut bg, input_block, Observe::Backward, None).unwrap();
         let (copy_block_1, copy_block_2) =
             new_copy_block_2(&mut bg, observe_block_backward).unwrap();
         let (copy_block_3, copy_block_4) = new_copy_block_2(&mut bg, copy_block_1).unwrap();
 
         let _observe_block_1_forward =
-            block_misc::new_observe_block(&mut bg, copy_block_2, Observe::Forward, Some(5.0))
+            misc::new_observe_block(&mut bg, copy_block_2, Observe::Forward, Some(5.0))
                 .unwrap();
         let _observe_block_2_forward =
-            block_misc::new_observe_block(&mut bg, copy_block_3, Observe::Forward, Some(6.0))
+            misc::new_observe_block(&mut bg, copy_block_3, Observe::Forward, Some(6.0))
                 .unwrap();
         let _observe_block_3_forward =
-            block_misc::new_observe_block(&mut bg, copy_block_4, Observe::Forward, Some(7.0))
+            misc::new_observe_block(&mut bg, copy_block_4, Observe::Forward, Some(7.0))
                 .unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
@@ -1061,10 +1062,10 @@ mod tests {
     fn test_join_1_block() {
         let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
-        let input_block_1 = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
+        let input_block_1 = misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
         let join_block = new_join_block(&mut bg, vec![input_block_1]).unwrap();
         let _observe_block =
-            block_misc::new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0))
+            misc::new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0))
                 .unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
@@ -1082,11 +1083,11 @@ mod tests {
     fn test_join_2_blocks() {
         let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
-        let input_block_1 = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
-        let input_block_2 = block_misc::new_const_block(&mut bg, vec![4.0, 5.0, 6.0]).unwrap();
+        let input_block_1 = misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
+        let input_block_2 = misc::new_const_block(&mut bg, vec![4.0, 5.0, 6.0]).unwrap();
         let join_block = new_join_block(&mut bg, vec![input_block_1, input_block_2]).unwrap();
         let _observe_block =
-            block_misc::new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0))
+            misc::new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0))
                 .unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
@@ -1104,13 +1105,13 @@ mod tests {
     fn test_join_3_blocks() {
         let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
-        let input_block_3 = block_misc::new_const_block(&mut bg, vec![1.0, 2.0]).unwrap();
-        let input_block_2 = block_misc::new_const_block(&mut bg, vec![3.0, 4.0, 5.0]).unwrap();
-        let input_block_1 = block_misc::new_const_block(&mut bg, vec![6.0, 7.0]).unwrap();
+        let input_block_3 = misc::new_const_block(&mut bg, vec![1.0, 2.0]).unwrap();
+        let input_block_2 = misc::new_const_block(&mut bg, vec![3.0, 4.0, 5.0]).unwrap();
+        let input_block_1 = misc::new_const_block(&mut bg, vec![6.0, 7.0]).unwrap();
         let join_block =
             new_join_block(&mut bg, vec![input_block_1, input_block_2, input_block_3]).unwrap();
         let _observe_block =
-            block_misc::new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0))
+            misc::new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0))
                 .unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
@@ -1129,13 +1130,13 @@ mod tests {
     fn test_join_cascading() {
         let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
-        let input_block_1 = block_misc::new_const_block(&mut bg, vec![1.0, 2.0]).unwrap();
-        let input_block_2 = block_misc::new_const_block(&mut bg, vec![3.0, 4.0, 5.0]).unwrap();
+        let input_block_1 = misc::new_const_block(&mut bg, vec![1.0, 2.0]).unwrap();
+        let input_block_2 = misc::new_const_block(&mut bg, vec![3.0, 4.0, 5.0]).unwrap();
         let join_block_1 = new_join_block(&mut bg, vec![input_block_1, input_block_2]).unwrap();
-        let input_block_3 = block_misc::new_const_block(&mut bg, vec![6.0, 7.0]).unwrap();
+        let input_block_3 = misc::new_const_block(&mut bg, vec![6.0, 7.0]).unwrap();
         let join_block_2 = new_join_block(&mut bg, vec![input_block_3, join_block_1]).unwrap();
         let _observe_block =
-            block_misc::new_observe_block(&mut bg, join_block_2, Observe::Forward, Some(6.0))
+            misc::new_observe_block(&mut bg, join_block_2, Observe::Forward, Some(6.0))
                 .unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
@@ -1155,14 +1156,14 @@ mod tests {
     fn test_copy_to_join() {
         let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
-        let input_block_1 = block_misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
+        let input_block_1 = misc::new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
         let observe_block_backward =
-            block_misc::new_observe_block(&mut bg, input_block_1, Observe::Backward, None).unwrap();
+            misc::new_observe_block(&mut bg, input_block_1, Observe::Backward, None).unwrap();
         let (copy_1, copy_2) =
-            block_misc::new_copy_block_2(&mut bg, observe_block_backward).unwrap();
+            misc::new_copy_block_2(&mut bg, observe_block_backward).unwrap();
         let join_block = new_join_block(&mut bg, vec![copy_1, copy_2]).unwrap();
         let _observe_block =
-            block_misc::new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0))
+            misc::new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0))
                 .unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);

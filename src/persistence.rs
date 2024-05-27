@@ -207,7 +207,7 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use crate::assert_epsilon;
-    use crate::block_ffm;
+    use crate::ffm;
     use crate::feature_buffer;
     use crate::feature_buffer::{HashAndValue, HashAndValueAndSeq};
     use crate::model_instance::Optimizer;
@@ -318,7 +318,7 @@ B,featureB
         let block_ffm = &mut rg.blocks_boxes[1];
         let block_ffm = block_ffm
             .as_any()
-            .downcast_mut::<block_ffm::BlockFFM<optimizer::OptimizerAdagradFlex>>()
+            .downcast_mut::<ffm::BlockFFM<optimizer::OptimizerAdagradFlex>>()
             .unwrap();
 
         for i in 0..block_ffm.get_serialized_len() {

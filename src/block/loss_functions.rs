@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::error::Error;
 
-use crate::block_helpers;
+use crate::block::iterators;
 use crate::feature_buffer;
 use crate::feature_buffer::FeatureBuffer;
 use crate::graph;
@@ -144,7 +144,7 @@ impl BlockTrait for BlockSigmoid {
             if self.copy_to_result {
                 pb.observations.push(prediction_probability);
             }
-            block_helpers::forward_backward(further_blocks, fb, pb, update);
+            iterators::forward_backward(further_blocks, fb, pb, update);
             // replace inputs with their gradients
             pb.tape
                 .get_unchecked_mut(self.input_offset..(self.input_offset + self.num_inputs))
@@ -159,7 +159,7 @@ impl BlockTrait for BlockSigmoid {
         pb: &mut port_buffer::PortBuffer,
     ) {
         self.internal_forward(fb, pb);
-        block_helpers::forward(further_blocks, fb, pb);
+        iterators::forward(further_blocks, fb, pb);
     }
 
     fn forward_with_cache(
@@ -170,6 +170,6 @@ impl BlockTrait for BlockSigmoid {
         caches: &[BlockCache],
     ) {
         self.internal_forward(fb, pb);
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        iterators::forward_with_cache(further_blocks, fb, pb, caches);
     }
 }

@@ -7,15 +7,15 @@ use std::io;
 use std::io::Error as IOError;
 use std::io::ErrorKind;
 
-use crate::block_helpers;
-use crate::block_misc;
+use crate::block::{file, iterators};
+use crate::block::misc;
 use crate::feature_buffer;
 use crate::graph;
 use crate::model_instance;
 use crate::optimizer;
 use crate::port_buffer;
 use crate::regressor;
-use block_helpers::OptimizerData;
+use iterators::OptimizerData;
 use optimizer::OptimizerTrait;
 use regressor::BlockTrait;
 
@@ -181,7 +181,7 @@ pub fn new_neuron_block(
     init_type: InitType,
 ) -> Result<graph::BlockPtrOutput, Box<dyn Error>> {
     match ntype {
-        NeuronType::Sum => block_misc::new_sum_block(bg, input),
+        NeuronType::Sum => misc::new_sum_block(bg, input),
         _ => new_neuronlayer_block(
             bg, mi, input, ntype, 1, // a single neuron
             init_type, 0.0,   // dropout
@@ -195,7 +195,7 @@ impl<L: OptimizerTrait + 'static> BlockNeuronLayer<L> {
     #[inline(always)]
     fn internal_forward(&self, pb: &mut port_buffer::PortBuffer, alpha: f32) {
         unsafe {
-            let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
+            let (input_tape, output_tape) = iterators::get_input_output_borrows(
                 &mut pb.tape,
                 self.input_offset,
                 self.num_inputs,
@@ -247,7 +247,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
 
         self.internal_forward(pb, dropout_inv);
 
-        block_helpers::forward_backward(further_blocks, fb, pb, update);
+        iterators::forward_backward(further_blocks, fb, pb, update);
 
         unsafe {
             if update && self.neuron_type == NeuronType::WeightedSum {
@@ -255,7 +255,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
 
                 let mut output_errors: [f32; MAX_NUM_INPUTS] = [0.0; MAX_NUM_INPUTS];
 
-                let (input_tape, output_tape) = block_helpers::get_input_output_borrows(
+                let (input_tape, output_tape) = iterators::get_input_output_borrows(
                     &mut pb.tape,
                     self.input_offset,
                     self.num_inputs,
@@ -349,7 +349,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
     ) {
         self.internal_forward(pb, 1.0);
 
-        block_helpers::forward(further_blocks, fb, pb);
+        iterators::forward(further_blocks, fb, pb);
     }
 
     fn forward_with_cache(
@@ -361,7 +361,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
     ) {
         self.internal_forward(pb, 1.0);
 
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        iterators::forward_with_cache(further_blocks, fb, pb, caches);
     }
 
     fn allocate_and_init_weights(&mut self, _mi: &model_instance::ModelInstance) {
@@ -432,8 +432,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
         output_bufwriter: &mut dyn io::Write,
         _use_quantization: bool,
     ) -> Result<(), Box<dyn Error>> {
-        block_helpers::write_weights_to_buf(&self.weights, output_bufwriter, false)?;
-        block_helpers::write_weights_to_buf(&self.weights_optimizer, output_bufwriter, false)?;
+        file::write_weights_to_buf(&self.weights, output_bufwriter, false)?;
+        file::write_weights_to_buf(&self.weights_optimizer, output_bufwriter, false)?;
         Ok(())
     }
 
@@ -442,8 +442,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
         input_bufreader: &mut dyn io::Read,
         _use_quantization: bool,
     ) -> Result<(), Box<dyn Error>> {
-        block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader, false)?;
-        block_helpers::read_weights_from_buf(&mut self.weights_optimizer, input_bufreader, false)?;
+        file::read_weights_from_buf(&mut self.weights, input_bufreader, false)?;
+        file::read_weights_from_buf(&mut self.weights_optimizer, input_bufreader, false)?;
         Ok(())
     }
 
@@ -472,8 +472,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
             .as_any()
             .downcast_mut::<BlockNeuronLayer<optimizer::OptimizerSGD>>()
             .unwrap();
-        block_helpers::read_weights_from_buf(&mut forward.weights, input_bufreader, false)?;
-        block_helpers::skip_weights_from_buf::<OptimizerData<L>>(
+        file::read_weights_from_buf(&mut forward.weights, input_bufreader, false)?;
+        file::skip_weights_from_buf::<OptimizerData<L>>(
             self.weights_len as usize,
             input_bufreader,
         )?;
@@ -486,12 +486,12 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use crate::assert_epsilon;
-    use crate::block_misc;
-    use crate::block_misc::Observe;
+    use crate::block::misc;
+    use crate::block::misc::Observe;
     use crate::feature_buffer;
     use crate::graph::BlockGraph;
     use crate::model_instance::Optimizer;
-    use block_helpers::slearn2;
+    use crate::block::test::slearn2;
 
     fn fb_vec() -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {
@@ -511,7 +511,7 @@ mod tests {
         mi.optimizer = Optimizer::SGD;
 
         let mut bg = BlockGraph::new();
-        let input_block = block_misc::new_const_block(&mut bg, vec![2.0]).unwrap();
+        let input_block = misc::new_const_block(&mut bg, vec![2.0]).unwrap();
         let neuron_block = new_neuronlayer_block(
             &mut bg,
             &mi,
@@ -525,7 +525,7 @@ mod tests {
         )
         .unwrap();
         let _observe_block =
-            block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0))
+            misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0))
                 .unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
@@ -546,7 +546,7 @@ mod tests {
 
         let num_neurons = 2;
         let mut bg = BlockGraph::new();
-        let input_block = block_misc::new_const_block(&mut bg, vec![2.0]).unwrap();
+        let input_block = misc::new_const_block(&mut bg, vec![2.0]).unwrap();
         let neuron_block = new_neuronlayer_block(
             &mut bg,
             &mi,
@@ -560,7 +560,7 @@ mod tests {
         )
         .unwrap();
         let _observe_block =
-            block_misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0))
+            misc::new_observe_block(&mut bg, neuron_block, Observe::Forward, Some(1.0))
                 .unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);

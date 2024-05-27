@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::error::Error;
 
-use crate::block_helpers;
+use crate::block::iterators;
 use crate::feature_buffer;
 use crate::feature_buffer::FeatureBuffer;
 use crate::graph::{BlockGraph, BlockPtrOutput, InputSlot, OutputSlot};
@@ -99,7 +99,7 @@ impl BlockTrait for BlockRELU {
                 }
             }
 
-            block_helpers::forward_backward(further_blocks, fb, pb, update);
+            iterators::forward_backward(further_blocks, fb, pb, update);
 
             if update {
                 for i in 0..self.num_inputs {
@@ -117,7 +117,7 @@ impl BlockTrait for BlockRELU {
         pb: &mut port_buffer::PortBuffer,
     ) {
         self.internal_forward(pb);
-        block_helpers::forward(further_blocks, fb, pb);
+        iterators::forward(further_blocks, fb, pb);
     }
 
     fn forward_with_cache(
@@ -128,7 +128,7 @@ impl BlockTrait for BlockRELU {
         caches: &[BlockCache],
     ) {
         self.internal_forward(pb);
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        iterators::forward_with_cache(further_blocks, fb, pb, caches);
     }
 }
 
@@ -137,10 +137,12 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use crate::assert_epsilon;
-    use crate::block_misc;
+    use crate::block::misc;
+    use crate::block::test;
     use crate::feature_buffer;
-    use block_helpers::slearn2;
-    use block_misc::Observe;
+    use test::slearn2;
+    use misc::Observe;
+    use crate::block::misc;
 
     fn fb_vec() -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {
@@ -156,10 +158,10 @@ mod tests {
     fn test_simple_positive() {
         let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
-        let input_block = block_misc::new_const_block(&mut bg, vec![2.0]).unwrap();
+        let input_block = misc::new_const_block(&mut bg, vec![2.0]).unwrap();
         let relu_block = new_relu_block(&mut bg, &mi, input_block).unwrap();
         let _observe_block =
-            block_misc::new_observe_block(&mut bg, relu_block, Observe::Forward, Some(1.0))
+            misc::new_observe_block(&mut bg, relu_block, Observe::Forward, Some(1.0))
                 .unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);

@@ -298,8 +298,8 @@ impl BlockGraph {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::block_ffm;
-    use crate::block_loss_functions;
+    use crate::ffm;
+    use crate::loss_functions;
     use crate::block_lr;
     use crate::block_misc;
     use crate::block_misc::Observe;
@@ -484,9 +484,9 @@ mod tests {
         let mut bg = BlockGraph::new();
 
         let re_lr = block_lr::new_lr_block(&mut bg, &mi).unwrap();
-        let re_ffm = block_ffm::new_ffm_block(&mut bg, &mi).unwrap();
+        let re_ffm = ffm::new_ffm_block(&mut bg, &mi).unwrap();
         let joined = block_misc::new_join_block(&mut bg, vec![re_lr, re_ffm]).unwrap();
-        let _lossf = block_loss_functions::new_logloss_block(&mut bg, joined, true);
+        let _lossf = loss_functions::new_logloss_block(&mut bg, joined, true);
         bg.finalize();
     }
 

@@ -1,11 +1,4 @@
-pub mod block_ffm;
-pub mod block_helpers;
-pub mod block_loss_functions;
-pub mod block_lr;
-pub mod block_misc;
-pub mod block_neural;
-pub mod block_normalize;
-pub mod block_relu;
+pub mod block;
 pub mod buffer_handler;
 pub mod cache;
 pub mod cmdline;
@@ -26,7 +19,6 @@ pub mod quantization;
 pub mod radix_tree;
 pub mod regressor;
 pub mod serving;
-pub mod version;
 pub mod vwmap;
 
 extern crate blas;

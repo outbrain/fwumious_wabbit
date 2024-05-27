@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::error::Error;
 
-use crate::block_helpers;
+use crate::block::iterators;
 use crate::feature_buffer;
 use crate::feature_buffer::FeatureBuffer;
 use crate::graph;
@@ -95,7 +95,7 @@ impl BlockTrait for BlockNormalize {
                 *pb.tape.get_unchecked_mut(self.output_offset + i) =
                     (*pb.tape.get_unchecked(self.input_offset + i) - mean) * variance_inv;
             }
-            block_helpers::forward_backward(further_blocks, fb, pb, update);
+            iterators::forward_backward(further_blocks, fb, pb, update);
 
             if update {
                 for i in 0..self.num_inputs {
@@ -113,7 +113,7 @@ impl BlockTrait for BlockNormalize {
         pb: &mut port_buffer::PortBuffer,
     ) {
         self.internal_forward(pb);
-        block_helpers::forward(further_blocks, fb, pb);
+        iterators::forward(further_blocks, fb, pb);
     }
 
     fn forward_with_cache(
@@ -124,7 +124,7 @@ impl BlockTrait for BlockNormalize {
         caches: &[BlockCache],
     ) {
         self.internal_forward(pb);
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        iterators::forward_with_cache(further_blocks, fb, pb, caches);
     }
 }
 
@@ -222,7 +222,7 @@ impl BlockTrait for BlockStopBackward {
     ) {
         self.internal_forward(pb);
 
-        block_helpers::forward_backward(further_blocks, fb, pb, update);
+        iterators::forward_backward(further_blocks, fb, pb, update);
 
         if update {
             pb.tape[self.input_offset..(self.input_offset + self.num_inputs)].fill(0.0);
@@ -236,7 +236,7 @@ impl BlockTrait for BlockStopBackward {
         pb: &mut port_buffer::PortBuffer,
     ) {
         self.internal_forward(pb);
-        block_helpers::forward(further_blocks, fb, pb);
+        iterators::forward(further_blocks, fb, pb);
     }
 
     fn forward_with_cache(
@@ -247,7 +247,7 @@ impl BlockTrait for BlockStopBackward {
         caches: &[BlockCache],
     ) {
         self.internal_forward(pb);
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        iterators::forward_with_cache(further_blocks, fb, pb, caches);
     }
 }
 
