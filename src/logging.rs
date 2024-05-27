@@ -1,7 +1,7 @@
 extern crate log;
 use env_logger::Builder;
 
-pub fn initialize_logging_layer() {
+pub fn initialize_logging() {
     let mut builder = Builder::new();
     let log_level = std::env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string());
     match log_level.to_lowercase().as_str() {

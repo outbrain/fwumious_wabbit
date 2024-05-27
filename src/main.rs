@@ -36,10 +36,10 @@ use fw::persistence::{
 use fw::regressor::{get_regressor_with_weights, Regressor};
 use fw::serving::Serving;
 use fw::vwmap::VwNamespaceMap;
-use fw::{cmdline, feature_buffer, logging_layer, regressor};
+use fw::{cmdline, feature_buffer, logging, regressor};
 
 fn main() {
-    logging_layer::initialize_logging_layer();
+    logging::initialize_logging();
 
     if let Err(e) = main_fw_loop() {
         log::error!("Global error: {:?}", e);

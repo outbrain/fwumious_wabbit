@@ -207,7 +207,7 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use crate::assert_epsilon;
-    use crate::ffm;
+    use crate::block::ffm;
     use crate::feature_buffer;
     use crate::feature_buffer::{HashAndValue, HashAndValueAndSeq};
     use crate::model_instance::Optimizer;
