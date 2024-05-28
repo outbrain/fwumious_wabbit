@@ -7,12 +7,12 @@ use std::fs::File;
 use std::io;
 use std::io::Read;
 
+use crate::engine::regressor;
 use crate::model_instance;
-use crate::regressor;
-use crate::vwmap;
+use crate::namespace::vwmap;
 
-use crate::multithread_helpers::BoxedRegressorTrait;
-use crate::regressor::Regressor;
+use crate::engine::multithread_helpers::BoxedRegressorTrait;
+use crate::engine::regressor::Regressor;
 
 const REGRESSOR_HEADER_MAGIC_STRING: &[u8; 4] = b"FWRE"; // Fwumious Wabbit REgressor
 const REGRESSOR_HEADER_VERSION: u32 = 6; // Change to 5: introduce namespace descriptors which changes regressor
@@ -25,7 +25,7 @@ impl model_instance::ModelInstance {
         Ok(())
     }
     pub fn new_from_buf(
-        input_bufreader: &mut dyn io::Read,
+        input_bufreader: &mut dyn Read,
     ) -> Result<model_instance::ModelInstance, Box<dyn Error>> {
         let len = input_bufreader.read_u64::<LittleEndian>()?;
         let mi: model_instance::ModelInstance = serde_json::from_reader(input_bufreader.take(len))?;
@@ -42,7 +42,7 @@ impl vwmap::VwNamespaceMap {
     }
 
     pub fn new_from_buf(
-        input_bufreader: &mut dyn io::Read,
+        input_bufreader: &mut dyn Read,
     ) -> Result<vwmap::VwNamespaceMap, Box<dyn Error>> {
         let len = input_bufreader.read_u64::<LittleEndian>()?;
         let vw_source: vwmap::VwNamespaceMapSource =
@@ -60,7 +60,7 @@ pub fn save_sharable_regressor_to_filename(
     quantize_weights: bool,
 ) -> Result<(), Box<dyn Error>> {
     let output_bufwriter = &mut io::BufWriter::new(
-        fs::File::create(filename)
+        File::create(filename)
             .unwrap_or_else(|_| panic!("Cannot open {} to save regressor to", filename)),
     );
     write_regressor_header(output_bufwriter)?;
@@ -78,7 +78,7 @@ pub fn save_regressor_to_filename(
     quantize_weights: bool,
 ) -> Result<(), Box<dyn Error>> {
     let output_bufwriter = &mut io::BufWriter::new(
-        fs::File::create(filename)
+        File::create(filename)
             .unwrap_or_else(|_| panic!("Cannot open {} to save regressor to", filename)),
     );
     write_regressor_header(output_bufwriter)?;
@@ -103,7 +103,7 @@ fn load_regressor_without_weights(
     (
         model_instance::ModelInstance,
         vwmap::VwNamespaceMap,
-        regressor::Regressor,
+        Regressor,
     ),
     Box<dyn Error>,
 > {
@@ -132,11 +132,11 @@ pub fn new_regressor_from_filename(
     (
         model_instance::ModelInstance,
         vwmap::VwNamespaceMap,
-        regressor::Regressor,
+        Regressor,
     ),
     Box<dyn Error>,
 > {
-    let mut input_bufreader = io::BufReader::new(fs::File::open(filename).unwrap());
+    let mut input_bufreader = io::BufReader::new(File::open(filename).unwrap());
     let (mut mi, vw, mut re) = load_regressor_without_weights(&mut input_bufreader, cmd_arguments)?;
 
     // reading logic is for some reason different, so doing this again here ..
@@ -173,8 +173,8 @@ pub fn new_regressor_from_filename(
     }
 }
 
-pub fn hogwild_load(re: &mut regressor::Regressor, filename: &str) -> Result<(), Box<dyn Error>> {
-    let mut input_bufreader = io::BufReader::new(fs::File::open(filename)?);
+pub fn hogwild_load(re: &mut Regressor, filename: &str) -> Result<(), Box<dyn Error>> {
+    let mut input_bufreader = io::BufReader::new(File::open(filename)?);
     let (_, _, mut re_hw) = load_regressor_without_weights(&mut input_bufreader, None)?;
     // TODO: Here we should do safety comparison that the regressor is really the same;
     if !re.immutable {
@@ -185,7 +185,7 @@ pub fn hogwild_load(re: &mut regressor::Regressor, filename: &str) -> Result<(),
     Ok(())
 }
 
-fn verify_header(input_bufreader: &mut dyn io::Read) -> Result<(), Box<dyn Error>> {
+fn verify_header(input_bufreader: &mut dyn Read) -> Result<(), Box<dyn Error>> {
     let mut magic_string: [u8; 4] = [0; 4];
     input_bufreader.read(&mut magic_string)?;
     if &magic_string != REGRESSOR_HEADER_MAGIC_STRING {
@@ -207,14 +207,14 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use crate::assert_epsilon;
-    use crate::block_ffm;
-    use crate::feature_buffer;
-    use crate::feature_buffer::{HashAndValue, HashAndValueAndSeq};
+    use crate::engine::block::ffm;
+    use crate::engine::optimizer;
+    use crate::engine::optimizer::OptimizerTrait;
+    use crate::engine::regressor::BlockTrait;
+    use crate::engine::regressor::Regressor;
     use crate::model_instance::Optimizer;
-    use crate::optimizer;
-    use crate::optimizer::OptimizerTrait;
-    use regressor::BlockTrait;
-    use regressor::Regressor;
+    use crate::namespace::feature_buffer;
+    use crate::namespace::feature_buffer::{HashAndValue, HashAndValueAndSeq};
 
     use tempfile::tempdir;
 
@@ -229,15 +229,15 @@ B,featureB
         mi.learning_rate = 0.1;
         mi.power_t = 0.0;
         mi.bit_precision = 18;
-        mi.optimizer = model_instance::Optimizer::AdagradFlex;
+        mi.optimizer = Optimizer::AdagradFlex;
         let rr = regressor::get_regressor_with_weights(&mi);
-        let dir = tempfile::tempdir().unwrap();
+        let dir = tempdir().unwrap();
         let regressor_filepath = dir.path().join("test_regressor.fw");
         save_regressor_to_filename(regressor_filepath.to_str().unwrap(), &mi, &vw, rr, false)
             .unwrap();
     }
 
-    fn lr_vec(v: Vec<feature_buffer::HashAndValue>) -> feature_buffer::FeatureBuffer {
+    fn lr_vec(v: Vec<HashAndValue>) -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {
             label: 0.0,
             example_importance: 1.0,
@@ -258,9 +258,9 @@ B,featureB
         mi.learning_rate = 0.1;
         mi.power_t = 0.5;
         mi.bit_precision = 18;
-        mi.optimizer = model_instance::Optimizer::AdagradFlex;
+        mi.optimizer = Optimizer::AdagradFlex;
         mi.init_acc_gradient = 0.0;
-        let mut re = regressor::Regressor::new(&mi);
+        let mut re = Regressor::new(&mi);
         let mut pb = re.new_portbuffer();
 
         let fbuf = &lr_vec(vec![
@@ -284,11 +284,11 @@ B,featureB
 
         // Now we test conversion to fixed regressor
         {
-            mi.optimizer = model_instance::Optimizer::SGD;
+            mi.optimizer = Optimizer::SGD;
             let re_fixed = re.immutable_regressor(&mi, false).unwrap();
             // predict with the same feature vector
             assert_eq!(re_fixed.predict(fbuf, &mut pb), expected_result);
-            mi.optimizer = model_instance::Optimizer::AdagradFlex;
+            mi.optimizer = Optimizer::AdagradFlex;
         }
         // Now we test saving and loading a) regular regressor, b) fixed regressor
         {
@@ -318,7 +318,7 @@ B,featureB
         let block_ffm = &mut rg.blocks_boxes[1];
         let block_ffm = block_ffm
             .as_any()
-            .downcast_mut::<block_ffm::BlockFFM<optimizer::OptimizerAdagradFlex>>()
+            .downcast_mut::<ffm::BlockFFM<optimizer::OptimizerAdagradFlex>>()
             .unwrap();
 
         for i in 0..block_ffm.get_serialized_len() {
@@ -328,7 +328,7 @@ B,featureB
         }
     }
 
-    fn ffm_vec(v: Vec<feature_buffer::HashAndValueAndSeq>) -> feature_buffer::FeatureBuffer {
+    fn ffm_vec(v: Vec<HashAndValueAndSeq>) -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {
             label: 0.0,
             example_importance: 1.0,
@@ -355,7 +355,7 @@ B,featureB
         mi.ffm_learning_rate = 0.1;
         mi.ffm_fields = vec![vec![], vec![]];
         mi.optimizer = Optimizer::AdagradFlex;
-        let mut re = regressor::Regressor::new(&mi);
+        let mut re = Regressor::new(&mi);
         let mut pb = re.new_portbuffer();
 
         let mut p: f32;
@@ -421,8 +421,8 @@ B,featureB
     }
 
     fn lr_and_ffm_vec(
-        v1: Vec<feature_buffer::HashAndValue>,
-        v2: Vec<feature_buffer::HashAndValueAndSeq>,
+        v1: Vec<HashAndValue>,
+        v2: Vec<HashAndValueAndSeq>,
     ) -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {
             label: 0.0,
@@ -451,8 +451,8 @@ B,featureB
         mi.ffm_fields = vec![vec![], vec![]];
         mi.optimizer = Optimizer::AdagradFlex;
 
-        let mut re_1 = regressor::Regressor::new(&mi);
-        let mut re_2 = regressor::Regressor::new(&mi);
+        let mut re_1 = Regressor::new(&mi);
+        let mut re_2 = Regressor::new(&mi);
         let mut pb_1 = re_1.new_portbuffer();
         let mut pb_2 = re_2.new_portbuffer();
         let mut p: f32;

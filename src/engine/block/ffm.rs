@@ -11,20 +11,19 @@ use std::{io, ptr};
 use merand48::*;
 
 use optimizer::OptimizerTrait;
-use regressor::BlockTrait;
 
-use crate::block_helpers;
-use crate::block_helpers::OptimizerData;
-use crate::feature_buffer;
-use crate::feature_buffer::{FeatureBuffer, HashAndValueAndSeq};
-use crate::graph;
+use crate::engine::block::iterators::OptimizerData;
+use crate::engine::block::{file, iterators};
+use crate::engine::graph;
+use crate::engine::optimizer;
+use crate::engine::port_buffer;
+use crate::engine::port_buffer::PortBuffer;
+use crate::engine::quantization;
+use crate::engine::regressor;
+use crate::engine::regressor::{BlockCache, BlockTrait, FFM_CONTRA_BUF_LEN};
 use crate::model_instance;
-use crate::optimizer;
-use crate::port_buffer;
-use crate::port_buffer::PortBuffer;
-use crate::quantization;
-use crate::regressor;
-use crate::regressor::{BlockCache, FFM_CONTRA_BUF_LEN};
+use crate::namespace::feature_buffer;
+use crate::namespace::feature_buffer::{FeatureBuffer, HashAndValueAndSeq};
 
 const FFM_STACK_BUF_LEN: usize = 170393;
 const STEP: usize = 4;
@@ -122,8 +121,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
     fn forward_backward(
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer,
-        pb: &mut port_buffer::PortBuffer,
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
         update: bool,
     ) {
         debug_assert!(self.output_offset != usize::MAX);
@@ -260,7 +259,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                         }
                     }
 
-                    block_helpers::forward_backward(further_blocks, fb, pb, update);
+                    iterators::forward_backward(further_blocks, fb, pb, update);
 
                     if update {
                         let mut local_index: usize = 0;
@@ -295,7 +294,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 fb.ffm_buffer.len() * (self.ffm_k * self.ffm_num_fields) as usize;
             if local_data_ffm_len < FFM_STACK_BUF_LEN {
                 // Fast-path - using on-stack data structures
-                let local_data_ffm_values: [f32; FFM_STACK_BUF_LEN as usize] =
+                let local_data_ffm_values: [f32; FFM_STACK_BUF_LEN] =
                     MaybeUninit::uninit().assume_init();
                 core_macro!(local_data_ffm_values);
             } else {
@@ -316,8 +315,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
     fn forward(
         &self,
         further_blocks: &[Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer,
-        pb: &mut port_buffer::PortBuffer,
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
     ) {
         debug_assert!(self.output_offset != usize::MAX);
 
@@ -436,7 +435,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             );
         }
 
-        block_helpers::forward(further_blocks, fb, pb);
+        iterators::forward(further_blocks, fb, pb);
     }
 
     fn forward_with_cache(
@@ -644,7 +643,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 field_embedding_len_as_usize,
             );
         }
-        block_helpers::forward_with_cache(further_blocks, fb, pb, further_caches);
+        iterators::forward_with_cache(further_blocks, fb, pb, further_caches);
     }
 
     fn create_forward_cache(
@@ -660,13 +659,13 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             });
         }
 
-        block_helpers::create_forward_cache(further_blocks, caches);
+        iterators::create_forward_cache(further_blocks, caches);
     }
 
     fn prepare_forward_cache(
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer,
+        fb: &FeatureBuffer,
         caches: &mut [BlockCache],
     ) {
         let Some((next_cache, further_caches)) = caches.split_first_mut() else {
@@ -778,7 +777,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
             }
         }
 
-        block_helpers::prepare_forward_cache(further_blocks, fb, further_caches);
+        iterators::prepare_forward_cache(further_blocks, fb, further_caches);
     }
 
     fn allocate_and_init_weights(&mut self, mi: &model_instance::ModelInstance) {
@@ -839,11 +838,11 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
     ) -> Result<(), Box<dyn Error>> {
         if use_quantization {
             let quantized_weights = quantization::quantize_ffm_weights(&self.weights);
-            block_helpers::write_weights_to_buf(&quantized_weights, output_bufwriter, false)?;
+            file::write_weights_to_buf(&quantized_weights, output_bufwriter, false)?;
         } else {
-            block_helpers::write_weights_to_buf(&self.weights, output_bufwriter, false)?;
+            file::write_weights_to_buf(&self.weights, output_bufwriter, false)?;
         }
-        block_helpers::write_weights_to_buf(&self.optimizer, output_bufwriter, false)?;
+        file::write_weights_to_buf(&self.optimizer, output_bufwriter, false)?;
         Ok(())
     }
 
@@ -855,10 +854,10 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         if use_quantization {
             quantization::dequantize_ffm_weights(input_bufreader, &mut self.weights);
         } else {
-            block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader, false)?;
+            file::read_weights_from_buf(&mut self.weights, input_bufreader, false)?;
         }
 
-        block_helpers::read_weights_from_buf(&mut self.optimizer, input_bufreader, false)?;
+        file::read_weights_from_buf(&mut self.optimizer, input_bufreader, false)?;
         Ok(())
     }
 
@@ -890,9 +889,9 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         if use_quantization {
             quantization::dequantize_ffm_weights(input_bufreader, &mut forward.weights);
         } else {
-            block_helpers::read_weights_from_buf(&mut forward.weights, input_bufreader, false)?;
+            file::read_weights_from_buf(&mut forward.weights, input_bufreader, false)?;
         }
-        block_helpers::skip_weights_from_buf::<OptimizerData<L>>(
+        file::skip_weights_from_buf::<OptimizerData<L>>(
             self.ffm_weights_len as usize,
             input_bufreader,
         )?;
@@ -1203,21 +1202,18 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
 
 #[cfg(test)]
 mod tests {
-    use block_helpers::{slearn2, spredict2, spredict2_with_cache};
-
     use crate::assert_epsilon;
-    use crate::block_helpers::ssetup_cache2;
-    use crate::block_loss_functions;
-    use crate::feature_buffer;
-    use crate::feature_buffer::HashAndValueAndSeq;
-    use crate::graph::BlockGraph;
+    use crate::engine::block::loss_functions;
+    use crate::engine::block::test::{slearn2, spredict2, spredict2_with_cache, ssetup_cache2};
+    use crate::engine::graph::BlockGraph;
     use crate::model_instance::Optimizer;
+    use crate::namespace::feature_buffer::HashAndValueAndSeq;
 
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
 
-    fn ffm_vec(v: Vec<feature_buffer::HashAndValueAndSeq>) -> feature_buffer::FeatureBuffer {
-        feature_buffer::FeatureBuffer {
+    fn ffm_vec(v: Vec<HashAndValueAndSeq>) -> FeatureBuffer {
+        FeatureBuffer {
             label: 0.0,
             example_importance: 1.0,
             example_number: 0,
@@ -1251,7 +1247,7 @@ mod tests {
         // Nothing can be learned from a single field in FFMs
         let mut bg = BlockGraph::new();
         let ffm_block = new_ffm_block(&mut bg, &mi).unwrap();
-        let _loss_block = block_loss_functions::new_logloss_block(&mut bg, ffm_block, true);
+        let _loss_block = loss_functions::new_logloss_block(&mut bg, ffm_block, true);
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
         let mut pb = bg.new_port_buffer();
@@ -1271,7 +1267,7 @@ mod tests {
         let mut bg = BlockGraph::new();
 
         let ffm_block = new_ffm_block(&mut bg, &mi).unwrap();
-        let _lossf = block_loss_functions::new_logloss_block(&mut bg, ffm_block, true);
+        let _lossf = loss_functions::new_logloss_block(&mut bg, ffm_block, true);
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
         let mut pb = bg.new_port_buffer();
@@ -1299,7 +1295,7 @@ mod tests {
         mi.optimizer = Optimizer::AdagradLUT;
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
-        let _lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        let _lossf = loss_functions::new_logloss_block(&mut bg, re_ffm, true);
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -1338,7 +1334,7 @@ mod tests {
         // Nothing can be learned from a single field in FFMs
         let mut bg = BlockGraph::new();
         let ffm_block = new_ffm_block(&mut bg, &mi).unwrap();
-        let _loss_block = block_loss_functions::new_logloss_block(&mut bg, ffm_block, true);
+        let _loss_block = loss_functions::new_logloss_block(&mut bg, ffm_block, true);
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
         let mut pb = bg.new_port_buffer();
@@ -1365,7 +1361,7 @@ mod tests {
         let mut bg = BlockGraph::new();
 
         let ffm_block = new_ffm_block(&mut bg, &mi).unwrap();
-        let _lossf = block_loss_functions::new_logloss_block(&mut bg, ffm_block, true);
+        let _lossf = loss_functions::new_logloss_block(&mut bg, ffm_block, true);
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
         let mut pb = bg.new_port_buffer();
@@ -1408,7 +1404,7 @@ mod tests {
         mi.optimizer = Optimizer::AdagradLUT;
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
-        let _lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        let _lossf = loss_functions::new_logloss_block(&mut bg, re_ffm, true);
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -1461,7 +1457,7 @@ mod tests {
         mi.optimizer = Optimizer::AdagradLUT;
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
-        let _lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        let _lossf = loss_functions::new_logloss_block(&mut bg, re_ffm, true);
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -1482,7 +1478,7 @@ mod tests {
         mi.optimizer = Optimizer::AdagradFlex;
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
-        let _lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        let _lossf = loss_functions::new_logloss_block(&mut bg, re_ffm, true);
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -1508,7 +1504,7 @@ mod tests {
         mi.optimizer = Optimizer::AdagradLUT;
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
-        let _lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        let _lossf = loss_functions::new_logloss_block(&mut bg, re_ffm, true);
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -1546,7 +1542,7 @@ mod tests {
         mi.optimizer = Optimizer::AdagradLUT;
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
-        let _lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        let _lossf = loss_functions::new_logloss_block(&mut bg, re_ffm, true);
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -1575,7 +1571,7 @@ mod tests {
         mi.optimizer = Optimizer::AdagradFlex;
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
-        let _lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        let _lossf = loss_functions::new_logloss_block(&mut bg, re_ffm, true);
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -1616,7 +1612,7 @@ mod tests {
         mi.optimizer = Optimizer::AdagradLUT;
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
-        let _lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        let _lossf = loss_functions::new_logloss_block(&mut bg, re_ffm, true);
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -1668,7 +1664,7 @@ mod tests {
         mi.optimizer = Optimizer::AdagradLUT;
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
-        let _lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        let _lossf = loss_functions::new_logloss_block(&mut bg, re_ffm, true);
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -1714,7 +1710,7 @@ mod tests {
         mi.optimizer = Optimizer::AdagradLUT;
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
-        let _lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        let _lossf = loss_functions::new_logloss_block(&mut bg, re_ffm, true);
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -1784,7 +1780,7 @@ mod tests {
         mi.optimizer = Optimizer::AdagradLUT;
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
-        let _lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        let _lossf = loss_functions::new_logloss_block(&mut bg, re_ffm, true);
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -1826,7 +1822,7 @@ mod tests {
         mi.optimizer = Optimizer::AdagradLUT;
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
-        let _lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        let _lossf = loss_functions::new_logloss_block(&mut bg, re_ffm, true);
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -1897,7 +1893,7 @@ mod tests {
         mi.optimizer = Optimizer::AdagradLUT;
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
-        let _lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        let _lossf = loss_functions::new_logloss_block(&mut bg, re_ffm, true);
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -1908,7 +1904,7 @@ mod tests {
         mi.optimizer = Optimizer::AdagradFlex;
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
-        let _lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        let _lossf = loss_functions::new_logloss_block(&mut bg, re_ffm, true);
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -1962,7 +1958,7 @@ mod tests {
         mi.optimizer = Optimizer::AdagradLUT;
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
-        let _lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        let _lossf = loss_functions::new_logloss_block(&mut bg, re_ffm, true);
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -1973,7 +1969,7 @@ mod tests {
         mi.optimizer = Optimizer::AdagradFlex;
         let mut bg = BlockGraph::new();
         let re_ffm = new_ffm_block(&mut bg, &mi).unwrap();
-        let _lossf = block_loss_functions::new_logloss_block(&mut bg, re_ffm, true);
+        let _lossf = loss_functions::new_logloss_block(&mut bg, re_ffm, true);
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 

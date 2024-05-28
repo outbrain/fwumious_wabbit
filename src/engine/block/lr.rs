@@ -1,20 +1,20 @@
 use std::any::Any;
 
-use crate::graph;
+use crate::engine::graph;
+use crate::engine::optimizer;
+use crate::engine::regressor;
 use crate::model_instance;
-use crate::optimizer;
-use crate::regressor;
-use crate::{feature_buffer, parser};
+use crate::namespace::{feature_buffer, parser};
 
 use std::error::Error;
 use std::io;
 
-use crate::block_helpers;
-use crate::port_buffer;
-use crate::regressor::BlockCache;
-use block_helpers::WeightAndOptimizerData;
+use crate::engine::block::{file, iterators};
+use crate::engine::port_buffer;
+use crate::engine::regressor::BlockCache;
+use crate::engine::regressor::BlockTrait;
+use iterators::WeightAndOptimizerData;
 use optimizer::OptimizerTrait;
-use regressor::BlockTrait;
 
 pub struct BlockLR<L: OptimizerTrait> {
     pub weights: Vec<WeightAndOptimizerData<L>>,
@@ -130,7 +130,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         unsafe {
             self.internal_forward(fb, pb);
 
-            block_helpers::forward_backward(further_blocks, fb, pb, update);
+            iterators::forward_backward(further_blocks, fb, pb, update);
 
             if update {
                 let myslice = &mut pb.tape.get_unchecked(
@@ -159,7 +159,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         pb: &mut port_buffer::PortBuffer,
     ) {
         self.internal_forward(fb, pb);
-        block_helpers::forward(further_blocks, fb, pb);
+        iterators::forward(further_blocks, fb, pb);
     }
 
     fn forward_with_cache(
@@ -199,7 +199,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
                     self.weights.get_unchecked(feature_index).weight * feature_value;
             }
         }
-        block_helpers::forward_with_cache(further_blocks, fb, pb, further_caches);
+        iterators::forward_with_cache(further_blocks, fb, pb, further_caches);
     }
 
     fn create_forward_cache(
@@ -211,7 +211,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
             lr: vec![0.0; self.num_combos as usize],
             combo_indexes: vec![false; self.num_combos as usize],
         });
-        block_helpers::create_forward_cache(further_blocks, caches);
+        iterators::create_forward_cache(further_blocks, caches);
     }
 
     fn prepare_forward_cache(
@@ -251,7 +251,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
             }
         }
 
-        block_helpers::prepare_forward_cache(further_blocks, fb, further_caches);
+        iterators::prepare_forward_cache(further_blocks, fb, further_caches);
     }
 
     fn get_serialized_len(&self) -> usize {
@@ -263,7 +263,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         input_bufreader: &mut dyn io::Read,
         _use_quantization: bool,
     ) -> Result<(), Box<dyn Error>> {
-        block_helpers::read_weights_from_buf(&mut self.weights, input_bufreader, false)
+        file::read_weights_from_buf(&mut self.weights, input_bufreader, false)
     }
 
     fn write_weights_to_buf(
@@ -271,7 +271,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         output_bufwriter: &mut dyn io::Write,
         _use_quantization: bool,
     ) -> Result<(), Box<dyn Error>> {
-        block_helpers::write_weights_to_buf(&self.weights, output_bufwriter, false)
+        file::write_weights_to_buf(&self.weights, output_bufwriter, false)
     }
 
     fn read_weights_from_buf_into_forward_only(
@@ -284,7 +284,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
             .as_any()
             .downcast_mut::<BlockLR<optimizer::OptimizerSGD>>()
             .unwrap();
-        block_helpers::read_weights_only_from_buf2::<L>(
+        file::read_weights_only_from_buf2::<L>(
             self.weights_len as usize,
             &mut forward.weights,
             input_bufreader,

@@ -1,15 +1,15 @@
 use std::any::Any;
 use std::error::Error;
 
-use crate::block_helpers;
-use crate::feature_buffer;
-use crate::feature_buffer::FeatureBuffer;
-use crate::graph;
-use crate::port_buffer;
-use crate::port_buffer::PortBuffer;
-use crate::regressor;
-use crate::regressor::BlockCache;
-use regressor::BlockTrait;
+use crate::engine::block::iterators;
+use crate::engine::graph;
+use crate::engine::port_buffer;
+use crate::engine::port_buffer::PortBuffer;
+use crate::engine::regressor;
+use crate::engine::regressor::BlockCache;
+use crate::engine::regressor::BlockTrait;
+use crate::namespace::feature_buffer;
+use crate::namespace::feature_buffer::FeatureBuffer;
 
 #[inline(always)]
 pub fn logistic(t: f32) -> f32 {
@@ -42,11 +42,7 @@ pub fn new_logloss_block(
 
 impl BlockSigmoid {
     #[inline(always)]
-    fn internal_forward(
-        &self,
-        fb: &feature_buffer::FeatureBuffer,
-        pb: &mut port_buffer::PortBuffer,
-    ) {
+    fn internal_forward(&self, fb: &FeatureBuffer, pb: &mut PortBuffer) {
         unsafe {
             debug_assert!(self.input_offset != usize::MAX);
             debug_assert!(self.output_offset != usize::MAX);
@@ -105,8 +101,8 @@ impl BlockTrait for BlockSigmoid {
     fn forward_backward(
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer,
-        pb: &mut port_buffer::PortBuffer,
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
         update: bool,
     ) {
         debug_assert!(self.input_offset != usize::MAX);
@@ -144,7 +140,7 @@ impl BlockTrait for BlockSigmoid {
             if self.copy_to_result {
                 pb.observations.push(prediction_probability);
             }
-            block_helpers::forward_backward(further_blocks, fb, pb, update);
+            iterators::forward_backward(further_blocks, fb, pb, update);
             // replace inputs with their gradients
             pb.tape
                 .get_unchecked_mut(self.input_offset..(self.input_offset + self.num_inputs))
@@ -155,11 +151,11 @@ impl BlockTrait for BlockSigmoid {
     fn forward(
         &self,
         further_blocks: &[Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer,
-        pb: &mut port_buffer::PortBuffer,
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
     ) {
         self.internal_forward(fb, pb);
-        block_helpers::forward(further_blocks, fb, pb);
+        iterators::forward(further_blocks, fb, pb);
     }
 
     fn forward_with_cache(
@@ -170,6 +166,6 @@ impl BlockTrait for BlockSigmoid {
         caches: &[BlockCache],
     ) {
         self.internal_forward(fb, pb);
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        iterators::forward_with_cache(further_blocks, fb, pb, caches);
     }
 }

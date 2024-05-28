@@ -5,8 +5,9 @@ use std::io::ErrorKind;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::feature_transform_parser;
-use crate::vwmap::{NamespaceDescriptor, VwNamespaceMap};
+use crate::namespace::feature;
+use crate::namespace::feature::parser;
+use crate::namespace::vwmap::{NamespaceDescriptor, VwNamespaceMap};
 
 const WEIGHT_DELIM: &str = ":";
 const VERBOSE_FIELD_DELIM: &str = ",";
@@ -91,7 +92,7 @@ pub struct ModelInstance {
     #[serde(default = "default_optimizer_adagrad")]
     pub optimizer: Optimizer,
 
-    pub transform_namespaces: feature_transform_parser::NamespaceTransforms,
+    pub transform_namespaces: parser::NamespaceTransforms,
 
     pub dequantize_weights: Option<bool>,
 }
@@ -142,7 +143,7 @@ impl ModelInstance {
             nn_power_t: 0.45,
             init_acc_gradient: 1.0,
             optimizer: Optimizer::SGD,
-            transform_namespaces: feature_transform_parser::NamespaceTransforms::new(),
+            transform_namespaces: parser::NamespaceTransforms::new(),
             nn_config: NNConfig::new(),
             dequantize_weights: Some(false),
         };
@@ -173,11 +174,8 @@ impl ModelInstance {
         let namespaces_str = vsplit[0];
         let mut namespace_descriptors: Vec<NamespaceDescriptor> = Vec::new();
         for char in namespaces_str.chars() {
-            let namespace_descriptor = feature_transform_parser::get_namespace_descriptor(
-                &self.transform_namespaces,
-                vw,
-                char,
-            )?;
+            let namespace_descriptor =
+                parser::get_namespace_descriptor(&self.transform_namespaces, vw, char)?;
             namespace_descriptors.push(namespace_descriptor);
         }
         Ok(FeatureComboDesc {
@@ -221,7 +219,7 @@ impl ModelInstance {
         let namespaces_verbose: Vec<&str> = vsplit[0].split(VERBOSE_FIELD_DELIM).collect(); // verbose names are separated by comma
         let mut namespace_descriptors: Vec<NamespaceDescriptor> = Vec::new();
         for namespace_verbose in namespaces_verbose {
-            let namespace_descriptor = feature_transform_parser::get_namespace_descriptor_verbose(
+            let namespace_descriptor = parser::get_namespace_descriptor_verbose(
                 &self.transform_namespaces,
                 vw,
                 namespace_verbose,
@@ -252,7 +250,7 @@ impl ModelInstance {
         let namespaces_verbose: Vec<&str> = s.split(VERBOSE_FIELD_DELIM).collect(); // verbose names are separated by comma
         let mut field: FieldDesc = Vec::new();
         for namespace_verbose in namespaces_verbose {
-            let namespace_descriptor = feature_transform_parser::get_namespace_descriptor_verbose(
+            let namespace_descriptor = parser::get_namespace_descriptor_verbose(
                 &self.transform_namespaces,
                 vw,
                 namespace_verbose,
@@ -339,7 +337,7 @@ impl ModelInstance {
         // we first need transform namespaces, before processing keep or interactions
 
         if let Some(in_v) = cl.values_of("transform") {
-            let mut namespace_parser = feature_transform_parser::NamespaceTransformsParser::new();
+            let mut namespace_parser = parser::NamespaceTransformsParser::new();
             for value_str in in_v {
                 namespace_parser.add_transform_namespace(vw, value_str)?;
             }
@@ -389,11 +387,8 @@ impl ModelInstance {
             for namespaces_str in in_v {
                 let mut field: Vec<NamespaceDescriptor> = Vec::new();
                 for char in namespaces_str.chars() {
-                    let namespace_descriptor = feature_transform_parser::get_namespace_descriptor(
-                        &mi.transform_namespaces,
-                        vw,
-                        char,
-                    )?;
+                    let namespace_descriptor =
+                        parser::get_namespace_descriptor(&mi.transform_namespaces, vw, char)?;
                     field.push(namespace_descriptor);
                 }
                 mi.ffm_fields.push(field);
@@ -554,7 +549,9 @@ impl ModelInstance {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::vwmap::{NamespaceDescriptor, NamespaceFormat, NamespaceType, VwNamespaceMap};
+    use crate::namespace::vwmap::{
+        NamespaceDescriptor, NamespaceFormat, NamespaceType, VwNamespaceMap,
+    };
 
     fn ns_desc(i: u16) -> NamespaceDescriptor {
         NamespaceDescriptor {

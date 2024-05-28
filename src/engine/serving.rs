@@ -9,14 +9,14 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 
-use crate::feature_buffer;
+use crate::engine::multithread_helpers::BoxedRegressorTrait;
+use crate::engine::port_buffer;
+use crate::engine::regressor;
 use crate::model_instance;
-use crate::multithread_helpers::BoxedRegressorTrait;
-use crate::parser;
+use crate::namespace::feature_buffer;
+use crate::namespace::parser;
+use crate::namespace::vwmap;
 use crate::persistence;
-use crate::port_buffer;
-use crate::regressor;
-use crate::vwmap;
 
 pub struct Serving {
     listening_interface: String,
@@ -37,7 +37,7 @@ pub struct WorkerThread {
 pub trait IsEmpty {
     fn is_empty(&mut self) -> bool;
 }
-impl IsEmpty for io::BufReader<&net::TcpStream> {
+impl IsEmpty for BufReader<&net::TcpStream> {
     fn is_empty(&mut self) -> bool {
         return self.buffer().is_empty();
     }
@@ -257,19 +257,19 @@ impl Serving {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::feature_buffer;
-    use crate::regressor;
+    use crate::engine::regressor;
+    use crate::namespace::feature_buffer;
     use mockstream::{FailingMockStream, SharedMockStream};
     use std::io::ErrorKind;
     use std::str;
     use tempfile::tempdir;
 
-    impl IsEmpty for std::io::BufReader<mockstream::SharedMockStream> {
+    impl IsEmpty for BufReader<SharedMockStream> {
         fn is_empty(&mut self) -> bool {
             true
         }
     }
-    impl IsEmpty for std::io::BufReader<mockstream::FailingMockStream> {
+    impl IsEmpty for BufReader<FailingMockStream> {
         fn is_empty(&mut self) -> bool {
             true
         }

@@ -23,23 +23,25 @@ extern crate intel_mkl_src;
 extern crate nom;
 extern crate core;
 
-use fw::cache::RecordCache;
-use fw::feature_buffer::FeatureBufferTranslator;
-use fw::hogwild::HogwildTrainer;
+use fw::engine::buffer_handler::create_buffered_input;
+use fw::engine::hogwild::HogwildTrainer;
+use fw::engine::multithread_helpers::BoxedRegressorTrait;
+use fw::engine::regressor;
+use fw::engine::regressor::{get_regressor_with_weights, Regressor};
+use fw::engine::serving::Serving;
 use fw::model_instance::{ModelInstance, Optimizer};
-use fw::multithread_helpers::BoxedRegressorTrait;
-use fw::parser::VowpalParser;
-use fw::buffer_handler::create_buffered_input;
+use fw::namespace::cache::RecordCache;
+use fw::namespace::feature_buffer::FeatureBufferTranslator;
+use fw::namespace::parser::VowpalParser;
+use fw::namespace::vwmap::VwNamespaceMap;
 use fw::persistence::{
     new_regressor_from_filename, save_regressor_to_filename, save_sharable_regressor_to_filename,
 };
-use fw::regressor::{get_regressor_with_weights, Regressor};
-use fw::serving::Serving;
-use fw::vwmap::VwNamespaceMap;
-use fw::{cmdline, feature_buffer, logging_layer, regressor};
+use fw::{cmdline, logging};
+use fw::namespace::feature_buffer;
 
 fn main() {
-    logging_layer::initialize_logging_layer();
+    logging::initialize_logging();
 
     if let Err(e) = main_fw_loop() {
         log::error!("Global error: {:?}", e);
@@ -129,7 +131,7 @@ fn main_fw_loop() -> Result<(), Box<dyn Error>> {
             .value_of("initial_regressor")
             .expect("Daemon mode only supports serving from --initial regressor");
         log::info!("initial_regressor = {}", filename);
-        let (mi2, vw2, re_fixed) = new_regressor_from_filename(filename, true, Option::Some(&cl))?;
+        let (mi2, vw2, re_fixed) = new_regressor_from_filename(filename, true, Some(&cl))?;
 
         let mut se = Serving::new(&cl, &vw2, Box::new(re_fixed), &mi2)?;
         se.serve()?;
@@ -137,8 +139,7 @@ fn main_fw_loop() -> Result<(), Box<dyn Error>> {
         let filename = cl
             .value_of("initial_regressor")
             .expect("Convert mode requires --initial regressor");
-        let (mut mi2, vw2, re_fixed) =
-            new_regressor_from_filename(filename, true, Option::Some(&cl))?;
+        let (mut mi2, vw2, re_fixed) = new_regressor_from_filename(filename, true, Some(&cl))?;
         mi2.optimizer = Optimizer::SGD;
         if cl.is_present("weight_quantization") {
             mi2.dequantize_weights = Some(true);
@@ -154,7 +155,7 @@ fn main_fw_loop() -> Result<(), Box<dyn Error>> {
 
         if let Some(filename) = cl.value_of("initial_regressor") {
             log::info!("initial_regressor = {}", filename);
-            (mi, vw, re) = new_regressor_from_filename(filename, testonly, Option::Some(&cl))?;
+            (mi, vw, re) = new_regressor_from_filename(filename, testonly, Some(&cl))?;
             sharable_regressor = BoxedRegressorTrait::new(Box::new(re));
         } else {
             // We load vw_namespace_map.csv just so we know all the namespaces ahead of time

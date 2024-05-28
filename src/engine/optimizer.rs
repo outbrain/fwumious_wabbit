@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
-pub trait OptimizerTrait: std::clone::Clone {
-    type PerWeightStore: std::clone::Clone;
+pub trait OptimizerTrait: Clone {
+    type PerWeightStore: Clone;
     fn new() -> Self;
     fn init(&mut self, learning_rate: f32, power_t: f32, initial_acc_gradient: f32);
     unsafe fn calculate_update(&self, gradient: f32, data: &mut Self::PerWeightStore) -> f32;
@@ -37,7 +37,7 @@ impl OptimizerTrait for OptimizerSGD {
     }
 
     fn initial_data(&self) -> Self::PerWeightStore {
-        std::marker::PhantomData {}
+        PhantomData {}
     }
 }
 
@@ -171,7 +171,7 @@ mod tests {
         let mut l = OptimizerSGD::new();
         l.init(0.15, 0.4, 0.0);
         unsafe {
-            let mut acc: PhantomData<()> = std::marker::PhantomData {};
+            let mut acc: PhantomData<()> = PhantomData {};
             let p = l.calculate_update(0.1, &mut acc);
             assert_eq!(p, 0.1 * 0.15);
         }

@@ -1,16 +1,13 @@
 use std::any::Any;
 use std::error::Error;
 
-use crate::block_helpers;
-use crate::feature_buffer;
-use crate::feature_buffer::FeatureBuffer;
-use crate::graph::{BlockGraph, BlockPtrOutput, InputSlot, OutputSlot};
+use crate::engine::block::iterators;
+use crate::engine::graph::{BlockGraph, BlockPtrOutput, InputSlot, OutputSlot};
+use crate::engine::port_buffer::PortBuffer;
+use crate::engine::regressor::BlockCache;
+use crate::engine::regressor::BlockTrait;
 use crate::model_instance;
-use crate::port_buffer;
-use crate::port_buffer::PortBuffer;
-use crate::regressor;
-use crate::regressor::BlockCache;
-use regressor::BlockTrait;
+use crate::namespace::feature_buffer::FeatureBuffer;
 
 pub struct BlockRELU {
     pub num_inputs: usize,
@@ -37,13 +34,13 @@ pub fn new_relu_block(
 
 impl BlockRELU {
     #[inline(always)]
-    fn internal_forward(&self, pb: &mut port_buffer::PortBuffer) {
+    fn internal_forward(&self, pb: &mut PortBuffer) {
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.input_offset != usize::MAX);
         debug_assert!(self.num_inputs > 0);
 
         unsafe {
-            for i in 0..self.num_inputs as usize {
+            for i in 0..self.num_inputs {
                 let w = *pb.tape.get_unchecked_mut(self.input_offset + i);
                 if w < 0.0 {
                     *pb.tape.get_unchecked_mut(self.output_offset + i) = 0.0;
@@ -79,8 +76,8 @@ impl BlockTrait for BlockRELU {
     fn forward_backward(
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer,
-        pb: &mut port_buffer::PortBuffer,
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
         update: bool,
     ) {
         debug_assert!(self.output_offset != usize::MAX);
@@ -99,7 +96,7 @@ impl BlockTrait for BlockRELU {
                 }
             }
 
-            block_helpers::forward_backward(further_blocks, fb, pb, update);
+            iterators::forward_backward(further_blocks, fb, pb, update);
 
             if update {
                 for i in 0..self.num_inputs {
@@ -113,11 +110,11 @@ impl BlockTrait for BlockRELU {
     fn forward(
         &self,
         further_blocks: &[Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer,
-        pb: &mut port_buffer::PortBuffer,
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
     ) {
         self.internal_forward(pb);
-        block_helpers::forward(further_blocks, fb, pb);
+        iterators::forward(further_blocks, fb, pb);
     }
 
     fn forward_with_cache(
@@ -128,7 +125,7 @@ impl BlockTrait for BlockRELU {
         caches: &[BlockCache],
     ) {
         self.internal_forward(pb);
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        iterators::forward_with_cache(further_blocks, fb, pb, caches);
     }
 }
 
@@ -137,13 +134,13 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use crate::assert_epsilon;
-    use crate::block_misc;
-    use crate::feature_buffer;
-    use block_helpers::slearn2;
-    use block_misc::Observe;
+    use crate::engine::block::misc;
+    use crate::engine::block::test;
+    use misc::Observe;
+    use test::slearn2;
 
-    fn fb_vec() -> feature_buffer::FeatureBuffer {
-        feature_buffer::FeatureBuffer {
+    fn fb_vec() -> FeatureBuffer {
+        FeatureBuffer {
             label: 0.0,
             example_importance: 1.0,
             example_number: 0,
@@ -156,11 +153,10 @@ mod tests {
     fn test_simple_positive() {
         let mi = model_instance::ModelInstance::new_empty().unwrap();
         let mut bg = BlockGraph::new();
-        let input_block = block_misc::new_const_block(&mut bg, vec![2.0]).unwrap();
+        let input_block = misc::new_const_block(&mut bg, vec![2.0]).unwrap();
         let relu_block = new_relu_block(&mut bg, &mi, input_block).unwrap();
         let _observe_block =
-            block_misc::new_observe_block(&mut bg, relu_block, Observe::Forward, Some(1.0))
-                .unwrap();
+            misc::new_observe_block(&mut bg, relu_block, Observe::Forward, Some(1.0)).unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 

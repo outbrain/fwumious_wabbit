@@ -1,44 +1,20 @@
-pub mod block_ffm;
-pub mod block_helpers;
-pub mod block_loss_functions;
-pub mod block_lr;
-pub mod block_misc;
-pub mod block_neural;
-pub mod block_normalize;
-pub mod block_relu;
-pub mod buffer_handler;
-pub mod cache;
 pub mod cmdline;
-pub mod feature_buffer;
-pub mod feature_transform_executor;
-pub mod feature_transform_implementations;
-pub mod feature_transform_parser;
-pub mod graph;
-pub mod hogwild;
-pub mod logging_layer;
+pub mod engine;
+pub mod logging;
 pub mod model_instance;
-pub mod multithread_helpers;
-pub mod optimizer;
-pub mod parser;
-pub mod persistence;
-pub mod port_buffer;
-pub mod quantization;
-pub mod radix_tree;
-pub mod regressor;
-pub mod serving;
-pub mod version;
-pub mod vwmap;
+pub mod namespace;
 
 extern crate blas;
 extern crate half;
 extern crate intel_mkl_src;
 
-use crate::feature_buffer::FeatureBufferTranslator;
-use crate::multithread_helpers::BoxedRegressorTrait;
-use crate::parser::VowpalParser;
-use crate::port_buffer::PortBuffer;
-use crate::regressor::BlockCache;
-use crate::vwmap::NamespaceType;
+use crate::engine::multithread_helpers::BoxedRegressorTrait;
+use crate::engine::port_buffer::PortBuffer;
+use crate::engine::regressor::BlockCache;
+use crate::namespace::feature_buffer::FeatureBufferTranslator;
+use crate::namespace::parser::VowpalParser;
+use crate::namespace::vwmap::NamespaceType;
+use engine::persistence;
 use shellwords;
 use std::ffi::CStr;
 use std::io::Cursor;
@@ -153,7 +129,7 @@ pub extern "C" fn new_fw_predictor_prototype(command: *const c_char) -> *mut Ffi
     // create a "prototype" predictor that loads the weights file. This predictor is expensive, and is intended
     // to only be created once. If additional predictors are needed (e.g. for concurrent work), please
     // use this "prototype" with the clone_lite function, which will create cheap copies
-    logging_layer::initialize_logging_layer();
+    logging::initialize_logging();
 
     let str_command = c_char_to_str(command);
     let words = shellwords::split(str_command).unwrap();

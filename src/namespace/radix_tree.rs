@@ -1,4 +1,4 @@
-use crate::vwmap::NamespaceDescriptor;
+use crate::namespace::vwmap::NamespaceDescriptor;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct NamespaceDescriptorWithHash {
@@ -66,7 +66,7 @@ impl RadixTree {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vwmap::{NamespaceFormat, NamespaceType};
+    use crate::namespace::vwmap::{NamespaceFormat, NamespaceType};
 
     #[test]
     fn test_insert_and_get() {

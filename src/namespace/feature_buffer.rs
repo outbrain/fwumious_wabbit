@@ -1,10 +1,10 @@
-use crate::feature_transform_executor;
 use crate::model_instance;
-use crate::parser;
-use crate::vwmap::{NamespaceFormat, NamespaceType};
+use crate::namespace::feature::executors;
+use crate::namespace::parser::{IS_NOT_SINGLE_MASK, EXAMPLE_IMPORTANCE_OFFSET, HEADER_LEN, LABEL_OFFSET};
+use crate::namespace::vwmap::{NamespaceFormat, NamespaceType};
 
 const VOWPAL_FNV_PRIME: u32 = 16777619; // vowpal magic number
-                                        //const CONSTANT_NAMESPACE:usize = 128;
+
 const CONSTANT_HASH: u32 = 11650396;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -39,7 +39,7 @@ pub struct FeatureBufferTranslator {
     pub feature_buffer: FeatureBuffer,
     pub lr_hash_mask: u32,
     pub ffm_hash_mask: u32,
-    pub transform_executors: feature_transform_executor::TransformExecutors,
+    pub transform_executors: executors::TransformExecutors,
 }
 
 // A macro that takes care of decoding the individual feature - which can have two different encodings
@@ -77,10 +77,9 @@ macro_rules! feature_reader {
             }
         } else {
             let namespace_index = $namespace_descriptor.namespace_index as usize;
-            let first_token = unsafe {
-                *$record_buffer.get_unchecked(namespace_index + parser::HEADER_LEN as usize)
-            };
-            if (first_token & parser::IS_NOT_SINGLE_MASK) == 0 {
+            let first_token =
+                unsafe { *$record_buffer.get_unchecked(namespace_index + HEADER_LEN as usize) };
+            if (first_token & IS_NOT_SINGLE_MASK) == 0 {
                 let $hash_index = first_token;
                 let $hash_value: f32 = 1.0;
                 $bl
@@ -117,7 +116,7 @@ macro_rules! feature_reader_float_namespace {
       $bl:block  ) => {
         let namespace_index = $namespace_descriptor.namespace_index as usize;
         let first_token =
-            unsafe { *$record_buffer.get_unchecked(namespace_index + parser::HEADER_LEN as usize) };
+            unsafe { *$record_buffer.get_unchecked(namespace_index + HEADER_LEN as usize) };
         if $namespace_descriptor.namespace_format == NamespaceFormat::F32 {
             let start = ((first_token >> 16) & 0x3fff) as usize;
             let end = (first_token & 0xffff) as usize;
@@ -164,10 +163,9 @@ impl FeatureBufferTranslator {
             feature_buffer: fb,
             lr_hash_mask,
             ffm_hash_mask,
-            transform_executors:
-                feature_transform_executor::TransformExecutors::from_namespace_transforms(
-                    &mi.transform_namespaces,
-                ),
+            transform_executors: executors::TransformExecutors::from_namespace_transforms(
+                &mi.transform_namespaces,
+            ),
         }
     }
 
@@ -184,9 +182,9 @@ impl FeatureBufferTranslator {
         {
             let lr_buffer = &mut self.feature_buffer.lr_buffer;
             lr_buffer.truncate(0);
-            self.feature_buffer.label = record_buffer[parser::LABEL_OFFSET] as f32; // copy label
+            self.feature_buffer.label = record_buffer[LABEL_OFFSET] as f32; // copy label
             self.feature_buffer.example_importance =
-                f32::from_bits(record_buffer[parser::EXAMPLE_IMPORTANCE_OFFSET]);
+                f32::from_bits(record_buffer[EXAMPLE_IMPORTANCE_OFFSET]);
             self.feature_buffer.example_number = example_number;
 
             let mut hashes_vec_in: &mut Vec<HashAndValue> = &mut self.hashes_vec_in;
@@ -342,8 +340,8 @@ impl FeatureBufferTranslator {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::parser::{IS_NOT_SINGLE_MASK, MASK31, NO_FEATURES};
-    use crate::vwmap::{NamespaceDescriptor, NamespaceFormat, NamespaceType};
+    use crate::namespace::parser::{IS_NOT_SINGLE_MASK, MASK31, NO_FEATURES};
+    use crate::namespace::vwmap::{NamespaceDescriptor, NamespaceFormat, NamespaceType};
 
     fn add_header(v2: Vec<u32>) -> Vec<u32> {
         let mut rr: Vec<u32> = vec![100, 1, 1.0f32.to_bits()];
@@ -382,7 +380,7 @@ mod tests {
             });
 
         let mut fbt = FeatureBufferTranslator::new(&mi);
-        let rb = add_header(vec![parser::NO_FEATURES]); // no feature
+        let rb = add_header(vec![NO_FEATURES]); // no feature
         fbt.translate(&rb, 0);
         assert_eq!(
             fbt.feature_buffer.lr_buffer,
@@ -405,7 +403,7 @@ mod tests {
             });
 
         let mut fbt = FeatureBufferTranslator::new(&mi);
-        let rb = add_header(vec![parser::NO_FEATURES]); // no feature
+        let rb = add_header(vec![NO_FEATURES]); // no feature
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]); // vw compatibility - no feature is no feature
 
@@ -421,7 +419,7 @@ mod tests {
         );
 
         let rb = add_header(vec![
-            parser::IS_NOT_SINGLE_MASK | nd(4, 8),
+            IS_NOT_SINGLE_MASK | nd(4, 8),
             0xfea,
             1.0f32.to_bits(),
             0xfeb,
@@ -462,11 +460,11 @@ mod tests {
 
         let mut fbt = FeatureBufferTranslator::new(&mi);
 
-        let rb = add_header(vec![parser::NO_FEATURES, parser::NO_FEATURES]);
+        let rb = add_header(vec![NO_FEATURES, NO_FEATURES]);
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]);
 
-        let rb = add_header(vec![0xfea, parser::NO_FEATURES]);
+        let rb = add_header(vec![0xfea, NO_FEATURES]);
         fbt.translate(&rb, 0);
         assert_eq!(
             fbt.feature_buffer.lr_buffer,
@@ -509,19 +507,15 @@ mod tests {
             });
 
         let mut fbt = FeatureBufferTranslator::new(&mi);
-        let rb = add_header(vec![parser::NO_FEATURES]);
+        let rb = add_header(vec![NO_FEATURES]);
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]);
 
-        let rb = add_header(vec![123456789, parser::NO_FEATURES]);
+        let rb = add_header(vec![123456789, NO_FEATURES]);
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]); // since the other feature is missing - VW compatibility says no feature is here
 
-        let rb = add_header(vec![
-            2988156968 & parser::MASK31,
-            2422381320 & parser::MASK31,
-            parser::NO_FEATURES,
-        ]);
+        let rb = add_header(vec![2988156968 & MASK31, 2422381320 & MASK31, NO_FEATURES]);
         fbt.translate(&rb, 0);
 
         assert_eq!(
@@ -597,7 +591,7 @@ mod tests {
         mi.ffm_k = 1;
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![
-            parser::IS_NOT_SINGLE_MASK | nd(5, 9),
+            IS_NOT_SINGLE_MASK | nd(5, 9),
             0xfec,
             0xfea,
             2.0f32.to_bits(),
@@ -647,7 +641,7 @@ mod tests {
         mi.ffm_k = 1;
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![
-            parser::IS_NOT_SINGLE_MASK | nd(5, 9),
+            IS_NOT_SINGLE_MASK | nd(5, 9),
             0x1,
             0xfff,
             2.0f32.to_bits(),
@@ -695,7 +689,7 @@ mod tests {
         mi.ffm_k = 3;
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![
-            parser::IS_NOT_SINGLE_MASK | nd(5, 9),
+            IS_NOT_SINGLE_MASK | nd(5, 9),
             0x1,
             0xfff,
             2.0f32.to_bits(),
@@ -752,7 +746,7 @@ mod tests {
             });
 
         let mut fbt = FeatureBufferTranslator::new(&mi);
-        let rb = add_header(vec![parser::NO_FEATURES]); // no feature
+        let rb = add_header(vec![NO_FEATURES]); // no feature
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.example_importance, 1.0); // Did example importance get parsed correctly
     }
