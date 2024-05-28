@@ -38,6 +38,7 @@ use fw::persistence::{
     new_regressor_from_filename, save_regressor_to_filename, save_sharable_regressor_to_filename,
 };
 use fw::{cmdline, logging};
+use fw::namespace::feature_buffer;
 
 fn main() {
     logging::initialize_logging();
