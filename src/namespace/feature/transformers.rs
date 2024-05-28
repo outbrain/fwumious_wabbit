@@ -9,7 +9,6 @@ use crate::namespace::feature::executors::{
     ExecutorFromNamespace, ExecutorToNamespace, FunctionExecutorTrait, SeedNumber,
     TransformExecutors,
 };
-use crate::namespace::feature::parser;
 use crate::namespace::feature::parser::Namespace;
 use crate::namespace::vwmap::{NamespaceDescriptor, NamespaceFormat, NamespaceType};
 
@@ -608,7 +607,7 @@ mod tests {
         let record_buffer = [
             6,                   // length
             0,                   // label
-            (1.0_f32).to_bits(), // Example weight
+            1.0_f32.to_bits(), // Example weight
             nd(4, 6) | IS_NOT_SINGLE_MASK,
             // Feature triple
             1775699190 & MASK31, // Hash location
@@ -629,7 +628,7 @@ mod tests {
         let record_buffer = [
             6,                   // length
             0,                   // label
-            (1.0_f32).to_bits(), // Example weight
+            1.0_f32.to_bits(), // Example weight
             nd(4, 6) | IS_NOT_SINGLE_MASK,
             // Feature triple
             1775699190 & MASK31, // Hash location
@@ -675,7 +674,7 @@ mod tests {
         let record_buffer = [
             9,                   // length
             0,                   // label
-            (1.0_f32).to_bits(), // Example weight
+            1.0_f32.to_bits(), // Example weight
             nd(5, 7) | IS_NOT_SINGLE_MASK,
             nd(7, 9) | IS_NOT_SINGLE_MASK,
             // Feature triple
@@ -699,7 +698,7 @@ mod tests {
         let record_buffer = [
             9,                   // length
             0,                   // label
-            (1.0_f32).to_bits(), // Example weight
+            1.0_f32.to_bits(), // Example weight
             nd(5, 7) | IS_NOT_SINGLE_MASK,
             nd(7, 9) | IS_NOT_SINGLE_MASK,
             // Feature triple
@@ -727,7 +726,7 @@ mod tests {
         let record_buffer = [
             9,                   // length
             0,                   // label
-            (1.0_f32).to_bits(), // Example weight
+            1.0_f32.to_bits(), // Example weight
             nd(5, 7) | IS_NOT_SINGLE_MASK,
             nd(7, 9) | IS_NOT_SINGLE_MASK,
             // Feature triple
@@ -751,7 +750,7 @@ mod tests {
         let record_buffer = [
             9,                   // length
             0,                   // label
-            (1.0_f32).to_bits(), // Example weight
+            1.0_f32.to_bits(), // Example weight
             nd(5, 7) | IS_NOT_SINGLE_MASK,
             nd(7, 9) | IS_NOT_SINGLE_MASK,
             // Feature triple
@@ -779,7 +778,7 @@ mod tests {
         let record_buffer = [
             9,                   // length
             0,                   // label
-            (1.0_f32).to_bits(), // Example weight
+            1.0_f32.to_bits(), // Example weight
             nd(5, 7) | IS_NOT_SINGLE_MASK,
             nd(7, 9) | IS_NOT_SINGLE_MASK,
             // Feature triple
@@ -824,7 +823,7 @@ mod tests {
         let record_buffer = [
             6,                   // length
             0,                   // label
-            (1.0_f32).to_bits(), // Example weight
+            1.0_f32.to_bits(), // Example weight
             nd(4, 6) | IS_NOT_SINGLE_MASK,
             // Feature triple
             1775699190 & MASK31, // Hash location
@@ -856,7 +855,7 @@ mod tests {
         let record_buffer = [
             7,                   // length
             0,                   // label
-            (1.0_f32).to_bits(), // Example weight
+            1.0_f32.to_bits(), // Example weight
             nd(4, 6) | IS_NOT_SINGLE_MASK,
             // Feature triple
             1775699190 & MASK31, // Hash location
@@ -907,7 +906,7 @@ mod tests {
         let record_buffer = [
             9,                   // length
             0,                   // label
-            (1.0_f32).to_bits(), // Example weight
+            1.0_f32.to_bits(), // Example weight
             nd(5, 7) | IS_NOT_SINGLE_MASK,
             nd(7, 9) | IS_NOT_SINGLE_MASK,
             // Feature triple

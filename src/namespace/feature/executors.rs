@@ -1,18 +1,18 @@
-use crate::namespace::{feature, vwmap};
 use std::error::Error;
 use std::io::Error as IOError;
 use std::io::ErrorKind;
 
 use std::cell::RefCell;
 
-use crate::namespace;
 use dyn_clone::{clone_trait_object, DynClone};
 use fasthash::murmur3;
 
+use crate::namespace;
 use crate::namespace::feature::transformers::{
     TransformerBinner, TransformerCombine, TransformerLogRatioBinner, TransformerWeight,
 };
-use crate::namespace::feature::{parser, transformers};
+use crate::namespace::feature::parser;
+use crate::namespace::vwmap;
 
 pub fn default_seeds(to_namespace_index: u32) -> [u32; 5] {
     let to_namespace_index = to_namespace_index ^ 1u32 << 31; // compatibility with earlier version
@@ -52,7 +52,7 @@ impl ExecutorToNamespace {
     pub fn emit_i32<const SEED_ID: usize>(&mut self, to_data: i32, hash_value: f32) {
         let hash_index = murmur3::hash32_with_seed(to_data.to_le_bytes(), *unsafe {
             self.namespace_seeds.get_unchecked(SEED_ID)
-        }) & feature::parser::MASK31;
+        }) & namespace::parser::MASK31;
         self.tmp_data.push((hash_index, hash_value));
     }
 

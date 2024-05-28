@@ -3,7 +3,6 @@ use crate::namespace::vwmap::{
     NamespaceDescriptor, NamespaceFormat, NamespaceType, VwNamespaceMap,
 };
 use nom::bytes::complete::take_while;
-use nom::character;
 use nom::character::complete;
 use nom::number;
 use nom::sequence::tuple;
@@ -39,13 +38,13 @@ struct NSStage1Parse {
     #[allow(dead_code)]
     name: String,
     definition: String,
-    from_namespaces: Vec<std::string::String>,
+    from_namespaces: Vec<String>,
     processing: Cell<bool>,
     done: Cell<bool>,
 }
 
 pub struct NamespaceTransformsParser {
-    denormalized: HashMap<std::string::String, NSStage1Parse>, // to_namespace_str -> list of from_namespace_str
+    denormalized: HashMap<String, NSStage1Parse>, // to_namespace_str -> list of from_namespace_str
 }
 
 impl NamespaceTransformsParser {
@@ -301,10 +300,10 @@ pub fn name_char(c: char) -> bool {
 // identifier = namespace or function name
 pub fn parse_identifier(input: &str) -> IResult<&str, String> {
     let (input, (_, first_char, rest, _)) = tuple((
-        character::complete::space0,
+        complete::space0,
         complete::one_of("abcdefghijklmnopqrstuvwzxyABCDEFGHIJKLMNOPQRSTUVWZXY_"),
         take_while(name_char),
-        character::complete::space0,
+        complete::space0,
     ))(input)?;
     let mut s = first_char.to_string();
     s.push_str(rest);
@@ -326,9 +325,9 @@ pub fn parse_function_params_namespaces(input: &str) -> IResult<&str, Vec<String
 
 pub fn parse_float(input: &str) -> IResult<&str, f32> {
     let (input, (_, f, _)) = tuple((
-        character::complete::space0,
+        complete::space0,
         number::complete::float,
-        character::complete::space0,
+        complete::space0,
     ))(input)?;
     Ok((input, f))
 }
