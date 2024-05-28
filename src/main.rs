@@ -23,20 +23,20 @@ extern crate intel_mkl_src;
 extern crate nom;
 extern crate core;
 
-use fw::namespace::cache::RecordCache;
-use fw::namespace::feature_buffer::FeatureBufferTranslator;
-use fw::engine::hogwild::HogwildTrainer;
-use fw::model_instance::{ModelInstance, Optimizer};
-use fw::engine::multithread_helpers::BoxedRegressorTrait;
-use fw::namespace::parser::VowpalParser;
 use fw::engine::buffer_handler::create_buffered_input;
-use fw::persistence::{
-    new_regressor_from_filename, save_regressor_to_filename, save_sharable_regressor_to_filename,
-};
+use fw::engine::hogwild::HogwildTrainer;
+use fw::engine::multithread_helpers::BoxedRegressorTrait;
 use fw::engine::regressor;
 use fw::engine::regressor::{get_regressor_with_weights, Regressor};
 use fw::engine::serving::Serving;
+use fw::model_instance::{ModelInstance, Optimizer};
+use fw::namespace::cache::RecordCache;
+use fw::namespace::feature_buffer::FeatureBufferTranslator;
+use fw::namespace::parser::VowpalParser;
 use fw::namespace::vwmap::VwNamespaceMap;
+use fw::persistence::{
+    new_regressor_from_filename, save_regressor_to_filename, save_sharable_regressor_to_filename,
+};
 use fw::{cmdline, logging};
 
 fn main() {
@@ -138,8 +138,7 @@ fn main_fw_loop() -> Result<(), Box<dyn Error>> {
         let filename = cl
             .value_of("initial_regressor")
             .expect("Convert mode requires --initial regressor");
-        let (mut mi2, vw2, re_fixed) =
-            new_regressor_from_filename(filename, true, Some(&cl))?;
+        let (mut mi2, vw2, re_fixed) = new_regressor_from_filename(filename, true, Some(&cl))?;
         mi2.optimizer = Optimizer::SGD;
         if cl.is_present("weight_quantization") {
             mi2.dequantize_weights = Some(true);

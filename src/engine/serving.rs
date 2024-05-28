@@ -9,14 +9,14 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 
-use crate::namespace::feature_buffer;
-use crate::model_instance;
 use crate::engine::multithread_helpers::BoxedRegressorTrait;
-use crate::namespace::parser;
-use crate::persistence;
 use crate::engine::port_buffer;
 use crate::engine::regressor;
+use crate::model_instance;
+use crate::namespace::feature_buffer;
+use crate::namespace::parser;
 use crate::namespace::vwmap;
+use crate::persistence;
 
 pub struct Serving {
     listening_interface: String,
@@ -257,8 +257,8 @@ impl Serving {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::namespace::feature_buffer;
     use crate::engine::regressor;
+    use crate::namespace::feature_buffer;
     use mockstream::{FailingMockStream, SharedMockStream};
     use std::io::ErrorKind;
     use std::str;

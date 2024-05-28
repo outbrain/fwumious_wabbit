@@ -2,12 +2,12 @@ use std::any::Any;
 use std::error::Error;
 
 use crate::engine::block::iterators;
-use crate::namespace::feature_buffer::FeatureBuffer;
 use crate::engine::graph::{BlockGraph, BlockPtrOutput, InputSlot, OutputSlot};
-use crate::model_instance;
 use crate::engine::port_buffer::PortBuffer;
 use crate::engine::regressor::BlockCache;
 use crate::engine::regressor::BlockTrait;
+use crate::model_instance;
+use crate::namespace::feature_buffer::FeatureBuffer;
 
 pub struct BlockRELU {
     pub num_inputs: usize,
@@ -136,8 +136,8 @@ mod tests {
     use crate::assert_epsilon;
     use crate::engine::block::misc;
     use crate::engine::block::test;
-    use test::slearn2;
     use misc::Observe;
+    use test::slearn2;
 
     fn fb_vec() -> FeatureBuffer {
         FeatureBuffer {
@@ -156,8 +156,7 @@ mod tests {
         let input_block = misc::new_const_block(&mut bg, vec![2.0]).unwrap();
         let relu_block = new_relu_block(&mut bg, &mi, input_block).unwrap();
         let _observe_block =
-            misc::new_observe_block(&mut bg, relu_block, Observe::Forward, Some(1.0))
-                .unwrap();
+            misc::new_observe_block(&mut bg, relu_block, Observe::Forward, Some(1.0)).unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 

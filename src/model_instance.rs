@@ -174,11 +174,8 @@ impl ModelInstance {
         let namespaces_str = vsplit[0];
         let mut namespace_descriptors: Vec<NamespaceDescriptor> = Vec::new();
         for char in namespaces_str.chars() {
-            let namespace_descriptor = parser::get_namespace_descriptor(
-                &self.transform_namespaces,
-                vw,
-                char,
-            )?;
+            let namespace_descriptor =
+                parser::get_namespace_descriptor(&self.transform_namespaces, vw, char)?;
             namespace_descriptors.push(namespace_descriptor);
         }
         Ok(FeatureComboDesc {
@@ -390,11 +387,8 @@ impl ModelInstance {
             for namespaces_str in in_v {
                 let mut field: Vec<NamespaceDescriptor> = Vec::new();
                 for char in namespaces_str.chars() {
-                    let namespace_descriptor = parser::get_namespace_descriptor(
-                        &mi.transform_namespaces,
-                        vw,
-                        char,
-                    )?;
+                    let namespace_descriptor =
+                        parser::get_namespace_descriptor(&mi.transform_namespaces, vw, char)?;
                     field.push(namespace_descriptor);
                 }
                 mi.ffm_fields.push(field);
@@ -555,7 +549,9 @@ impl ModelInstance {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::namespace::vwmap::{NamespaceDescriptor, NamespaceFormat, NamespaceType, VwNamespaceMap};
+    use crate::namespace::vwmap::{
+        NamespaceDescriptor, NamespaceFormat, NamespaceType, VwNamespaceMap,
+    };
 
     fn ns_desc(i: u16) -> NamespaceDescriptor {
         NamespaceDescriptor {

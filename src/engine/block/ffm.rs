@@ -12,18 +12,18 @@ use merand48::*;
 
 use optimizer::OptimizerTrait;
 
-use crate::engine::block::{file, iterators};
 use crate::engine::block::iterators::OptimizerData;
-use crate::namespace::feature_buffer;
-use crate::namespace::feature_buffer::{FeatureBuffer, HashAndValueAndSeq};
+use crate::engine::block::{file, iterators};
 use crate::engine::graph;
-use crate::model_instance;
 use crate::engine::optimizer;
 use crate::engine::port_buffer;
 use crate::engine::port_buffer::PortBuffer;
 use crate::engine::quantization;
 use crate::engine::regressor;
 use crate::engine::regressor::{BlockCache, BlockTrait, FFM_CONTRA_BUF_LEN};
+use crate::model_instance;
+use crate::namespace::feature_buffer;
+use crate::namespace::feature_buffer::{FeatureBuffer, HashAndValueAndSeq};
 
 const FFM_STACK_BUF_LEN: usize = 170393;
 const STEP: usize = 4;
@@ -294,7 +294,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 fb.ffm_buffer.len() * (self.ffm_k * self.ffm_num_fields) as usize;
             if local_data_ffm_len < FFM_STACK_BUF_LEN {
                 // Fast-path - using on-stack data structures
-                let local_data_ffm_values: [f32; FFM_STACK_BUF_LEN ] =
+                let local_data_ffm_values: [f32; FFM_STACK_BUF_LEN] =
                     MaybeUninit::uninit().assume_init();
                 core_macro!(local_data_ffm_values);
             } else {
@@ -1203,11 +1203,11 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
 #[cfg(test)]
 mod tests {
     use crate::assert_epsilon;
-    use crate::engine::block::test::{slearn2, spredict2, spredict2_with_cache, ssetup_cache2};
     use crate::engine::block::loss_functions;
-    use crate::namespace::feature_buffer::HashAndValueAndSeq;
+    use crate::engine::block::test::{slearn2, spredict2, spredict2_with_cache, ssetup_cache2};
     use crate::engine::graph::BlockGraph;
     use crate::model_instance::Optimizer;
+    use crate::namespace::feature_buffer::HashAndValueAndSeq;
 
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;

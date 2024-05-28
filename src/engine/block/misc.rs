@@ -3,10 +3,10 @@ use std::error::Error;
 
 use crate::engine::block::iterators;
 use crate::engine::graph;
-use crate::namespace::feature_buffer::FeatureBuffer;
 use crate::engine::port_buffer::PortBuffer;
 use crate::engine::regressor::BlockCache;
 use crate::engine::regressor::BlockTrait;
+use crate::namespace::feature_buffer::FeatureBuffer;
 
 #[derive(PartialEq)]
 pub enum Observe {
@@ -941,12 +941,7 @@ mod tests {
         let triangle_block = new_triangle_block(&mut bg, observe_block_backward).unwrap();
         let observe_block_forward =
             new_observe_block(&mut bg, triangle_block, Observe::Forward, None).unwrap();
-        new_sink_block(
-            &mut bg,
-            observe_block_forward,
-            SinkType::Untouched,
-        )
-        .unwrap();
+        new_sink_block(&mut bg, observe_block_forward, SinkType::Untouched).unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -972,11 +967,9 @@ mod tests {
         let (copy_block_1, copy_block_2) =
             new_copy_block_2(&mut bg, observe_block_backward).unwrap();
         let _observe_block_1_forward =
-            new_observe_block(&mut bg, copy_block_1, Observe::Forward, Some(5.0))
-                .unwrap();
+            new_observe_block(&mut bg, copy_block_1, Observe::Forward, Some(5.0)).unwrap();
         let _observe_block_2_forward =
-            new_observe_block(&mut bg, copy_block_2, Observe::Forward, Some(6.0))
-                .unwrap();
+            new_observe_block(&mut bg, copy_block_2, Observe::Forward, Some(6.0)).unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -1015,14 +1008,11 @@ mod tests {
         let (copy_block_3, copy_block_4) = new_copy_block_2(&mut bg, copy_block_1).unwrap();
 
         let _observe_block_1_forward =
-            new_observe_block(&mut bg, copy_block_2, Observe::Forward, Some(5.0))
-                .unwrap();
+            new_observe_block(&mut bg, copy_block_2, Observe::Forward, Some(5.0)).unwrap();
         let _observe_block_2_forward =
-            new_observe_block(&mut bg, copy_block_3, Observe::Forward, Some(6.0))
-                .unwrap();
+            new_observe_block(&mut bg, copy_block_3, Observe::Forward, Some(6.0)).unwrap();
         let _observe_block_3_forward =
-            new_observe_block(&mut bg, copy_block_4, Observe::Forward, Some(7.0))
-                .unwrap();
+            new_observe_block(&mut bg, copy_block_4, Observe::Forward, Some(7.0)).unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -1057,8 +1047,7 @@ mod tests {
         let input_block_1 = new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
         let join_block = new_join_block(&mut bg, vec![input_block_1]).unwrap();
         let _observe_block =
-            new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0))
-                .unwrap();
+            new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0)).unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -1079,8 +1068,7 @@ mod tests {
         let input_block_2 = new_const_block(&mut bg, vec![4.0, 5.0, 6.0]).unwrap();
         let join_block = new_join_block(&mut bg, vec![input_block_1, input_block_2]).unwrap();
         let _observe_block =
-            new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0))
-                .unwrap();
+            new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0)).unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -1103,8 +1091,7 @@ mod tests {
         let join_block =
             new_join_block(&mut bg, vec![input_block_1, input_block_2, input_block_3]).unwrap();
         let _observe_block =
-            new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0))
-                .unwrap();
+            new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0)).unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -1128,8 +1115,7 @@ mod tests {
         let input_block_3 = new_const_block(&mut bg, vec![6.0, 7.0]).unwrap();
         let join_block_2 = new_join_block(&mut bg, vec![input_block_3, join_block_1]).unwrap();
         let _observe_block =
-            new_observe_block(&mut bg, join_block_2, Observe::Forward, Some(6.0))
-                .unwrap();
+            new_observe_block(&mut bg, join_block_2, Observe::Forward, Some(6.0)).unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 
@@ -1151,12 +1137,10 @@ mod tests {
         let input_block_1 = new_const_block(&mut bg, vec![2.0, 3.0]).unwrap();
         let observe_block_backward =
             new_observe_block(&mut bg, input_block_1, Observe::Backward, None).unwrap();
-        let (copy_1, copy_2) =
-            new_copy_block_2(&mut bg, observe_block_backward).unwrap();
+        let (copy_1, copy_2) = new_copy_block_2(&mut bg, observe_block_backward).unwrap();
         let join_block = new_join_block(&mut bg, vec![copy_1, copy_2]).unwrap();
         let _observe_block =
-            new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0))
-                .unwrap();
+            new_observe_block(&mut bg, join_block, Observe::Forward, Some(6.0)).unwrap();
         bg.finalize();
         bg.allocate_and_init_weights(&mi);
 

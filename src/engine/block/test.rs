@@ -1,5 +1,8 @@
 #[cfg(test)]
-use crate::{namespace::feature_buffer, engine:: {graph, port_buffer, regressor::BlockCache}};
+use crate::{
+    engine::{graph, port_buffer, regressor::BlockCache},
+    namespace::feature_buffer,
+};
 
 #[cfg(test)]
 #[macro_export]
@@ -44,7 +47,6 @@ pub fn ssetup_cache2(
         caches.as_mut_slice(),
     );
 }
-
 
 #[cfg(test)]
 pub fn spredict2_with_cache(

@@ -2,12 +2,12 @@ use std::any::Any;
 use std::error::Error;
 
 use crate::engine::block::iterators;
-use crate::namespace::feature_buffer::FeatureBuffer;
 use crate::engine::graph;
-use crate::model_instance;
 use crate::engine::port_buffer::PortBuffer;
 use crate::engine::regressor::BlockCache;
 use crate::engine::regressor::BlockTrait;
+use crate::model_instance;
+use crate::namespace::feature_buffer::FeatureBuffer;
 
 const EPS: f32 = 1e-2;
 

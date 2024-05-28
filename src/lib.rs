@@ -1,5 +1,5 @@
-pub mod engine;
 pub mod cmdline;
+pub mod engine;
 pub mod logging;
 pub mod model_instance;
 pub mod namespace;
@@ -8,17 +8,17 @@ extern crate blas;
 extern crate half;
 extern crate intel_mkl_src;
 
-use crate::namespace::feature_buffer::FeatureBufferTranslator;
 use crate::engine::multithread_helpers::BoxedRegressorTrait;
-use crate::namespace::parser::VowpalParser;
 use crate::engine::port_buffer::PortBuffer;
 use crate::engine::regressor::BlockCache;
+use crate::namespace::feature_buffer::FeatureBufferTranslator;
+use crate::namespace::parser::VowpalParser;
 use crate::namespace::vwmap::NamespaceType;
+use engine::persistence;
 use shellwords;
 use std::ffi::CStr;
 use std::io::Cursor;
 use std::os::raw::c_char;
-use engine::persistence;
 
 const EOF_ERROR_CODE: f32 = -1.0;
 const EXCEPTION_ERROR_CODE: f32 = -1.0;

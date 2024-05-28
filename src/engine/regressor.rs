@@ -5,6 +5,7 @@ use std::error::Error;
 use std::io;
 use std::io::Cursor;
 
+use crate::engine::block;
 use crate::engine::block::ffm;
 use crate::engine::block::iterators;
 use crate::engine::block::loss_functions;
@@ -14,12 +15,11 @@ use crate::engine::block::neural;
 use crate::engine::block::neural::InitType;
 use crate::engine::block::normalize;
 use crate::engine::block::relu;
-use crate::engine::block;
+use crate::engine::graph;
+use crate::engine::port_buffer;
+use crate::model_instance;
 use crate::namespace::feature_buffer;
 use crate::namespace::feature_buffer::HashAndValueAndSeq;
-use crate::engine::graph;
-use crate::model_instance;
-use crate::engine::port_buffer;
 
 pub const FFM_CONTRA_BUF_LEN: usize = 41472;
 
@@ -294,21 +294,18 @@ impl Regressor {
                 .unwrap();
 
                 if layernorm == NNLayerNorm::BeforeRelu {
-                    output =
-                        normalize::new_normalize_layer_block(&mut bg, mi, output).unwrap();
+                    output = normalize::new_normalize_layer_block(&mut bg, mi, output).unwrap();
                 }
                 if activation == NNActivation::Relu {
                     output = relu::new_relu_block(&mut bg, mi, output).unwrap();
                 }
                 if layernorm == NNLayerNorm::AfterRelu {
-                    output =
-                        normalize::new_normalize_layer_block(&mut bg, mi, output).unwrap();
+                    output = normalize::new_normalize_layer_block(&mut bg, mi, output).unwrap();
                 }
             }
             // If we have split
             if join_block.is_some() {
-                output =
-                    misc::new_join_block(&mut bg, vec![output, join_block.unwrap()]).unwrap();
+                output = misc::new_join_block(&mut bg, vec![output, join_block.unwrap()]).unwrap();
             }
             output = neural::new_neuron_block(
                 &mut bg,
@@ -539,8 +536,8 @@ impl Regressor {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::namespace::feature_buffer::HashAndValue;
     use crate::engine::optimizer;
+    use crate::namespace::feature_buffer::HashAndValue;
 
     /* LR TESTS */
     fn lr_vec(v: Vec<HashAndValue>) -> feature_buffer::FeatureBuffer {

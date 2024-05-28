@@ -7,8 +7,8 @@ use std::fs::File;
 use std::io;
 use std::io::Read;
 
-use crate::model_instance;
 use crate::engine::regressor;
+use crate::model_instance;
 use crate::namespace::vwmap;
 
 use crate::engine::multithread_helpers::BoxedRegressorTrait;
@@ -207,14 +207,14 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use crate::assert_epsilon;
-    use crate::namespace::feature_buffer;
-    use crate::namespace::feature_buffer::{HashAndValue, HashAndValueAndSeq};
-    use crate::model_instance::Optimizer;
+    use crate::engine::block::ffm;
     use crate::engine::optimizer;
     use crate::engine::optimizer::OptimizerTrait;
-    use crate::engine::block::ffm;
     use crate::engine::regressor::BlockTrait;
     use crate::engine::regressor::Regressor;
+    use crate::model_instance::Optimizer;
+    use crate::namespace::feature_buffer;
+    use crate::namespace::feature_buffer::{HashAndValue, HashAndValueAndSeq};
 
     use tempfile::tempdir;
 

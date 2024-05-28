@@ -86,8 +86,8 @@ impl ExecutorToNamespace {
         let hash_index = murmur3::hash32_with_seed(to_data1.to_le_bytes(), unsafe {
             *self.namespace_seeds.get_unchecked(SEED_ID)
         });
-        let hash_index =
-            murmur3::hash32_with_seed(to_data2.to_le_bytes(), hash_index) & transformers::parser::MASK31;
+        let hash_index = murmur3::hash32_with_seed(to_data2.to_le_bytes(), hash_index)
+            & transformers::parser::MASK31;
         self.tmp_data.push((hash_index, hash_value));
     }
 }

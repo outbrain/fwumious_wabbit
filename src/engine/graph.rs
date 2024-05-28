@@ -1,7 +1,7 @@
 use crate::engine::block::misc;
-use crate::{engine::block, model_instance};
 use crate::engine::port_buffer;
 use crate::engine::regressor::BlockTrait;
+use crate::{engine::block, model_instance};
 use std::error::Error;
 use std::mem;
 
@@ -429,8 +429,7 @@ mod tests {
 
         // Using the join block, we merge two outputs into one single output (copy-less implementation)
         let union_output =
-            misc::new_join_block(&mut bg, vec![const_block_output1, const_block_output2])
-                .unwrap();
+            misc::new_join_block(&mut bg, vec![const_block_output1, const_block_output2]).unwrap();
         assert_eq!(union_output, BlockPtrOutput(BlockPtr(2), OutputSlot(0)));
         assert_eq!(bg.nodes[0].edges_in, vec![]);
         assert_eq!(
@@ -501,32 +500,24 @@ mod tests {
         let const_2 = misc::new_const_block(&mut bg, vec![3.0]).unwrap(); // 1
         let const_3 = misc::new_const_block(&mut bg, vec![4.0]).unwrap(); // 2
         let const_4 = misc::new_const_block(&mut bg, vec![4.0]).unwrap(); // 3
-        let (copy_output_1, copy_output_2) =
-            misc::new_copy_block_2(&mut bg, const_1).unwrap(); // 4
-        let (_copy_output_3, _copy_output_4) =
-            misc::new_copy_block_2(&mut bg, const_2).unwrap(); // 5
+        let (copy_output_1, copy_output_2) = misc::new_copy_block_2(&mut bg, const_1).unwrap(); // 4
+        let (_copy_output_3, _copy_output_4) = misc::new_copy_block_2(&mut bg, const_2).unwrap(); // 5
 
         // this is not zero copy
         let _join_1 = misc::new_join_block(&mut bg, vec![copy_output_1, const_3]).unwrap(); // 6
-                                                                                                  // this is zero copy
+                                                                                            // this is zero copy
         let _join_2 = misc::new_join_block(&mut bg, vec![const_4, copy_output_2]); // 7
         bg.finalize();
         let mut list = bg.take_blocks();
 
         {
             // first one goes to copy again, so it cannot use input as an output
-            let copy_block_1 = list[4]
-                .as_any()
-                .downcast_mut::<misc::BlockCopy>()
-                .unwrap();
+            let copy_block_1 = list[4].as_any().downcast_mut::<misc::BlockCopy>().unwrap();
             assert_ne!(copy_block_1.input_offset, copy_block_1.output_offsets[0]);
         }
         {
             // But second one can re-use the input as output
-            let copy_block_2 = list[5]
-                .as_any()
-                .downcast_mut::<misc::BlockCopy>()
-                .unwrap();
+            let copy_block_2 = list[5].as_any().downcast_mut::<misc::BlockCopy>().unwrap();
             assert_eq!(copy_block_2.input_offset, copy_block_2.output_offsets[0]);
         }
     }

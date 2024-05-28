@@ -1,5 +1,5 @@
-use crate::namespace::feature::executors;
 use crate::model_instance;
+use crate::namespace::feature::executors;
 use crate::namespace::parser;
 use crate::namespace::vwmap::{NamespaceFormat, NamespaceType};
 
@@ -164,10 +164,9 @@ impl FeatureBufferTranslator {
             feature_buffer: fb,
             lr_hash_mask,
             ffm_hash_mask,
-            transform_executors:
-                executors::TransformExecutors::from_namespace_transforms(
-                    &mi.transform_namespaces,
-                ),
+            transform_executors: executors::TransformExecutors::from_namespace_transforms(
+                &mi.transform_namespaces,
+            ),
         }
     }
 
@@ -517,11 +516,7 @@ mod tests {
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]); // since the other feature is missing - VW compatibility says no feature is here
 
-        let rb = add_header(vec![
-            2988156968 & MASK31,
-            2422381320 & MASK31,
-            NO_FEATURES,
-        ]);
+        let rb = add_header(vec![2988156968 & MASK31, 2422381320 & MASK31, NO_FEATURES]);
         fbt.translate(&rb, 0);
 
         assert_eq!(

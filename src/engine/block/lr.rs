@@ -1,9 +1,9 @@
 use std::any::Any;
 
 use crate::engine::graph;
-use crate::model_instance;
 use crate::engine::optimizer;
 use crate::engine::regressor;
+use crate::model_instance;
 use crate::namespace::{feature_buffer, parser};
 
 use std::error::Error;
@@ -12,9 +12,9 @@ use std::io;
 use crate::engine::block::{file, iterators};
 use crate::engine::port_buffer;
 use crate::engine::regressor::BlockCache;
+use crate::engine::regressor::BlockTrait;
 use iterators::WeightAndOptimizerData;
 use optimizer::OptimizerTrait;
-use crate::engine::regressor::BlockTrait;
 
 pub struct BlockLR<L: OptimizerTrait> {
     pub weights: Vec<WeightAndOptimizerData<L>>,
