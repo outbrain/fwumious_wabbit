@@ -7,9 +7,9 @@ use crate::feature_buffer::FeatureBuffer;
 use crate::graph;
 use crate::port_buffer;
 use crate::port_buffer::PortBuffer;
-use crate::regressor;
-use crate::regressor::BlockCache;
-use regressor::BlockTrait;
+use crate::engine::regressor;
+use crate::engine::regressor::BlockCache;
+use crate::engine::regressor::BlockTrait;
 
 #[inline(always)]
 pub fn logistic(t: f32) -> f32 {

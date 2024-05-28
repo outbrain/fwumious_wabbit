@@ -14,8 +14,8 @@ use crate::model_instance;
 use crate::multithread_helpers::BoxedRegressorTrait;
 use crate::parser;
 use crate::persistence;
-use crate::port_buffer;
-use crate::regressor;
+use crate::engine::port_buffer;
+use crate::engine::regressor;
 use crate::vwmap;
 
 pub struct Serving {
@@ -258,7 +258,7 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use crate::feature_buffer;
-    use crate::regressor;
+    use crate::engine::regressor;
     use mockstream::{FailingMockStream, SharedMockStream};
     use std::io::ErrorKind;
     use std::str;

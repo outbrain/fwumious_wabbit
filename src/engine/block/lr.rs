@@ -2,19 +2,19 @@ use std::any::Any;
 
 use crate::graph;
 use crate::model_instance;
-use crate::optimizer;
-use crate::regressor;
+use crate::engine::optimizer;
+use crate::engine::regressor;
 use crate::{feature_buffer, parser};
 
 use std::error::Error;
 use std::io;
 
-use crate::block::iterators;
-use crate::port_buffer;
-use crate::regressor::BlockCache;
+use crate::engine::block::{file, iterators};
+use crate::engine::port_buffer;
+use crate::engine::regressor::BlockCache;
 use iterators::WeightAndOptimizerData;
 use optimizer::OptimizerTrait;
-use regressor::BlockTrait;
+use crate::engine::regressor::BlockTrait;
 
 pub struct BlockLR<L: OptimizerTrait> {
     pub weights: Vec<WeightAndOptimizerData<L>>,
@@ -263,7 +263,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         input_bufreader: &mut dyn io::Read,
         _use_quantization: bool,
     ) -> Result<(), Box<dyn Error>> {
-        iterators::read_weights_from_buf(&mut self.weights, input_bufreader, false)
+        file::read_weights_from_buf(&mut self.weights, input_bufreader, false)
     }
 
     fn write_weights_to_buf(
@@ -271,7 +271,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
         output_bufwriter: &mut dyn io::Write,
         _use_quantization: bool,
     ) -> Result<(), Box<dyn Error>> {
-        iterators::write_weights_to_buf(&self.weights, output_bufwriter, false)
+        file::write_weights_to_buf(&self.weights, output_bufwriter, false)
     }
 
     fn read_weights_from_buf_into_forward_only(
@@ -284,7 +284,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockLR<L> {
             .as_any()
             .downcast_mut::<BlockLR<optimizer::OptimizerSGD>>()
             .unwrap();
-        iterators::read_weights_only_from_buf2::<L>(
+        file::read_weights_only_from_buf2::<L>(
             self.weights_len as usize,
             &mut forward.weights,
             input_bufreader,

@@ -2,8 +2,8 @@ use std::error::Error;
 use std::{io, mem, slice};
 use std::cmp::min;
 use std::io::{Read, Write};
-use crate::block::iterators::WeightAndOptimizerData;
-use crate::optimizer::{OptimizerSGD, OptimizerTrait};
+use crate::engine::block::iterators::WeightAndOptimizerData;
+use crate::engine::optimizer::{OptimizerSGD, OptimizerTrait};
 
 
 pub fn read_weights_from_buf<L>(

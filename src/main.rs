@@ -33,10 +33,11 @@ use fw::buffer_handler::create_buffered_input;
 use fw::persistence::{
     new_regressor_from_filename, save_regressor_to_filename, save_sharable_regressor_to_filename,
 };
-use fw::regressor::{get_regressor_with_weights, Regressor};
+use fw::engine::regressor;
+use fw::engine::regressor::{get_regressor_with_weights, Regressor};
 use fw::serving::Serving;
 use fw::vwmap::VwNamespaceMap;
-use fw::{cmdline, feature_buffer, logging, regressor};
+use fw::{cmdline, feature_buffer, logging};
 
 fn main() {
     logging::initialize_logging();

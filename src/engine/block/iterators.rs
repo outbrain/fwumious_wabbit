@@ -1,8 +1,8 @@
-use crate::optimizer::OptimizerTrait;
+use crate::engine::optimizer::OptimizerTrait;
 
 use crate::feature_buffer;
 use crate::port_buffer;
-use crate::regressor::{BlockCache, BlockTrait};
+use crate::engine::regressor::{BlockCache, BlockTrait};
 
 
 #[derive(Clone, Debug)]

@@ -4,7 +4,7 @@ use crate::parser;
 use crate::vwmap::{NamespaceFormat, NamespaceType};
 
 const VOWPAL_FNV_PRIME: u32 = 16777619; // vowpal magic number
-                                        //const CONSTANT_NAMESPACE:usize = 128;
+
 const CONSTANT_HASH: u32 = 11650396;
 
 #[derive(Clone, Debug, PartialEq)]

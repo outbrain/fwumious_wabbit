@@ -6,7 +6,7 @@ use std::thread::JoinHandle;
 use crate::feature_buffer::FeatureBufferTranslator;
 use crate::model_instance::ModelInstance;
 use crate::multithread_helpers::BoxedRegressorTrait;
-use crate::port_buffer::PortBuffer;
+use crate::engine::port_buffer::PortBuffer;
 
 static CHANNEL_CAPACITY: usize = 100_000;
 
@@ -106,7 +106,7 @@ impl HogwildWorker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::regressor::Regressor;
+    use crate::engine::regressor::Regressor;
 
     #[test]
     fn hogwild_trainer_new_creates_workers() {

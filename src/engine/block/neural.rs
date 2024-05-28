@@ -7,21 +7,21 @@ use std::io;
 use std::io::Error as IOError;
 use std::io::ErrorKind;
 
-use crate::block::{file, iterators};
-use crate::block::misc;
+use crate::engine::block::{file, iterators};
+use crate::engine::block::misc;
 use crate::feature_buffer;
 use crate::graph;
 use crate::model_instance;
-use crate::optimizer;
-use crate::port_buffer;
-use crate::regressor;
+use crate::engine::optimizer;
+use crate::engine::port_buffer;
+use crate::engine::regressor;
+use crate::engine::regressor::BlockCache;
 use iterators::OptimizerData;
 use optimizer::OptimizerTrait;
-use regressor::BlockTrait;
+use crate::engine::regressor::BlockTrait;
 
 use crate::feature_buffer::FeatureBuffer;
-use crate::port_buffer::PortBuffer;
-use crate::regressor::BlockCache;
+use crate::engine::port_buffer::PortBuffer;
 use blas::*;
 
 const MAX_NUM_INPUTS: usize = 16000;
@@ -486,12 +486,12 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use crate::assert_epsilon;
-    use crate::block::misc;
-    use crate::block::misc::Observe;
+    use crate::engine:: block::misc;
+    use crate::engine::block::misc::Observe;
     use crate::feature_buffer;
-    use crate::graph::BlockGraph;
+    use crate::engine::graph::BlockGraph;
     use crate::model_instance::Optimizer;
-    use crate::block::test::slearn2;
+    use crate::engine::block::test::slearn2;
 
     fn fb_vec() -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {

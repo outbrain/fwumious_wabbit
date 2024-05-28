@@ -8,11 +8,11 @@ use std::io;
 use std::io::Read;
 
 use crate::model_instance;
-use crate::regressor;
+use crate::engine::regressor;
 use crate::vwmap;
 
 use crate::multithread_helpers::BoxedRegressorTrait;
-use crate::regressor::Regressor;
+use crate::engine::regressor::Regressor;
 
 const REGRESSOR_HEADER_MAGIC_STRING: &[u8; 4] = b"FWRE"; // Fwumious Wabbit REgressor
 const REGRESSOR_HEADER_VERSION: u32 = 6; // Change to 5: introduce namespace descriptors which changes regressor
@@ -207,14 +207,14 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use crate::assert_epsilon;
-    use crate::block::ffm;
     use crate::feature_buffer;
     use crate::feature_buffer::{HashAndValue, HashAndValueAndSeq};
     use crate::model_instance::Optimizer;
-    use crate::optimizer;
-    use crate::optimizer::OptimizerTrait;
-    use regressor::BlockTrait;
-    use regressor::Regressor;
+    use crate::engine::optimizer;
+    use crate::engine::optimizer::OptimizerTrait;
+    use crate::engine::block::ffm;
+    use crate::engine::regressor::BlockTrait;
+    use crate::engine::regressor::Regressor;
 
     use tempfile::tempdir;
 

@@ -1,16 +1,16 @@
 use std::any::Any;
 use std::error::Error;
 
-use crate::block::iterators;
+use crate::engine::block::iterators;
 use crate::feature_buffer;
 use crate::graph;
-use crate::port_buffer;
-use crate::regressor;
+use crate::engine::port_buffer;
+use crate::engine::regressor;
 
 use crate::feature_buffer::FeatureBuffer;
-use crate::port_buffer::PortBuffer;
-use crate::regressor::BlockCache;
-use regressor::BlockTrait;
+use crate::engine::port_buffer::PortBuffer;
+use crate::engine::regressor::BlockCache;
+use crate::engine::regressor::BlockTrait;
 
 #[derive(PartialEq)]
 pub enum Observe {
@@ -885,14 +885,12 @@ impl BlockTriangle {
 
 #[cfg(test)]
 mod tests {
-    use crate::block::misc;
-    use crate::block::test::{slearn2, spredict2};
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::block::misc;
-    use crate::block::misc::Observe;
+    use crate::engine::block::misc;
+    use crate::engine::block::test::{slearn2, spredict2};
     use crate::feature_buffer;
-    use crate::graph::BlockGraph;
+    use crate::engine::graph::BlockGraph;
     use crate::model_instance;
 
     fn fb_vec() -> feature_buffer::FeatureBuffer {

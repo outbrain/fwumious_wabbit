@@ -5,20 +5,20 @@ use std::error::Error;
 use std::io;
 use std::io::Cursor;
 
-use crate::block::ffm;
-use crate::block::iterators;
-use crate::block::loss_functions;
-use crate::block::lr;
-use crate::block::misc;
-use crate::block::neural;
-use crate::block::neural::InitType;
-use crate::block::normalize;
-use crate::block::relu;
-use crate::{block, feature_buffer};
+use crate::engine::block::ffm;
+use crate::engine::block::iterators;
+use crate::engine::block::loss_functions;
+use crate::engine::block::lr;
+use crate::engine::block::misc;
+use crate::engine::block::neural;
+use crate::engine::block::neural::InitType;
+use crate::engine::block::normalize;
+use crate::engine::block::relu;
+use crate::{engine::block, feature_buffer};
 use crate::feature_buffer::HashAndValueAndSeq;
 use crate::graph;
 use crate::model_instance;
-use crate::port_buffer;
+use crate::engine::port_buffer;
 
 pub const FFM_CONTRA_BUF_LEN: usize = 41472;
 
@@ -539,7 +539,7 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use crate::feature_buffer::HashAndValue;
-    use crate::optimizer;
+    use crate::engine::optimizer;
 
     /* LR TESTS */
     fn lr_vec(v: Vec<feature_buffer::HashAndValue>) -> feature_buffer::FeatureBuffer {

@@ -11,20 +11,19 @@ use std::{io, ptr};
 use merand48::*;
 
 use optimizer::OptimizerTrait;
-use regressor::BlockTrait;
 
-use crate::block::iterators;
-use crate::block::iterators::OptimizerData;
+use crate::engine::block::iterators;
+use crate::engine::block::iterators::OptimizerData;
 use crate::feature_buffer;
 use crate::feature_buffer::{FeatureBuffer, HashAndValueAndSeq};
 use crate::graph;
 use crate::model_instance;
-use crate::optimizer;
-use crate::port_buffer;
-use crate::port_buffer::PortBuffer;
+use crate::engine::optimizer;
+use crate::engine::port_buffer;
+use crate::engine::port_buffer::PortBuffer;
 use crate::quantization;
-use crate::regressor;
-use crate::regressor::{BlockCache, FFM_CONTRA_BUF_LEN};
+use crate::engine::regressor;
+use crate::engine::regressor::{BlockCache, BlockTrait, FFM_CONTRA_BUF_LEN};
 
 const FFM_STACK_BUF_LEN: usize = 170393;
 const STEP: usize = 4;
@@ -1203,14 +1202,12 @@ impl<L: OptimizerTrait + 'static> BlockFFM<L> {
 
 #[cfg(test)]
 mod tests {
-    use iterators::{slearn2, spredict2, spredict2_with_cache};
-
     use crate::assert_epsilon;
-    use crate::iterators::ssetup_cache2;
-    use crate::loss_functions;
+    use crate::engine::block::test::{slearn2, spredict2, spredict2_with_cache, ssetup_cache2};
+    use crate::engine::block::loss_functions;
     use crate::feature_buffer;
     use crate::feature_buffer::HashAndValueAndSeq;
-    use crate::graph::BlockGraph;
+    use crate::engine::graph::BlockGraph;
     use crate::model_instance::Optimizer;
 
     // Note this useful idiom: importing names from outer (for mod tests) scope.

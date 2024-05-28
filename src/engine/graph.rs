@@ -1,7 +1,7 @@
-use crate::block::misc;
-use crate::{block, model_instance};
-use crate::port_buffer;
-use crate::regressor::BlockTrait;
+use crate::engine::block::misc;
+use crate::{engine::block, model_instance};
+use crate::engine::port_buffer;
+use crate::engine::regressor::BlockTrait;
 use std::error::Error;
 use std::mem;
 
@@ -298,11 +298,11 @@ impl BlockGraph {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::block::ffm;
-    use crate::block::loss_functions;
-    use crate::block::lr;
-    use crate::block::misc;
-    use crate::block::misc::Observe;
+    use crate::engine::block::ffm;
+    use crate::engine::block::loss_functions;
+    use crate::engine::block::lr;
+    use crate::engine::block::misc;
+    use crate::engine::block::misc::Observe;
     use crate::model_instance;
     use crate::model_instance::Optimizer;
 

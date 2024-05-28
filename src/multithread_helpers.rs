@@ -1,4 +1,4 @@
-use crate::regressor::Regressor;
+use crate::engine::regressor::Regressor;
 use core::ops::{Deref, DerefMut};
 use std::marker::PhantomData;
 use std::mem;

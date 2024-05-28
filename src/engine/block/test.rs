@@ -1,8 +1,8 @@
 #[cfg(test)]
-use crate::{feature_buffer, graph, port_buffer};
+use crate::{feature_buffer, graph, engine::port_buffer};
 
 #[cfg(test)]
-use crate::regressor::BlockCache;
+use crate::engine::regressor::BlockCache;
 
 #[cfg(test)]
 #[macro_export]
