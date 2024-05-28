@@ -1,5 +1,5 @@
 #[cfg(test)]
-use crate::{feature_buffer, graph, engine::port_buffer};
+use crate::{feature_buffer, engine:: {graph, port_buffer}};
 
 #[cfg(test)]
 use crate::engine::regressor::BlockCache;

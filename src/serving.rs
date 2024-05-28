@@ -37,7 +37,7 @@ pub struct WorkerThread {
 pub trait IsEmpty {
     fn is_empty(&mut self) -> bool;
 }
-impl IsEmpty for io::BufReader<&net::TcpStream> {
+impl IsEmpty for BufReader<&net::TcpStream> {
     fn is_empty(&mut self) -> bool {
         return self.buffer().is_empty();
     }
@@ -264,12 +264,12 @@ mod tests {
     use std::str;
     use tempfile::tempdir;
 
-    impl IsEmpty for std::io::BufReader<mockstream::SharedMockStream> {
+    impl IsEmpty for BufReader<SharedMockStream> {
         fn is_empty(&mut self) -> bool {
             true
         }
     }
-    impl IsEmpty for std::io::BufReader<mockstream::FailingMockStream> {
+    impl IsEmpty for BufReader<FailingMockStream> {
         fn is_empty(&mut self) -> bool {
             true
         }

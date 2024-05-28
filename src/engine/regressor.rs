@@ -16,7 +16,7 @@ use crate::engine::block::normalize;
 use crate::engine::block::relu;
 use crate::{engine::block, feature_buffer};
 use crate::feature_buffer::HashAndValueAndSeq;
-use crate::graph;
+use crate::engine::graph;
 use crate::model_instance;
 use crate::engine::port_buffer;
 
@@ -180,32 +180,32 @@ impl Regressor {
 
         let mut bg = graph::BlockGraph::new();
         // A bit more elaborate than necessary. Let's really make it clear what's happening
-        let mut output = block::lr::new_lr_block(&mut bg, mi).unwrap();
+        let mut output = lr::new_lr_block(&mut bg, mi).unwrap();
 
         if mi.ffm_k > 0 {
             let block_ffm = ffm::new_ffm_block(&mut bg, mi).unwrap();
-            let triangle_ffm = block::misc::new_triangle_block(&mut bg, block_ffm).unwrap();
-            output = block::misc::new_join_block(&mut bg, vec![output, triangle_ffm]).unwrap();
+            let triangle_ffm = misc::new_triangle_block(&mut bg, block_ffm).unwrap();
+            output = misc::new_join_block(&mut bg, vec![output, triangle_ffm]).unwrap();
         }
 
         if !mi.nn_config.layers.is_empty() {
             let mut join_block: Option<graph::BlockPtrOutput> = None;
             if mi.nn_config.topology == "one" {
-                let (a1, a2) = block::misc::new_copy_block_2(&mut bg, output).unwrap();
+                let (a1, a2) = misc::new_copy_block_2(&mut bg, output).unwrap();
                 output = a1;
                 join_block = Some(a2);
             } else if mi.nn_config.topology == "two" {
                 // do not copy out the
             } else if mi.nn_config.topology == "four" {
-                let (a1, a2) = block::misc::new_copy_block_2(&mut bg, output).unwrap();
+                let (a1, a2) = misc::new_copy_block_2(&mut bg, output).unwrap();
                 output = a1;
                 join_block = Some(a2);
-                output = block::normalize::new_normalize_layer_block(&mut bg, mi, output).unwrap();
+                output = normalize::new_normalize_layer_block(&mut bg, mi, output).unwrap();
             } else if mi.nn_config.topology == "five" {
-                let (a1, a2) = block::misc::new_copy_block_2(&mut bg, output).unwrap();
+                let (a1, a2) = misc::new_copy_block_2(&mut bg, output).unwrap();
                 output = a1;
                 join_block = Some(a2);
-                output = block::normalize::new_stop_block(&mut bg, mi, output).unwrap();
+                output = normalize::new_stop_block(&mut bg, mi, output).unwrap();
             } else {
                 Err(format!(
                     "unknown nn topology: \"{}\"",
@@ -278,8 +278,8 @@ impl Regressor {
                     ))
                     .unwrap(),
                 };
-                let neuron_type = block::neural::NeuronType::WeightedSum;
-                output = block::neural::new_neuronlayer_block(
+                let neuron_type = neural::NeuronType::WeightedSum;
+                output = neural::new_neuronlayer_block(
                     &mut bg,
                     mi,
                     output,
@@ -294,27 +294,27 @@ impl Regressor {
 
                 if layernorm == NNLayerNorm::BeforeRelu {
                     output =
-                        block::normalize::new_normalize_layer_block(&mut bg, mi, output).unwrap();
+                        normalize::new_normalize_layer_block(&mut bg, mi, output).unwrap();
                 }
                 if activation == NNActivation::Relu {
-                    output = block::relu::new_relu_block(&mut bg, mi, output).unwrap();
+                    output = relu::new_relu_block(&mut bg, mi, output).unwrap();
                 }
                 if layernorm == NNLayerNorm::AfterRelu {
                     output =
-                        block::normalize::new_normalize_layer_block(&mut bg, mi, output).unwrap();
+                        normalize::new_normalize_layer_block(&mut bg, mi, output).unwrap();
                 }
             }
             // If we have split
             if join_block.is_some() {
                 output =
-                    block::misc::new_join_block(&mut bg, vec![output, join_block.unwrap()]).unwrap();
+                    misc::new_join_block(&mut bg, vec![output, join_block.unwrap()]).unwrap();
             }
-            output = block::neural::new_neuron_block(
+            output = neural::new_neuron_block(
                 &mut bg,
                 mi,
                 output,
-                block::neural::NeuronType::WeightedSum,
-                block::neural::InitType::One,
+                neural::NeuronType::WeightedSum,
+                InitType::One,
             )
             .unwrap();
         }
@@ -542,7 +542,7 @@ mod tests {
     use crate::engine::optimizer;
 
     /* LR TESTS */
-    fn lr_vec(v: Vec<feature_buffer::HashAndValue>) -> feature_buffer::FeatureBuffer {
+    fn lr_vec(v: Vec<HashAndValue>) -> feature_buffer::FeatureBuffer {
         feature_buffer::FeatureBuffer {
             label: 0.0,
             example_importance: 1.0,

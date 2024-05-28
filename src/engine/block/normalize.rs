@@ -2,13 +2,10 @@ use std::any::Any;
 use std::error::Error;
 
 use crate::engine::block::iterators;
-use crate::feature_buffer;
 use crate::feature_buffer::FeatureBuffer;
-use crate::graph;
+use crate::engine::graph;
 use crate::model_instance;
-use crate::engine::port_buffer;
 use crate::engine::port_buffer::PortBuffer;
-use crate::engine::regressor;
 use crate::engine::regressor::BlockCache;
 use crate::engine::regressor::BlockTrait;
 
@@ -65,8 +62,8 @@ impl BlockTrait for BlockNormalize {
     fn forward_backward(
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer,
-        pb: &mut port_buffer::PortBuffer,
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
         update: bool,
     ) {
         debug_assert!(self.output_offset != usize::MAX);
@@ -109,8 +106,8 @@ impl BlockTrait for BlockNormalize {
     fn forward(
         &self,
         further_blocks: &[Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer,
-        pb: &mut port_buffer::PortBuffer,
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
     ) {
         self.internal_forward(pb);
         iterators::forward(further_blocks, fb, pb);
@@ -130,7 +127,7 @@ impl BlockTrait for BlockNormalize {
 
 impl BlockNormalize {
     #[inline(always)]
-    fn internal_forward(&self, pb: &mut port_buffer::PortBuffer) -> f32 {
+    fn internal_forward(&self, pb: &mut PortBuffer) -> f32 {
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.input_offset != usize::MAX);
         debug_assert!(self.num_inputs > 0);
@@ -216,8 +213,8 @@ impl BlockTrait for BlockStopBackward {
     fn forward_backward(
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer,
-        pb: &mut port_buffer::PortBuffer,
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
         update: bool,
     ) {
         self.internal_forward(pb);
@@ -232,8 +229,8 @@ impl BlockTrait for BlockStopBackward {
     fn forward(
         &self,
         further_blocks: &[Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer,
-        pb: &mut port_buffer::PortBuffer,
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
     ) {
         self.internal_forward(pb);
         iterators::forward(further_blocks, fb, pb);
@@ -253,7 +250,7 @@ impl BlockTrait for BlockStopBackward {
 
 impl BlockStopBackward {
     #[inline(always)]
-    fn internal_forward(&self, pb: &mut port_buffer::PortBuffer) {
+    fn internal_forward(&self, pb: &mut PortBuffer) {
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.input_offset != usize::MAX);
         debug_assert!(self.num_inputs > 0);

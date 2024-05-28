@@ -16,7 +16,7 @@ use crate::engine::block::iterators;
 use crate::engine::block::iterators::OptimizerData;
 use crate::feature_buffer;
 use crate::feature_buffer::{FeatureBuffer, HashAndValueAndSeq};
-use crate::graph;
+use crate::engine::graph;
 use crate::model_instance;
 use crate::engine::optimizer;
 use crate::engine::port_buffer;
@@ -121,8 +121,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
     fn forward_backward(
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer,
-        pb: &mut port_buffer::PortBuffer,
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
         update: bool,
     ) {
         debug_assert!(self.output_offset != usize::MAX);
@@ -294,7 +294,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
                 fb.ffm_buffer.len() * (self.ffm_k * self.ffm_num_fields) as usize;
             if local_data_ffm_len < FFM_STACK_BUF_LEN {
                 // Fast-path - using on-stack data structures
-                let local_data_ffm_values: [f32; FFM_STACK_BUF_LEN as usize] =
+                let local_data_ffm_values: [f32; FFM_STACK_BUF_LEN ] =
                     MaybeUninit::uninit().assume_init();
                 core_macro!(local_data_ffm_values);
             } else {
@@ -315,8 +315,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
     fn forward(
         &self,
         further_blocks: &[Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer,
-        pb: &mut port_buffer::PortBuffer,
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
     ) {
         debug_assert!(self.output_offset != usize::MAX);
 
@@ -665,7 +665,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
     fn prepare_forward_cache(
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer,
+        fb: &FeatureBuffer,
         caches: &mut [BlockCache],
     ) {
         let Some((next_cache, further_caches)) = caches.split_first_mut() else {
@@ -1205,7 +1205,6 @@ mod tests {
     use crate::assert_epsilon;
     use crate::engine::block::test::{slearn2, spredict2, spredict2_with_cache, ssetup_cache2};
     use crate::engine::block::loss_functions;
-    use crate::feature_buffer;
     use crate::feature_buffer::HashAndValueAndSeq;
     use crate::engine::graph::BlockGraph;
     use crate::model_instance::Optimizer;
@@ -1213,8 +1212,8 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
 
-    fn ffm_vec(v: Vec<feature_buffer::HashAndValueAndSeq>) -> feature_buffer::FeatureBuffer {
-        feature_buffer::FeatureBuffer {
+    fn ffm_vec(v: Vec<HashAndValueAndSeq>) -> FeatureBuffer {
+        FeatureBuffer {
             label: 0.0,
             example_importance: 1.0,
             example_number: 0,

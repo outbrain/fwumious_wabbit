@@ -2,13 +2,10 @@ use std::any::Any;
 use std::error::Error;
 
 use crate::engine::block::iterators;
-use crate::feature_buffer;
 use crate::feature_buffer::FeatureBuffer;
 use crate::engine::graph::{BlockGraph, BlockPtrOutput, InputSlot, OutputSlot};
 use crate::model_instance;
-use crate::engine::port_buffer;
 use crate::engine::port_buffer::PortBuffer;
-use crate::engine::regressor;
 use crate::engine::regressor::BlockCache;
 use crate::engine::regressor::BlockTrait;
 
@@ -37,13 +34,13 @@ pub fn new_relu_block(
 
 impl BlockRELU {
     #[inline(always)]
-    fn internal_forward(&self, pb: &mut port_buffer::PortBuffer) {
+    fn internal_forward(&self, pb: &mut PortBuffer) {
         debug_assert!(self.output_offset != usize::MAX);
         debug_assert!(self.input_offset != usize::MAX);
         debug_assert!(self.num_inputs > 0);
 
         unsafe {
-            for i in 0..self.num_inputs as usize {
+            for i in 0..self.num_inputs {
                 let w = *pb.tape.get_unchecked_mut(self.input_offset + i);
                 if w < 0.0 {
                     *pb.tape.get_unchecked_mut(self.output_offset + i) = 0.0;
@@ -79,8 +76,8 @@ impl BlockTrait for BlockRELU {
     fn forward_backward(
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer,
-        pb: &mut port_buffer::PortBuffer,
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
         update: bool,
     ) {
         debug_assert!(self.output_offset != usize::MAX);
@@ -113,8 +110,8 @@ impl BlockTrait for BlockRELU {
     fn forward(
         &self,
         further_blocks: &[Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer,
-        pb: &mut port_buffer::PortBuffer,
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
     ) {
         self.internal_forward(pb);
         iterators::forward(further_blocks, fb, pb);
@@ -139,12 +136,11 @@ mod tests {
     use crate::assert_epsilon;
     use crate::engine::block::misc;
     use crate::engine::block::test;
-    use crate::feature_buffer;
     use test::slearn2;
     use misc::Observe;
 
-    fn fb_vec() -> feature_buffer::FeatureBuffer {
-        feature_buffer::FeatureBuffer {
+    fn fb_vec() -> FeatureBuffer {
+        FeatureBuffer {
             label: 0.0,
             example_importance: 1.0,
             example_number: 0,

@@ -5,7 +5,6 @@ use std::error::Error;
 use std::io::Error as IOError;
 use std::io::ErrorKind;
 
-use crate::feature_transform_executor;
 use crate::vwmap::{NamespaceDescriptor, NamespaceFormat, NamespaceType, VwNamespaceMap};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -228,7 +227,7 @@ impl NamespaceTransforms {
         };
 
         // Now we try to setup a function and then throw it away - for early validation
-        let _ = feature_transform_executor::TransformExecutor::from_namespace_transform(&nt)?;
+        let _ = feature::executors::TransformExecutor::from_namespace_transform(&nt)?;
 
         self.v.push(nt);
 
@@ -293,6 +292,7 @@ use nom::number;
 use nom::sequence::tuple;
 use nom::AsChar;
 use nom::IResult;
+use crate::feature;
 
 pub fn name_char(c: char) -> bool {
     AsChar::is_alphanum(c) || c == '_'

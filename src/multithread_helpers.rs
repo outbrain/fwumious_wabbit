@@ -53,7 +53,7 @@ impl<T: Sized + 'static> UnsafelySharableTrait<T> {
     pub fn new(a: T) -> UnsafelySharableTrait<T> {
         UnsafelySharableTrait::<T> {
             content: ManuallyDrop::new(a),
-            reference_count: Arc::new(Mutex::new(std::marker::PhantomData {})),
+            reference_count: Arc::new(Mutex::new(PhantomData {})),
         }
     }
 }

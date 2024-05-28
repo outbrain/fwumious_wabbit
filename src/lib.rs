@@ -3,9 +3,6 @@ pub mod buffer_handler;
 pub mod cache;
 pub mod cmdline;
 pub mod feature_buffer;
-pub mod feature_transform_executor;
-pub mod feature_transform_implementations;
-pub mod feature_transform_parser;
 pub mod hogwild;
 pub mod logging;
 pub mod model_instance;
@@ -16,6 +13,7 @@ pub mod quantization;
 pub mod radix_tree;
 pub mod serving;
 pub mod vwmap;
+pub mod feature;
 
 extern crate blas;
 extern crate half;

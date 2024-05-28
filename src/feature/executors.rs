@@ -1,5 +1,4 @@
-use crate::parser;
-use crate::vwmap;
+use crate::{feature, vwmap};
 use std::error::Error;
 use std::io::Error as IOError;
 use std::io::ErrorKind;
@@ -9,10 +8,10 @@ use std::cell::RefCell;
 use dyn_clone::{clone_trait_object, DynClone};
 use fasthash::murmur3;
 
-use crate::feature_transform_implementations::{
+use crate::feature::transformers::{
     TransformerBinner, TransformerCombine, TransformerLogRatioBinner, TransformerWeight,
 };
-use crate::feature_transform_parser;
+use crate::feature::{parser, transformers};
 
 pub fn default_seeds(to_namespace_index: u32) -> [u32; 5] {
     let to_namespace_index = to_namespace_index ^ 1u32 << 31; // compatibility with earlier version
@@ -52,7 +51,7 @@ impl ExecutorToNamespace {
     pub fn emit_i32<const SEED_ID: usize>(&mut self, to_data: i32, hash_value: f32) {
         let hash_index = murmur3::hash32_with_seed(to_data.to_le_bytes(), *unsafe {
             self.namespace_seeds.get_unchecked(SEED_ID)
-        }) & parser::MASK31;
+        }) & feature::parser::MASK31;
         self.tmp_data.push((hash_index, hash_value));
     }
 
@@ -88,7 +87,7 @@ impl ExecutorToNamespace {
             *self.namespace_seeds.get_unchecked(SEED_ID)
         });
         let hash_index =
-            murmur3::hash32_with_seed(to_data2.to_le_bytes(), hash_index) & parser::MASK31;
+            murmur3::hash32_with_seed(to_data2.to_le_bytes(), hash_index) & transformers::parser::MASK31;
         self.tmp_data.push((hash_index, hash_value));
     }
 }
@@ -101,7 +100,7 @@ pub struct TransformExecutor {
 
 impl TransformExecutor {
     pub fn from_namespace_transform(
-        namespace_transform: &feature_transform_parser::NamespaceTransform,
+        namespace_transform: &parser::NamespaceTransform,
     ) -> Result<TransformExecutor, Box<dyn Error>> {
         let namespace_to = ExecutorToNamespace {
             namespace_descriptor: namespace_transform.to_namespace.namespace_descriptor,
@@ -127,7 +126,7 @@ impl TransformExecutor {
 
     pub fn create_executor(
         function_name: &str,
-        namespaces_from: &Vec<feature_transform_parser::Namespace>,
+        namespaces_from: &Vec<parser::Namespace>,
         function_params: &Vec<f32>,
     ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
         /*        let mut executor_namespaces_from: Vec<ExecutorFromNamespace> = Vec::new();
@@ -201,7 +200,7 @@ pub struct TransformExecutors {
 
 impl TransformExecutors {
     pub fn from_namespace_transforms(
-        namespace_transforms: &feature_transform_parser::NamespaceTransforms,
+        namespace_transforms: &parser::NamespaceTransforms,
     ) -> TransformExecutors {
         let mut executors: Vec<TransformExecutor> = Vec::new();
         for transformed_namespace in &namespace_transforms.v {
@@ -216,7 +215,7 @@ impl TransformExecutors {
     //  We don't use this function as we have put it into feature_reader! macro
         #[inline(always)]
         pub fn get_transformations<'a>(&self, record_buffer: &[u32], feature_index_offset: u32) -> &TransformExecutor  {
-            let executor_index = feature_index_offset & !feature_transform_parser::TRANSFORM_NAMESPACE_MARK; // remove transform namespace mark
+            let executor_index = feature_index_offset & !parser::TRANSFORM_NAMESPACE_MARK; // remove transform namespace mark
             let executor = unsafe {&self.executors.get_unchecked(executor_index as usize)};
 
             // If we have a cyclic defintion (which is a bug), this will panic!
@@ -245,7 +244,7 @@ clone_trait_object!(FunctionExecutorTrait);
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::feature_transform_executor::default_seeds;
+    use crate::feature::executors::default_seeds;
     use crate::parser;
 
     fn ns_desc(i: u16) -> vwmap::NamespaceDescriptor {

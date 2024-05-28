@@ -1,16 +1,16 @@
 use std::error::Error;
 use std::io::Error as IOError;
 use std::io::ErrorKind;
+use feature::parser::Namespace;
 
-use crate::feature_reader;
+use crate::{feature, feature_reader};
 use crate::feature_reader_float_namespace;
-use crate::parser;
 
-use crate::feature_transform_executor::{
+use crate::feature::executors::{
     ExecutorFromNamespace, ExecutorToNamespace, FunctionExecutorTrait, SeedNumber,
     TransformExecutors,
 };
-use crate::feature_transform_parser;
+use crate::feature::parser;
 use crate::vwmap::{NamespaceDescriptor, NamespaceFormat, NamespaceType};
 
 // -------------------------------------------------------------------
@@ -79,7 +79,7 @@ impl TransformerBinner {
     pub fn create_function(
         function_pointer: &'static (dyn Fn(f32, f32) -> f32 + 'static + Sync),
         function_name: &str,
-        from_namespaces: &Vec<feature_transform_parser::Namespace>,
+        from_namespaces: &Vec<Namespace>,
         function_params: &Vec<f32>,
         interpolated: bool,
     ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
@@ -214,7 +214,7 @@ impl FunctionExecutorTrait for TransformerLogRatioBinner {
 impl TransformerLogRatioBinner {
     pub fn create_function(
         function_name: &str,
-        from_namespaces: &Vec<feature_transform_parser::Namespace>,
+        from_namespaces: &Vec<Namespace>,
         function_params: &Vec<f32>,
         interpolated: bool,
     ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
@@ -309,7 +309,7 @@ impl FunctionExecutorTrait for TransformerWeight {
 impl TransformerWeight {
     pub fn create_function(
         function_name: &str,
-        from_namespaces: &Vec<feature_transform_parser::Namespace>,
+        from_namespaces: &Vec<Namespace>,
         function_params: &Vec<f32>,
     ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
         if function_params.len() != 1 {
@@ -488,7 +488,7 @@ impl FunctionExecutorTrait for TransformerCombine {
 impl TransformerCombine {
     pub fn create_function(
         function_name: &str,
-        from_namespaces: &Vec<feature_transform_parser::Namespace>,
+        from_namespaces: &Vec<Namespace>,
         function_params: &Vec<f32>,
     ) -> Result<Box<dyn FunctionExecutorTrait>, Box<dyn Error>> {
         if !function_params.is_empty() {
@@ -534,9 +534,10 @@ impl TransformerCombine {
 
 #[cfg(test)]
 mod tests {
+    use crate::feature;
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::feature_transform_executor::default_seeds;
+    use crate::feature::executors::default_seeds;
     use crate::parser::{IS_NOT_SINGLE_MASK, MASK31};
 
     fn nd(start: u32, end: u32) -> u32 {
@@ -562,7 +563,7 @@ mod tests {
     #[test]
     fn test_transformerbinner_fail() {
         // this fails because input namespace is not float namespace
-        let from_namespace = feature_transform_parser::Namespace {
+        let from_namespace = Namespace {
             namespace_verbose: "a".to_string(),
             namespace_descriptor: ns_desc(0),
         };
@@ -585,7 +586,7 @@ mod tests {
 
     #[test]
     fn test_transformerbinner() {
-        let from_namespace = feature_transform_parser::Namespace {
+        let from_namespace = Namespace {
             namespace_descriptor: ns_desc_f32(0),
             namespace_verbose: "a".to_string(),
         };
@@ -648,12 +649,12 @@ mod tests {
 
     #[test]
     fn test_transformerlogratiobinner() {
-        let from_namespace_1 = feature_transform_parser::Namespace {
+        let from_namespace_1 = Namespace {
             namespace_descriptor: ns_desc_f32(0),
             namespace_verbose: "a".to_string(),
         };
 
-        let from_namespace_2 = feature_transform_parser::Namespace {
+        let from_namespace_2 = Namespace {
             namespace_descriptor: ns_desc_f32(1),
             namespace_verbose: "c".to_string(),
         };
@@ -806,7 +807,7 @@ mod tests {
 
     #[test]
     fn test_transformerweightmutliplier() {
-        let from_namespace_float = feature_transform_parser::Namespace {
+        let from_namespace_float = Namespace {
             namespace_descriptor: ns_desc_f32(0),
             namespace_verbose: "a".to_string(),
         };
@@ -845,7 +846,7 @@ mod tests {
         assert_eq!(to_namespace.tmp_data, to_namespace_comparison.tmp_data);
 
         // But weightmultiplier can take non-float namespaces
-        let from_namespace_nonfloat = feature_transform_parser::Namespace {
+        let from_namespace_nonfloat = Namespace {
             namespace_descriptor: ns_desc(0),
             namespace_verbose: "a".to_string(),
         };
@@ -879,12 +880,12 @@ mod tests {
 
     #[test]
     fn test_transformercombine() {
-        let from_namespace_1 = feature_transform_parser::Namespace {
+        let from_namespace_1 = Namespace {
             namespace_descriptor: ns_desc_f32(0),
             namespace_verbose: "a".to_string(),
         };
 
-        let from_namespace_2 = feature_transform_parser::Namespace {
+        let from_namespace_2 = Namespace {
             namespace_descriptor: ns_desc(1),
             namespace_verbose: "b".to_string(),
         };

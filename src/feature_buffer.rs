@@ -1,4 +1,4 @@
-use crate::feature_transform_executor;
+use crate::feature::executors;
 use crate::model_instance;
 use crate::parser;
 use crate::vwmap::{NamespaceFormat, NamespaceType};
@@ -39,7 +39,7 @@ pub struct FeatureBufferTranslator {
     pub feature_buffer: FeatureBuffer,
     pub lr_hash_mask: u32,
     pub ffm_hash_mask: u32,
-    pub transform_executors: feature_transform_executor::TransformExecutors,
+    pub transform_executors: executors::TransformExecutors,
 }
 
 // A macro that takes care of decoding the individual feature - which can have two different encodings
@@ -165,7 +165,7 @@ impl FeatureBufferTranslator {
             lr_hash_mask,
             ffm_hash_mask,
             transform_executors:
-                feature_transform_executor::TransformExecutors::from_namespace_transforms(
+                executors::TransformExecutors::from_namespace_transforms(
                     &mi.transform_namespaces,
                 ),
         }
@@ -382,7 +382,7 @@ mod tests {
             });
 
         let mut fbt = FeatureBufferTranslator::new(&mi);
-        let rb = add_header(vec![parser::NO_FEATURES]); // no feature
+        let rb = add_header(vec![NO_FEATURES]); // no feature
         fbt.translate(&rb, 0);
         assert_eq!(
             fbt.feature_buffer.lr_buffer,
@@ -405,7 +405,7 @@ mod tests {
             });
 
         let mut fbt = FeatureBufferTranslator::new(&mi);
-        let rb = add_header(vec![parser::NO_FEATURES]); // no feature
+        let rb = add_header(vec![NO_FEATURES]); // no feature
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]); // vw compatibility - no feature is no feature
 
@@ -421,7 +421,7 @@ mod tests {
         );
 
         let rb = add_header(vec![
-            parser::IS_NOT_SINGLE_MASK | nd(4, 8),
+            IS_NOT_SINGLE_MASK | nd(4, 8),
             0xfea,
             1.0f32.to_bits(),
             0xfeb,
@@ -462,11 +462,11 @@ mod tests {
 
         let mut fbt = FeatureBufferTranslator::new(&mi);
 
-        let rb = add_header(vec![parser::NO_FEATURES, parser::NO_FEATURES]);
+        let rb = add_header(vec![NO_FEATURES, NO_FEATURES]);
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]);
 
-        let rb = add_header(vec![0xfea, parser::NO_FEATURES]);
+        let rb = add_header(vec![0xfea, NO_FEATURES]);
         fbt.translate(&rb, 0);
         assert_eq!(
             fbt.feature_buffer.lr_buffer,
@@ -509,18 +509,18 @@ mod tests {
             });
 
         let mut fbt = FeatureBufferTranslator::new(&mi);
-        let rb = add_header(vec![parser::NO_FEATURES]);
+        let rb = add_header(vec![NO_FEATURES]);
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]);
 
-        let rb = add_header(vec![123456789, parser::NO_FEATURES]);
+        let rb = add_header(vec![123456789, NO_FEATURES]);
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.lr_buffer, vec![]); // since the other feature is missing - VW compatibility says no feature is here
 
         let rb = add_header(vec![
-            2988156968 & parser::MASK31,
-            2422381320 & parser::MASK31,
-            parser::NO_FEATURES,
+            2988156968 & MASK31,
+            2422381320 & MASK31,
+            NO_FEATURES,
         ]);
         fbt.translate(&rb, 0);
 
@@ -597,7 +597,7 @@ mod tests {
         mi.ffm_k = 1;
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![
-            parser::IS_NOT_SINGLE_MASK | nd(5, 9),
+            IS_NOT_SINGLE_MASK | nd(5, 9),
             0xfec,
             0xfea,
             2.0f32.to_bits(),
@@ -647,7 +647,7 @@ mod tests {
         mi.ffm_k = 1;
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![
-            parser::IS_NOT_SINGLE_MASK | nd(5, 9),
+            IS_NOT_SINGLE_MASK | nd(5, 9),
             0x1,
             0xfff,
             2.0f32.to_bits(),
@@ -695,7 +695,7 @@ mod tests {
         mi.ffm_k = 3;
         let mut fbt = FeatureBufferTranslator::new(&mi);
         let rb = add_header(vec![
-            parser::IS_NOT_SINGLE_MASK | nd(5, 9),
+            IS_NOT_SINGLE_MASK | nd(5, 9),
             0x1,
             0xfff,
             2.0f32.to_bits(),
@@ -752,7 +752,7 @@ mod tests {
             });
 
         let mut fbt = FeatureBufferTranslator::new(&mi);
-        let rb = add_header(vec![parser::NO_FEATURES]); // no feature
+        let rb = add_header(vec![NO_FEATURES]); // no feature
         fbt.translate(&rb, 0);
         assert_eq!(fbt.feature_buffer.example_importance, 1.0); // Did example importance get parsed correctly
     }

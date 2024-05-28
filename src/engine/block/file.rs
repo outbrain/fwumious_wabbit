@@ -8,7 +8,7 @@ use crate::engine::optimizer::{OptimizerSGD, OptimizerTrait};
 
 pub fn read_weights_from_buf<L>(
     weights: &mut Vec<L>,
-    input_bufreader: &mut dyn io::Read,
+    input_bufreader: &mut dyn Read,
     _use_quantization: bool
 ) -> Result<(), Box<dyn Error>> {
     if weights.is_empty() {
@@ -38,7 +38,7 @@ pub fn skip_weights_from_buf<L>(
 
 pub fn write_weights_to_buf<L>(
     weights: &Vec<L>,
-    output_bufwriter: &mut dyn io::Write,
+    output_bufwriter: &mut dyn Write,
     _use_quantization: bool
 ) -> Result<(), Box<dyn Error>> {
     if weights.is_empty() {
@@ -58,7 +58,7 @@ pub fn write_weights_to_buf<L>(
 pub fn read_weights_only_from_buf2<L: OptimizerTrait>(
     weights_len: usize,
     out_weights: &mut Vec<WeightAndOptimizerData<OptimizerSGD>>,
-    input_bufreader: &mut dyn io::Read,
+    input_bufreader: &mut dyn Read,
 ) -> Result<(), Box<dyn Error>> {
     const BUF_LEN: usize = 1024 * 1024;
     let mut in_weights: Vec<WeightAndOptimizerData<L>> = Vec::with_capacity(BUF_LEN);

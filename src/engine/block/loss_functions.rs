@@ -1,12 +1,12 @@
 use std::any::Any;
 use std::error::Error;
 
-use crate::block::iterators;
+use crate::engine::block::iterators;
 use crate::feature_buffer;
 use crate::feature_buffer::FeatureBuffer;
-use crate::graph;
-use crate::port_buffer;
-use crate::port_buffer::PortBuffer;
+use crate::engine::graph;
+use crate::engine::port_buffer;
+use crate::engine::port_buffer::PortBuffer;
 use crate::engine::regressor;
 use crate::engine::regressor::BlockCache;
 use crate::engine::regressor::BlockTrait;
@@ -44,8 +44,8 @@ impl BlockSigmoid {
     #[inline(always)]
     fn internal_forward(
         &self,
-        fb: &feature_buffer::FeatureBuffer,
-        pb: &mut port_buffer::PortBuffer,
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
     ) {
         unsafe {
             debug_assert!(self.input_offset != usize::MAX);
@@ -105,8 +105,8 @@ impl BlockTrait for BlockSigmoid {
     fn forward_backward(
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer,
-        pb: &mut port_buffer::PortBuffer,
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
         update: bool,
     ) {
         debug_assert!(self.input_offset != usize::MAX);
@@ -155,8 +155,8 @@ impl BlockTrait for BlockSigmoid {
     fn forward(
         &self,
         further_blocks: &[Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer,
-        pb: &mut port_buffer::PortBuffer,
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
     ) {
         self.internal_forward(fb, pb);
         iterators::forward(further_blocks, fb, pb);

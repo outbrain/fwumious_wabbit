@@ -9,12 +9,9 @@ use std::io::ErrorKind;
 
 use crate::engine::block::{file, iterators};
 use crate::engine::block::misc;
-use crate::feature_buffer;
-use crate::graph;
+use crate::engine::graph;
 use crate::model_instance;
 use crate::engine::optimizer;
-use crate::engine::port_buffer;
-use crate::engine::regressor;
 use crate::engine::regressor::BlockCache;
 use iterators::OptimizerData;
 use optimizer::OptimizerTrait;
@@ -193,7 +190,7 @@ pub fn new_neuron_block(
 
 impl<L: OptimizerTrait + 'static> BlockNeuronLayer<L> {
     #[inline(always)]
-    fn internal_forward(&self, pb: &mut port_buffer::PortBuffer, alpha: f32) {
+    fn internal_forward(&self, pb: &mut PortBuffer, alpha: f32) {
         unsafe {
             let (input_tape, output_tape) = iterators::get_input_output_borrows(
                 &mut pb.tape,
@@ -231,8 +228,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
     fn forward_backward(
         &mut self,
         further_blocks: &mut [Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer,
-        pb: &mut port_buffer::PortBuffer,
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
         update: bool,
     ) {
         debug_assert!(self.num_inputs > 0);
@@ -344,8 +341,8 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockNeuronLayer<L> {
     fn forward(
         &self,
         further_blocks: &[Box<dyn BlockTrait>],
-        fb: &feature_buffer::FeatureBuffer,
-        pb: &mut port_buffer::PortBuffer,
+        fb: &FeatureBuffer,
+        pb: &mut PortBuffer,
     ) {
         self.internal_forward(pb, 1.0);
 
@@ -488,13 +485,12 @@ mod tests {
     use crate::assert_epsilon;
     use crate::engine:: block::misc;
     use crate::engine::block::misc::Observe;
-    use crate::feature_buffer;
     use crate::engine::graph::BlockGraph;
     use crate::model_instance::Optimizer;
     use crate::engine::block::test::slearn2;
 
-    fn fb_vec() -> feature_buffer::FeatureBuffer {
-        feature_buffer::FeatureBuffer {
+    fn fb_vec() -> FeatureBuffer {
+        FeatureBuffer {
             label: 0.0,
             example_importance: 1.0,
             example_number: 0,

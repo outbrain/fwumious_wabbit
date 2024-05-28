@@ -130,7 +130,7 @@ fn main_fw_loop() -> Result<(), Box<dyn Error>> {
             .value_of("initial_regressor")
             .expect("Daemon mode only supports serving from --initial regressor");
         log::info!("initial_regressor = {}", filename);
-        let (mi2, vw2, re_fixed) = new_regressor_from_filename(filename, true, Option::Some(&cl))?;
+        let (mi2, vw2, re_fixed) = new_regressor_from_filename(filename, true, Some(&cl))?;
 
         let mut se = Serving::new(&cl, &vw2, Box::new(re_fixed), &mi2)?;
         se.serve()?;
@@ -139,7 +139,7 @@ fn main_fw_loop() -> Result<(), Box<dyn Error>> {
             .value_of("initial_regressor")
             .expect("Convert mode requires --initial regressor");
         let (mut mi2, vw2, re_fixed) =
-            new_regressor_from_filename(filename, true, Option::Some(&cl))?;
+            new_regressor_from_filename(filename, true, Some(&cl))?;
         mi2.optimizer = Optimizer::SGD;
         if cl.is_present("weight_quantization") {
             mi2.dequantize_weights = Some(true);
@@ -155,7 +155,7 @@ fn main_fw_loop() -> Result<(), Box<dyn Error>> {
 
         if let Some(filename) = cl.value_of("initial_regressor") {
             log::info!("initial_regressor = {}", filename);
-            (mi, vw, re) = new_regressor_from_filename(filename, testonly, Option::Some(&cl))?;
+            (mi, vw, re) = new_regressor_from_filename(filename, testonly, Some(&cl))?;
             sharable_regressor = BoxedRegressorTrait::new(Box::new(re));
         } else {
             // We load vw_namespace_map.csv just so we know all the namespaces ahead of time

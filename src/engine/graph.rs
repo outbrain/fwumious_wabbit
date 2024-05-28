@@ -132,7 +132,7 @@ impl BlockGraph {
             if self.blocks[node_id_in].get_block_type() == BlockType::Copy {
                 let copy_block = self.blocks[node_id_in]
                     .as_any()
-                    .downcast_mut::<block::misc::BlockCopy>()
+                    .downcast_mut::<misc::BlockCopy>()
                     .unwrap();
                 let bp = BlockPtr(node_id_in);
                 let bo = BlockPtrOutput(bp, OutputSlot(copy_block.output_offsets.len()));
@@ -244,7 +244,7 @@ impl BlockGraph {
         // TODO we could have a single sink for all
         for bptro in sinks.into_iter() {
             // For neural nets, zeroing out the backward data is the least-surprise way of doing it
-            block::misc::new_sink_block(self, bptro, block::misc::SinkType::Zero).unwrap();
+            misc::new_sink_block(self, bptro, misc::SinkType::Zero).unwrap();
         }
 
         // Now allocate inputs/outputs to parts of the tape
@@ -300,8 +300,6 @@ mod tests {
     use super::*;
     use crate::engine::block::ffm;
     use crate::engine::block::loss_functions;
-    use crate::engine::block::lr;
-    use crate::engine::block::misc;
     use crate::engine::block::misc::Observe;
     use crate::model_instance;
     use crate::model_instance::Optimizer;
@@ -310,7 +308,7 @@ mod tests {
     fn graph_creation() {
         let mut bg = BlockGraph::new();
 
-        let const_block_output = block::misc::new_const_block(&mut bg, vec![1.0]).unwrap();
+        let const_block_output = misc::new_const_block(&mut bg, vec![1.0]).unwrap();
         assert_eq!(
             const_block_output,
             BlockPtrOutput(BlockPtr(0), OutputSlot(0))
@@ -323,7 +321,7 @@ mod tests {
     fn graph_one_sink() {
         let mut bg = BlockGraph::new();
 
-        let const_block_output = block::misc::new_const_block(&mut bg, vec![1.0]).unwrap();
+        let const_block_output = misc::new_const_block(&mut bg, vec![1.0]).unwrap();
         assert_eq!(
             const_block_output,
             BlockPtrOutput(BlockPtr(0), OutputSlot(0))
@@ -333,7 +331,7 @@ mod tests {
 
         // Let's add one result block
         let _output_node =
-            block::misc::new_observe_block(&mut bg, const_block_output, Observe::Forward, Some(1.0))
+            misc::new_observe_block(&mut bg, const_block_output, Observe::Forward, Some(1.0))
                 .unwrap();
 
         assert_eq!(bg.nodes[0].edges_in, vec![]); // basically []
@@ -353,7 +351,7 @@ mod tests {
     fn graph_two_sinks() {
         let mut bg = BlockGraph::new();
 
-        let const_block_output = block::misc::new_const_block(&mut bg, vec![1.0]).unwrap();
+        let const_block_output = misc::new_const_block(&mut bg, vec![1.0]).unwrap();
         assert_eq!(
             const_block_output,
             BlockPtrOutput(BlockPtr(0), OutputSlot(0))
@@ -362,11 +360,11 @@ mod tests {
         assert_eq!(bg.nodes[0].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);
 
         // We need to add a copy block to have two sinks
-        let (c1, c2) = block::misc::new_copy_block_2(&mut bg, const_block_output).unwrap();
+        let (c1, c2) = misc::new_copy_block_2(&mut bg, const_block_output).unwrap();
 
         // Let's add one result block
         let _output_node =
-            block::misc::new_observe_block(&mut bg, c1, Observe::Forward, Some(1.0)).unwrap();
+            misc::new_observe_block(&mut bg, c1, Observe::Forward, Some(1.0)).unwrap();
 
         assert_eq!(bg.nodes[0].edges_in.len(), 0);
         assert_eq!(
@@ -377,7 +375,7 @@ mod tests {
         // Let's add second result block to see what happens
 
         let _output_node =
-            block::misc::new_observe_block(&mut bg, c2, Observe::Forward, Some(1.0)).unwrap();
+            misc::new_observe_block(&mut bg, c2, Observe::Forward, Some(1.0)).unwrap();
         assert_eq!(bg.nodes[0].edges_in, vec![]);
         assert_eq!(
             bg.nodes[0].edges_out,
@@ -413,7 +411,7 @@ mod tests {
     fn graph_two_sources() {
         let mut bg = BlockGraph::new();
 
-        let const_block_output1 = block::misc::new_const_block(&mut bg, vec![1.0]).unwrap();
+        let const_block_output1 = misc::new_const_block(&mut bg, vec![1.0]).unwrap();
         assert_eq!(
             const_block_output1,
             BlockPtrOutput(BlockPtr(0), OutputSlot(0))
@@ -421,7 +419,7 @@ mod tests {
         assert_eq!(bg.nodes[0].edges_in, vec![]);
         assert_eq!(bg.nodes[0].edges_out, vec![BLOCK_PTR_INPUT_DEFAULT]);
 
-        let const_block_output2 = block::misc::new_const_block(&mut bg, vec![1.0, 2.0]).unwrap();
+        let const_block_output2 = misc::new_const_block(&mut bg, vec![1.0, 2.0]).unwrap();
         assert_eq!(
             const_block_output2,
             BlockPtrOutput(BlockPtr(1), OutputSlot(0))
@@ -431,7 +429,7 @@ mod tests {
 
         // Using the join block, we merge two outputs into one single output (copy-less implementation)
         let union_output =
-            block::misc::new_join_block(&mut bg, vec![const_block_output1, const_block_output2])
+            misc::new_join_block(&mut bg, vec![const_block_output1, const_block_output2])
                 .unwrap();
         assert_eq!(union_output, BlockPtrOutput(BlockPtr(2), OutputSlot(0)));
         assert_eq!(bg.nodes[0].edges_in, vec![]);
@@ -460,9 +458,9 @@ mod tests {
     fn finalize_simple() {
         let mut bg = BlockGraph::new();
 
-        let const_block_output = block::misc::new_const_block(&mut bg, vec![1.0]).unwrap();
+        let const_block_output = misc::new_const_block(&mut bg, vec![1.0]).unwrap();
         let _output_node =
-            block::misc::new_observe_block(&mut bg, const_block_output, Observe::Forward, Some(1.0))
+            misc::new_observe_block(&mut bg, const_block_output, Observe::Forward, Some(1.0))
                 .unwrap();
         bg.finalize();
         assert_eq!(bg.tape_size, 1);
@@ -485,7 +483,7 @@ mod tests {
 
         let re_lr = block::lr::new_lr_block(&mut bg, &mi).unwrap();
         let re_ffm = ffm::new_ffm_block(&mut bg, &mi).unwrap();
-        let joined = block::misc::new_join_block(&mut bg, vec![re_lr, re_ffm]).unwrap();
+        let joined = misc::new_join_block(&mut bg, vec![re_lr, re_ffm]).unwrap();
         let _lossf = loss_functions::new_logloss_block(&mut bg, joined, true);
         bg.finalize();
     }
@@ -499,19 +497,19 @@ mod tests {
 
         let mut bg = BlockGraph::new();
 
-        let const_1 = block::misc::new_const_block(&mut bg, vec![1.0]).unwrap(); // 0
-        let const_2 = block::misc::new_const_block(&mut bg, vec![3.0]).unwrap(); // 1
-        let const_3 = block::misc::new_const_block(&mut bg, vec![4.0]).unwrap(); // 2
-        let const_4 = block::misc::new_const_block(&mut bg, vec![4.0]).unwrap(); // 3
+        let const_1 = misc::new_const_block(&mut bg, vec![1.0]).unwrap(); // 0
+        let const_2 = misc::new_const_block(&mut bg, vec![3.0]).unwrap(); // 1
+        let const_3 = misc::new_const_block(&mut bg, vec![4.0]).unwrap(); // 2
+        let const_4 = misc::new_const_block(&mut bg, vec![4.0]).unwrap(); // 3
         let (copy_output_1, copy_output_2) =
-            block::misc::new_copy_block_2(&mut bg, const_1).unwrap(); // 4
+            misc::new_copy_block_2(&mut bg, const_1).unwrap(); // 4
         let (_copy_output_3, _copy_output_4) =
-            block::misc::new_copy_block_2(&mut bg, const_2).unwrap(); // 5
+            misc::new_copy_block_2(&mut bg, const_2).unwrap(); // 5
 
         // this is not zero copy
-        let _join_1 = block::misc::new_join_block(&mut bg, vec![copy_output_1, const_3]).unwrap(); // 6
+        let _join_1 = misc::new_join_block(&mut bg, vec![copy_output_1, const_3]).unwrap(); // 6
                                                                                                   // this is zero copy
-        let _join_2 = block::misc::new_join_block(&mut bg, vec![const_4, copy_output_2]); // 7
+        let _join_2 = misc::new_join_block(&mut bg, vec![const_4, copy_output_2]); // 7
         bg.finalize();
         let mut list = bg.take_blocks();
 
@@ -519,7 +517,7 @@ mod tests {
             // first one goes to copy again, so it cannot use input as an output
             let copy_block_1 = list[4]
                 .as_any()
-                .downcast_mut::<block::misc::BlockCopy>()
+                .downcast_mut::<misc::BlockCopy>()
                 .unwrap();
             assert_ne!(copy_block_1.input_offset, copy_block_1.output_offsets[0]);
         }
@@ -527,7 +525,7 @@ mod tests {
             // But second one can re-use the input as output
             let copy_block_2 = list[5]
                 .as_any()
-                .downcast_mut::<block::misc::BlockCopy>()
+                .downcast_mut::<misc::BlockCopy>()
                 .unwrap();
             assert_eq!(copy_block_2.input_offset, copy_block_2.output_offsets[0]);
         }
@@ -542,11 +540,11 @@ mod tests {
 
         let mut bg = BlockGraph::new();
 
-        let const_1 = block::misc::new_const_block(&mut bg, vec![1.0]).unwrap();
-        let const_2 = block::misc::new_const_block(&mut bg, vec![1.0]).unwrap();
-        let const_3 = block::misc::new_const_block(&mut bg, vec![1.0]).unwrap();
-        let join_block1 = block::misc::new_join_block(&mut bg, vec![const_1, const_2]).unwrap();
-        let _join_block2 = block::misc::new_join_block(&mut bg, vec![join_block1, const_3]).unwrap();
+        let const_1 = misc::new_const_block(&mut bg, vec![1.0]).unwrap();
+        let const_2 = misc::new_const_block(&mut bg, vec![1.0]).unwrap();
+        let const_3 = misc::new_const_block(&mut bg, vec![1.0]).unwrap();
+        let join_block1 = misc::new_join_block(&mut bg, vec![const_1, const_2]).unwrap();
+        let _join_block2 = misc::new_join_block(&mut bg, vec![join_block1, const_3]).unwrap();
         assert_eq!(bg.nodes.len(), 5);
         assert_eq!(bg.nodes[3].edges_in.len(), 0); // 3 is the first join block which was removed
         assert_eq!(bg.nodes[3].edges_out.len(), 0);

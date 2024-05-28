@@ -33,12 +33,12 @@ const READBUF_LEN: usize = 1024 * 100;
 struct Wrapper<W: Write> {
     s: Option<lz4::Encoder<W>>,
 }
-impl<W: io::Write> Write for Wrapper<W> {
-    fn write(&mut self, buffer: &[u8]) -> Result<usize, std::io::Error> {
+impl<W: Write> Write for Wrapper<W> {
+    fn write(&mut self, buffer: &[u8]) -> Result<usize, io::Error> {
         self.s.as_mut().unwrap().write(buffer)
     }
 
-    fn flush(&mut self) -> Result<(), std::io::Error> {
+    fn flush(&mut self) -> Result<(), io::Error> {
         self.s.as_mut().unwrap().flush()
     }
 }
@@ -51,8 +51,8 @@ impl<W: Write> Drop for Wrapper<W> {
 }
 
 pub struct RecordCache {
-    output_bufwriter: Box<dyn io::Write>,
-    input_bufreader: Box<dyn io::Read>,
+    output_bufwriter: Box<dyn Write>,
+    input_bufreader: Box<dyn Read>,
     temporary_filename: String,
     final_filename: String,
     pub writing: bool,

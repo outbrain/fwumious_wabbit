@@ -29,17 +29,17 @@ pub struct NamespaceDescriptor {
 #[derive(Clone, Debug)]
 pub struct VwNamespaceMap {
     pub num_namespaces: usize,
-    pub map_verbose_to_namespace_descriptor: HashMap<std::string::String, NamespaceDescriptor>,
+    pub map_verbose_to_namespace_descriptor: HashMap<String, NamespaceDescriptor>,
     pub map_vwname_to_namespace_descriptor: HashMap<Vec<u8>, NamespaceDescriptor>,
-    pub map_vwname_to_name: HashMap<Vec<u8>, std::string::String>,
+    pub map_vwname_to_name: HashMap<Vec<u8>, String>,
     pub vw_source: VwNamespaceMapSource, // this is the source from which VwNamespaceMap can be constructed - for persistence
 }
 
 // this is serializible source from which VwNamespaceMap can be constructed
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct VwNamespaceMapEntry {
-    pub namespace_vwname: std::string::String,
-    namespace_verbose: std::string::String,
+    pub namespace_vwname: String,
+    namespace_verbose: String,
     namespace_index: u16,
     namespace_format: NamespaceFormat,
 }
