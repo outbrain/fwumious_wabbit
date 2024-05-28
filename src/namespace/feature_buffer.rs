@@ -1,6 +1,6 @@
 use crate::model_instance;
 use crate::namespace::feature::executors;
-use crate::namespace::parser;
+use crate::namespace::parser::{IS_NOT_SINGLE_MASK, EXAMPLE_IMPORTANCE_OFFSET, HEADER_LEN, LABEL_OFFSET};
 use crate::namespace::vwmap::{NamespaceFormat, NamespaceType};
 
 const VOWPAL_FNV_PRIME: u32 = 16777619; // vowpal magic number
@@ -77,10 +77,9 @@ macro_rules! feature_reader {
             }
         } else {
             let namespace_index = $namespace_descriptor.namespace_index as usize;
-            let first_token = unsafe {
-                *$record_buffer.get_unchecked(namespace_index + parser::HEADER_LEN as usize)
-            };
-            if (first_token & parser::IS_NOT_SINGLE_MASK) == 0 {
+            let first_token =
+                unsafe { *$record_buffer.get_unchecked(namespace_index + HEADER_LEN as usize) };
+            if (first_token & IS_NOT_SINGLE_MASK) == 0 {
                 let $hash_index = first_token;
                 let $hash_value: f32 = 1.0;
                 $bl
@@ -117,7 +116,7 @@ macro_rules! feature_reader_float_namespace {
       $bl:block  ) => {
         let namespace_index = $namespace_descriptor.namespace_index as usize;
         let first_token =
-            unsafe { *$record_buffer.get_unchecked(namespace_index + parser::HEADER_LEN as usize) };
+            unsafe { *$record_buffer.get_unchecked(namespace_index + HEADER_LEN as usize) };
         if $namespace_descriptor.namespace_format == NamespaceFormat::F32 {
             let start = ((first_token >> 16) & 0x3fff) as usize;
             let end = (first_token & 0xffff) as usize;
@@ -183,9 +182,9 @@ impl FeatureBufferTranslator {
         {
             let lr_buffer = &mut self.feature_buffer.lr_buffer;
             lr_buffer.truncate(0);
-            self.feature_buffer.label = record_buffer[parser::LABEL_OFFSET] as f32; // copy label
+            self.feature_buffer.label = record_buffer[LABEL_OFFSET] as f32; // copy label
             self.feature_buffer.example_importance =
-                f32::from_bits(record_buffer[parser::EXAMPLE_IMPORTANCE_OFFSET]);
+                f32::from_bits(record_buffer[EXAMPLE_IMPORTANCE_OFFSET]);
             self.feature_buffer.example_number = example_number;
 
             let mut hashes_vec_in: &mut Vec<HashAndValue> = &mut self.hashes_vec_in;
