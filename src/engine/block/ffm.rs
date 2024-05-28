@@ -12,16 +12,16 @@ use merand48::*;
 
 use optimizer::OptimizerTrait;
 
-use crate::engine::block::iterators;
+use crate::engine::block::{file, iterators};
 use crate::engine::block::iterators::OptimizerData;
-use crate::feature_buffer;
-use crate::feature_buffer::{FeatureBuffer, HashAndValueAndSeq};
+use crate::namespace::feature_buffer;
+use crate::namespace::feature_buffer::{FeatureBuffer, HashAndValueAndSeq};
 use crate::engine::graph;
 use crate::model_instance;
 use crate::engine::optimizer;
 use crate::engine::port_buffer;
 use crate::engine::port_buffer::PortBuffer;
-use crate::quantization;
+use crate::engine::quantization;
 use crate::engine::regressor;
 use crate::engine::regressor::{BlockCache, BlockTrait, FFM_CONTRA_BUF_LEN};
 
@@ -838,11 +838,11 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
     ) -> Result<(), Box<dyn Error>> {
         if use_quantization {
             let quantized_weights = quantization::quantize_ffm_weights(&self.weights);
-            iterators::write_weights_to_buf(&quantized_weights, output_bufwriter, false)?;
+            file::write_weights_to_buf(&quantized_weights, output_bufwriter, false)?;
         } else {
-            iterators::write_weights_to_buf(&self.weights, output_bufwriter, false)?;
+            file::write_weights_to_buf(&self.weights, output_bufwriter, false)?;
         }
-        iterators::write_weights_to_buf(&self.optimizer, output_bufwriter, false)?;
+        file::write_weights_to_buf(&self.optimizer, output_bufwriter, false)?;
         Ok(())
     }
 
@@ -854,10 +854,10 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         if use_quantization {
             quantization::dequantize_ffm_weights(input_bufreader, &mut self.weights);
         } else {
-            iterators::read_weights_from_buf(&mut self.weights, input_bufreader, false)?;
+            file::read_weights_from_buf(&mut self.weights, input_bufreader, false)?;
         }
 
-        iterators::read_weights_from_buf(&mut self.optimizer, input_bufreader, false)?;
+        file::read_weights_from_buf(&mut self.optimizer, input_bufreader, false)?;
         Ok(())
     }
 
@@ -889,9 +889,9 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
         if use_quantization {
             quantization::dequantize_ffm_weights(input_bufreader, &mut forward.weights);
         } else {
-            iterators::read_weights_from_buf(&mut forward.weights, input_bufreader, false)?;
+            file::read_weights_from_buf(&mut forward.weights, input_bufreader, false)?;
         }
-        iterators::skip_weights_from_buf::<OptimizerData<L>>(
+        file::skip_weights_from_buf::<OptimizerData<L>>(
             self.ffm_weights_len as usize,
             input_bufreader,
         )?;
@@ -1205,7 +1205,7 @@ mod tests {
     use crate::assert_epsilon;
     use crate::engine::block::test::{slearn2, spredict2, spredict2_with_cache, ssetup_cache2};
     use crate::engine::block::loss_functions;
-    use crate::feature_buffer::HashAndValueAndSeq;
+    use crate::namespace::feature_buffer::HashAndValueAndSeq;
     use crate::engine::graph::BlockGraph;
     use crate::model_instance::Optimizer;
 

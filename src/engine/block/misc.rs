@@ -3,7 +3,7 @@ use std::error::Error;
 
 use crate::engine::block::iterators;
 use crate::engine::graph;
-use crate::feature_buffer::FeatureBuffer;
+use crate::namespace::feature_buffer::FeatureBuffer;
 use crate::engine::port_buffer::PortBuffer;
 use crate::engine::regressor::BlockCache;
 use crate::engine::regressor::BlockTrait;

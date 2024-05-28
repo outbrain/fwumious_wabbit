@@ -4,7 +4,7 @@ use crate::engine::graph;
 use crate::model_instance;
 use crate::engine::optimizer;
 use crate::engine::regressor;
-use crate::{feature_buffer, parser};
+use crate::namespace::{feature_buffer, parser};
 
 use std::error::Error;
 use std::io;

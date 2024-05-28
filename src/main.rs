@@ -23,21 +23,21 @@ extern crate intel_mkl_src;
 extern crate nom;
 extern crate core;
 
-use fw::cache::RecordCache;
-use fw::feature_buffer::FeatureBufferTranslator;
-use fw::hogwild::HogwildTrainer;
+use fw::namespace::cache::RecordCache;
+use fw::namespace::feature_buffer::FeatureBufferTranslator;
+use fw::engine::hogwild::HogwildTrainer;
 use fw::model_instance::{ModelInstance, Optimizer};
-use fw::multithread_helpers::BoxedRegressorTrait;
-use fw::parser::VowpalParser;
-use fw::buffer_handler::create_buffered_input;
+use fw::engine::multithread_helpers::BoxedRegressorTrait;
+use fw::namespace::parser::VowpalParser;
+use fw::engine::buffer_handler::create_buffered_input;
 use fw::persistence::{
     new_regressor_from_filename, save_regressor_to_filename, save_sharable_regressor_to_filename,
 };
 use fw::engine::regressor;
 use fw::engine::regressor::{get_regressor_with_weights, Regressor};
-use fw::serving::Serving;
-use fw::vwmap::VwNamespaceMap;
-use fw::{cmdline, feature_buffer, logging};
+use fw::engine::serving::Serving;
+use fw::namespace::vwmap::VwNamespaceMap;
+use fw::{cmdline, logging};
 
 fn main() {
     logging::initialize_logging();

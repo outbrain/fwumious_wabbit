@@ -1,17 +1,17 @@
 use std::error::Error;
 use std::io::Error as IOError;
 use std::io::ErrorKind;
-use feature::parser::Namespace;
 
-use crate::{feature, feature_reader};
+use crate::feature_reader;
 use crate::feature_reader_float_namespace;
 
-use crate::feature::executors::{
+use crate::namespace::feature::executors::{
     ExecutorFromNamespace, ExecutorToNamespace, FunctionExecutorTrait, SeedNumber,
     TransformExecutors,
 };
-use crate::feature::parser;
-use crate::vwmap::{NamespaceDescriptor, NamespaceFormat, NamespaceType};
+use crate::namespace::feature::parser;
+use crate::namespace::feature::parser::Namespace;
+use crate::namespace::vwmap::{NamespaceDescriptor, NamespaceFormat, NamespaceType};
 
 // -------------------------------------------------------------------
 // TransformerBinner - A basic binner
@@ -534,11 +534,10 @@ impl TransformerCombine {
 
 #[cfg(test)]
 mod tests {
-    use crate::feature;
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::feature::executors::default_seeds;
-    use crate::parser::{IS_NOT_SINGLE_MASK, MASK31};
+    use crate::namespace::feature::executors::default_seeds;
+    use crate::namespace::parser::{IS_NOT_SINGLE_MASK, MASK31};
 
     fn nd(start: u32, end: u32) -> u32 {
         (start << 16) + end

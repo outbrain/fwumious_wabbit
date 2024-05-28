@@ -7,7 +7,7 @@ use std::io::Write;
 use std::path;
 use std::{mem, slice};
 
-use crate::vwmap;
+use crate::namespace::vwmap;
 
 const CACHE_HEADER_MAGIC_STRING: &[u8; 4] = b"FWCA"; // Fwumious Wabbit CAche
 const CACHE_HEADER_VERSION: u32 = 11;

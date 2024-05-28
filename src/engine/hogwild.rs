@@ -3,9 +3,9 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
 
-use crate::feature_buffer::FeatureBufferTranslator;
+use crate::namespace::feature_buffer::FeatureBufferTranslator;
 use crate::model_instance::ModelInstance;
-use crate::multithread_helpers::BoxedRegressorTrait;
+use crate::engine::multithread_helpers::BoxedRegressorTrait;
 use crate::engine::port_buffer::PortBuffer;
 
 static CHANNEL_CAPACITY: usize = 100_000;

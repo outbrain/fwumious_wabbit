@@ -1,34 +1,24 @@
 pub mod engine;
-pub mod buffer_handler;
-pub mod cache;
 pub mod cmdline;
-pub mod feature_buffer;
-pub mod hogwild;
 pub mod logging;
 pub mod model_instance;
-pub mod multithread_helpers;
-pub mod parser;
-pub mod persistence;
-pub mod quantization;
-pub mod radix_tree;
-pub mod serving;
-pub mod vwmap;
-pub mod feature;
+pub mod namespace;
 
 extern crate blas;
 extern crate half;
 extern crate intel_mkl_src;
 
-use crate::feature_buffer::FeatureBufferTranslator;
-use crate::multithread_helpers::BoxedRegressorTrait;
-use crate::parser::VowpalParser;
+use crate::namespace::feature_buffer::FeatureBufferTranslator;
+use crate::engine::multithread_helpers::BoxedRegressorTrait;
+use crate::namespace::parser::VowpalParser;
 use crate::engine::port_buffer::PortBuffer;
 use crate::engine::regressor::BlockCache;
-use crate::vwmap::NamespaceType;
+use crate::namespace::vwmap::NamespaceType;
 use shellwords;
 use std::ffi::CStr;
 use std::io::Cursor;
 use std::os::raw::c_char;
+use engine::persistence;
 
 const EOF_ERROR_CODE: f32 = -1.0;
 const EXCEPTION_ERROR_CODE: f32 = -1.0;

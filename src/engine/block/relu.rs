@@ -2,7 +2,7 @@ use std::any::Any;
 use std::error::Error;
 
 use crate::engine::block::iterators;
-use crate::feature_buffer::FeatureBuffer;
+use crate::namespace::feature_buffer::FeatureBuffer;
 use crate::engine::graph::{BlockGraph, BlockPtrOutput, InputSlot, OutputSlot};
 use crate::model_instance;
 use crate::engine::port_buffer::PortBuffer;

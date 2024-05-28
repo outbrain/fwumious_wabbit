@@ -2,8 +2,8 @@ use std::any::Any;
 use std::error::Error;
 
 use crate::engine::block::iterators;
-use crate::feature_buffer;
-use crate::feature_buffer::FeatureBuffer;
+use crate::namespace::feature_buffer;
+use crate::namespace::feature_buffer::FeatureBuffer;
 use crate::engine::graph;
 use crate::engine::port_buffer;
 use crate::engine::port_buffer::PortBuffer;

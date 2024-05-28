@@ -1,5 +1,5 @@
-use crate::radix_tree::{NamespaceDescriptorWithHash, RadixTree};
-use crate::vwmap;
+use crate::namespace::radix_tree::{NamespaceDescriptorWithHash, RadixTree};
+use crate::namespace::vwmap;
 use fasthash::murmur3;
 use std::error::Error;
 use std::fmt;

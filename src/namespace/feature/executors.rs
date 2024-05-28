@@ -1,4 +1,4 @@
-use crate::{feature, vwmap};
+use crate::namespace::{feature, vwmap};
 use std::error::Error;
 use std::io::Error as IOError;
 use std::io::ErrorKind;
@@ -8,10 +8,10 @@ use std::cell::RefCell;
 use dyn_clone::{clone_trait_object, DynClone};
 use fasthash::murmur3;
 
-use crate::feature::transformers::{
+use crate::namespace::feature::transformers::{
     TransformerBinner, TransformerCombine, TransformerLogRatioBinner, TransformerWeight,
 };
-use crate::feature::{parser, transformers};
+use crate::namespace::feature::{parser, transformers};
 
 pub fn default_seeds(to_namespace_index: u32) -> [u32; 5] {
     let to_namespace_index = to_namespace_index ^ 1u32 << 31; // compatibility with earlier version
@@ -244,8 +244,8 @@ clone_trait_object!(FunctionExecutorTrait);
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::feature::executors::default_seeds;
-    use crate::parser;
+    use crate::namespace::feature::executors::default_seeds;
+    use crate::namespace::parser;
 
     fn ns_desc(i: u16) -> vwmap::NamespaceDescriptor {
         vwmap::NamespaceDescriptor {

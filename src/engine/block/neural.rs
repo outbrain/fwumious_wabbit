@@ -17,7 +17,7 @@ use iterators::OptimizerData;
 use optimizer::OptimizerTrait;
 use crate::engine::regressor::BlockTrait;
 
-use crate::feature_buffer::FeatureBuffer;
+use crate::namespace::feature_buffer::FeatureBuffer;
 use crate::engine::port_buffer::PortBuffer;
 use blas::*;
 

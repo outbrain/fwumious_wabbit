@@ -4,10 +4,10 @@ use std::io::ErrorKind;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::feature;
 
-use crate::feature::parser;
-use crate::vwmap::{NamespaceDescriptor, VwNamespaceMap};
+use crate::namespace::feature;
+use crate::namespace::feature::parser;
+use crate::namespace::vwmap::{NamespaceDescriptor, VwNamespaceMap};
 
 const WEIGHT_DELIM: &str = ":";
 const VERBOSE_FIELD_DELIM: &str = ",";
@@ -555,7 +555,7 @@ impl ModelInstance {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::vwmap::{NamespaceDescriptor, NamespaceFormat, NamespaceType, VwNamespaceMap};
+    use crate::namespace::vwmap::{NamespaceDescriptor, NamespaceFormat, NamespaceType, VwNamespaceMap};
 
     fn ns_desc(i: u16) -> NamespaceDescriptor {
         NamespaceDescriptor {

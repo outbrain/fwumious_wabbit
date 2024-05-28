@@ -14,8 +14,9 @@ use crate::engine::block::neural;
 use crate::engine::block::neural::InitType;
 use crate::engine::block::normalize;
 use crate::engine::block::relu;
-use crate::{engine::block, feature_buffer};
-use crate::feature_buffer::HashAndValueAndSeq;
+use crate::engine::block;
+use crate::namespace::feature_buffer;
+use crate::namespace::feature_buffer::HashAndValueAndSeq;
 use crate::engine::graph;
 use crate::model_instance;
 use crate::engine::port_buffer;
@@ -538,7 +539,7 @@ impl Regressor {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::feature_buffer::HashAndValue;
+    use crate::namespace::feature_buffer::HashAndValue;
     use crate::engine::optimizer;
 
     /* LR TESTS */

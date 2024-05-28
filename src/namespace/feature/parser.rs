@@ -4,8 +4,15 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::io::Error as IOError;
 use std::io::ErrorKind;
-
-use crate::vwmap::{NamespaceDescriptor, NamespaceFormat, NamespaceType, VwNamespaceMap};
+use nom::bytes::complete::take_while;
+use nom::character;
+use nom::character::complete;
+use nom::number;
+use nom::sequence::tuple;
+use nom::AsChar;
+use nom::IResult;
+use crate::namespace::feature;
+use crate::namespace::vwmap::{NamespaceDescriptor, NamespaceFormat, NamespaceType, VwNamespaceMap};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Namespace {
@@ -285,15 +292,6 @@ pub fn get_namespace_descriptor_verbose(
     };
 }
 
-use nom::bytes::complete::take_while;
-use nom::character;
-use nom::character::complete;
-use nom::number;
-use nom::sequence::tuple;
-use nom::AsChar;
-use nom::IResult;
-use crate::feature;
-
 pub fn name_char(c: char) -> bool {
     AsChar::is_alphanum(c) || c == '_'
 }
@@ -372,7 +370,7 @@ pub fn parse_namespace_statement(
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::vwmap::{NamespaceDescriptor, NamespaceFormat, NamespaceType, VwNamespaceMap};
+    use crate::namespace::vwmap::{NamespaceDescriptor, NamespaceFormat, NamespaceType, VwNamespaceMap};
 
     fn ns_desc(i: u16) -> NamespaceDescriptor {
         NamespaceDescriptor {
