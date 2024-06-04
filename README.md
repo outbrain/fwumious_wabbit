@@ -8,15 +8,15 @@ Fwumious Wabbit is
 [![Rust-Ubuntu18](https://github.com/outbrain/fwumious_wabbit/actions/workflows/rust-Ubuntu18.yml/badge.svg)](https://github.com/outbrain/fwumious_wabbit/actions/workflows/rust-Ubuntu18.yml)
 [![Gitter](https://badges.gitter.im/FwumiousWabbit/community.svg)](https://gitter.im/FwumiousWabbit/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
-Fwumious Wabbit is actively used in Outbrain for offline research, as well as for some production flows. It 
-enables "high bandwidth research" when doing feature engineering, feature 
-selection, hyperparameter tuning, and the like. 
+Fwumious Wabbit is actively used in Outbrain for offline research, as well as for some production flows. It
+enables "high bandwidth research" when doing feature engineering, feature
+selection, hyperparameter tuning, and the like.
 
-Data scientists can train hundreds of models over hundreds of millions of examples in 
+Data scientists can train hundreds of models over hundreds of millions of examples in
 a matter of hours on a single machine.
 
-For our tested scenarios it is almost two orders of magnitude faster than the 
-fastest Tensorflow implementation of Logistic Regression and FFMs that we could 
+For our tested scenarios it is almost two orders of magnitude faster than the
+fastest Tensorflow implementation of Logistic Regression and FFMs that we could
 come up with. It is an order of magnitude faster than Vowpal Wabbit for some specific use-cases.
 
 Check out our [benchmark](BENCHMARK.md), here's a teaser:
@@ -32,3 +32,6 @@ Check out our [benchmark](BENCHMARK.md), here's a teaser:
 - Written in Rust with heavy use of code specialization (via macros and traits)
 - Special emphasis on efficiency of sparse operations and serving
 
+
+# Weight patching
+This repo also contains the patching algorithm that enables very fast weight diff computation see `weight_patcher` for more details.
