@@ -26,7 +26,7 @@ use crate::quantization;
 use crate::regressor;
 use crate::regressor::{BlockCache, FFM_CONTRA_BUF_LEN};
 
-const FFM_STACK_BUF_LEN: usize = 130393;
+const FFM_STACK_BUF_LEN: usize = 170393;
 const STEP: usize = 4;
 const ZEROES: [f32; STEP] = [0.0; STEP];
 
