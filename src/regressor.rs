@@ -10,6 +10,7 @@ use crate::block_helpers;
 use crate::block_loss_functions;
 use crate::block_lr;
 use crate::block_misc;
+use crate::block_monte_carlo;
 use crate::block_neural;
 use crate::block_neural::InitType;
 use crate::block_normalize;
@@ -19,6 +20,7 @@ use crate::feature_buffer::HashAndValueAndSeq;
 use crate::graph;
 use crate::model_instance;
 use crate::port_buffer;
+use crate::port_buffer::PredictionStats;
 
 pub const FFM_CONTRA_BUF_LEN: usize = 41472;
 
@@ -184,8 +186,21 @@ impl Regressor {
 
         if mi.ffm_k > 0 {
             let block_ffm = block_ffm::new_ffm_block(&mut bg, mi).unwrap();
-            let triangle_ffm = block_misc::new_triangle_block(&mut bg, block_ffm).unwrap();
-            output = block_misc::new_join_block(&mut bg, vec![output, triangle_ffm]).unwrap();
+            if mi.ffm_mc_iteration_count == 0 || mi.ffm_mc_dropout_rate <= 0.0 {
+                let triangle_ffm = block_misc::new_triangle_block(&mut bg, block_ffm).unwrap();
+                output = block_misc::new_join_block(&mut bg, vec![output, triangle_ffm]).unwrap();
+            } else {
+                let monte_carlo_ffm = block_monte_carlo::new_monte_carlo_block(
+                    &mut bg,
+                    block_ffm,
+                    mi.ffm_mc_iteration_count as usize,
+                    mi.ffm_mc_dropout_rate,
+                )
+                .unwrap();
+                let triangle_ffm = block_misc::new_triangle_block(&mut bg, monte_carlo_ffm).unwrap();
+                output =
+                    block_misc::new_join_block(&mut bg, vec![output, triangle_ffm]).unwrap();
+            }
         }
 
         if !mi.nn_config.layers.is_empty() {
@@ -378,20 +393,45 @@ impl Regressor {
         pb.observations.pop().unwrap()
     }
 
+    fn predict_internal(
+        &self,
+        fb: &feature_buffer::FeatureBuffer,
+        pb: &mut port_buffer::PortBuffer,
+    ) {
+        pb.reset(); // empty the tape
+
+        let further_blocks = &self.blocks_boxes[..];
+        block_helpers::forward(further_blocks, fb, pb);
+    }
+
     pub fn predict(
         &self,
         fb: &feature_buffer::FeatureBuffer,
         pb: &mut port_buffer::PortBuffer,
     ) -> f32 {
-        // TODO: we should find a way of not using unsafe
+        self.predict_internal(fb, pb);
+        self.select_prediction(pb)
+    }
+
+    pub fn predict_and_report_stats(
+        &self,
+        fb: &feature_buffer::FeatureBuffer,
+        pb: &mut port_buffer::PortBuffer,
+    ) -> PredictionStats {
+        self.predict_internal(fb, pb);
+        self.select_prediction_and_stats(pb)
+    }
+
+    fn predict_with_cache_internal(
+        &self,
+        fb: &feature_buffer::FeatureBuffer,
+        pb: &mut port_buffer::PortBuffer,
+        caches: &[BlockCache],
+    ) {
         pb.reset(); // empty the tape
 
         let further_blocks = &self.blocks_boxes[..];
-        block_helpers::forward(further_blocks, fb, pb);
-
-        assert_eq!(pb.observations.len(), 1);
-
-        pb.observations.pop().unwrap()
+        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
     }
 
     pub fn predict_with_cache(
@@ -400,13 +440,47 @@ impl Regressor {
         pb: &mut port_buffer::PortBuffer,
         caches: &[BlockCache],
     ) -> f32 {
-        pb.reset(); // empty the tape
+        self.predict_with_cache_internal(fb, pb, caches);
 
-        let further_blocks = &self.blocks_boxes[..];
-        block_helpers::forward_with_cache(further_blocks, fb, pb, caches);
+        self.select_prediction(pb)
+    }
 
-        assert_eq!(pb.observations.len(), 1);
-        pb.observations.pop().unwrap()
+    pub fn predict_with_cache_and_report_stats(
+        &self,
+        fb: &feature_buffer::FeatureBuffer,
+        pb: &mut port_buffer::PortBuffer,
+        caches: &[BlockCache],
+    ) -> PredictionStats {
+        self.predict_with_cache_internal(fb, pb, caches);
+
+        self.select_prediction_and_stats(pb)
+    }
+
+    fn select_prediction(&self, pb: &mut port_buffer::PortBuffer) -> f32 {
+        match &pb.stats {
+            Some(stats) => stats.mean,
+            None => {
+                assert_eq!(pb.observations.len(), 1);
+
+                pb.observations.pop().unwrap()
+            }
+        }
+    }
+
+    fn select_prediction_and_stats(&self, pb: &mut port_buffer::PortBuffer) -> PredictionStats {
+        match &pb.stats {
+            Some(stats) => stats.clone(),
+            None => {
+                assert_eq!(pb.observations.len(), 1);
+
+                PredictionStats {
+                    mean: pb.observations.pop().unwrap(),
+                    variance: 0.0,
+                    standard_deviation: 0.0,
+                    count: 1,
+                }
+            }
+        }
     }
 
     pub fn setup_cache(

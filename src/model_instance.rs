@@ -86,6 +86,11 @@ pub struct ModelInstance {
     #[serde(default = "default_f32_zero")]
     pub nn_power_t: f32,
 
+    #[serde(default = "default_u32_zero")]
+    pub ffm_mc_iteration_count: u32,
+    #[serde(default = "default_f32_zero")]
+    pub ffm_mc_dropout_rate: f32,
+
     pub nn_config: NNConfig,
 
     #[serde(default = "default_optimizer_adagrad")]
@@ -137,6 +142,8 @@ impl ModelInstance {
             ffm_init_width: 0.0,
             ffm_init_zero_band: 0.0,
             ffm_init_acc_gradient: 0.0,
+            ffm_mc_iteration_count: 0,
+            ffm_mc_dropout_rate: 0.0,
             nn_init_acc_gradient: 0.0,
             nn_learning_rate: 0.02,
             nn_power_t: 0.45,
@@ -377,6 +384,12 @@ impl ModelInstance {
             }
         }
 
+        if let Some(val) = cl.value_of("ffm_mc_iteration_count") {
+            mi.ffm_mc_iteration_count = val.parse()?;
+        }
+
+        mi.ffm_mc_dropout_rate = parse_float("ffm_mc_dropout_rate", mi.ffm_mc_dropout_rate, cl);
+
         if let Some(val) = cl.value_of("ffm_initialization_type") {
             mi.ffm_initialization_type = val.parse()?;
         }
@@ -535,6 +548,22 @@ impl ModelInstance {
                 let hvalue = val.parse::<f32>()?;
                 mi.ffm_power_t = hvalue;
                 replacement_hyperparam_ids.push(("ffm_power_t".to_string(), hvalue.to_string()));
+            }
+        }
+
+        if cmd_arguments.is_present("ffm_mc_iteration_count") {
+            if let Some(val) = cmd_arguments.value_of("ffm_mc_iteration_count") {
+                let hvalue = val.parse::<>()?;
+                mi.ffm_mc_iteration_count = hvalue;
+                replacement_hyperparam_ids.push(("ffm_mc_iteration_count".to_string(), hvalue.to_string()));
+            }
+        }
+
+        if cmd_arguments.is_present("ffm_mc_dropout_rate") {
+            if let Some(val) = cmd_arguments.value_of("ffm_mc_dropout_rate") {
+                let hvalue = val.parse::<f32>()?;
+                mi.ffm_mc_dropout_rate = hvalue;
+                replacement_hyperparam_ids.push(("ffm_mc_dropout_rate".to_string(), hvalue.to_string()));
             }
         }
 

@@ -3,6 +3,7 @@ pub mod block_helpers;
 pub mod block_loss_functions;
 pub mod block_lr;
 pub mod block_misc;
+pub mod block_monte_carlo;
 pub mod block_neural;
 pub mod block_normalize;
 pub mod block_relu;
@@ -36,7 +37,7 @@ extern crate intel_mkl_src;
 use crate::feature_buffer::FeatureBufferTranslator;
 use crate::multithread_helpers::BoxedRegressorTrait;
 use crate::parser::VowpalParser;
-use crate::port_buffer::PortBuffer;
+use crate::port_buffer::{PortBuffer, PredictionStats};
 use crate::regressor::BlockCache;
 use crate::vwmap::NamespaceType;
 use shellwords;
@@ -85,6 +86,32 @@ impl Predictor {
             .predict(&self.feature_buffer_translator.feature_buffer, &mut self.pb)
     }
 
+    unsafe fn predict_and_report_stats(
+        &mut self,
+        input_buffer: &str,
+    ) -> Result<PredictionStats, f32> {
+        let mut buffered_input = Cursor::new(input_buffer);
+        let reading_result = self.vw_parser.next_vowpal(&mut buffered_input);
+        let buffer = match reading_result {
+            Ok([]) => {
+                log::error!("Reading result for prediction and stats returns EOF");
+                return Err(EOF_ERROR_CODE);
+            } // EOF
+            Ok(buffer2) => buffer2,
+            Err(e) => {
+                log::error!(
+                    "Reading result for prediction and stats returns error {}",
+                    e
+                );
+                return Err(EXCEPTION_ERROR_CODE);
+            }
+        };
+        self.feature_buffer_translator.translate(buffer, 0);
+        Ok(self
+            .regressor
+            .predict_and_report_stats(&self.feature_buffer_translator.feature_buffer, &mut self.pb))
+    }
+
     unsafe fn predict_with_cache(&mut self, input_buffer: &str) -> f32 {
         let mut buffered_input = Cursor::new(&input_buffer);
         let reading_result = self
@@ -112,6 +139,38 @@ impl Predictor {
             &mut self.pb,
             self.cache.blocks.as_slice(),
         )
+    }
+
+    unsafe fn predict_with_cache_and_report_stats(
+        &mut self,
+        input_buffer: &str,
+    ) -> Result<PredictionStats, f32> {
+        let mut buffered_input = Cursor::new(&input_buffer);
+        let reading_result = self
+            .vw_parser
+            .next_vowpal_with_cache(&mut buffered_input, self.cache.input_buffer_size);
+
+        let buffer = match reading_result {
+            Ok([]) => {
+                log::error!("Reading result for prediction and stats with cache returns EOF");
+                return Err(EOF_ERROR_CODE);
+            } // EOF
+            Ok(buffer2) => buffer2,
+            Err(e) => {
+                log::error!(
+                    "Reading result for prediction and stats with cache returns error {}",
+                    e
+                );
+                return Err(EXCEPTION_ERROR_CODE);
+            }
+        };
+
+        self.feature_buffer_translator.translate(buffer, 0);
+        Ok(self.regressor.predict_with_cache_and_report_stats(
+            &self.feature_buffer_translator.feature_buffer,
+            &mut self.pb,
+            self.cache.blocks.as_slice(),
+        ))
     }
 
     unsafe fn setup_cache(&mut self, input_buffer: &str) -> f32 {
@@ -210,6 +269,24 @@ pub unsafe extern "C" fn fw_predict(ptr: *mut FfiPredictor, input_buffer: *const
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn fw_predict_and_report_stats(
+    ptr: *mut FfiPredictor,
+    input_buffer: *const c_char,
+    stats: *mut f32,
+    stats_size: usize,
+) -> f32 {
+    let str_buffer = c_char_to_str(input_buffer);
+    let predictor: &mut Predictor = from_ptr(ptr);
+    match predictor.predict_and_report_stats(str_buffer) {
+        Ok(prediction_stats) => {
+            report_stats(&prediction_stats, stats, stats_size);
+            prediction_stats.mean
+        }
+        Err(e) => e,
+    }
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn fw_predict_with_cache(
     ptr: *mut FfiPredictor,
     input_buffer: *const c_char,
@@ -217,6 +294,36 @@ pub unsafe extern "C" fn fw_predict_with_cache(
     let str_buffer = c_char_to_str(input_buffer);
     let predictor: &mut Predictor = from_ptr(ptr);
     predictor.predict_with_cache(str_buffer)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn fw_predict_with_cache_and_report_stats(
+    ptr: *mut FfiPredictor,
+    input_buffer: *const c_char,
+    stats: *mut f32,
+    stats_size: usize,
+) -> f32 {
+    let str_buffer = c_char_to_str(input_buffer);
+    let predictor: &mut Predictor = from_ptr(ptr);
+    match predictor.predict_with_cache_and_report_stats(str_buffer) {
+        Ok(prediction_stats) => {
+            report_stats(&prediction_stats, stats, stats_size);
+            prediction_stats.mean
+        }
+        Err(e) => e,
+    }
+}
+
+unsafe fn report_stats(prediction_stats: &PredictionStats, stats: *mut f32, stats_size: usize) {
+    if stats_size < 4 {
+        log::error!("Stats buffer is too small, expecting 4, was {}", stats_size);
+        return;
+    }
+    let stats_slice = std::slice::from_raw_parts_mut(stats, stats_size);
+    *stats_slice.get_unchecked_mut(0) = prediction_stats.mean;
+    *stats_slice.get_unchecked_mut(1) = prediction_stats.variance;
+    *stats_slice.get_unchecked_mut(2) = prediction_stats.standard_deviation;
+    *stats_slice.get_unchecked_mut(3) = prediction_stats.count as f32;
 }
 
 #[no_mangle]
