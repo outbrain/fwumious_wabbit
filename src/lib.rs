@@ -25,7 +25,6 @@ pub mod port_buffer;
 pub mod quantization;
 pub mod radix_tree;
 pub mod regressor;
-pub mod serving;
 pub mod version;
 pub mod vwmap;
 
