@@ -254,7 +254,7 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 				}
 			    }
 
-			    *myslice.get_unchecked_mut(contra_offset2 + z) += correction * 0.5;
+			    *myslice.get_unchecked_mut(contra_offset2 + z) += correction;
 			    vv += ffmk_as_usize;
 			    ffm_values_offset += ffmk_as_usize;
 			}
@@ -273,12 +273,11 @@ impl<L: OptimizerTrait + 'static> BlockTrait for BlockFFM<L> {
 			    for z in 0..ffm_fields_count_as_usize {
 				let general_gradient = myslice.get_unchecked(contra_offset + z);
 
-				for _ in 0.. ffmk_as_usize {
+				for _ in 0..ffmk_as_usize {
 				    let feature_value = *local_data_ffm_values.get_unchecked(local_index);
 				    let gradient = general_gradient * feature_value;
 				    let update = self.optimizer_ffm.calculate_update(gradient,
 					&mut self.optimizer.get_unchecked_mut(feature_index).optimizer_data);
-
 				    *ffm_weights.get_unchecked_mut(feature_index) -= update;
 				    local_index += 1;
 				    feature_index += 1;
